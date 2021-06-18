@@ -1,0 +1,4 @@
+scan all                time:   [14.108 s 14.246 s 14.370 s]
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) low mild
+  1 (10.00%) high mild

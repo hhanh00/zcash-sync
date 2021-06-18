@@ -5,4 +5,12 @@ pub mod lw_rpc;
 
 pub const NETWORK: Network = Network::MainNetwork;
 
+mod print;
 mod chain;
+mod commitment;
+mod scan;
+
+pub use crate::chain::{LWD_URL, get_latest_height, download_chain, calculate_tree_state_v2, DecryptNode};
+pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
+pub use crate::lw_rpc::*;
+pub use crate::scan::scan_all;

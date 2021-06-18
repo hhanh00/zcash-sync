@@ -6,8 +6,13 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bench]]
+name = "scan_all"
+harness = false
+
 [dependencies]
 dotenv = "0.15.0"
+env_logger = "0.8.4"
 anyhow = "1.0.40"
 log = "0.4.14"
 flexi_logger = {version="0.17.1", features = ["compress"]}
@@ -25,19 +30,19 @@ futures = "0.3.15"
 tonic = {version = "0.4.3", features = ["tls", "tls-roots"]}
 prost = "0.7"
 rayon = "1.5.1"
+byteorder = "1.4.3"
 
 [dependencies.zcash_client_backend]
-git = "https://github.com/zcash/librustzcash.git"
-rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+path = "../librustzcash/zcash_client_backend"
 
 [dependencies.zcash_primitives]
-git = "https://github.com/zcash/librustzcash.git"
-features = [ "transparent-inputs" ]
-rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+path = "../librustzcash/zcash_primitives"
 
 [dependencies.zcash_proofs]
-git = "https://github.com/zcash/librustzcash.git"
-rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+path = "../librustzcash/zcash_proofs"
 
 [build-dependencies]
 tonic-build = "0.4.2"
+
+[dev-dependencies]
+criterion = "0.3.4"
