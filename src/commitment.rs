@@ -5,6 +5,21 @@ use zcash_primitives::serialize::{Optional, Vector};
 use byteorder::WriteBytesExt;
 use rayon::prelude::*;
 
+/*
+Same behavior and structure as CommitmentTree<Node> from librustzcash
+It represents the data required to build a merkle path from a note commitment (leaf)
+to the root.
+The Merkle Path is the minimal set of nodes needed to recalculate the Merkle root
+that includes our note.
+It starts with our note commitment (because it is already a hash, it doesn't need
+to be hashed). The value is stored in either `left` or `right` slot depending on the parity
+of the note index. If there is a sibling, its value is in the other slot.
+`parents` is the list of hashes that are siblings to the nodes along the path to the root.
+If a hash has no sibling yet, then the parent is None. It means that the placeholder hash
+value should be used there.
+
+Remark: It's possible to have a grand parent but no parent.
+ */
 #[derive(Clone)]
 pub struct CTree {
     left: Option<Node>,
@@ -12,6 +27,53 @@ pub struct CTree {
     parents: Vec<Option<Node>>,
 }
 
+/*
+Witness is the data required to maintain the Merkle Path of a given note after more
+notes are added.
+Once a node has two actual children values (i.e. not a placeholder), its value
+is constant because leaves can't change.
+However, it doesn't mean that our Merkle Path is immutable. As the tree fills up,
+previous entries that were None could end up getting a value.
+- `tree` is the Merkle Path at the time the note is inserted. It does not change
+- `filled` are the hash values that replace the "None" values in `tree`. It gets populated as
+more notes are added and the sibling sub trees fill up
+- `cursor` is a sibling subtree that is not yet full. It is tracked as a sub Merkle Tree
+
+Example:
+Let's say the `tree` has parents [ hash, None, hash ] and left = hash, right = None.
+Based on this information, we know the position is 1010b = 10 (11th leaf)
+
+                   o
+           /              \
+        hash              o
+     /        \          /   \
+    *          *        o     .
+  /   \      /  \     /   \
+  *    *    *    *  hash  o
+ /\   /\   /\   /\   /\   /\
+0  1 2  3 4  5 6  7 8  9 10 .
+
+legend:
+o is a hash value that we calculate as part of the merkle path verification
+. is a placeholder hash and denotes a non existent node
+
+We have two missing nodes (None):
+- the `right` node,
+- the 2nd parent
+
+When node 11 comes, `filled` gets the value since it is filling the first None.
+Then when node 12 comes, we are starting to fill a new sub tree in `cursor`
+cursor -> left = 12, right = None, parents = []
+After node 13, cursor continues to fill up:
+cursor -> left = 12, right = 13, parents = []
+With node 14, the cursor tree gains one level
+cursor -> left = 14, right = None, parents = [hash(12,13)]
+With node 15, the subtree is full, `filled` gets the value of the 2nd parent
+and the cursor is empty
+With node 16, the tree gains a level but `tree` remains the same (it is immutable).
+Instead, a new cursor starts. Eventually, it fills up and a new value
+gets pushed into `filled`.
+*/
 #[derive(Clone)]
 pub struct Witness {
     tree: CTree,       // commitment tree at the moment the witness is created: immutable
@@ -266,6 +328,7 @@ mod tests {
             for p in t.parents.iter() {
                 println!("{:?}", p.map(|n| hex::encode(n.repr)));
             }
+            println!("====");
 
             println!("{:?}", tree1.left.map(|n| hex::encode(n.repr)));
             println!("{:?}", tree1.right.map(|n| hex::encode(n.repr)));
