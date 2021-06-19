@@ -1,37 +1,15 @@
-## Welcome to GitHub Pages
+## Abstract
 
-You can use the [editor on GitHub](https://github.com/hhanh00/zcash-sync/edit/master/docs/index.md) to maintain and preview the content for your website in Markdown files.
+The initial synchronization of a wallet with the Zcash blockchain is one of the most often mentioned issues with light clients.
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+In some cases, users have to wait for several minutes or even hours before the application is entirely up to date.
 
-### Markdown
+It is a strong deterrent for many users.
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+We introduce a new method of synchronization that leverages parallel execution and several properties of the note commitment tree. The result is an initial synchronization time of a few seconds.
 
-```markdown
-Syntax highlighted code block
+Our synchronization method does not incrementally update the wallet state block per block. Instead, it directly computes the state at the current block height. Therefore it reduces the amount of calculation immensely.
 
-# Header 1
-## Header 2
-### Header 3
 
-- Bulleted
-- List
 
-1. Numbered
-2. List
 
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
-```
-
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/hhanh00/zcash-sync/settings/pages). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://docs.github.com/categories/github-pages-basics/) or [contact support](https://support.github.com/contact) and we’ll help you sort it out.

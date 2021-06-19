@@ -2,3 +2,4 @@
 .env
 .idea/
 src/generated/*.rs
+docs/_site/
