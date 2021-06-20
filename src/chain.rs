@@ -218,7 +218,7 @@ pub fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) 
     let start = Instant::now();
     let n = nodes.len();
     let mut positions: Vec<_> = positions.iter().map(|&p| NotePosition::new(p, n)).collect();
-    let _frontier = CTree::calc_state(nodes, &mut positions, &CTree::new());
+    let _frontier = CTree::calc_state(nodes, &mut positions, None);
     let witnesses: Vec<_> = positions.iter().map(|p| p.witness.clone()).collect();
     info!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
     witnesses
