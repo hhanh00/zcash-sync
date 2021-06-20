@@ -11,7 +11,7 @@ use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decryption;
 use zcash_primitives::sapling::{Node, Note, SaplingIvk};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
-use crate::commitment::{CTree, Witness};
+use crate::commitment::{CTree, Witness, NotePosition};
 use std::time::Instant;
 use log::info;
 
@@ -216,7 +216,9 @@ pub fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) 
     info!("Build CMU list: {} ms - {} nodes", start.elapsed().as_millis(), nodes.len());
 
     let start = Instant::now();
-    let (_tree, positions) = CTree::calc_state(&mut nodes, &positions);
+    let n = nodes.len();
+    let mut positions: Vec<_> = positions.iter().map(|&p| NotePosition::new(p, n)).collect();
+    let _frontier = CTree::calc_state(nodes, &mut positions, &CTree::new());
     let witnesses: Vec<_> = positions.iter().map(|p| p.witness.clone()).collect();
     info!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
     witnesses
