@@ -77,14 +77,16 @@ gets pushed into `filled`.
 */
 #[derive(Clone)]
 pub struct Witness {
-    tree: CTree,       // commitment tree at the moment the witness is created: immutable
+    pub(crate) position: usize,
+    pub(crate) tree: CTree,       // commitment tree at the moment the witness is created: immutable
     filled: Vec<Node>, // as more nodes are added, levels get filled up: won't change anymore
     cursor: CTree,     // partial tree which still updates when nodes are added
 }
 
 impl Witness {
-    pub fn new() -> Witness {
+    pub fn new(position: usize) -> Witness {
         Witness {
+            position,
             tree: CTree::new(),
             filled: vec![],
             cursor: CTree::new(),
@@ -151,7 +153,7 @@ impl NotePosition {
             p: position,
             p2: count - 1,
             c,
-            witness: Witness::new(),
+            witness: Witness::new(position),
         }
     }
 
@@ -305,7 +307,7 @@ impl CTree {
         })
     }
 
-    fn get_position(&self) -> usize {
+    pub(crate) fn get_position(&self) -> usize {
         let mut p = 0usize;
         for parent in self.parents.iter().rev() {
             if parent.is_some() {
