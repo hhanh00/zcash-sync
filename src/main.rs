@@ -1,9 +1,9 @@
+use std::time::Instant;
+use sync::{advance_tree, scan_all, CTree, Witness, NETWORK};
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use sync::{NETWORK, scan_all, Witness, CTree, advance_tree};
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::Node;
-use std::time::Instant;
 
 #[tokio::main]
 #[allow(dead_code)]
@@ -21,7 +21,8 @@ async fn main_scan() {
     scan_all(&vec![ivk]).await.unwrap();
 }
 
-fn test_advance_tree() {
+#[allow(dead_code)]
+fn test_increasing_notes() {
     const NUM_NODES: usize = 1000;
     const NUM_CHUNKS: usize = 50;
     const WITNESS_PERCENT: f64 = 1.0; // percentage of notes that are ours
@@ -59,6 +60,75 @@ fn test_advance_tree() {
     println!("# witnesses = {}", ws2.len());
 }
 
+fn mk_node(pos: usize) -> Node {
+    let mut bb = [0u8; 32];
+    bb[0..8].copy_from_slice(&pos.to_be_bytes());
+    let node = Node::new(bb);
+    node
+}
+
+fn test_increasing_gap(run_normal: bool, run_warp: bool) {
+    const NUM_CHUNKS: usize = 20;
+    const NUM_WITNESS: usize = 20;
+
+    let mut tree1: CommitmentTree<Node> = CommitmentTree::empty();
+    let mut tree2 = CTree::new();
+    let mut ws: Vec<IncrementalWitness<Node>> = vec![];
+    let mut ws2: Vec<Witness> = vec![];
+
+    // Add our received notes
+    let mut pos = 0usize;
+    let mut nodes: Vec<_> = vec![];
+    for _ in 0..NUM_WITNESS {
+        let node = mk_node(pos);
+        if run_normal {
+            tree1.append(node).unwrap();
+            for w in ws.iter_mut() {
+                w.append(node).unwrap();
+            }
+            let w = IncrementalWitness::from_tree(&tree1);
+            ws.push(w);
+        }
+        ws2.push(Witness::new(pos));
+        nodes.push(node);
+        pos += 1;
+    }
+
+    if run_warp {
+        let (new_tree, new_witnesses) = advance_tree(tree2, &ws2, &mut nodes);
+        tree2 = new_tree;
+        ws2 = new_witnesses;
+    }
+
+    let start = Instant::now();
+    let mut node_count = 2usize;
+    for i in 0..NUM_CHUNKS {
+        let mut nodes: Vec<_> = vec![];
+        for _ in 0..node_count {
+            let node = mk_node(pos);
+            if run_normal {
+                tree1.append(node).unwrap();
+                for w in ws.iter_mut() {
+                    w.append(node).unwrap();
+                }
+            }
+            nodes.push(node);
+            pos += 1;
+        }
+
+        if run_warp {
+            let (new_tree, new_witnesses) = advance_tree(tree2, &ws2, &mut nodes);
+            tree2 = new_tree;
+            ws2 = new_witnesses;
+        }
+        node_count *= 2;
+        eprintln!("{}, {}, {}", i, node_count, start.elapsed().as_millis());
+    }
+
+    println!("# witnesses = {}", ws2.len());
+}
+
 fn main() {
-    test_advance_tree();
+    test_increasing_gap(false, true);
+    test_increasing_gap(true, false);
 }
