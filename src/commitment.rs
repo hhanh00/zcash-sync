@@ -77,10 +77,10 @@ gets pushed into `filled`.
 */
 #[derive(Clone)]
 pub struct Witness {
-    pub(crate) position: usize,
-    pub(crate) tree: CTree,       // commitment tree at the moment the witness is created: immutable
-    filled: Vec<Node>, // as more nodes are added, levels get filled up: won't change anymore
-    cursor: CTree,     // partial tree which still updates when nodes are added
+    pub position: usize,
+    pub tree: CTree,       // commitment tree at the moment the witness is created: immutable
+    pub filled: Vec<Node>, // as more nodes are added, levels get filled up: won't change anymore
+    pub cursor: CTree,     // partial tree which still updates when nodes are added
 }
 
 impl Witness {
@@ -299,6 +299,10 @@ impl CTree {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.left.is_none() && self.right.is_none()
+    }
+
     pub(crate) fn write<W: Write>(&self, mut writer: W) -> std::io::Result<()> {
         Optional::write(&mut writer, &self.left, |w, n| n.write(w))?;
         Optional::write(&mut writer, &self.right, |w, n| n.write(w))?;
@@ -391,7 +395,7 @@ mod tests {
 
         println!("# witnesses = {}", all_positions.len());
 
-        for (i, (w, p)) in witnesses.iter().zip(&all_positions).enumerate() {
+        for (_i, (w, p)) in witnesses.iter().zip(&all_positions).enumerate() {
             let mut bb1: Vec<u8> = vec![];
             w.write(&mut bb1).unwrap();
 
