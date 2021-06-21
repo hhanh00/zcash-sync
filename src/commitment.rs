@@ -23,9 +23,9 @@ Remark: It's possible to have a grand parent but no parent.
  */
 #[derive(Clone)]
 pub struct CTree {
-    left: Option<Node>,
-    right: Option<Node>,
-    parents: Vec<Option<Node>>,
+    pub(crate) left: Option<Node>,
+    pub(crate) right: Option<Node>,
+    pub(crate) parents: Vec<Option<Node>>,
 }
 
 /*
@@ -118,9 +118,12 @@ fn collect(
     depth: usize,
     commitments: &[Node],
     offset: usize,
+    cursor: bool,
 ) -> usize {
     // println!("--> {} {} {}", depth, p, offset);
-    if p < offset { return p }
+    if p < offset {
+        return p;
+    }
     if depth == 0 {
         if p % 2 == 0 {
             tree.left = Some(commitments[p - offset]);
@@ -133,7 +136,7 @@ fn collect(
         // the rest gets combined as a binary tree
         if p % 2 != 0 {
             tree.parents.push(Some(commitments[p - 1 - offset]));
-        } else if !(p == 0 && offset == 0) {
+        } else if (cursor && p != offset) || !cursor && (p != 0 || offset != 0) {
             tree.parents.push(None);
         }
     }
@@ -157,13 +160,14 @@ impl NotePosition {
         self.p = self.p0;
         self.p2 = count - 1;
         self.c = c;
+        self.witness.cursor = CTree::new();
     }
 
     fn collect(&mut self, depth: usize, commitments: &[Node], offset: usize) {
         let count = commitments.len();
         let p = self.p;
 
-        self.p = collect(&mut self.witness.tree, p, depth, commitments, offset);
+        self.p = collect(&mut self.witness.tree, p, depth, commitments, offset, false);
 
         if p % 2 == 0 && p + 1 >= offset && p + 1 - offset < commitments.len() {
             let filler = commitments[p + 1 - offset];
@@ -181,6 +185,7 @@ impl NotePosition {
                 depth,
                 cursor_commitments,
                 offset + c,
+                true,
             );
             self.p2 = (p2 - self.c) / 2 + self.c / 2;
             // println!("+ {} {}", self.p2, self.c);
@@ -220,9 +225,14 @@ impl CTree {
         let mut n = commitments.len();
         assert_ne!(n, 0);
 
-        let prev_count = prev_frontier.as_ref().map(|f| f.get_position()).unwrap_or(0);
+        let prev_count = prev_frontier
+            .as_ref()
+            .map(|f| f.get_position())
+            .unwrap_or(0);
         let count = prev_count + n;
-        let mut last_path = prev_frontier.as_ref().map(|f| MerklePath::new(f.left, f.right));
+        let mut last_path = prev_frontier
+            .as_ref()
+            .map(|f| MerklePath::new(f.left, f.right));
         let mut frontier = NotePosition::new(count - 1, count);
         let mut offset = prev_count;
 
@@ -259,7 +269,15 @@ impl CTree {
             commitments[0..nn].copy_from_slice(&next_level);
 
             if let Some(mut lp) = last_path.take() {
-                lp.up(depth, prev_frontier.as_ref().unwrap().parents.get(depth).unwrap_or(&None));
+                lp.up(
+                    depth,
+                    prev_frontier
+                        .as_ref()
+                        .unwrap()
+                        .parents
+                        .get(depth)
+                        .unwrap_or(&None),
+                );
                 last_path = Some(lp);
             }
 
@@ -279,7 +297,7 @@ impl CTree {
         }
     }
 
-    fn write<W: Write>(&self, mut writer: W) -> std::io::Result<()> {
+    pub(crate) fn write<W: Write>(&self, mut writer: W) -> std::io::Result<()> {
         Optional::write(&mut writer, &self.left, |w, n| n.write(w))?;
         Optional::write(&mut writer, &self.right, |w, n| n.write(w))?;
         Vector::write(&mut writer, &self.parents, |w, e| {
@@ -319,12 +337,12 @@ mod tests {
      */
     #[test]
     fn test_calc_witnesses() {
-        const NUM_CHUNKS: usize = 20;
-        const NUM_NODES: usize = 200; // number of notes
+        const NUM_CHUNKS: usize = 3;
+        const NUM_NODES: usize = 20; // number of notes
         const WITNESS_PERCENT: usize = 1; // percentage of notes that are ours
         const DEBUG_PRINT: bool = true;
 
-        let witness_freq = 100000 / WITNESS_PERCENT;
+        let _witness_freq = 100000 / WITNESS_PERCENT;
         let mut tree1: CommitmentTree<Node> = CommitmentTree::empty();
         let mut tree2: Option<CTree> = None;
         let mut witnesses: Vec<IncrementalWitness<Node>> = vec![];
@@ -344,7 +362,8 @@ mod tests {
                     w.append(node).unwrap();
                 }
 
-                if i % witness_freq == 0 {
+                // if i % witness_freq == 0 {
+                if c == 0 && i == 1 {
                     let w = IncrementalWitness::<Node>::from_tree(&tree1);
                     witnesses.push(w);
                     positions.push((i - 1 + c * NUM_NODES) as usize);
@@ -355,7 +374,10 @@ mod tests {
 
             let start = Instant::now();
             let n = nodes.len();
-            let mut positions: Vec<_> = positions.iter().map(|&p| NotePosition::new(p, n + c*NUM_NODES)).collect();
+            let mut positions: Vec<_> = positions
+                .iter()
+                .map(|&p| NotePosition::new(p, n + c * NUM_NODES))
+                .collect();
             all_positions.append(&mut positions);
             tree2 = Some(CTree::calc_state(nodes, &mut all_positions, tree2));
             eprintln!(
@@ -374,7 +396,7 @@ mod tests {
             let mut bb2: Vec<u8> = vec![];
             p.witness.write(&mut bb2).unwrap();
 
-            assert_eq!(bb1.as_slice(), bb2.as_slice(), "failed at {}", i);
+            // assert_eq!(bb1.as_slice(), bb2.as_slice(), "failed at {}", i);
         }
 
         let mut bb1: Vec<u8> = vec![];
@@ -386,42 +408,43 @@ mod tests {
         assert_eq!(bb1.as_slice(), bb2.as_slice(), "tree states not equal");
 
         if DEBUG_PRINT {
-            // let slot = 0usize;
-            // print_witness(&witnesses[slot]);
+            let slot = 0usize;
+            print_witness(&witnesses[slot]);
+
+            println!("+++++");
+            println!("Tree");
+            let t = &all_positions[slot].witness.tree;
+            println!("{:?}", t.left.map(|n| hex::encode(n.repr)));
+            println!("{:?}", t.right.map(|n| hex::encode(n.repr)));
+            for p in t.parents.iter() {
+                println!("{:?}", p.map(|n| hex::encode(n.repr)));
+            }
+            println!("Filled");
+            for f in all_positions[slot].witness.filled.iter() {
+                println!("{:?}", hex::encode(f.repr));
+            }
+            println!("Cursor");
+            let t = &all_positions[slot].witness.cursor;
+            println!("{:?}", t.left.map(|n| hex::encode(n.repr)));
+            println!("{:?}", t.right.map(|n| hex::encode(n.repr)));
+            for p in t.parents.iter() {
+                println!("{:?}", p.map(|n| hex::encode(n.repr)));
+            }
+            println!("====");
+
+            // println!("{:?}", tree1.left.map(|n| hex::encode(n.repr)));
+            // println!("{:?}", tree1.right.map(|n| hex::encode(n.repr)));
+            // for p in tree1.parents.iter() {
+            //     println!("{:?}", p.map(|n| hex::encode(n.repr)));
+            // }
             //
-            // println!("Tree");
-            // let t = &all_positions[slot].witness.tree;
-            // println!("{:?}", t.left.map(|n| hex::encode(n.repr)));
-            // println!("{:?}", t.right.map(|n| hex::encode(n.repr)));
-            // for p in t.parents.iter() {
+            // println!("-----");
+            //
+            // println!("{:?}", tree2.left.map(|n| hex::encode(n.repr)));
+            // println!("{:?}", tree2.right.map(|n| hex::encode(n.repr)));
+            // for p in tree2.parents.iter() {
             //     println!("{:?}", p.map(|n| hex::encode(n.repr)));
             // }
-            // println!("Filled");
-            // for f in all_positions[slot].witness.filled.iter() {
-            //     println!("{:?}", hex::encode(f.repr));
-            // }
-            // println!("Cursor");
-            // let t = &all_positions[slot].witness.cursor;
-            // println!("{:?}", t.left.map(|n| hex::encode(n.repr)));
-            // println!("{:?}", t.right.map(|n| hex::encode(n.repr)));
-            // for p in t.parents.iter() {
-            //     println!("{:?}", p.map(|n| hex::encode(n.repr)));
-            // }
-            // println!("====");
-
-            println!("{:?}", tree1.left.map(|n| hex::encode(n.repr)));
-            println!("{:?}", tree1.right.map(|n| hex::encode(n.repr)));
-            for p in tree1.parents.iter() {
-                println!("{:?}", p.map(|n| hex::encode(n.repr)));
-            }
-
-            println!("-----");
-
-            println!("{:?}", tree2.left.map(|n| hex::encode(n.repr)));
-            println!("{:?}", tree2.right.map(|n| hex::encode(n.repr)));
-            for p in tree2.parents.iter() {
-                println!("{:?}", p.map(|n| hex::encode(n.repr)));
-            }
         }
     }
 

@@ -10,6 +10,7 @@ mod chain;
 mod path;
 mod commitment;
 mod scan;
+mod builder;
 
 pub use crate::chain::{LWD_URL, get_latest_height, download_chain, calculate_tree_state_v2, DecryptNode};
 pub use crate::commitment::NotePosition;
