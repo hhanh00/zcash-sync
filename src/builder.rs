@@ -133,16 +133,12 @@ impl CTreeBuilder {
         Self::get_opt(commitments, index, offset).unwrap()
     }
 
-    fn adjusted_start(&self) -> usize {
-        if self.offset.is_some() {
+    fn adjusted_start(&self, prev: &Option<Node>, depth: usize) -> usize {
+        if depth != 0 && prev.is_some() {
             self.start - 1
         } else {
             self.start
         }
-    }
-
-    fn adjusted_end(&self, commitments: &[Node]) -> usize {
-        self.start + commitments.len()
     }
 
     fn clone_trimmed(&self, mut depth: usize) -> CTree {
@@ -199,18 +195,11 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
         let offset = context.offset;
         let depth = context.depth;
 
-        if depth == 1 {
-            context.offset.map(|c| println!("{}", hex::encode(c.repr)));
-            for c in commitments.iter() {
-                println!("{}", hex::encode(c.repr));
-            }
-            println!("===");
-        }
-
         let tree = &mut self.witness.tree;
+        let right = if depth != 0 { context.right } else { None };
 
         if self.inside {
-            let rp = self.p - context.adjusted_start();
+            let rp = self.p - context.adjusted_start(&offset, depth);
             if depth == 0 {
                 if self.p % 2 == 1 {
                     tree.left = Some(*CTreeBuilder::get(commitments, rp - 1, &offset));
@@ -230,11 +219,9 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
         }
 
         let p1 = self.p + 1;
-        let has_p1 = p1 >= context.adjusted_start() && p1 < context.adjusted_end(commitments);
-        // println!("D{}: {} {} {} {}", depth, p1, context.start, context.start + commitments.len(), context.offset.is_some());
+        let has_p1 = p1 >= context.adjusted_start(&right, depth) && p1 < context.start + commitments.len();
         if has_p1 {
-            let p1 = CTreeBuilder::get(commitments, p1 - context.adjusted_start(), &offset);
-            println!("P1 {} {}", depth, hex::encode(p1.repr));
+            let p1 = CTreeBuilder::get(commitments, p1 - context.adjusted_start(&right, depth), &right);
             if depth == 0 {
                 if tree.right.is_none() {
                     self.witness.filled.push(*p1);
@@ -260,32 +247,36 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
         let tree = &self.witness.tree;
         let mut num_filled = self.witness.filled.len();
 
-        let mut depth = 0;
-        loop {
-            let is_none = if depth == 0 { // check if this level is occupied
-                tree.right.is_none()
-            } else {
-                depth > tree.parents.len() || tree.parents[depth - 1].is_none()
-            };
-            if is_none {
-                if num_filled > 0 {
-                    num_filled -= 1; // we filled it
-                }
-                else {
-                    break
-                }
-            }
-            depth += 1;
-            // loop terminates because we are eventually going to run out of ancestors and filled
+        if self.witness.position + 1 == context.next_tree.get_position() {
+            self.witness.cursor = CTree::new();
         }
+        else {
+            let mut depth = 0;
+            loop {
+                let is_none = if depth == 0 { // check if this level is occupied
+                    tree.right.is_none()
+                } else {
+                    depth > tree.parents.len() || tree.parents[depth - 1].is_none()
+                };
+                if is_none {
+                    if num_filled > 0 {
+                        num_filled -= 1; // we filled it
+                    } else {
+                        break
+                    }
+                }
+                depth += 1;
+                // loop terminates because we are eventually going to run out of ancestors and filled
+            }
 
-        self.witness.cursor = context.clone_trimmed(depth - 1);
+            self.witness.cursor = context.clone_trimmed(depth - 1);
+        }
         self.witness
     }
 }
 
 #[allow(dead_code)]
-fn advance_tree(
+pub fn advance_tree(
     prev_tree: CTree,
     prev_witnesses: &[Witness],
     mut commitments: &mut [Node],
@@ -330,9 +321,9 @@ mod tests {
 
     #[test]
     fn test_advance_tree() {
-        const NUM_NODES: usize = 10;
-        const NUM_CHUNKS: usize = 5;
-        const WITNESS_PERCENT: f64 = 100.0; // percentage of notes that are ours
+        const NUM_NODES: usize = 1000;
+        const NUM_CHUNKS: usize = 50;
+        const WITNESS_PERCENT: f64 = 1.0; // percentage of notes that are ours
         const DEBUG_PRINT: bool = true;
         let witness_freq = (100.0 / WITNESS_PERCENT) as usize;
 
@@ -341,6 +332,7 @@ mod tests {
         let mut ws: Vec<IncrementalWitness<Node>> = vec![];
         let mut ws2: Vec<Witness> = vec![];
         for i in 0..NUM_CHUNKS {
+            println!("{}", i);
             let mut nodes: Vec<_> = vec![];
             for j in 0..NUM_NODES {
                 let mut bb = [0u8; 32];
@@ -351,8 +343,8 @@ mod tests {
                 for w in ws.iter_mut() {
                     w.append(node).unwrap();
                 }
-                // if v % witness_freq == 0 {
-                if v == 37 {
+                if v % witness_freq == 0 {
+                // if v == 499 {
                     let w = IncrementalWitness::from_tree(&tree1);
                     ws.push(w);
                     ws2.push(Witness::new(v));

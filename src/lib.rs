@@ -13,7 +13,8 @@ mod scan;
 mod builder;
 
 pub use crate::chain::{LWD_URL, get_latest_height, download_chain, calculate_tree_state_v2, DecryptNode};
-pub use crate::commitment::NotePosition;
+pub use crate::commitment::{NotePosition, Witness, CTree};
+pub use crate::builder::advance_tree;
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;
 pub use crate::scan::scan_all;
