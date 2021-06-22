@@ -10,6 +10,10 @@ edition = "2018"
 name = "scan_all"
 harness = false
 
+[[bin]]
+name = "warp-cli"
+path = "src/main/warp_cli.rs"
+
 [dependencies]
 dotenv = "0.15.0"
 env_logger = "0.8.4"
@@ -31,15 +35,21 @@ tonic = {version = "0.4.3", features = ["tls", "tls-roots"]}
 prost = "0.7"
 rayon = "1.5.1"
 byteorder = "1.4.3"
+tiny-bip39 = "0.8"
+rand = "0.8.4"
+rusqlite = "^0.25.3"
 
 [dependencies.zcash_client_backend]
-path = "../librustzcash/zcash_client_backend"
+git = "https://github.com/zcash/librustzcash.git"
+rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
 
 [dependencies.zcash_primitives]
-path = "../librustzcash/zcash_primitives"
+git = "https://github.com/zcash/librustzcash.git"
+rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
 
 [dependencies.zcash_proofs]
-path = "../librustzcash/zcash_proofs"
+git = "https://github.com/zcash/librustzcash.git"
+rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
 
 [build-dependencies]
 tonic-build = "0.4.2"

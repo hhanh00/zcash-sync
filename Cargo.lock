@@ -38,6 +38,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "739f4a8db6605981345c5654f3a85b056ce52f37a39d34da03f25bf2151ea16e"
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -127,9 +133,9 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "bech32"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c7f7096bc256f5e5cb960f60dfc4f4ef979ca65abe7fb9d5a4f77150d3783d4"
+checksum = "cf9ff0bbfd639f15c74af777d81383cf53efb7c93613f6cab67c6c11e05bbf8b"
 
 [[package]]
 name = "bellman"
@@ -638,10 +644,23 @@ dependencies = [
 [[package]]
 name = "equihash"
 version = "0.1.0"
+source = "git+https://github.com/zcash/librustzcash.git?rev=d50bb12a97da768dc8f3ee39b81f84262103e6eb#d50bb12a97da768dc8f3ee39b81f84262103e6eb"
 dependencies = [
  "blake2b_simd",
  "byteorder",
 ]
+
+[[package]]
+name = "fallible-iterator"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
 name = "ff"
@@ -893,6 +912,18 @@ name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+dependencies = [
+ "ahash",
+]
+
+[[package]]
+name = "hashlink"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d99cf782f0dc4372d26846bec3de7804ceb5df083c2d4462c0b8d2330e894fa8"
+dependencies = [
+ "hashbrown",
+]
 
 [[package]]
 name = "heck"
@@ -1063,6 +1094,17 @@ name = "libc"
 version = "0.2.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12b8adadd720df158f4d70dfe7ccc6adb0472d7c55ca83445f6a5ab3e36f8fb6"
+
+[[package]]
+name = "libsqlite3-sys"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64d31059f22935e6c31830db5249ba2b7ecd54fd73a9909286f0a67aa55c2fbd"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "log"
@@ -1293,6 +1335,12 @@ name = "pin-utils"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+
+[[package]]
+name = "pkg-config"
+version = "0.3.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3831453b3449ceb48b6d9c7ad7c96d5ea673e9b470a1dc578c2ce6521230884c"
 
 [[package]]
 name = "plotters"
@@ -1578,6 +1626,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusqlite"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5f38ee71cbab2c827ec0ac24e76f82eca723cee92c509a65f67dee393c25112"
+dependencies = [
+ "bitflags",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "memchr",
+ "smallvec",
+ "time 0.2.27",
+]
+
+[[package]]
 name = "rustc_version"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1784,6 +1848,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f173ac3d1a7e3b28003f40de0b5ce7fe2710f9b9dc3fc38664cebee46b3b6527"
 
 [[package]]
+name = "smallvec"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
+
+[[package]]
 name = "socket2"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1907,6 +1977,7 @@ dependencies = [
  "tonic",
  "tonic-build",
  "zcash_client_backend",
+ "zcash_client_sqlite",
  "zcash_primitives",
  "zcash_proofs",
 ]
@@ -2253,6 +2324,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
+name = "vcpkg"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
 name = "version_check"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2415,6 +2492,7 @@ checksum = "9fc79f4a1e39857fc00c3f662cbf2651c771f00e9c15fe2abc341806bd46bd71"
 [[package]]
 name = "zcash_client_backend"
 version = "0.5.0"
+source = "git+https://github.com/zcash/librustzcash.git?rev=d50bb12a97da768dc8f3ee39b81f84262103e6eb#d50bb12a97da768dc8f3ee39b81f84262103e6eb"
 dependencies = [
  "base64",
  "bech32",
@@ -2436,8 +2514,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "zcash_client_sqlite"
+version = "0.3.0"
+source = "git+https://github.com/zcash/librustzcash.git?rev=d50bb12a97da768dc8f3ee39b81f84262103e6eb#d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+dependencies = [
+ "bech32",
+ "bs58",
+ "ff",
+ "group",
+ "jubjub",
+ "protobuf",
+ "rand_core",
+ "rusqlite",
+ "time 0.2.27",
+ "zcash_client_backend",
+ "zcash_primitives",
+]
+
+[[package]]
 name = "zcash_note_encryption"
 version = "0.0.0"
+source = "git+https://github.com/zcash/librustzcash.git?rev=d50bb12a97da768dc8f3ee39b81f84262103e6eb#d50bb12a97da768dc8f3ee39b81f84262103e6eb"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -2451,6 +2548,7 @@ dependencies = [
 [[package]]
 name = "zcash_primitives"
 version = "0.5.0"
+source = "git+https://github.com/zcash/librustzcash.git?rev=d50bb12a97da768dc8f3ee39b81f84262103e6eb#d50bb12a97da768dc8f3ee39b81f84262103e6eb"
 dependencies = [
  "aes",
  "bitvec 0.20.4",
@@ -2478,6 +2576,7 @@ dependencies = [
 [[package]]
 name = "zcash_proofs"
 version = "0.5.0"
+source = "git+https://github.com/zcash/librustzcash.git?rev=d50bb12a97da768dc8f3ee39b81f84262103e6eb#d50bb12a97da768dc8f3ee39b81f84262103e6eb"
 dependencies = [
  "bellman",
  "blake2b_simd",

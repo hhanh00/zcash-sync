@@ -16,9 +16,8 @@ async fn main_scan() {
         decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)
             .unwrap()
             .unwrap();
-    let ivk = fvk.fvk.vk.ivk();
 
-    scan_all(&vec![ivk]).await.unwrap();
+    scan_all(&vec![fvk]).await.unwrap();
 }
 
 #[allow(dead_code)]
@@ -48,7 +47,7 @@ fn test_increasing_notes() {
             if v % witness_freq == 0 {
                 // let w = IncrementalWitness::from_tree(&tree1);
                 // ws.push(w);
-                ws2.push(Witness::new(v));
+                ws2.push(Witness::new(v, 0, None));
             }
             nodes.push(node);
         }
@@ -89,7 +88,7 @@ fn test_increasing_gap(run_normal: bool, run_warp: bool) {
             let w = IncrementalWitness::from_tree(&tree1);
             ws.push(w);
         }
-        ws2.push(Witness::new(pos));
+        ws2.push(Witness::new(pos, 0, None));
         nodes.push(node);
         pos += 1;
     }

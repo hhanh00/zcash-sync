@@ -14,13 +14,12 @@ fn scan(c: &mut Criterion) {
             .unwrap()
             .unwrap();
 
-    let ivk = fvk.fvk.vk.ivk();
-    let ivks = &vec![ivk];
+    let fvks = &vec![fvk];
 
     c.bench_function("scan all", |b| {
         b.iter(|| {
             let r = Runtime::new().unwrap();
-            r.block_on(scan_all(ivks.clone().as_slice())).unwrap();
+            r.block_on(scan_all(fvks.clone().as_slice())).unwrap();
         });
     });
 }

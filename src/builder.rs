@@ -315,16 +315,15 @@ pub fn advance_tree(
 mod tests {
     use crate::builder::advance_tree;
     use crate::commitment::{CTree, Witness};
-    use crate::print::{print_tree, print_witness};
     use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
     use zcash_primitives::sapling::Node;
+    use crate::chain::DecryptedNote;
 
     #[test]
     fn test_advance_tree() {
         const NUM_NODES: usize = 1000;
         const NUM_CHUNKS: usize = 50;
         const WITNESS_PERCENT: f64 = 1.0; // percentage of notes that are ours
-        const DEBUG_PRINT: bool = true;
         let witness_freq = (100.0 / WITNESS_PERCENT) as usize;
 
         let mut tree1: CommitmentTree<Node> = CommitmentTree::empty();
@@ -347,7 +346,7 @@ mod tests {
                 // if v == 499 {
                     let w = IncrementalWitness::from_tree(&tree1);
                     ws.push(w);
-                    ws2.push(Witness::new(v));
+                    ws2.push(Witness::new(v, 0, None));
                 }
                 nodes.push(node);
             }
@@ -382,48 +381,6 @@ mod tests {
             }
         }
 
-        if DEBUG_PRINT && (failed_index.is_some() || !equal) {
-            let i = failed_index.unwrap();
-            println!("FAILED AT {}", i);
-            print_witness(&ws[i]);
-
-            // println!("-----");
-            // println!("Final-----");
-            //
-            // println!("{:?}", tree2.left.map(|n| hex::encode(n.repr)));
-            // println!("{:?}", tree2.right.map(|n| hex::encode(n.repr)));
-            // for p in tree2.parents.iter() {
-            //     println!("{:?}", p.map(|n| hex::encode(n.repr)));
-            // }
-            // println!("-----");
-
-            // println!("{:?}", tree1.left.map(|n| hex::encode(n.repr)));
-            // println!("{:?}", tree1.right.map(|n| hex::encode(n.repr)));
-            // for p in tree1.parents.iter() {
-            //     println!("{:?}", p.map(|n| hex::encode(n.repr)));
-            // }
-            println!("----- {}", ws2[i].position);
-            let tree2 = &ws2[i].tree;
-            println!("{:?}", tree2.left.map(|n| hex::encode(n.repr)));
-            println!("{:?}", tree2.right.map(|n| hex::encode(n.repr)));
-            for p in tree2.parents.iter() {
-                println!("{:?}", p.map(|n| hex::encode(n.repr)));
-            }
-            println!("-----");
-            let filled2 = &ws2[i].filled;
-            println!("Filled");
-            for f in filled2.iter() {
-                println!("{:?}", hex::encode(f.repr));
-            }
-            println!("Cursor");
-            let cursor2 = &ws2[i].cursor;
-            println!("{:?}", cursor2.left.map(|n| hex::encode(n.repr)));
-            println!("{:?}", cursor2.right.map(|n| hex::encode(n.repr)));
-            for p in cursor2.parents.iter() {
-                println!("{:?}", p.map(|n| hex::encode(n.repr)));
-            }
-
-            assert!(false);
-        }
+        assert!(equal && failed_index.is_none());
     }
 }

@@ -1,21 +1,26 @@
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
-use crate::NETWORK;
+use crate::{NETWORK, advance_tree};
 use ff::PrimeField;
 use group::GroupEncoding;
 use rayon::prelude::*;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Certificate, ClientTlsConfig};
 use tonic::Request;
-use zcash_primitives::consensus::BlockHeight;
+use zcash_primitives::consensus::{BlockHeight, Parameters, NetworkUpgrade};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decryption;
-use zcash_primitives::sapling::{Node, Note, SaplingIvk};
+use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
-use crate::commitment::{CTree, Witness, NotePosition};
+use crate::commitment::{CTree, Witness};
 use std::time::Instant;
 use log::info;
+use zcash_client_backend::encoding::decode_extended_full_viewing_key;
+use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 const MAX_CHUNK: u32 = 50000;
+// pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
+// pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
+// pub const LWD_URL: &str = "https://lwdv3.zecwallet.co";
 pub const LWD_URL: &str = "http://127.0.0.1:9067";
 
 pub async fn get_latest_height(
@@ -60,7 +65,7 @@ pub async fn download_chain(
 }
 
 pub struct DecryptNode {
-    ivks: Vec<SaplingIvk>,
+    fvks: Vec<ExtendedFullViewingKey>,
 }
 
 pub struct DecryptedBlock {
@@ -69,17 +74,25 @@ pub struct DecryptedBlock {
     pub count_outputs: u32,
 }
 
+#[derive(Clone)]
 pub struct DecryptedNote {
+    pub ivk: ExtendedFullViewingKey,
     pub note: Note,
-    pub position: u32,
+    pub pa: PaymentAddress,
+    pub position: usize,
+
+    pub height: u32,
+    pub txid: Vec<u8>,
+    pub tx_index: usize,
+    pub output_index: usize,
 }
 
-fn decrypt_notes(block: &CompactBlock, ivks: &[SaplingIvk]) -> DecryptedBlock {
+fn decrypt_notes(block: &CompactBlock, fvks: &[ExtendedFullViewingKey]) -> DecryptedBlock {
     let height = BlockHeight::from_u32(block.height as u32);
     let mut count_outputs = 0u32;
     let mut notes: Vec<DecryptedNote> = vec![];
-    for vtx in block.vtx.iter() {
-        for co in vtx.outputs.iter() {
+    for (tx_index, vtx) in block.vtx.iter().enumerate() {
+        for (output_index, co) in vtx.outputs.iter().enumerate() {
             let mut cmu = [0u8; 32];
             cmu.copy_from_slice(&co.cmu);
             let cmu = bls12_381::Scalar::from_repr(cmu).unwrap();
@@ -91,13 +104,20 @@ fn decrypt_notes(block: &CompactBlock, ivks: &[SaplingIvk]) -> DecryptedBlock {
                 cmu,
                 enc_ciphertext: co.ciphertext.to_vec(),
             };
-            for ivk in ivks.iter() {
-                if let Some((note, _pa)) =
+            for fvk in fvks.iter() {
+                let ivk = &fvk.fvk.vk.ivk();
+                if let Some((note, pa)) =
                     try_sapling_compact_note_decryption(&NETWORK, height, ivk, &od)
                 {
                     notes.push(DecryptedNote {
+                        ivk: fvk.clone(),
                         note,
-                        position: count_outputs,
+                        pa,
+                        position: count_outputs as usize,
+                        height: block.height as u32,
+                        tx_index,
+                        txid: vtx.hash.clone(),
+                        output_index,
                     });
                 }
             }
@@ -112,14 +132,14 @@ fn decrypt_notes(block: &CompactBlock, ivks: &[SaplingIvk]) -> DecryptedBlock {
 }
 
 impl DecryptNode {
-    pub fn new(ivks: Vec<SaplingIvk>) -> DecryptNode {
-        DecryptNode { ivks }
+    pub fn new(fvks: Vec<ExtendedFullViewingKey>) -> DecryptNode {
+        DecryptNode { fvks }
     }
 
     pub fn decrypt_blocks(&self, blocks: &[CompactBlock]) -> Vec<DecryptedBlock> {
         let mut decrypted_blocks: Vec<DecryptedBlock> = blocks
             .par_iter()
-            .map(|b| decrypt_notes(b, &self.ivks))
+            .map(|b| decrypt_notes(b, &self.fvks))
             .collect();
         decrypted_blocks.sort_by(|a, b| a.height.cmp(&b.height));
         decrypted_blocks
@@ -156,7 +176,7 @@ fn calculate_tree_state_v1(
         } // skip before height
         let mut notes = block.notes.iter();
         let mut n = notes.next();
-        let mut i = 0u32;
+        let mut i = 0usize;
         for tx in cb.vtx.iter() {
             for co in tx.outputs.iter() {
                 let mut cmu = [0u8; 32];
@@ -192,9 +212,12 @@ pub fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) 
     let start = Instant::now();
     for (cb, block) in cbs.iter().zip(blocks) {
         assert_eq!(cb.height as u32, block.height);
+        if !block.notes.is_empty() {
+            println!("{} {}", block.height, block.notes.len());
+        }
         let mut notes = block.notes.iter();
         let mut n = notes.next();
-        let mut i = 0u32;
+        let mut i = 0usize;
         for tx in cb.vtx.iter() {
             for co in tx.outputs.iter() {
                 let mut cmu = [0u8; 32];
@@ -215,13 +238,57 @@ pub fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) 
     }
     info!("Build CMU list: {} ms - {} nodes", start.elapsed().as_millis(), nodes.len());
 
-    let start = Instant::now();
-    let n = nodes.len();
-    let mut positions: Vec<_> = positions.iter().map(|&p| NotePosition::new(p, n)).collect();
-    let _frontier = CTree::calc_state(nodes, &mut positions, None);
-    let witnesses: Vec<_> = positions.iter().map(|p| p.witness.clone()).collect();
+    let witnesses: Vec<_> = positions.iter().map(|p| Witness::new(*p, 0, None)).collect();
+    let (_, new_witnesses) = advance_tree(CTree::new(), &witnesses, &mut nodes);
     info!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
-    witnesses
+    new_witnesses
+}
+
+pub async fn connect_lightwalletd() -> anyhow::Result<CompactTxStreamerClient<Channel>> {
+    let mut channel = tonic::transport::Channel::from_shared(LWD_URL)?;
+    if LWD_URL.starts_with("https") {
+        let pem = include_bytes!("ca.pem");
+        let ca = Certificate::from_pem(pem);
+        let tls = ClientTlsConfig::new().ca_certificate(ca);
+        channel = channel.tls_config(tls)?;
+    }
+    let client = CompactTxStreamerClient::connect(channel).await?;
+    Ok(client)
+}
+
+pub async fn sync(ivk: &str) -> anyhow::Result<()> {
+    let fvk =
+        decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)
+            .unwrap()
+            .unwrap();
+    let decrypter = DecryptNode::new(vec![fvk]);
+    let mut client = connect_lightwalletd().await?;
+    let start_height: u32 = crate::NETWORK
+        .activation_height(NetworkUpgrade::Sapling)
+        .unwrap()
+        .into();
+    let end_height = get_latest_height(&mut client).await?;
+
+    let start = Instant::now();
+    let cbs = download_chain(&mut client, start_height, end_height).await?;
+    eprintln!("Download chain: {} ms", start.elapsed().as_millis());
+
+    let start = Instant::now();
+    let blocks = decrypter.decrypt_blocks(&cbs);
+    eprintln!("Decrypt Notes: {} ms", start.elapsed().as_millis());
+
+    let start = Instant::now();
+    let witnesses = calculate_tree_state_v2(&cbs, &blocks);
+    eprintln!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
+
+    eprintln!("# Witnesses {}", witnesses.len());
+    for w in witnesses.iter() {
+        let mut bb: Vec<u8> = vec![];
+        w.write(&mut bb).unwrap();
+        log::info!("{}", hex::encode(&bb));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -247,14 +314,13 @@ mod tests {
     #[tokio::test]
     async fn test_download_chain() -> anyhow::Result<()> {
         dotenv::dotenv().unwrap();
-        let ivk = dotenv::var("IVK").unwrap();
+        let fvk = dotenv::var("FVK").unwrap();
 
         let fvk =
-            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)
+            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
                 .unwrap()
                 .unwrap();
-        let ivk = fvk.fvk.vk.ivk();
-        let decrypter = DecryptNode::new(vec![ivk]);
+        let decrypter = DecryptNode::new(vec![fvk]);
         let mut client = CompactTxStreamerClient::connect(LWD_URL).await?;
         let start_height: u32 = crate::NETWORK
             .activation_height(NetworkUpgrade::Sapling)
@@ -282,13 +348,15 @@ mod tests {
 
         // let witnesses = calculate_tree_state(&cbs, &blocks, 0, tree_state);
 
+        let start = Instant::now();
         let witnesses = calculate_tree_state_v2(&cbs, &blocks);
+        eprintln!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
 
         eprintln!("# Witnesses {}", witnesses.len());
         for w in witnesses.iter() {
             let mut bb: Vec<u8> = vec![];
             w.write(&mut bb).unwrap();
-            eprintln!("{}", hex::encode(&bb));
+            log::info!("{}", hex::encode(&bb));
         }
 
         Ok(())
