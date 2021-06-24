@@ -3,7 +3,7 @@ use zcash_primitives::consensus::Network;
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-pub const NETWORK: Network = Network::MainNetwork;
+pub const NETWORK: Network = Network::TestNetwork;
 
 mod builder;
 mod chain;
@@ -12,6 +12,7 @@ mod scan;
 mod key;
 mod db;
 mod wallet;
+mod print;
 
 pub use crate::builder::advance_tree;
 pub use crate::chain::{
@@ -24,3 +25,4 @@ pub use crate::lw_rpc::*;
 pub use crate::scan::{scan_all, sync_async, latest_height};
 pub use crate::key::{get_secret_key, get_address, get_viewing_key};
 pub use crate::db::DbAdapter;
+pub use crate::wallet::{Wallet, DEFAULT_ACCOUNT};

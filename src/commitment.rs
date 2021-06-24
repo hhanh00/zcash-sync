@@ -174,6 +174,15 @@ impl CTree {
         p
     }
 
+    pub fn clone_trimmed(&self, depth: usize) -> CTree {
+        let mut tree = self.clone();
+        tree.parents.truncate(depth);
+        if let Some(None) = tree.parents.last() { // Remove trailing None
+            tree.parents.truncate(depth - 1);
+        }
+        tree
+    }
+
     pub fn to_commitment_tree(&self) -> CommitmentTree<Node> {
         let mut bb: Vec<u8> = vec![];
         self.write(&mut bb).unwrap();

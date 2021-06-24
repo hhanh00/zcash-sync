@@ -40,7 +40,7 @@ pub async fn download_chain(
 ) -> anyhow::Result<Vec<CompactBlock>> {
     let mut cbs: Vec<CompactBlock> = Vec::new();
     let mut s = start_height + 1;
-    while s < end_height {
+    while s <= end_height {
         let e = (s + MAX_CHUNK - 1).min(end_height);
         let range = BlockRange {
             start: Some(BlockId {
@@ -68,10 +68,14 @@ pub struct DecryptNode {
     fvks: Vec<ExtendedFullViewingKey>,
 }
 
+#[derive(Eq, Hash, PartialEq)]
+pub struct Nf(pub [u8; 32]);
+
 pub struct DecryptedBlock {
     pub height: u32,
     pub notes: Vec<DecryptedNote>,
     pub count_outputs: u32,
+    pub spends: Vec<Nf>,
 }
 
 #[derive(Clone)]
@@ -79,7 +83,7 @@ pub struct DecryptedNote {
     pub ivk: ExtendedFullViewingKey,
     pub note: Note,
     pub pa: PaymentAddress,
-    pub position: usize,
+    pub position_in_block: usize,
 
     pub height: u32,
     pub txid: Vec<u8>,
@@ -90,8 +94,15 @@ pub struct DecryptedNote {
 fn decrypt_notes(block: &CompactBlock, fvks: &[ExtendedFullViewingKey]) -> DecryptedBlock {
     let height = BlockHeight::from_u32(block.height as u32);
     let mut count_outputs = 0u32;
+    let mut spends: Vec<Nf> = vec![];
     let mut notes: Vec<DecryptedNote> = vec![];
     for (tx_index, vtx) in block.vtx.iter().enumerate() {
+        for cs in vtx.spends.iter() {
+            let mut nf = [0u8; 32];
+            nf.copy_from_slice(&cs.nf);
+            spends.push(Nf(nf));
+        }
+
         for (output_index, co) in vtx.outputs.iter().enumerate() {
             let mut cmu = [0u8; 32];
             cmu.copy_from_slice(&co.cmu);
@@ -113,7 +124,7 @@ fn decrypt_notes(block: &CompactBlock, fvks: &[ExtendedFullViewingKey]) -> Decry
                         ivk: fvk.clone(),
                         note,
                         pa,
-                        position: count_outputs as usize,
+                        position_in_block: count_outputs as usize,
                         height: block.height as u32,
                         tx_index,
                         txid: vtx.hash.clone(),
@@ -126,6 +137,7 @@ fn decrypt_notes(block: &CompactBlock, fvks: &[ExtendedFullViewingKey]) -> Decry
     }
     DecryptedBlock {
         height: block.height as u32,
+        spends,
         notes,
         count_outputs,
     }
@@ -160,6 +172,15 @@ async fn get_tree_state(client: &mut CompactTxStreamerClient<Channel>, height: u
     rep.tree
 }
 
+pub async fn send_transaction(client: &mut CompactTxStreamerClient<Channel>, raw_tx: &[u8], height: u32) -> anyhow::Result<String> {
+    let raw_tx = RawTransaction {
+        data: raw_tx.to_vec(),
+        height: height as u64
+    };
+    let rep = client.send_transaction(Request::new(raw_tx)).await?.into_inner();
+    Ok(rep.error_message)
+}
+
 /* Using the IncrementalWitness */
 #[allow(dead_code)]
 fn calculate_tree_state_v1(
@@ -187,7 +208,7 @@ fn calculate_tree_state_v1(
                     w.append(node).unwrap();
                 }
                 if let Some(nn) = n {
-                    if i == nn.position {
+                    if i == nn.position_in_block {
                         let w = IncrementalWitness::from_tree(&tree_state);
                         witnesses.push(w);
                         n = notes.next();
@@ -226,7 +247,7 @@ pub fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) 
                 nodes.push(node);
 
                 if let Some(nn) = n {
-                    if i == nn.position {
+                    if i == nn.position_in_block {
                         positions.push(p);
                         n = notes.next();
                     }

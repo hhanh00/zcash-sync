@@ -1,5 +1,11 @@
-use rusqlite::{Connection, params, OptionalExtension};
+use rusqlite::{Connection, params, OptionalExtension, NO_PARAMS};
 use crate::{Witness, CTree};
+use zcash_primitives::sapling::{Note, Diversifier, Rseed, Node};
+use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_primitives::merkle_tree::IncrementalWitness;
+use std::collections::HashMap;
+use crate::chain::Nf;
+use zcash_primitives::consensus::{Parameters, NetworkUpgrade};
 
 pub struct DbAdapter {
     connection: Connection,
@@ -12,9 +18,13 @@ pub struct ReceivedNote {
     pub value: u64,
     pub rcm: Vec<u8>,
     pub nf: Vec<u8>,
-    pub is_change: bool,
-    pub memo: Vec<u8>,
-    pub spent: bool,
+    pub spent: Option<u32>,
+}
+
+pub struct SpendableNote {
+    pub note: Note,
+    pub diversifier: Diversifier,
+    pub witness: IncrementalWitness<Node>,
 }
 
 impl DbAdapter {
@@ -26,16 +36,22 @@ impl DbAdapter {
     }
 
     pub fn init_db(&self) -> anyhow::Result<()> {
+        self.connection.execute("CREATE TABLE IF NOT EXISTS accounts (
+            id_account INTEGER PRIMARY KEY,
+            sk TEXT NOT NULL UNIQUE,
+            ivk TEXT NOT NULL,
+            address TEXT NOT NULL)", NO_PARAMS)?;
+
         self.connection.execute("CREATE TABLE IF NOT EXISTS blocks (
             height INTEGER PRIMARY KEY,
             hash BLOB NOT NULL,
-            sapling_tree BLOB NOT NULL)", [])?;
+            sapling_tree BLOB NOT NULL)", NO_PARAMS)?;
 
         self.connection.execute("CREATE TABLE IF NOT EXISTS transactions (
             id_tx INTEGER PRIMARY KEY,
             txid BLOB NOT NULL UNIQUE,
             height INTEGER,
-            tx_index INTEGER)", [])?;
+            tx_index INTEGER)", NO_PARAMS)?;
 
         self.connection.execute("CREATE TABLE IF NOT EXISTS received_notes (
             id_note INTEGER PRIMARY KEY,
@@ -47,21 +63,22 @@ impl DbAdapter {
             value INTEGER NOT NULL,
             rcm BLOB NOT NULL,
             nf BLOB NOT NULL UNIQUE,
-            is_change INTEGER NOT NULL,
-            memo BLOB,
             spent INTEGER,
-            FOREIGN KEY (tx) REFERENCES transactions(id_tx),
-            FOREIGN KEY (spent) REFERENCES transactions(id_tx),
-            CONSTRAINT tx_output UNIQUE (tx, output_index))", [])?;
+            CONSTRAINT tx_output UNIQUE (tx, output_index))", NO_PARAMS)?;
 
         self.connection.execute("CREATE TABLE IF NOT EXISTS sapling_witnesses (
             id_witness INTEGER PRIMARY KEY,
             note INTEGER NOT NULL,
             height INTEGER NOT NULL,
             witness BLOB NOT NULL,
-            FOREIGN KEY (note) REFERENCES received_notes(id_note),
-            CONSTRAINT witness_height UNIQUE (note, height))", [])?;
+            CONSTRAINT witness_height UNIQUE (note, height))", NO_PARAMS)?;
 
+        Ok(())
+    }
+
+    pub fn store_account(&self, sk: &str, ivk: &str, address: &str) -> anyhow::Result<()> {
+        self.connection.execute("INSERT INTO accounts(sk, ivk, address) VALUES (?1, ?2, ?3)
+            ON CONFLICT DO NOTHING", params![sk, ivk, address])?;
         Ok(())
     }
 
@@ -77,53 +94,70 @@ impl DbAdapter {
     }
 
     pub fn store_block(&self, height: u32, hash: &[u8], tree: &CTree) -> anyhow::Result<()> {
+        log::info!("+block");
         let mut bb: Vec<u8> = vec![];
         tree.write(&mut bb)?;
         self.connection.execute("INSERT INTO blocks(height, hash, sapling_tree)
         VALUES (?1, ?2, ?3)
         ON CONFLICT DO NOTHING", params![height, hash, &bb])?;
+        log::info!("-block");
         Ok(())
     }
 
     pub fn store_transaction(&self, txid: &[u8], height: u32, tx_index: u32) -> anyhow::Result<u32> {
+        log::info!("+transaction");
         self.connection.execute("INSERT INTO transactions(txid, height, tx_index)
         VALUES (?1, ?2, ?3)
         ON CONFLICT DO NOTHING", params![txid, height, tx_index])?;
         let id_tx: u32 = self.connection.query_row("SELECT id_tx FROM transactions WHERE txid = ?1", params![txid], |row| row.get(0))?;
+        log::info!("-transaction {}", id_tx);
         Ok(id_tx)
     }
 
     pub fn store_received_note(&self, note: &ReceivedNote, id_tx: u32, position: usize) -> anyhow::Result<u32> {
-        self.connection.execute("INSERT INTO received_notes(tx, height, position, output_index, diversifier, value, rcm, nf, is_change, memo, spent)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-        ON CONFLICT DO NOTHING", params![id_tx, note.height, position, note.output_index, note.diversifier, note.value, note.rcm, note.nf, note.is_change, note.memo, note.spent])?;
+        log::info!("+received_note {}", id_tx);
+        self.connection.execute("INSERT INTO received_notes(tx, height, position, output_index, diversifier, value, rcm, nf, spent)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        ON CONFLICT DO NOTHING", params![id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.nf, note.spent])?;
         let id_note: u32 = self.connection.query_row("SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2", params![id_tx, note.output_index], |row| row.get(0))?;
+        log::info!("-received_note");
         Ok(id_note)
     }
 
     pub fn store_witnesses(&self, witness: &Witness, height: u32, id_note: u32) -> anyhow::Result<()> {
+        log::info!("+witnesses");
         let mut bb: Vec<u8> = vec![];
         witness.write(&mut bb)?;
-        println!("{} {}", height, id_note);
         self.connection.execute("INSERT INTO sapling_witnesses(note, height, witness) VALUES (?1, ?2, ?3)
         ON CONFLICT DO NOTHING", params![id_note, height, bb])?;
+        log::info!("-witnesses");
         Ok(())
     }
 
     pub fn get_balance(&self) -> anyhow::Result<u64> {
-        let balance: u64 = self.connection.query_row("SELECT SUM(value) FROM received_notes WHERE spent = 0", [], |row| row.get(0))?;
-        Ok(balance)
+        let balance: Option<i64> = self.connection.query_row("SELECT SUM(value) FROM received_notes WHERE spent IS NULL", NO_PARAMS, |row| row.get(0))?;
+        Ok(balance.unwrap_or(0) as u64)
     }
 
-    pub fn get_last_height(&self) -> anyhow::Result<Option<u32>> {
-        let height: Option<u32> = self.connection.query_row("SELECT MAX(height) FROM blocks", [], |row| row.get(0)).optional()?;
+    pub fn get_last_sync_height(&self) -> anyhow::Result<Option<u32>> {
+        let height: Option<u32> = self.connection.query_row("SELECT MAX(height) FROM blocks", NO_PARAMS, |row| row.get(0))?;
+        Ok(height)
+    }
+
+    pub fn get_db_height(&self) -> anyhow::Result<u32> {
+        let height: u32 = self.get_last_sync_height()?.unwrap_or_else(|| {
+            crate::NETWORK
+                .activation_height(NetworkUpgrade::Sapling)
+                .unwrap()
+                .into()
+        });
         Ok(height)
     }
 
     pub fn get_tree(&self) -> anyhow::Result<(CTree, Vec<Witness>)> {
         let res = self.connection.query_row(
             "SELECT height, sapling_tree FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)",
-            [], |row| {
+            NO_PARAMS, |row| {
                 let height: u32 = row.get(0)?;
                 let tree: Vec<u8> = row.get(1)?;
                 Ok((height, tree))
@@ -147,6 +181,89 @@ impl DbAdapter {
             },
             None => (CTree::new(), vec![])
         })
+    }
+
+    pub fn get_nullifiers(&self) -> anyhow::Result<HashMap<Nf, u32>> {
+        let mut statement = self.connection.prepare(
+            "SELECT id_note, nf FROM received_notes WHERE spent = 0")?;
+        let nfs_res = statement.query_map(NO_PARAMS, |row| {
+            let id_note: u32 = row.get(0)?;
+            let nf_vec: Vec<u8> = row.get(1)?;
+            let mut nf = [0u8; 32];
+            nf.clone_from_slice(&nf_vec);
+            Ok((id_note, nf))
+        })?;
+        let mut nfs: HashMap<Nf, u32> = HashMap::new();
+        for n in nfs_res {
+            let n = n?;
+            nfs.insert(Nf(n.1), n.0);
+        }
+
+        Ok(nfs)
+    }
+
+    pub fn get_spendable_notes(&self, anchor_height: u32, fvk: &ExtendedFullViewingKey) -> anyhow::Result<Vec<SpendableNote>> {
+        let mut statement = self.connection.prepare(
+            "SELECT diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL
+            AND w.height = (
+	            SELECT MAX(height) FROM sapling_witnesses WHERE height <= ?1
+            ) AND r.id_note = w.note")?;
+        let notes = statement.query_map(params![anchor_height], |row| {
+            let diversifier: Vec<u8> = row.get(0)?;
+            let value: i64 = row.get(1)?;
+            let rcm: Vec<u8> = row.get(2)?;
+            let witness: Vec<u8> = row.get(3)?;
+
+            let mut diversifer_bytes = [0u8; 11];
+            diversifer_bytes.copy_from_slice(&diversifier);
+            let diversifier = Diversifier(diversifer_bytes);
+            let mut rcm_bytes = [0u8; 32];
+            rcm_bytes.copy_from_slice(&rcm);
+            let rcm = jubjub::Fr::from_bytes(&rcm_bytes).unwrap();
+            let rseed = Rseed::BeforeZip212(rcm);
+            let witness = IncrementalWitness::<Node>::read(&*witness).unwrap();
+
+            let pa = fvk.fvk.vk.to_payment_address(diversifier).unwrap();
+            let note = pa.create_note(value as u64, rseed).unwrap();
+            Ok(SpendableNote {
+                note,
+                diversifier,
+                witness
+            })
+        })?;
+        let mut spendable_notes: Vec<SpendableNote> = vec![];
+        for n in notes {
+            spendable_notes.push(n?);
+        }
+
+        Ok(spendable_notes)
+    }
+
+    pub fn mark_spent(&self, id: u32, height: u32) -> anyhow::Result<()> {
+        log::info!("+mark_spent");
+        self.connection.execute("UPDATE received_notes SET spent = ?1 WHERE id_note = ?2", params![height, id])?;
+        log::info!("-mark_spent");
+        Ok(())
+    }
+
+    pub fn get_sk(&self, account: u32) -> anyhow::Result<String> {
+        log::info!("+get_sk");
+        let ivk = self.connection.query_row("SELECT sk FROM accounts WHERE id_account = ?1", params![account], |row | {
+            let ivk: String = row.get(0)?;
+            Ok(ivk)
+        })?;
+        log::info!("-get_sk");
+        Ok(ivk)
+    }
+
+    pub fn get_ivk(&self, account: u32) -> anyhow::Result<String> {
+        log::info!("+get_ivk");
+        let ivk = self.connection.query_row("SELECT ivk FROM accounts WHERE id_account = ?1", params![account], |row | {
+            let ivk: String = row.get(0)?;
+            Ok(ivk)
+        })?;
+        log::info!("-get_ivk");
+        Ok(ivk)
     }
 }
 
@@ -172,9 +289,7 @@ mod tests {
             value: 0,
             rcm: vec![],
             nf: vec![],
-            is_change: false,
-            memo: vec![],
-            spent: false
+            spent: None
         }, id_tx, 5).unwrap();
         let witness = Witness {
             position: 10,

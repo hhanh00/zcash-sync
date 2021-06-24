@@ -37,19 +37,31 @@ rayon = "1.5.1"
 byteorder = "1.4.3"
 tiny-bip39 = "0.8"
 rand = "0.8.4"
-rusqlite = "^0.25.3"
+rusqlite = { version = "^0.24", features = ["bundled"] }
+
+#[dependencies.zcash_client_backend]
+#git = "https://github.com/zcash/librustzcash.git"
+#rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+#
+#[dependencies.zcash_primitives]
+#git = "https://github.com/zcash/librustzcash.git"
+#rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+#
+#[dependencies.zcash_proofs]
+#git = "https://github.com/zcash/librustzcash.git"
+#rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
 
 [dependencies.zcash_client_backend]
-git = "https://github.com/zcash/librustzcash.git"
-rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+path = "/home/hanh/projects/librustzcash/zcash_client_backend"
 
 [dependencies.zcash_primitives]
-git = "https://github.com/zcash/librustzcash.git"
-rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+path = "/home/hanh/projects/librustzcash/zcash_primitives"
 
 [dependencies.zcash_proofs]
-git = "https://github.com/zcash/librustzcash.git"
-rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+path = "/home/hanh/projects/librustzcash/zcash_proofs"
+
+[dependencies.zcash_params]
+path = "../zcash_params"
 
 [build-dependencies]
 tonic-build = "0.4.2"
