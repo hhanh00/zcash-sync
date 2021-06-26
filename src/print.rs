@@ -1,6 +1,6 @@
-use zcash_primitives::sapling::Node;
+use crate::{CTree, Witness};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
-use crate::{Witness, CTree};
+use zcash_primitives::sapling::Node;
 
 #[allow(dead_code)]
 pub fn print_node(n: &Node) {
@@ -52,5 +52,4 @@ pub fn print_witness2(w: &Witness) {
     for p in t.parents.iter() {
         println!("{:?}", p.map(|n| hex::encode(n.repr)));
     }
-
 }

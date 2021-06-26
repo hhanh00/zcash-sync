@@ -20,6 +20,7 @@ struct CTreeBuilder {
     total_len: usize,
     depth: usize,
     offset: Option<Node>,
+    first_block: bool,
 }
 
 impl Builder<CTree, ()> for CTreeBuilder {
@@ -37,30 +38,30 @@ impl Builder<CTree, ()> for CTreeBuilder {
             m = commitments.len();
         };
 
-        let n =
-            if self.total_len > 0 {
-                if self.depth == 0 {
-                    if m % 2 == 0 {
-                        self.next_tree.left = Some(*Self::get(commitments, m - 2, &offset));
-                        self.next_tree.right = Some(*Self::get(commitments, m - 1, &offset));
-                        m - 2
-                    } else {
-                        self.next_tree.left = Some(*Self::get(commitments, m - 1, &offset));
-                        self.next_tree.right = None;
-                        m - 1
-                    }
+        let n = if self.total_len > 0 {
+            if self.depth == 0 {
+                if m % 2 == 0 {
+                    self.next_tree.left = Some(*Self::get(commitments, m - 2, &offset));
+                    self.next_tree.right = Some(*Self::get(commitments, m - 1, &offset));
+                    m - 2
                 } else {
-                    if m % 2 == 0 {
-                        self.next_tree.parents.push(None);
-                        m
-                    } else {
-                        let last_node = Self::get(commitments, m - 1, &offset);
-                        self.next_tree.parents.push(Some(*last_node));
-                        m - 1
-                    }
+                    self.next_tree.left = Some(*Self::get(commitments, m - 1, &offset));
+                    self.next_tree.right = None;
+                    m - 1
+                }
+            } else {
+                if m % 2 == 0 {
+                    self.next_tree.parents.push(None);
+                    m
+                } else {
+                    let last_node = Self::get(commitments, m - 1, &offset);
+                    self.next_tree.parents.push(Some(*last_node));
+                    m - 1
                 }
             }
-        else { 0 };
+        } else {
+            0
+        };
         assert_eq!(n % 2, 0);
 
         self.offset = offset;
@@ -106,7 +107,7 @@ impl Builder<CTree, ()> for CTreeBuilder {
 }
 
 impl CTreeBuilder {
-    fn new(prev_tree: CTree, len: usize) -> CTreeBuilder {
+    fn new(prev_tree: CTree, len: usize, first_block: bool) -> CTreeBuilder {
         let start = prev_tree.get_position();
         CTreeBuilder {
             left: prev_tree.left,
@@ -117,6 +118,7 @@ impl CTreeBuilder {
             total_len: len,
             depth: 0,
             offset: None,
+            first_block,
         }
     }
 
@@ -142,7 +144,7 @@ impl CTreeBuilder {
         Self::get_opt(commitments, index, offset).unwrap()
     }
 
-    fn adjusted_start(&self, prev: &Option<Node>, _depth: usize) -> usize {
+    fn adjusted_start(&self, prev: &Option<Node>) -> usize {
         if prev.is_some() {
             self.start - 1
         } else {
@@ -193,10 +195,9 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
         let depth = context.depth;
 
         let tree = &mut self.witness.tree;
-        let right = if depth != 0 { context.right } else { None };
 
         if self.inside {
-            let rp = self.p - context.adjusted_start(&offset, depth);
+            let rp = self.p - context.adjusted_start(&offset);
             if depth == 0 {
                 if self.p % 2 == 1 {
                     tree.left = Some(*CTreeBuilder::get(commitments, rp - 1, &offset));
@@ -221,10 +222,15 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
         // for c in commitments.iter() {
         //     println!("{}", hex::encode(c.repr));
         // }
+        let right = if depth != 0 && !context.first_block {
+            context.right
+        } else {
+            None
+        };
         let p1 = self.p + 1;
-        let has_p1 = p1 >= context.adjusted_start(&right, depth) && p1 < context.start + commitments.len();
+        let has_p1 = p1 >= context.adjusted_start(&right) && p1 < context.start + commitments.len();
         if has_p1 {
-            let p1 = CTreeBuilder::get(commitments, p1 - context.adjusted_start(&right, depth), &right);
+            let p1 = CTreeBuilder::get(commitments, p1 - context.adjusted_start(&right), &right);
             if depth == 0 {
                 if tree.right.is_none() {
                     self.witness.filled.push(*p1);
@@ -289,11 +295,12 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
 
 #[allow(dead_code)]
 pub fn advance_tree(
-    prev_tree: CTree,
+    prev_tree: &CTree,
     prev_witnesses: &[Witness],
     mut commitments: &mut [Node],
+    first_block: bool,
 ) -> (CTree, Vec<Witness>) {
-    let mut builder = CTreeBuilder::new(prev_tree, commitments.len());
+    let mut builder = CTreeBuilder::new(prev_tree.clone(), commitments.len(), first_block);
     let mut witness_builders: Vec<_> = prev_witnesses
         .iter()
         .map(|witness| WitnessBuilder::new(&builder, witness.clone(), commitments.len()))
@@ -319,43 +326,115 @@ pub fn advance_tree(
     (tree, witnesses)
 }
 
+pub struct BlockProcessor {
+    prev_tree: CTree,
+    prev_witnesses: Vec<Witness>,
+    first_block: bool,
+}
+
+impl BlockProcessor {
+    pub fn new(prev_tree: &CTree, prev_witnesses: &[Witness]) -> BlockProcessor {
+        BlockProcessor {
+            prev_tree: prev_tree.clone(),
+            prev_witnesses: prev_witnesses.to_vec(),
+            first_block: true,
+        }
+    }
+
+    pub fn add_nodes(&mut self, nodes: &mut [Node], new_witnesses: &[Witness]) {
+        self.prev_witnesses.extend_from_slice(new_witnesses);
+        let (t, ws) = advance_tree(
+            &self.prev_tree,
+            &self.prev_witnesses,
+            nodes,
+            self.first_block,
+        );
+        self.prev_tree = t;
+        self.prev_witnesses = ws;
+    }
+
+    pub fn finalize(self) -> (CTree, Vec<Witness>) {
+        let (t, ws) = advance_tree(&self.prev_tree, &self.prev_witnesses, &mut [], false);
+        (t, ws)
+    }
+}
+
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
-    use crate::builder::advance_tree;
+    use crate::builder::{advance_tree, BlockProcessor};
+    use crate::chain::DecryptedNote;
     use crate::commitment::{CTree, Witness};
+    use crate::print::{print_ctree, print_tree, print_witness, print_witness2};
     use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
     use zcash_primitives::sapling::Node;
-    use crate::chain::DecryptedNote;
-    use crate::print::{print_witness, print_witness2, print_tree, print_ctree};
+
+    #[test]
+    fn test_advance_tree_equal_blocks() {
+        for num_nodes in 1..=10 {
+            for num_chunks in 1..=10 {
+                test_advance_tree_helper(num_nodes, num_chunks, 100.0, None);
+            }
+        }
+    }
+
+    #[test]
+    fn test_advance_tree_unequal_blocks() {
+        for num_nodes1 in 1..=30 {
+            for num_nodes2 in 1..=30 {
+                println!("TESTING {} {}", num_nodes1, num_nodes2);
+                let (t, ws) = test_advance_tree_helper(num_nodes1, 1, 100.0, None);
+                test_advance_tree_helper(num_nodes2, 1, 100.0, Some((t, ws)));
+            }
+        }
+    }
 
     #[test]
     fn test_advance_tree() {
-        for num_nodes in 1..=10 {
-            for num_chunks in 1..=10 {
-                test_advance_tree_helper(num_nodes, num_chunks, 100.0);
-            }
-        }
+        test_advance_tree_helper(100, 50, 1.0, None);
 
-        test_advance_tree_helper(100, 50, 1.0);
         // test_advance_tree_helper(2, 10, 100.0);
         // test_advance_tree_helper(1, 40, 100.0);
         // test_advance_tree_helper(10, 2, 100.0);
     }
 
-    fn test_advance_tree_helper(num_nodes: usize, num_chunks: usize, witness_percent: f64) {
+    fn test_advance_tree_helper(
+        num_nodes: usize,
+        num_chunks: usize,
+        witness_percent: f64,
+        initial: Option<(CTree, Vec<Witness>)>,
+    ) -> (CTree, Vec<Witness>) {
         let witness_freq = (100.0 / witness_percent) as usize;
 
         let mut tree1: CommitmentTree<Node> = CommitmentTree::empty();
         let mut tree2 = CTree::new();
         let mut ws: Vec<IncrementalWitness<Node>> = vec![];
         let mut ws2: Vec<Witness> = vec![];
+        if let Some((t0, ws0)) = initial {
+            tree2 = t0;
+            ws2 = ws0;
+
+            let mut bb: Vec<u8> = vec![];
+            tree2.write(&mut bb).unwrap();
+            tree1 = CommitmentTree::<Node>::read(&*bb).unwrap();
+
+            for w in ws2.iter() {
+                bb = vec![];
+                w.write(&mut bb).unwrap();
+                let w1 = IncrementalWitness::<Node>::read(&*bb).unwrap();
+                ws.push(w1);
+            }
+        }
+        let p0 = tree2.get_position();
+        let mut bp = BlockProcessor::new(&tree2, &ws2);
+
         for i in 0..num_chunks {
             println!("{}", i);
             let mut nodes: Vec<_> = vec![];
+            let mut ws2: Vec<Witness> = vec![];
             for j in 0..num_nodes {
                 let mut bb = [0u8; 32];
-                let v = i * num_nodes + j;
+                let v = i * num_nodes + j + p0;
                 bb[0..8].copy_from_slice(&v.to_be_bytes());
                 let node = Node::new(bb);
                 tree1.append(node).unwrap();
@@ -363,7 +442,7 @@ mod tests {
                     w.append(node).unwrap();
                 }
                 if v % witness_freq == 0 {
-                // if v == 0 {
+                    // if v == 0 {
                     let w = IncrementalWitness::from_tree(&tree1);
                     ws.push(w);
                     ws2.push(Witness::new(v, 0, None));
@@ -371,15 +450,10 @@ mod tests {
                 nodes.push(node);
             }
 
-            let (new_tree, new_witnesses) = advance_tree(tree2, &ws2, &mut nodes);
-            tree2 = new_tree;
-            ws2 = new_witnesses;
+            bp.add_nodes(&mut nodes, &ws2);
         }
 
-        // Push an empty block
-        // It will calculate the tail of the tree
-        // This step is required at the end of a series of chunks
-        let (new_tree, new_witnesses) = advance_tree(tree2, &ws2, &mut []);
+        let (new_tree, new_witnesses) = bp.finalize();
         tree2 = new_tree;
         ws2 = new_witnesses;
 
@@ -411,18 +485,20 @@ mod tests {
             if bb1.as_slice() != bb2.as_slice() {
                 failed_index = Some(i);
                 println!("FAILED AT {}", i);
-                if let Some(ref c) = w1.cursor {
-                    print_tree(c);
-                }
-                else { println!("NONE"); }
-
                 println!("GOOD");
                 print_witness(&w1);
+                if let Some(ref c) = w1.cursor {
+                    print_tree(c);
+                } else {
+                    println!("NONE");
+                }
+
                 println!("BAD");
                 print_witness2(&w2);
             }
+            assert!(equal && failed_index.is_none());
         }
 
-        assert!(equal && failed_index.is_none());
+        (tree2, ws2)
     }
 }

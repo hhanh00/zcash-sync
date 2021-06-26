@@ -32,6 +32,7 @@ fn test_increasing_notes() {
     let mut _ws: Vec<IncrementalWitness<Node>> = vec![];
     let mut ws2: Vec<Witness> = vec![];
     let start = Instant::now();
+    let mut first_block = true;
     for i in 0..NUM_CHUNKS {
         eprintln!("{}, {}", i, start.elapsed().as_millis());
         let mut nodes: Vec<_> = vec![];
@@ -51,11 +52,14 @@ fn test_increasing_notes() {
             }
             nodes.push(node);
         }
-        let (new_tree, new_witnesses) = advance_tree(tree2, &ws2, &mut nodes);
+        let (new_tree, new_witnesses) = advance_tree(&tree2, &ws2, &mut nodes, first_block);
+        first_block = false;
         tree2 = new_tree;
         ws2 = new_witnesses;
     }
 
+    let (_, new_witnesses) = advance_tree(&tree2, &ws2, &mut [], false);
+    ws2 = new_witnesses;
     println!("# witnesses = {}", ws2.len());
 }
 
@@ -78,6 +82,7 @@ fn test_increasing_gap(run_normal: bool, run_warp: bool) {
     // Add our received notes
     let mut pos = 0usize;
     let mut nodes: Vec<_> = vec![];
+    let mut first_block = true;
     for _ in 0..NUM_WITNESS {
         let node = mk_node(pos);
         if run_normal {
@@ -94,7 +99,8 @@ fn test_increasing_gap(run_normal: bool, run_warp: bool) {
     }
 
     if run_warp {
-        let (new_tree, new_witnesses) = advance_tree(tree2, &ws2, &mut nodes);
+        let (new_tree, new_witnesses) = advance_tree(&tree2, &ws2, &mut nodes, first_block);
+        first_block = false;
         tree2 = new_tree;
         ws2 = new_witnesses;
     }
@@ -116,12 +122,17 @@ fn test_increasing_gap(run_normal: bool, run_warp: bool) {
         }
 
         if run_warp {
-            let (new_tree, new_witnesses) = advance_tree(tree2, &ws2, &mut nodes);
+            let (new_tree, new_witnesses) = advance_tree(&tree2, &ws2, &mut nodes, first_block);
             tree2 = new_tree;
             ws2 = new_witnesses;
         }
         node_count *= 2;
         eprintln!("{}, {}, {}", i, node_count, start.elapsed().as_millis());
+    }
+
+    if run_warp {
+        let (_, new_witnesses) = advance_tree(&tree2, &ws2, &mut [], false);
+        ws2 = new_witnesses;
     }
 
     println!("# witnesses = {}", ws2.len());

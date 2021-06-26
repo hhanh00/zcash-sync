@@ -1,7 +1,7 @@
-use sync::{DbAdapter, Wallet, DEFAULT_ACCOUNT};
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
 use rand::RngCore;
+use sync::{DbAdapter, Wallet, DEFAULT_ACCOUNT, ChainError};
 
 const DB_NAME: &str = "zec.db";
 
@@ -23,8 +23,16 @@ async fn test() -> anyhow::Result<()> {
     };
     let wallet = Wallet::new(DB_NAME);
     wallet.new_account_with_seed(&seed).unwrap();
-    wallet.sync(DEFAULT_ACCOUNT, progress).await.unwrap();
-    let tx_id = wallet.send_payment(DEFAULT_ACCOUNT, &address, 1000).await.unwrap();
+    let res = wallet.sync(DEFAULT_ACCOUNT, progress).await;
+    if let Err(err) = res {
+        if let Some(_) = err.downcast_ref::<ChainError>() {
+            println!("REORG");
+        }
+    }
+    let tx_id = wallet
+        .send_payment(DEFAULT_ACCOUNT, &address, 50000)
+        .await
+        .unwrap();
     println!("TXID = {}", tx_id);
 
     Ok(())

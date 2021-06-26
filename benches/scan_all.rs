@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use tokio::runtime::Runtime;
 use sync::{scan_all, NETWORK};
+use tokio::runtime::Runtime;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::Parameters;
 

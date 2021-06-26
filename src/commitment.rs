@@ -1,9 +1,9 @@
+use crate::chain::DecryptedNote;
 use byteorder::WriteBytesExt;
-use std::io::{Write, Read};
-use zcash_primitives::merkle_tree::{Hashable, CommitmentTree};
+use std::io::{Read, Write};
+use zcash_primitives::merkle_tree::{CommitmentTree, Hashable};
 use zcash_primitives::sapling::Node;
 use zcash_primitives::serialize::{Optional, Vector};
-use crate::chain::DecryptedNote;
 
 /*
 Same behavior and structure as CommitmentTree<Node> from librustzcash
@@ -77,9 +77,9 @@ gets pushed into `filled`.
 #[derive(Clone)]
 pub struct Witness {
     pub position: usize,
-    pub tree: CTree,       // commitment tree at the moment the witness is created: immutable
+    pub tree: CTree, // commitment tree at the moment the witness is created: immutable
     pub filled: Vec<Node>, // as more nodes are added, levels get filled up: won't change anymore
-    pub cursor: CTree,     // partial tree which still updates when nodes are added
+    pub cursor: CTree, // partial tree which still updates when nodes are added
 
     // not used for decryption but identifies the witness
     pub id_note: u32,
@@ -177,7 +177,8 @@ impl CTree {
     pub fn clone_trimmed(&self, depth: usize) -> CTree {
         let mut tree = self.clone();
         tree.parents.truncate(depth);
-        if let Some(None) = tree.parents.last() { // Remove trailing None
+        if let Some(None) = tree.parents.last() {
+            // Remove trailing None
             tree.parents.truncate(depth - 1);
         }
         tree
