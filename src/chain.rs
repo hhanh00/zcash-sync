@@ -19,10 +19,11 @@ use zcash_primitives::transaction::components::sapling::CompactOutputDescription
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 const MAX_CHUNK: u32 = 50000;
+pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "https://testnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
 // pub const LWD_URL: &str = "https://lwdv3.zecwallet.co";
-pub const LWD_URL: &str = "http://127.0.0.1:9067";
+// pub const LWD_URL: &str = "http://127.0.0.1:9067";
 
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
@@ -211,7 +212,13 @@ pub async fn send_transaction(
         .send_transaction(Request::new(raw_tx))
         .await?
         .into_inner();
-    Ok(rep.error_message)
+    let code = rep.error_code;
+    if code == 0 {
+        Ok(rep.error_message)
+    }
+    else {
+        Err(anyhow::anyhow!(rep.error_message))
+    }
 }
 
 /* Using the IncrementalWitness */

@@ -3,7 +3,7 @@ use zcash_primitives::consensus::Network;
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-pub const NETWORK: Network = Network::TestNetwork;
+pub const NETWORK: Network = Network::MainNetwork;
 
 mod builder;
 mod chain;
@@ -28,3 +28,4 @@ pub use crate::lw_rpc::*;
 pub use crate::mempool::MemPool;
 pub use crate::scan::{latest_height, scan_all, sync_async};
 pub use crate::wallet::{Wallet, WalletBalance, DEFAULT_ACCOUNT};
+pub use crate::print::*;

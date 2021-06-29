@@ -17,6 +17,7 @@ use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::Node;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+use std::panic;
 
 pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
     let decrypter = DecryptNode::new(fvks.to_vec());
@@ -214,6 +215,7 @@ pub async fn sync_async(
             if !nodes.is_empty() {
                 bp.add_nodes(&mut nodes, &witnesses);
             }
+            // println!("NOTES = {}", nodes.len());
 
             if let Some(block) = blocks.0.last() {
                 let mut hash = [0u8; 32];
@@ -276,6 +278,9 @@ pub async fn sync_async(
         }
         Err(err) => {
             log::info!("Sync error = {}", err);
+            if err.is_panic() {
+                panic::resume_unwind(err.into_panic());
+            }
             anyhow::bail!("Join Error");
         },
     }

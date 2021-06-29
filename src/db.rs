@@ -11,7 +11,7 @@ use zcash_primitives::zip32::ExtendedFullViewingKey;
 pub const DEFAULT_DB_PATH: &str = "zec.db";
 
 pub struct DbAdapter {
-    connection: Connection,
+    pub connection: Connection,
 }
 
 pub struct ReceivedNote {
@@ -25,6 +25,7 @@ pub struct ReceivedNote {
 }
 
 pub struct SpendableNote {
+    pub id: u32,
     pub note: Note,
     pub diversifier: Diversifier,
     pub witness: IncrementalWitness<Node>,
@@ -40,6 +41,7 @@ impl DbAdapter {
         self.connection.execute(
             "CREATE TABLE IF NOT EXISTS accounts (
             id_account INTEGER PRIMARY KEY,
+            seed TEXT NOT NULL,
             sk TEXT NOT NULL UNIQUE,
             ivk TEXT NOT NULL,
             address TEXT NOT NULL)",
@@ -95,11 +97,11 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn store_account(&self, sk: &str, ivk: &str, address: &str) -> anyhow::Result<()> {
+    pub fn store_account(&self, seed: &str, sk: &str, ivk: &str, address: &str) -> anyhow::Result<()> {
         self.connection.execute(
-            "INSERT INTO accounts(sk, ivk, address) VALUES (?1, ?2, ?3)
+            "INSERT INTO accounts(seed, sk, ivk, address) VALUES (?1, ?2, ?3, ?4)
             ON CONFLICT DO NOTHING",
-            params![sk, ivk, address],
+            params![seed, sk, ivk, address],
         )?;
         Ok(())
     }
@@ -235,7 +237,7 @@ impl DbAdapter {
 
     pub fn get_balance(&self) -> anyhow::Result<u64> {
         let balance: Option<i64> = self.connection.query_row(
-            "SELECT SUM(value) FROM received_notes WHERE spent IS NULL",
+            "SELECT SUM(value) FROM received_notes WHERE spent IS NULL OR spent = 0",
             NO_PARAMS,
             |row| row.get(0),
         )?;
@@ -291,12 +293,11 @@ impl DbAdapter {
             Some((height, tree)) => {
                 let tree = CTree::read(&*tree)?;
                 let mut statement = self.connection.prepare(
-                "SELECT id_note, position, witness FROM sapling_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND n.spent IS NULL")?;
+                "SELECT id_note, witness FROM sapling_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND (n.spent IS NULL OR n.spent = 0)")?;
                 let ws = statement.query_map(params![height], |row| {
                     let id_note: u32 = row.get(0)?;
-                    let position: u32 = row.get(1)?;
-                    let witness: Vec<u8> = row.get(2)?;
-                    Ok(Witness::read(position as usize, id_note, &*witness).unwrap())
+                    let witness: Vec<u8> = row.get(1)?;
+                    Ok(Witness::read(id_note, &*witness).unwrap())
                 })?;
                 let mut witnesses: Vec<Witness> = vec![];
                 for w in ws {
@@ -311,7 +312,7 @@ impl DbAdapter {
     pub fn get_nullifiers(&self) -> anyhow::Result<HashMap<Nf, u32>> {
         let mut statement = self
             .connection
-            .prepare("SELECT id_note, nf FROM received_notes WHERE spent IS NULL")?;
+            .prepare("SELECT id_note, nf FROM received_notes WHERE spent IS NULL OR spent = 0")?;
         let nfs_res = statement.query_map(NO_PARAMS, |row| {
             let id_note: u32 = row.get(0)?;
             let nf_vec: Vec<u8> = row.get(1)?;
@@ -331,7 +332,7 @@ impl DbAdapter {
     pub fn get_nullifier_amounts(&self) -> anyhow::Result<HashMap<Vec<u8>, u64>> {
         let mut statement = self
             .connection
-            .prepare("SELECT value, nf FROM received_notes WHERE spent IS NULL")?;
+            .prepare("SELECT value, nf FROM received_notes WHERE spent IS NULL OR spent = 0")?;
         let nfs_res = statement.query_map(NO_PARAMS, |row| {
             let amount: i64 = row.get(0)?;
             let nf: Vec<u8> = row.get(1)?;
@@ -352,15 +353,17 @@ impl DbAdapter {
         fvk: &ExtendedFullViewingKey,
     ) -> anyhow::Result<Vec<SpendableNote>> {
         let mut statement = self.connection.prepare(
-            "SELECT diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL
+            "SELECT id_note, diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL
             AND w.height = (
 	            SELECT MAX(height) FROM sapling_witnesses WHERE height <= ?1
             ) AND r.id_note = w.note")?;
         let notes = statement.query_map(params![anchor_height], |row| {
-            let diversifier: Vec<u8> = row.get(0)?;
-            let value: i64 = row.get(1)?;
-            let rcm: Vec<u8> = row.get(2)?;
-            let witness: Vec<u8> = row.get(3)?;
+            let id_note: u32 = row.get(0)?;
+
+            let diversifier: Vec<u8> = row.get(1)?;
+            let value: i64 = row.get(2)?;
+            let rcm: Vec<u8> = row.get(3)?;
+            let witness: Vec<u8> = row.get(4)?;
 
             let mut diversifer_bytes = [0u8; 11];
             diversifer_bytes.copy_from_slice(&diversifier);
@@ -374,6 +377,7 @@ impl DbAdapter {
             let pa = fvk.fvk.vk.to_payment_address(diversifier).unwrap();
             let note = pa.create_note(value as u64, rseed).unwrap();
             Ok(SpendableNote {
+                id: id_note,
                 note,
                 diversifier,
                 witness,
@@ -395,6 +399,20 @@ impl DbAdapter {
         )?;
         log::debug!("-mark_spent");
         Ok(())
+    }
+
+    pub fn get_seed(&self, account: u32) -> anyhow::Result<String> {
+        log::debug!("+get_seed");
+        let ivk = self.connection.query_row(
+            "SELECT seed FROM accounts WHERE id_account = ?1",
+            params![account],
+            |row| {
+                let ivk: String = row.get(0)?;
+                Ok(ivk)
+            },
+        )?;
+        log::debug!("-get_seed");
+        Ok(ivk)
     }
 
     pub fn get_sk(&self, account: u32) -> anyhow::Result<String> {

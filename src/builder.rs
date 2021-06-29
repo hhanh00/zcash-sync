@@ -216,18 +216,19 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
             }
         }
 
+        let right = if depth != 0 && !context.first_block {
+            context.right
+        } else {
+            None
+        };
         // println!("D {}", depth);
         // println!("O {:?}", offset.map(|r| hex::encode(r.repr)));
         // println!("R {:?}", right.map(|r| hex::encode(r.repr)));
         // for c in commitments.iter() {
         //     println!("{}", hex::encode(c.repr));
         // }
-        let right = if depth != 0 && !context.first_block {
-            context.right
-        } else {
-            None
-        };
         let p1 = self.p + 1;
+        // println!("P {} P1 {} S {} AS {}", self.p, p1, context.start, context.adjusted_start(&right));
         let has_p1 = p1 >= context.adjusted_start(&right) && p1 < context.start + commitments.len();
         if has_p1 {
             let p1 = CTreeBuilder::get(commitments, p1 - context.adjusted_start(&right), &right);
@@ -342,6 +343,7 @@ impl BlockProcessor {
     }
 
     pub fn add_nodes(&mut self, nodes: &mut [Node], new_witnesses: &[Witness]) {
+        if nodes.is_empty() { return }
         self.prev_witnesses.extend_from_slice(new_witnesses);
         let (t, ws) = advance_tree(
             &self.prev_tree,
@@ -349,13 +351,19 @@ impl BlockProcessor {
             nodes,
             self.first_block,
         );
+        self.first_block = false;
         self.prev_tree = t;
         self.prev_witnesses = ws;
     }
 
     pub fn finalize(self) -> (CTree, Vec<Witness>) {
-        let (t, ws) = advance_tree(&self.prev_tree, &self.prev_witnesses, &mut [], false);
-        (t, ws)
+        if self.first_block {
+            (self.prev_tree, self.prev_witnesses)
+        }
+        else {
+            let (t, ws) = advance_tree(&self.prev_tree, &self.prev_witnesses, &mut [], false);
+            (t, ws)
+        }
     }
 }
 
@@ -369,6 +377,121 @@ mod tests {
     use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
     use zcash_primitives::sapling::Node;
 
+    fn make_nodes(p: usize, len: usize) -> Vec<Node> {
+        let nodes: Vec<_> = (p..p+len).map(|v| {
+            let mut bb = [0u8; 32];
+            bb[0..8].copy_from_slice(&v.to_be_bytes());
+            Node::new(bb)
+        }).collect();
+        nodes
+    }
+
+    fn make_witnesses(p: usize, len: usize) -> Vec<Witness> {
+        let witnesses: Vec<_> = (p..p+len).map(|v| {
+            Witness::new(v, 0, None)
+        }).collect();
+        witnesses
+    }
+
+    fn update_witnesses1(tree: &mut CommitmentTree<Node>, ws: &mut Vec<IncrementalWitness<Node>>, nodes: &[Node]) {
+        for n in nodes.iter() {
+            tree.append(n.clone()).unwrap();
+            for w in ws.iter_mut() {
+                w.append(n.clone()).unwrap();
+            }
+            let w = IncrementalWitness::<Node>::from_tree(&tree);
+            ws.push(w);
+        }
+    }
+
+    fn compare_witness(w1: &IncrementalWitness<Node>, w2: &Witness) {
+        let mut bb1: Vec<u8> = vec![];
+        w1.write(&mut bb1).unwrap();
+        let mut bb2: Vec<u8> = vec![];
+        w2.write(&mut bb2).unwrap();
+
+        if bb1 != bb2 {
+            print_witness(&w1);
+            print_witness2(&w2);
+
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_simple() {
+        let v = [0u8; 32];
+        let mut bp = BlockProcessor::new(&CTree::new(), &[]);
+        let mut nodes = [Node::new(v)];
+        bp.add_nodes(&mut [], &[]);
+        bp.add_nodes(&mut nodes, &[Witness::new(0, 0, None)]);
+        bp.finalize();
+    }
+
+    #[test]
+    fn test_bp_1run() {
+        for n1 in 0..=40 {
+            for n2 in 0..=40 {
+                println!("{} {}", n1, n2);
+                let mut bp = BlockProcessor::new(&CTree::new(), &[]);
+                let mut tree1: CommitmentTree<Node> = CommitmentTree::empty();
+                let mut ws1: Vec<IncrementalWitness<Node>> = vec![];
+
+                let mut nodes = make_nodes(0, n1);
+                update_witnesses1(&mut tree1, &mut ws1, &nodes);
+                bp.add_nodes(&mut nodes, &make_witnesses(0, n1));
+
+                let mut nodes = make_nodes(n1, n2);
+                update_witnesses1(&mut tree1, &mut ws1, &nodes);
+                bp.add_nodes(&mut nodes, &make_witnesses(n1, n2));
+
+                let (_, ws2) = bp.finalize();
+
+                for (i, (w1, w2)) in ws1.iter().zip(ws2.iter()).enumerate() {
+                    println!("Compare {}", i);
+                    compare_witness(w1, w2);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_bp_2run() {
+        for n1 in 0..=40 {
+            for n2 in 0..=40 {
+                println!("{} {}", n1, n2);
+                let mut tree1: CommitmentTree<Node> = CommitmentTree::empty();
+                let mut ws1: Vec<IncrementalWitness<Node>> = vec![];
+                let mut tree2 = CTree::new();
+                let mut ws2: Vec<Witness> = vec![];
+
+                {
+                    let mut bp = BlockProcessor::new(&tree2, &ws2);
+                    let mut nodes = make_nodes(0, n1);
+                    update_witnesses1(&mut tree1, &mut ws1, &nodes);
+                    bp.add_nodes(&mut nodes, &make_witnesses(0, n1));
+                    let (t2, w2) = bp.finalize();
+                    tree2 = t2;
+                    ws2 = w2;
+                }
+
+                {
+                    let mut bp = BlockProcessor::new(&tree2, &ws2);
+                    let mut nodes = make_nodes(n1, n2);
+                    update_witnesses1(&mut tree1, &mut ws1, &nodes);
+                    bp.add_nodes(&mut nodes, &make_witnesses(n1, n2));
+                    let (_t2, w2) = bp.finalize();
+                    ws2 = w2;
+                }
+
+                for (i, (w1, w2)) in ws1.iter().zip(ws2.iter()).enumerate() {
+                    println!("Compare {}", i);
+                    compare_witness(w1, w2);
+                }
+            }
+        }
+    }
+
     #[test]
     fn test_advance_tree_equal_blocks() {
         for num_nodes in 1..=10 {
@@ -380,8 +503,8 @@ mod tests {
 
     #[test]
     fn test_advance_tree_unequal_blocks() {
-        for num_nodes1 in 1..=30 {
-            for num_nodes2 in 1..=30 {
+        for num_nodes1 in 0..=30 {
+            for num_nodes2 in 0..=30 {
                 println!("TESTING {} {}", num_nodes1, num_nodes2);
                 let (t, ws) = test_advance_tree_helper(num_nodes1, 1, 100.0, None);
                 test_advance_tree_helper(num_nodes2, 1, 100.0, Some((t, ws)));
@@ -390,8 +513,16 @@ mod tests {
     }
 
     #[test]
-    fn test_advance_tree() {
-        test_advance_tree_helper(100, 50, 1.0, None);
+    fn test_small_blocks() {
+        for num_nodes1 in 1..=30 {
+            println!("TESTING {}", num_nodes1);
+            test_advance_tree_helper(num_nodes1, 1, 100.0, None);
+        }
+    }
+
+    #[test]
+    fn test_tree() {
+        test_advance_tree_helper(4, 1, 100.0, None);
 
         // test_advance_tree_helper(2, 10, 100.0);
         // test_advance_tree_helper(1, 40, 100.0);

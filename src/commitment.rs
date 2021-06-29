@@ -98,19 +98,20 @@ impl Witness {
         }
     }
 
-    pub fn read<R: Read>(position: usize, id_note: u32, mut reader: R) -> std::io::Result<Self> {
+    pub fn read<R: Read>(id_note: u32, mut reader: R) -> std::io::Result<Self> {
         let tree = CTree::read(&mut reader)?;
         let filled = Vector::read(&mut reader, |r| Node::read(r))?;
         let cursor = Optional::read(&mut reader, |r| CTree::read(r))?;
 
-        let witness = Witness {
-            position,
+        let mut witness = Witness {
+            position: 0,
             id_note,
             tree,
             filled,
             cursor: cursor.unwrap_or_else(CTree::new),
             note: None,
         };
+        witness.position = witness.tree.get_position() - 1;
 
         Ok(witness)
     }

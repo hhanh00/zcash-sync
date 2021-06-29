@@ -76,6 +76,10 @@ impl Wallet {
         Ok(())
     }
 
+    pub fn get_seed(&self, account: u32) -> anyhow::Result<String> {
+        self.db.get_seed(account)
+    }
+
     pub fn has_account(&self, account: u32) -> anyhow::Result<bool> {
         self.db.has_account(account)
     }
@@ -84,7 +88,7 @@ impl Wallet {
         let sk = get_secret_key(&seed).unwrap();
         let vk = get_viewing_key(&sk).unwrap();
         let pa = get_address(&vk).unwrap();
-        self.db.store_account(&sk, &vk, &pa)?;
+        self.db.store_account(seed, &sk, &vk, &pa)?;
         Ok(())
     }
 
@@ -195,7 +199,8 @@ impl Wallet {
 
         let mut amount = target_amount;
         amount += DEFAULT_FEE;
-        for n in notes {
+        let mut selected_note: Vec<u32> = vec![];
+        for n in notes.iter() {
             if amount.is_positive() {
                 let a = amount.min(
                     Amount::from_u64(n.note.value)
@@ -203,12 +208,15 @@ impl Wallet {
                 );
                 amount -= a;
                 let merkle_path = n.witness.path().context("Invalid Merkle Path")?;
+                let mut witness_bytes: Vec<u8> = vec![];
+                n.witness.write(&mut witness_bytes)?;
                 builder.add_sapling_spend(
                     skey.clone(),
                     n.diversifier,
                     n.note.clone(),
                     merkle_path,
                 )?;
+                selected_note.push(n.id);
             }
         }
         if amount.is_positive() {
@@ -237,6 +245,10 @@ impl Wallet {
         let mut client = connect_lightwalletd().await?;
         let tx_id = send_transaction(&mut client, &raw_tx, last_height).await?;
         log::info!("Tx ID = {}", tx_id);
+
+        for id_note in selected_note.iter() {
+            self.db.mark_spent(*id_note, 0)?;
+        }
         Ok(tx_id)
     }
 
