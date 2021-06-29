@@ -3,7 +3,16 @@ use zcash_primitives::consensus::Network;
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-pub const NETWORK: Network = Network::MainNetwork;
+pub const NETWORK: Network = Network::TestNetwork;
+
+// Mainnet
+// pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
+// pub const LWD_URL: &str = "https://lwdv3.zecwallet.co";
+
+// Testnet
+pub const LWD_URL: &str = "https://testnet.lightwalletd.com:9067";
+// pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
+// pub const LWD_URL: &str = "http://127.0.0.1:9067";
 
 mod builder;
 mod chain;
@@ -18,14 +27,14 @@ mod wallet;
 pub use crate::builder::advance_tree;
 pub use crate::chain::{
     calculate_tree_state_v2, connect_lightwalletd, download_chain, get_latest_height, sync,
-    DecryptNode, LWD_URL, ChainError
+    DecryptNode, ChainError
 };
 pub use crate::commitment::{CTree, Witness};
 pub use crate::db::DbAdapter;
-pub use crate::key::{get_address, get_secret_key, get_viewing_key};
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;
 pub use crate::mempool::MemPool;
 pub use crate::scan::{latest_height, scan_all, sync_async};
-pub use crate::wallet::{Wallet, WalletBalance, DEFAULT_ACCOUNT};
+pub use crate::wallet::{Wallet, WalletBalance};
 pub use crate::print::*;
+pub use crate::key::is_valid_key;

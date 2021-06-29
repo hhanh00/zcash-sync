@@ -1,7 +1,7 @@
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
 use rand::RngCore;
-use sync::{DbAdapter, Wallet, DEFAULT_ACCOUNT, ChainError, Witness, print_witness2};
+use sync::{DbAdapter, Wallet, ChainError, Witness, print_witness2};
 use rusqlite::NO_PARAMS;
 
 const DB_NAME: &str = "zec.db";
@@ -23,18 +23,21 @@ async fn test() -> anyhow::Result<()> {
         log::info!("Height = {}", height);
     };
     let wallet = Wallet::new(DB_NAME);
-    wallet.new_account_with_seed(&seed).unwrap();
-    let res = wallet.sync(DEFAULT_ACCOUNT, progress).await;
+    wallet.new_account_with_key("test", &seed).unwrap();
+    let res = wallet.sync(progress).await;
     if let Err(err) = res {
         if let Some(_) = err.downcast_ref::<ChainError>() {
             println!("REORG");
         }
+        else {
+            panic!(err);
+        }
     }
-    // let tx_id = wallet
-    //     .send_payment(DEFAULT_ACCOUNT, &address, 50000)
-    //     .await
-    //     .unwrap();
-    // println!("TXID = {}", tx_id);
+    let tx_id = wallet
+        .send_payment(1, &address, 50000)
+        .await
+        .unwrap();
+    println!("TXID = {}", tx_id);
 
     Ok(())
 }
@@ -57,7 +60,7 @@ fn test_rewind() {
 #[allow(dead_code)]
 fn test_get_balance() {
     let db = DbAdapter::new(DB_NAME).unwrap();
-    let balance = db.get_balance().unwrap();
+    let balance = db.get_balance(1).unwrap();
     println!("Balance = {}", (balance as f64) / 100_000_000.0);
 }
 
@@ -77,6 +80,7 @@ fn test_invalid_witness() {
     print_witness2(&w);
 }
 
+#[allow(dead_code)]
 fn w() {
     let db = DbAdapter::new("zec.db").unwrap();
     // let w_b: Vec<u8> = db.connection.query_row("SELECT witness FROM sapling_witnesses WHERE note = 66 AND height = 1466097", NO_PARAMS, |row| row.get(0)).unwrap();

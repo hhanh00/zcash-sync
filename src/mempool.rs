@@ -21,6 +21,7 @@ struct MemPoolTransacton {
 
 pub struct MemPool {
     db_path: String,
+    account: u32,
     ivk: Option<SaplingIvk>,
     height: BlockHeight,
     transactions: HashMap<Vec<u8>, MemPoolTransacton>,
@@ -32,6 +33,7 @@ impl MemPool {
     pub fn new(db_path: &str) -> MemPool {
         MemPool {
             db_path: db_path.to_string(),
+            account: 0,
             ivk: None,
             height: BlockHeight::from(0),
             transactions: HashMap::new(),
@@ -43,11 +45,13 @@ impl MemPool {
     pub fn set_account(&mut self, account: u32) -> anyhow::Result<()> {
         let db = DbAdapter::new(&self.db_path)?;
         let ivk = db.get_ivk(account)?;
+        self.account = account;
         self.set_ivk(&ivk);
+        self.clear()?;
         Ok(())
     }
 
-    pub fn set_ivk(&mut self, ivk: &str) {
+    fn set_ivk(&mut self, ivk: &str) {
         let fvk =
             decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)
                 .unwrap()
@@ -56,30 +60,30 @@ impl MemPool {
         self.ivk = Some(ivk);
     }
 
-    pub async fn scan(&mut self) -> anyhow::Result<()> {
+    pub async fn scan(&mut self) -> anyhow::Result<i64> {
         if self.ivk.is_some() {
             let ivk = self.ivk.as_ref().unwrap().clone();
             let mut client = connect_lightwalletd().await?;
             let height = BlockHeight::from(get_latest_height(&mut client).await?);
             if self.height != height {
                 // New blocks invalidate the mempool
-                let db = DbAdapter::new(&self.db_path)?;
-                self.clear(&db)?;
+                self.clear()?;
             }
             self.height = height;
             self.update(&mut client, &ivk).await?;
         }
 
-        Ok(())
+        Ok(self.balance)
     }
 
     pub fn get_unconfirmed_balance(&self) -> i64 {
         self.balance
     }
 
-    fn clear(&mut self, db: &DbAdapter) -> anyhow::Result<()> {
+    fn clear(&mut self) -> anyhow::Result<()> {
+        let db = DbAdapter::new(&self.db_path)?;
         self.height = BlockHeight::from_u32(0);
-        self.nfs = db.get_nullifier_amounts()?;
+        self.nfs = db.get_nullifier_amounts(self.account)?;
         self.transactions.clear();
         self.balance = 0;
         Ok(())

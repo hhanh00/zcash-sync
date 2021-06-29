@@ -1,7 +1,6 @@
 use crate::chain::send_transaction;
-use crate::mempool::MemPool;
 use crate::scan::ProgressCallback;
-use crate::{connect_lightwalletd, get_address, get_latest_height, get_secret_key, get_viewing_key, DbAdapter, NETWORK, BlockId, CTree};
+use crate::{connect_lightwalletd, get_latest_height, DbAdapter, NETWORK, BlockId, CTree};
 use anyhow::Context;
 use bip39::{Language, Mnemonic};
 use rand::prelude::SliceRandom;
@@ -11,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
-use zcash_client_backend::encoding::{decode_extended_spending_key, decode_payment_address};
+use zcash_client_backend::encoding::decode_extended_spending_key;
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_primitives::consensus::{BlockHeight, BranchId, Parameters};
 use zcash_primitives::transaction::builder::Builder;
@@ -20,8 +19,8 @@ use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use zcash_proofs::prover::LocalTxProver;
 use tonic::Request;
+use crate::key::{is_valid_key, decode_key};
 
-pub const DEFAULT_ACCOUNT: u32 = 1;
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
 pub struct Wallet {
@@ -59,48 +58,48 @@ impl Wallet {
         }
     }
 
-    pub fn valid_seed(seed: &str) -> bool {
-        get_secret_key(&seed).is_ok()
+    pub fn valid_key(key: &str) -> bool {
+        is_valid_key(key)
     }
 
     pub fn valid_address(address: &str) -> bool {
-        decode_payment_address(NETWORK.hrp_sapling_payment_address(), address).is_ok()
+        let recipient = RecipientAddress::decode(&NETWORK, address);
+        recipient.is_some()
     }
 
-    pub fn new_seed(&self) -> anyhow::Result<()> {
-        let mut entropy = [0u8; 32];
-        OsRng.fill_bytes(&mut entropy);
-        let mnemonic = Mnemonic::from_entropy(&entropy, Language::English)?;
-        let seed = mnemonic.phrase();
-        self.new_account_with_seed(seed)?;
-        Ok(())
+    pub fn new_account(&self, name: &str, data: &str) -> anyhow::Result<u32> {
+        if data.is_empty() {
+            let mut entropy = [0u8; 32];
+            OsRng.fill_bytes(&mut entropy);
+            let mnemonic = Mnemonic::from_entropy(&entropy, Language::English)?;
+            let seed = mnemonic.phrase();
+            self.new_account_with_key(name, seed)
+        }
+        else {
+            self.new_account_with_key(name, data)
+        }
     }
 
-    pub fn get_seed(&self, account: u32) -> anyhow::Result<String> {
-        self.db.get_seed(account)
+    pub fn get_backup(&self, account: u32) -> anyhow::Result<String> {
+        let (seed, sk, ivk) = self.db.get_backup(account)?;
+        if let Some(seed) = seed { return Ok(seed); }
+        if let Some(sk) = sk { return Ok(sk); }
+        Ok(ivk)
     }
 
-    pub fn has_account(&self, account: u32) -> anyhow::Result<bool> {
-        self.db.has_account(account)
-    }
-
-    pub fn new_account_with_seed(&self, seed: &str) -> anyhow::Result<()> {
-        let sk = get_secret_key(&seed).unwrap();
-        let vk = get_viewing_key(&sk).unwrap();
-        let pa = get_address(&vk).unwrap();
-        self.db.store_account(seed, &sk, &vk, &pa)?;
-        Ok(())
+    pub fn new_account_with_key(&self, name: &str, key: &str) -> anyhow::Result<u32> {
+        let (seed, sk, ivk, pa) = decode_key(key)?;
+        let account = self.db.store_account(name, seed.as_deref(), sk.as_deref(), &ivk, &pa)?;
+        Ok(account)
     }
 
     async fn scan_async(
-        ivk: &str,
         db_path: &str,
         chunk_size: u32,
         target_height_offset: u32,
         progress_callback: ProgressCallback,
     ) -> anyhow::Result<()> {
         crate::scan::sync_async(
-            ivk,
             chunk_size,
             db_path,
             target_height_offset,
@@ -118,22 +117,19 @@ impl Wallet {
     // Not a method in order to avoid locking the instance
     pub async fn sync_ex(
         db_path: &str,
-        ivk: &str,
         progress_callback: impl Fn(u32) + Send + 'static,
     ) -> anyhow::Result<()> {
         let cb = Arc::new(Mutex::new(progress_callback));
-        Self::scan_async(&ivk, db_path, DEFAULT_CHUNK_SIZE, 10, cb.clone()).await?;
-        Self::scan_async(&ivk, db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone()).await?;
+        Self::scan_async(db_path, DEFAULT_CHUNK_SIZE, 10, cb.clone()).await?;
+        Self::scan_async(db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone()).await?;
         Ok(())
     }
 
     pub async fn sync(
         &self,
-        account: u32,
         progress_callback: impl Fn(u32) + Send + 'static,
     ) -> anyhow::Result<()> {
-        let ivk = self.get_ivk(account)?;
-        Self::sync_ex(&self.db_path, &ivk, progress_callback).await
+        Self::sync_ex(&self.db_path, progress_callback).await
     }
 
     pub async fn skip_to_last_height(&self) -> anyhow::Result<()> {
@@ -153,20 +149,6 @@ impl Wallet {
 
     pub fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<()> {
         self.db.trim_to_height(height)
-    }
-
-    pub async fn get_balance(&self, mempool: &MemPool) -> anyhow::Result<WalletBalance> {
-        let last_height = Self::get_latest_height().await?;
-        let anchor_height = last_height - ANCHOR_OFFSET;
-
-        let confirmed = self.db.get_balance()?;
-        let unconfirmed = mempool.get_unconfirmed_balance();
-        let spendable = self.db.get_spendable_balance(anchor_height)?;
-        Ok(WalletBalance {
-            confirmed,
-            unconfirmed,
-            spendable,
-        })
     }
 
     pub async fn send_payment(
@@ -193,7 +175,7 @@ impl Wallet {
             .ok_or_else(|| anyhow::anyhow!("No spendable notes"))?;
         let anchor_height = anchor_height.min(last_height - ANCHOR_OFFSET);
         log::info!("Anchor = {}", anchor_height);
-        let mut notes = self.db.get_spendable_notes(anchor_height, &extfvk)?;
+        let mut notes = self.db.get_spendable_notes(account, anchor_height, &extfvk)?;
         notes.shuffle(&mut OsRng);
         log::info!("Spendable notes = {}", notes.len());
 
@@ -260,7 +242,8 @@ impl Wallet {
 #[cfg(test)]
 mod tests {
     use crate::wallet::Wallet;
-    use crate::{get_address, get_secret_key, get_viewing_key};
+    use crate::key::derive_secret_key;
+    use bip39::{Mnemonic, Language};
 
     #[tokio::test]
     async fn test_wallet_seed() {
@@ -269,7 +252,7 @@ mod tests {
 
         let seed = dotenv::var("SEED").unwrap();
         let wallet = Wallet::new("zec.db");
-        wallet.new_account_with_seed(&seed).unwrap();
+        wallet.new_account_with_key("test", &seed).unwrap();
     }
 
     #[tokio::test]
@@ -278,14 +261,11 @@ mod tests {
         env_logger::init();
 
         let seed = dotenv::var("SEED").unwrap();
-        let sk = get_secret_key(&seed).unwrap();
-        let vk = get_viewing_key(&sk).unwrap();
-        println!("{}", vk);
-        let pa = get_address(&vk).unwrap();
-        println!("{}", pa);
-        let wallet = Wallet::new("zec.db");
-
-        let tx_id = wallet.send_payment(1, &pa, 1000).await.unwrap();
-        println!("TXID = {}", tx_id);
+        let (sk, vk, pa) = derive_secret_key(&Mnemonic::from_phrase(&seed, Language::English).unwrap()).unwrap();
+        println!("{} {} {}", sk, vk, pa);
+        // let wallet = Wallet::new("zec.db");
+        //
+        // let tx_id = wallet.send_payment(1, &pa, 1000).await.unwrap();
+        // println!("TXID = {}", tx_id);
     }
 }

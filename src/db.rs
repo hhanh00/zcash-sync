@@ -1,4 +1,4 @@
-use crate::chain::Nf;
+use crate::chain::{Nf, NfRef};
 use crate::{CTree, Witness};
 use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS};
 use std::collections::HashMap;
@@ -15,6 +15,7 @@ pub struct DbAdapter {
 }
 
 pub struct ReceivedNote {
+    pub account: u32,
     pub height: u32,
     pub output_index: u32,
     pub diversifier: Vec<u8>,
@@ -41,9 +42,10 @@ impl DbAdapter {
         self.connection.execute(
             "CREATE TABLE IF NOT EXISTS accounts (
             id_account INTEGER PRIMARY KEY,
-            seed TEXT NOT NULL,
-            sk TEXT NOT NULL UNIQUE,
-            ivk TEXT NOT NULL,
+            name TEXT NOT NULL,
+            seed TEXT,
+            sk TEXT,
+            ivk TEXT NOT NULL UNIQUE,
             address TEXT NOT NULL)",
             NO_PARAMS,
         )?;
@@ -60,6 +62,7 @@ impl DbAdapter {
         self.connection.execute(
             "CREATE TABLE IF NOT EXISTS transactions (
             id_tx INTEGER PRIMARY KEY,
+            account INTEGER NOT NULL,
             txid BLOB NOT NULL UNIQUE,
             height INTEGER NOT NULL,
             timestamp INTEGER NOT NULL,
@@ -71,6 +74,7 @@ impl DbAdapter {
         self.connection.execute(
             "CREATE TABLE IF NOT EXISTS received_notes (
             id_note INTEGER PRIMARY KEY,
+            account INTEGER NOT NULL,
             position INTEGER NOT NULL,
             tx INTEGER NOT NULL,
             height INTEGER NOT NULL,
@@ -97,25 +101,33 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn store_account(&self, seed: &str, sk: &str, ivk: &str, address: &str) -> anyhow::Result<()> {
+    pub fn store_account(&self, name: &str, seed: Option<&str>, sk: Option<&str>, ivk: &str, address: &str) -> anyhow::Result<u32> {
         self.connection.execute(
-            "INSERT INTO accounts(seed, sk, ivk, address) VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO accounts(name, seed, sk, ivk, address) VALUES (?1, ?2, ?3, ?4, ?5)
             ON CONFLICT DO NOTHING",
-            params![seed, sk, ivk, address],
+            params![name, seed, sk, ivk, address],
         )?;
-        Ok(())
+        let id_tx: u32 = self.connection.query_row(
+            "SELECT id_account FROM accounts WHERE sk = ?1",
+            params![sk],
+            |row| row.get(0),
+        )?;
+        Ok(id_tx)
     }
 
-    pub fn has_account(&self, account: u32) -> anyhow::Result<bool> {
-        let r: Option<i32> = self
-            .connection
-            .query_row(
-                "SELECT 1 FROM accounts WHERE id_account = ?1",
-                params![account],
-                |row| row.get(0),
-            )
-            .optional()?;
-        Ok(r.is_some())
+    pub fn get_fvks(&self) -> anyhow::Result<HashMap<u32, String>> {
+        let mut statement = self.connection.prepare("SELECT id_account, ivk FROM accounts")?;
+        let rows = statement.query_map(NO_PARAMS, |row| {
+            let account: u32 = row.get(0)?;
+            let ivk: String = row.get(1)?;
+            Ok((account, ivk))
+        })?;
+        let mut fvks: HashMap<u32, String> = HashMap::new();
+        for r in rows {
+            let row = r?;
+            fvks.insert(row.0, row.1);
+        }
+        Ok(fvks)
     }
 
     pub fn trim_to_height(&mut self, height: u32) -> anyhow::Result<()> {
@@ -161,16 +173,17 @@ impl DbAdapter {
     pub fn store_transaction(
         &self,
         txid: &[u8],
+        account: u32,
         height: u32,
         timestamp: u32,
         tx_index: u32,
     ) -> anyhow::Result<u32> {
         log::debug!("+transaction");
         self.connection.execute(
-            "INSERT INTO transactions(txid, height, timestamp, tx_index, value)
-        VALUES (?1, ?2, ?3, ?4, 0)
+            "INSERT INTO transactions(account, txid, height, timestamp, tx_index, value)
+        VALUES (?1, ?2, ?3, ?4, ?5, 0)
         ON CONFLICT DO NOTHING",
-            params![txid, height, timestamp, tx_index],
+            params![account, txid, height, timestamp, tx_index],
         )?;
         let id_tx: u32 = self.connection.query_row(
             "SELECT id_tx FROM transactions WHERE txid = ?1",
@@ -188,9 +201,9 @@ impl DbAdapter {
         position: usize,
     ) -> anyhow::Result<u32> {
         log::debug!("+received_note {}", id_tx);
-        self.connection.execute("INSERT INTO received_notes(tx, height, position, output_index, diversifier, value, rcm, nf, spent)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-        ON CONFLICT DO NOTHING", params![id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.nf, note.spent])?;
+        self.connection.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, nf, spent)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        ON CONFLICT DO NOTHING", params![note.account, id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.nf, note.spent])?;
         let id_note: u32 = self.connection.query_row(
             "SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2",
             params![id_tx, note.output_index],
@@ -226,28 +239,32 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn get_received_note_value(&self, nf: &Nf) -> anyhow::Result<i64> {
-        let value: i64 = self.connection.query_row(
-            "SELECT value FROM received_notes WHERE nf = ?1",
+    pub fn get_received_note_value(&self, nf: &Nf) -> anyhow::Result<(u32, i64)> {
+        let (account, value) = self.connection.query_row(
+            "SELECT account, value FROM received_notes WHERE nf = ?1",
             params![nf.0.to_vec()],
-            |row| row.get(0),
+            |row| {
+                let account: u32 = row.get(0)?;
+                let value: i64 = row.get(1)?;
+                Ok((account, value))
+            },
         )?;
-        Ok(value)
+        Ok((account, value))
     }
 
-    pub fn get_balance(&self) -> anyhow::Result<u64> {
+    pub fn get_balance(&self, account: u32) -> anyhow::Result<u64> {
         let balance: Option<i64> = self.connection.query_row(
-            "SELECT SUM(value) FROM received_notes WHERE spent IS NULL OR spent = 0",
-            NO_PARAMS,
+            "SELECT SUM(value) FROM received_notes WHERE (spent IS NULL OR spent = 0) AND account = ?1",
+            params![account],
             |row| row.get(0),
         )?;
         Ok(balance.unwrap_or(0) as u64)
     }
 
-    pub fn get_spendable_balance(&self, anchor_height: u32) -> anyhow::Result<u64> {
+    pub fn get_spendable_balance(&self, account: u32, anchor_height: u32) -> anyhow::Result<u64> {
         let balance: Option<i64> = self.connection.query_row(
-            "SELECT SUM(value) FROM received_notes WHERE spent IS NULL AND height <= ?1",
-            params![anchor_height],
+            "SELECT SUM(value) FROM received_notes WHERE spent IS NULL AND height <= ?1 AND account = ?2",
+            params![anchor_height, account],
             |row| row.get(0),
         )?;
         Ok(balance.unwrap_or(0) as u64)
@@ -293,7 +310,7 @@ impl DbAdapter {
             Some((height, tree)) => {
                 let tree = CTree::read(&*tree)?;
                 let mut statement = self.connection.prepare(
-                "SELECT id_note, witness FROM sapling_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND (n.spent IS NULL OR n.spent = 0)")?;
+                    "SELECT id_note, witness FROM sapling_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND (n.spent IS NULL OR n.spent = 0)")?;
                 let ws = statement.query_map(params![height], |row| {
                     let id_note: u32 = row.get(0)?;
                     let witness: Vec<u8> = row.get(1)?;
@@ -309,18 +326,23 @@ impl DbAdapter {
         })
     }
 
-    pub fn get_nullifiers(&self) -> anyhow::Result<HashMap<Nf, u32>> {
+    pub fn get_nullifiers(&self) -> anyhow::Result<HashMap<Nf, NfRef>> {
         let mut statement = self
             .connection
-            .prepare("SELECT id_note, nf FROM received_notes WHERE spent IS NULL OR spent = 0")?;
+            .prepare("SELECT id_note, account, nf FROM received_notes WHERE spent IS NULL OR spent = 0")?;
         let nfs_res = statement.query_map(NO_PARAMS, |row| {
             let id_note: u32 = row.get(0)?;
-            let nf_vec: Vec<u8> = row.get(1)?;
+            let account: u32 = row.get(1)?;
+            let nf_vec: Vec<u8> = row.get(2)?;
             let mut nf = [0u8; 32];
             nf.clone_from_slice(&nf_vec);
-            Ok((id_note, nf))
+            let nf_ref = NfRef {
+                id_note,
+                account
+            };
+            Ok((nf_ref, nf))
         })?;
-        let mut nfs: HashMap<Nf, u32> = HashMap::new();
+        let mut nfs: HashMap<Nf, NfRef> = HashMap::new();
         for n in nfs_res {
             let n = n?;
             nfs.insert(Nf(n.1), n.0);
@@ -329,11 +351,11 @@ impl DbAdapter {
         Ok(nfs)
     }
 
-    pub fn get_nullifier_amounts(&self) -> anyhow::Result<HashMap<Vec<u8>, u64>> {
+    pub fn get_nullifier_amounts(&self, account: u32) -> anyhow::Result<HashMap<Vec<u8>, u64>> {
         let mut statement = self
             .connection
-            .prepare("SELECT value, nf FROM received_notes WHERE spent IS NULL OR spent = 0")?;
-        let nfs_res = statement.query_map(NO_PARAMS, |row| {
+            .prepare("SELECT value, nf FROM received_notes WHERE account = ?1 AND (spent IS NULL OR spent = 0)")?;
+        let nfs_res = statement.query_map(params![account], |row| {
             let amount: i64 = row.get(0)?;
             let nf: Vec<u8> = row.get(1)?;
             Ok((amount, nf))
@@ -349,15 +371,16 @@ impl DbAdapter {
 
     pub fn get_spendable_notes(
         &self,
+        account: u32,
         anchor_height: u32,
         fvk: &ExtendedFullViewingKey,
     ) -> anyhow::Result<Vec<SpendableNote>> {
         let mut statement = self.connection.prepare(
-            "SELECT id_note, diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL
+            "SELECT id_note, diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL AND account = ?2
             AND w.height = (
 	            SELECT MAX(height) FROM sapling_witnesses WHERE height <= ?1
             ) AND r.id_note = w.note")?;
-        let notes = statement.query_map(params![anchor_height], |row| {
+        let notes = statement.query_map(params![anchor_height, account], |row| {
             let id_note: u32 = row.get(0)?;
 
             let diversifier: Vec<u8> = row.get(1)?;
@@ -401,32 +424,34 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn get_seed(&self, account: u32) -> anyhow::Result<String> {
-        log::debug!("+get_seed");
-        let ivk = self.connection.query_row(
-            "SELECT seed FROM accounts WHERE id_account = ?1",
+    pub fn get_backup(&self, account: u32) -> anyhow::Result<(Option<String>, Option<String>, String)> {
+        log::debug!("+get_backup");
+        let (seed, sk, ivk) = self.connection.query_row(
+            "SELECT seed, sk, ivk FROM accounts WHERE id_account = ?1",
             params![account],
             |row| {
+                let seed: Option<String> = row.get(0)?;
+                let sk: Option<String> = row.get(0)?;
                 let ivk: String = row.get(0)?;
-                Ok(ivk)
+                Ok((seed, sk, ivk))
             },
         )?;
-        log::debug!("-get_seed");
-        Ok(ivk)
+        log::debug!("-get_backup");
+        Ok((seed, sk, ivk))
     }
 
     pub fn get_sk(&self, account: u32) -> anyhow::Result<String> {
-        log::debug!("+get_sk");
-        let ivk = self.connection.query_row(
+        log::info!("+get_sk");
+        let sk = self.connection.query_row(
             "SELECT sk FROM accounts WHERE id_account = ?1",
             params![account],
             |row| {
-                let ivk: String = row.get(0)?;
-                Ok(ivk)
+                let sk: String = row.get(0)?;
+                Ok(sk)
             },
         )?;
-        log::debug!("-get_sk");
-        Ok(ivk)
+        log::info!("-get_sk");
+        Ok(sk)
     }
 
     pub fn get_ivk(&self, account: u32) -> anyhow::Result<String> {
@@ -456,9 +481,10 @@ mod tests {
         db.trim_to_height(0).unwrap();
 
         db.store_block(1, &[0u8; 32], 0, &CTree::new()).unwrap();
-        let id_tx = db.store_transaction(&[0; 32], 1, 0, 20).unwrap();
+        let id_tx = db.store_transaction(&[0; 32], 1, 1, 0, 20).unwrap();
         db.store_received_note(
             &ReceivedNote {
+                account: 1,
                 height: 1,
                 output_index: 0,
                 diversifier: vec![],
@@ -470,7 +496,7 @@ mod tests {
             id_tx,
             5,
         )
-        .unwrap();
+            .unwrap();
         let witness = Witness {
             position: 10,
             id_note: 0,
@@ -485,7 +511,7 @@ mod tests {
     #[test]
     fn test_balance() {
         let db = DbAdapter::new(DEFAULT_DB_PATH).unwrap();
-        let balance = db.get_balance().unwrap();
+        let balance = db.get_balance(1).unwrap();
         println!("{}", balance);
     }
 }

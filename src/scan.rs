@@ -1,5 +1,5 @@
 use crate::builder::BlockProcessor;
-use crate::chain::Nf;
+use crate::chain::{Nf, NfRef};
 use crate::db::{DbAdapter, ReceivedNote};
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::{
@@ -18,9 +18,12 @@ use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::Node;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use std::panic;
+use std::collections::HashMap;
 
 pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
-    let decrypter = DecryptNode::new(fvks.to_vec());
+    let fvks: HashMap<_, _> = fvks.iter().enumerate().map(|(i, fvk)|
+        (i as u32, fvk.clone())).collect();
+    let decrypter = DecryptNode::new(fvks);
 
     let total_start = Instant::now();
     let mut client = CompactTxStreamerClient::connect(LWD_URL).await?;
@@ -68,26 +71,32 @@ impl std::fmt::Debug for Blocks {
 pub type ProgressCallback = Arc<Mutex<dyn Fn(u32) + Send>>;
 
 pub async fn sync_async(
-    ivk: &str,
     chunk_size: u32,
     db_path: &str,
     target_height_offset: u32,
     progress_callback: ProgressCallback,
 ) -> anyhow::Result<()> {
     let db_path = db_path.to_string();
-    let fvk =
-        decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)?
-            .ok_or_else(|| anyhow::anyhow!("Invalid key"))?;
-    let decrypter = DecryptNode::new(vec![fvk]);
 
     let mut client = connect_lightwalletd().await?;
-    let (start_height, mut prev_hash) = {
+    let (start_height, mut prev_hash, fvks) = {
         let db = DbAdapter::new(&db_path)?;
         let height = db.get_db_height()?;
-        (height, db.get_db_hash(height)?)
+        let hash = db.get_db_hash(height)?;
+        let fvks = db.get_fvks()?;
+        (height, hash, fvks)
     };
     let end_height = get_latest_height(&mut client).await?;
     let end_height = (end_height - target_height_offset).max(start_height);
+
+    let fvks: HashMap<_, _> = fvks.iter().map(|(&account, fvk)| {
+        let fvk =
+            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
+                .unwrap()
+                .unwrap();
+        (account, fvk)
+    }).collect();
+    let decrypter = DecryptNode::new(fvks);
 
     let (downloader_tx, mut download_rx) = mpsc::channel::<Range<u32>>(2);
     let (processor_tx, mut processor_rx) = mpsc::channel::<Blocks>(1);
@@ -133,9 +142,9 @@ pub async fn sync_async(
             for b in dec_blocks.iter() {
                 let mut my_nfs: Vec<Nf> = vec![];
                 for nf in b.spends.iter() {
-                    if let Some(&id) = nfs.get(nf) {
-                        log::info!("NF FOUND {} {}", id, b.height);
-                        db.mark_spent(id, b.height)?;
+                    if let Some(&nf_ref) = nfs.get(nf) {
+                        log::info!("NF FOUND {} {}", nf_ref.id_note, b.height);
+                        db.mark_spent(nf_ref.id_note, b.height)?;
                         my_nfs.push(*nf);
                     }
                 }
@@ -152,12 +161,14 @@ pub async fn sync_async(
 
                     let id_tx = db.store_transaction(
                         &n.txid,
+                        n.account,
                         n.height,
                         b.compact_block.time,
                         n.tx_index as u32,
                     )?;
                     let id_note = db.store_received_note(
                         &ReceivedNote {
+                            account: n.account,
                             height: n.height,
                             output_index: n.output_index as u32,
                             diversifier: n.pa.diversifier().0.to_vec(),
@@ -170,7 +181,7 @@ pub async fn sync_async(
                         n.position_in_block,
                     )?;
                     db.add_value(id_tx, note.value as i64)?;
-                    nfs.insert(Nf(nf.0), id_note);
+                    nfs.insert(Nf(nf.0), NfRef { id_note, account: n.account });
 
                     let w = Witness::new(p as usize, id_note, Some(n.clone()));
                     witnesses.push(w);
@@ -183,10 +194,11 @@ pub async fn sync_async(
                             nf.copy_from_slice(&cs.nf);
                             let nf = Nf(nf);
                             if my_nfs.contains(&nf) {
-                                let note_value = db.get_received_note_value(&nf)?;
+                                let (account, note_value) = db.get_received_note_value(&nf)?;
                                 let txid = &*tx.hash;
                                 let id_tx = db.store_transaction(
                                     txid,
+                                    account,
                                     b.height,
                                     b.compact_block.time,
                                     tx_index as u32,
