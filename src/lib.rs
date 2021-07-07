@@ -3,14 +3,14 @@ use zcash_primitives::consensus::Network;
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-pub const NETWORK: Network = Network::TestNetwork;
+pub const NETWORK: Network = Network::MainNetwork;
 
 // Mainnet
-// pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
+pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "https://lwdv3.zecwallet.co";
 
 // Testnet
-pub const LWD_URL: &str = "https://testnet.lightwalletd.com:9067";
+// pub const LWD_URL: &str = "https://testnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
 // pub const LWD_URL: &str = "http://127.0.0.1:9067";
 

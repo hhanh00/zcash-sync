@@ -1,25 +1,25 @@
 use crate::chain::send_transaction;
+use crate::key::{decode_key, is_valid_key};
 use crate::scan::ProgressCallback;
-use crate::{connect_lightwalletd, get_latest_height, DbAdapter, NETWORK, BlockId, CTree};
+use crate::{connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, NETWORK};
 use anyhow::Context;
 use bip39::{Language, Mnemonic};
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
 use tokio::sync::Mutex;
+use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
 use zcash_client_backend::encoding::decode_extended_spending_key;
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_primitives::consensus::{BlockHeight, BranchId, Parameters};
-use zcash_primitives::transaction::builder::Builder;
-use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
+use zcash_primitives::transaction::builder::{Builder, Progress};
+use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use zcash_proofs::prover::LocalTxProver;
-use tonic::Request;
-use crate::key::{is_valid_key, decode_key};
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -74,22 +74,27 @@ impl Wallet {
             let mnemonic = Mnemonic::from_entropy(&entropy, Language::English)?;
             let seed = mnemonic.phrase();
             self.new_account_with_key(name, seed)
-        }
-        else {
+        } else {
             self.new_account_with_key(name, data)
         }
     }
 
     pub fn get_backup(&self, account: u32) -> anyhow::Result<String> {
         let (seed, sk, ivk) = self.db.get_backup(account)?;
-        if let Some(seed) = seed { return Ok(seed); }
-        if let Some(sk) = sk { return Ok(sk); }
+        if let Some(seed) = seed {
+            return Ok(seed);
+        }
+        if let Some(sk) = sk {
+            return Ok(sk);
+        }
         Ok(ivk)
     }
 
     pub fn new_account_with_key(&self, name: &str, key: &str) -> anyhow::Result<u32> {
         let (seed, sk, ivk, pa) = decode_key(key)?;
-        let account = self.db.store_account(name, seed.as_deref(), sk.as_deref(), &ivk, &pa)?;
+        let account = self
+            .db
+            .store_account(name, seed.as_deref(), sk.as_deref(), &ivk, &pa)?;
         Ok(account)
     }
 
@@ -99,13 +104,7 @@ impl Wallet {
         target_height_offset: u32,
         progress_callback: ProgressCallback,
     ) -> anyhow::Result<()> {
-        crate::scan::sync_async(
-            chunk_size,
-            db_path,
-            target_height_offset,
-            progress_callback,
-        )
-        .await
+        crate::scan::sync_async(chunk_size, db_path, target_height_offset, progress_callback).await
     }
 
     pub async fn get_latest_height() -> anyhow::Result<u32> {
@@ -140,9 +139,13 @@ impl Wallet {
             hash: vec![],
         };
         let block = client.get_block(block_id.clone()).await?.into_inner();
-        let tree_state = client.get_tree_state(Request::new(block_id)).await?.into_inner();
+        let tree_state = client
+            .get_tree_state(Request::new(block_id))
+            .await?
+            .into_inner();
         let tree = CTree::read(&*hex::decode(&tree_state.tree)?)?;
-        self.db.store_block(last_height, &block.hash, block.time, &tree)?;
+        self.db
+            .store_block(last_height, &block.hash, block.time, &tree)?;
 
         Ok(())
     }
@@ -156,6 +159,8 @@ impl Wallet {
         account: u32,
         to_address: &str,
         amount: u64,
+        max_amount_per_note: u64,
+        progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
         let secret_key = self.db.get_sk(account)?;
         let to_addr = RecipientAddress::decode(&NETWORK, to_address)
@@ -175,7 +180,9 @@ impl Wallet {
             .ok_or_else(|| anyhow::anyhow!("No spendable notes"))?;
         let anchor_height = anchor_height.min(last_height - ANCHOR_OFFSET);
         log::info!("Anchor = {}", anchor_height);
-        let mut notes = self.db.get_spendable_notes(account, anchor_height, &extfvk)?;
+        let mut notes = self
+            .db
+            .get_spendable_notes(account, anchor_height, &extfvk)?;
         notes.shuffle(&mut OsRng);
         log::info!("Spendable notes = {}", notes.len());
 
@@ -203,19 +210,40 @@ impl Wallet {
         }
         if amount.is_positive() {
             log::info!("Not enough balance");
-            return Ok("".to_string());
+            anyhow::bail!("Not enough balance");
         }
 
         log::info!("Preparing tx");
-        builder.send_change_to(Some(ovk), change_address);
-        match to_addr {
-            RecipientAddress::Shielded(pa) => {
-                builder.add_sapling_output(Some(ovk), pa, target_amount, None)
+        builder.send_change_to(ovk, change_address);
+
+        let max_amount_per_note = if max_amount_per_note != 0 {
+            Amount::from_u64(max_amount_per_note).unwrap()
+        } else {
+            Amount::from_i64(MAX_MONEY).unwrap()
+        };
+        let mut remaining_amount = target_amount;
+        while remaining_amount.is_positive() {
+            let note_amount = target_amount.min(max_amount_per_note);
+            match &to_addr {
+                RecipientAddress::Shielded(pa) => {
+                    builder.add_sapling_output(Some(ovk), pa.clone(), note_amount, None)
+                }
+                RecipientAddress::Transparent(t_address) => {
+                    builder.add_transparent_output(&t_address, note_amount)
+                }
+            }?;
+            remaining_amount -= note_amount;
+        }
+
+        let (progress_tx, progress_rx) = mpsc::channel::<Progress>();
+
+        builder.with_progress_notifier(progress_tx);
+        tokio::spawn(async move {
+            while let Ok(progress) = progress_rx.recv() {
+                log::info!("Progress: {}", progress.cur());
+                progress_callback(progress);
             }
-            RecipientAddress::Transparent(t_address) => {
-                builder.add_transparent_output(&t_address, target_amount)
-            }
-        }?;
+        });
 
         let consensus_branch_id =
             BranchId::for_height(&NETWORK, BlockHeight::from_u32(last_height));
@@ -241,9 +269,9 @@ impl Wallet {
 
 #[cfg(test)]
 mod tests {
-    use crate::wallet::Wallet;
     use crate::key::derive_secret_key;
-    use bip39::{Mnemonic, Language};
+    use crate::wallet::Wallet;
+    use bip39::{Language, Mnemonic};
 
     #[tokio::test]
     async fn test_wallet_seed() {
@@ -261,7 +289,8 @@ mod tests {
         env_logger::init();
 
         let seed = dotenv::var("SEED").unwrap();
-        let (sk, vk, pa) = derive_secret_key(&Mnemonic::from_phrase(&seed, Language::English).unwrap()).unwrap();
+        let (sk, vk, pa) =
+            derive_secret_key(&Mnemonic::from_phrase(&seed, Language::English).unwrap()).unwrap();
         println!("{} {} {}", sk, vk, pa);
         // let wallet = Wallet::new("zec.db");
         //

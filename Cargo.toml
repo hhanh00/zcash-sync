@@ -25,32 +25,21 @@ serde = {version = "1.0.126", features = ["derive"]}
 serde_json = "1.0.64"
 tokio = { version = "^1.6", features = ["macros", "rt-multi-thread"] }
 protobuf = "2.23.0"
-jubjub = "0.6"
-bls12_381 = "0.4.0"
-ff = "0.9"
-group = "0.9"
 hex = "0.4.3"
-bytes = "1.0.1"
 futures = "0.3.15"
 tonic = {version = "0.4.3", features = ["tls", "tls-roots"]}
 prost = "0.7"
 rayon = "1.5.1"
-byteorder = "1.4.3"
 tiny-bip39 = "0.8"
 rand = "0.8.4"
 rusqlite = { version = "^0.24", features = ["bundled"] }
+jubjub = "^0.6"
+bls12_381 = "^0.4.0"
+ff = "^0.9"
+group = "^0.9"
+byteorder = "^1.4"
 
-#[dependencies.zcash_client_backend]
-#git = "https://github.com/zcash/librustzcash.git"
-#rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
-#
-#[dependencies.zcash_primitives]
-#git = "https://github.com/zcash/librustzcash.git"
-#rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
-#
-#[dependencies.zcash_proofs]
-#git = "https://github.com/zcash/librustzcash.git"
-#rev = "d50bb12a97da768dc8f3ee39b81f84262103e6eb"
+# librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 
 [dependencies.zcash_client_backend]
 path = "/home/hanh/projects/librustzcash/zcash_client_backend"

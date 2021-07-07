@@ -34,7 +34,7 @@ async fn test() -> anyhow::Result<()> {
         }
     }
     let tx_id = wallet
-        .send_payment(1, &address, 50000)
+        .send_payment(1, &address, 50000, u64::max_value(), move |progress| { println!("{}", progress.cur()); })
         .await
         .unwrap();
     println!("TXID = {}", tx_id);
