@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
-use zcash_client_backend::encoding::decode_extended_spending_key;
+use zcash_client_backend::encoding::{decode_extended_spending_key, decode_extended_full_viewing_key, encode_payment_address};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_primitives::consensus::{BlockHeight, BranchId, Parameters};
 use zcash_primitives::transaction::builder::{Builder, Progress};
@@ -265,6 +265,17 @@ impl Wallet {
     pub fn get_ivk(&self, account: u32) -> anyhow::Result<String> {
         self.db.get_ivk(account)
     }
+
+    pub fn new_diversified_address(&self, account: u32) -> anyhow::Result<String> {
+        let ivk = self.get_ivk(account)?;
+        let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)?.unwrap();
+        let mut diversifier_index = self.db.get_diversifier(account)?;
+        diversifier_index.increment().unwrap();
+        let (new_diversifier_index, pa) = fvk.address(diversifier_index).map_err(|_| anyhow::anyhow!("Cannot generate new address"))?;
+        self.db.store_diversifier(account, &new_diversifier_index)?;
+        let pa = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
+        Ok(pa)
+    }
 }
 
 #[cfg(test)]
@@ -296,5 +307,12 @@ mod tests {
         //
         // let tx_id = wallet.send_payment(1, &pa, 1000).await.unwrap();
         // println!("TXID = {}", tx_id);
+    }
+
+    #[test]
+    pub fn test_diversified_address() {
+        let wallet = Wallet::new("zec.db");
+        let address = wallet.new_diversified_address(1).unwrap();
+        println!("{}", address);
     }
 }

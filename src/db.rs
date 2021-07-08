@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed};
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_primitives::zip32::{ExtendedFullViewingKey, DiversifierIndex};
 
 #[allow(dead_code)]
 pub const DEFAULT_DB_PATH: &str = "zec.db";
@@ -95,6 +95,13 @@ impl DbAdapter {
             height INTEGER NOT NULL,
             witness BLOB NOT NULL,
             CONSTRAINT witness_height UNIQUE (note, height))",
+            NO_PARAMS,
+        )?;
+
+        self.connection.execute(
+            "CREATE TABLE IF NOT EXISTS diversifiers (
+            account INTEGER PRIMARY KEY NOT NULL,
+            diversifier_index BLOB NOT NULL)",
             NO_PARAMS,
         )?;
 
@@ -338,7 +345,7 @@ impl DbAdapter {
             nf.clone_from_slice(&nf_vec);
             let nf_ref = NfRef {
                 id_note,
-                account
+                account,
             };
             Ok((nf_ref, nf))
         })?;
@@ -466,6 +473,29 @@ impl DbAdapter {
         )?;
         log::debug!("-get_ivk");
         Ok(ivk)
+    }
+
+    pub fn get_diversifier(&self, account: u32) -> anyhow::Result<DiversifierIndex> {
+        let diversifier_index = self.connection.query_row(
+            "SELECT diversifier_index FROM diversifiers WHERE account = ?1",
+            params![account],
+            |row| {
+                let d: Vec<u8> = row.get(0)?;
+                let mut div = [0u8; 11];
+                div.copy_from_slice(&d);
+                Ok(div)
+            }
+        ).optional()?.unwrap_or_else(|| [0u8; 11]);
+        Ok(DiversifierIndex(diversifier_index))
+    }
+
+    pub fn store_diversifier(&self, account: u32, diversifier_index: &DiversifierIndex) -> anyhow::Result<()> {
+        let diversifier_bytes = diversifier_index.0.to_vec();
+        self.connection.execute(
+            "INSERT INTO diversifiers(account, diversifier_index) VALUES (?1, ?2) ON CONFLICT \
+            (account) DO UPDATE SET diversifier_index = excluded.diversifier_index",
+            params![account, diversifier_bytes])?;
+        Ok(())
     }
 }
 
