@@ -11,7 +11,6 @@ use std::sync::{mpsc, Arc};
 use tokio::sync::Mutex;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
-use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
 use zcash_client_backend::encoding::{decode_extended_spending_key, decode_extended_full_viewing_key, encode_payment_address};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_primitives::consensus::{BlockHeight, BranchId, Parameters};
@@ -20,6 +19,7 @@ use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use zcash_proofs::prover::LocalTxProver;
+use crate::taddr::{get_taddr_balance, shield_taddr};
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -27,6 +27,7 @@ pub struct Wallet {
     pub db_path: String,
     db: DbAdapter,
     prover: LocalTxProver,
+    pub ld_url: String,
 }
 
 #[repr(C)]
@@ -47,7 +48,7 @@ impl Default for WalletBalance {
 }
 
 impl Wallet {
-    pub fn new(db_path: &str) -> Wallet {
+    pub fn new(db_path: &str, ld_url: &str) -> Wallet {
         let prover = LocalTxProver::from_bytes(SPEND_PARAMS, OUTPUT_PARAMS);
         let db = DbAdapter::new(db_path).unwrap();
         db.init_db().unwrap();
@@ -55,6 +56,7 @@ impl Wallet {
             db_path: db_path.to_string(),
             db,
             prover,
+            ld_url: ld_url.to_string(),
         }
     }
 
@@ -95,6 +97,7 @@ impl Wallet {
         let account = self
             .db
             .store_account(name, seed.as_deref(), sk.as_deref(), &ivk, &pa)?;
+        self.db.create_taddr(account)?;
         Ok(account)
     }
 
@@ -103,12 +106,13 @@ impl Wallet {
         chunk_size: u32,
         target_height_offset: u32,
         progress_callback: ProgressCallback,
+        ld_url: &str
     ) -> anyhow::Result<()> {
-        crate::scan::sync_async(chunk_size, db_path, target_height_offset, progress_callback).await
+        crate::scan::sync_async(chunk_size, db_path, target_height_offset, progress_callback, ld_url).await
     }
 
-    pub async fn get_latest_height() -> anyhow::Result<u32> {
-        let mut client = connect_lightwalletd().await?;
+    pub async fn get_latest_height(&self) -> anyhow::Result<u32> {
+        let mut client = connect_lightwalletd(&self.ld_url).await?;
         let last_height = get_latest_height(&mut client).await?;
         Ok(last_height)
     }
@@ -117,10 +121,11 @@ impl Wallet {
     pub async fn sync_ex(
         db_path: &str,
         progress_callback: impl Fn(u32) + Send + 'static,
+        ld_url: &str
     ) -> anyhow::Result<()> {
         let cb = Arc::new(Mutex::new(progress_callback));
-        Self::scan_async(db_path, DEFAULT_CHUNK_SIZE, 10, cb.clone()).await?;
-        Self::scan_async(db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone()).await?;
+        Self::scan_async(db_path, DEFAULT_CHUNK_SIZE, 10, cb.clone(), ld_url).await?;
+        Self::scan_async(db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone(), ld_url).await?;
         Ok(())
     }
 
@@ -128,11 +133,11 @@ impl Wallet {
         &self,
         progress_callback: impl Fn(u32) + Send + 'static,
     ) -> anyhow::Result<()> {
-        Self::sync_ex(&self.db_path, progress_callback).await
+        Self::sync_ex(&self.db_path, progress_callback, &self.ld_url).await
     }
 
     pub async fn skip_to_last_height(&self) -> anyhow::Result<()> {
-        let mut client = connect_lightwalletd().await?;
+        let mut client = connect_lightwalletd(&self.ld_url).await?;
         let last_height = get_latest_height(&mut client).await?;
         let block_id = BlockId {
             height: last_height as u64,
@@ -160,6 +165,7 @@ impl Wallet {
         to_address: &str,
         amount: u64,
         max_amount_per_note: u64,
+        anchor_offset: u32,
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
         let secret_key = self.db.get_sk(account)?;
@@ -172,13 +178,13 @@ impl Wallet {
         let extfvk = ExtendedFullViewingKey::from(&skey);
         let (_, change_address) = extfvk.default_address().unwrap();
         let ovk = extfvk.fvk.ovk;
-        let last_height = Self::get_latest_height().await?;
+        let last_height = self.get_latest_height().await?;
         let mut builder = Builder::new(NETWORK, BlockHeight::from_u32(last_height));
         let anchor_height = self
             .db
             .get_last_sync_height()?
             .ok_or_else(|| anyhow::anyhow!("No spendable notes"))?;
-        let anchor_height = anchor_height.min(last_height - ANCHOR_OFFSET);
+        let anchor_height = anchor_height.min(last_height - anchor_offset);
         log::info!("Anchor = {}", anchor_height);
         let mut notes = self
             .db
@@ -252,7 +258,7 @@ impl Wallet {
         let mut raw_tx: Vec<u8> = vec![];
         tx.write(&mut raw_tx)?;
 
-        let mut client = connect_lightwalletd().await?;
+        let mut client = connect_lightwalletd(&self.ld_url).await?;
         let tx_id = send_transaction(&mut client, &raw_tx, last_height).await?;
         log::info!("Tx ID = {}", tx_id);
 
@@ -276,6 +282,25 @@ impl Wallet {
         let pa = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
         Ok(pa)
     }
+
+    pub async fn get_taddr_balance(&self, account: u32) -> anyhow::Result<u64> {
+        let mut client = connect_lightwalletd(&self.ld_url).await?;
+        let address = self.db.get_taddr(account)?;
+        let balance = match address {
+            None => 0u64,
+            Some(address) => get_taddr_balance(&mut client, &address).await?,
+        };
+        Ok(balance)
+    }
+
+    pub async fn shield_taddr(&self, account: u32) -> anyhow::Result<String> {
+        shield_taddr(&self.db, account, &self.prover, &self.ld_url).await
+    }
+
+    pub fn set_lwd_url(&mut self, ld_url: &str) -> anyhow::Result<()> {
+        self.ld_url = ld_url.to_string();
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -283,6 +308,7 @@ mod tests {
     use crate::key::derive_secret_key;
     use crate::wallet::Wallet;
     use bip39::{Language, Mnemonic};
+    use crate::LWD_URL;
 
     #[tokio::test]
     async fn test_wallet_seed() {
@@ -290,7 +316,7 @@ mod tests {
         env_logger::init();
 
         let seed = dotenv::var("SEED").unwrap();
-        let wallet = Wallet::new("zec.db");
+        let wallet = Wallet::new("zec.db", LWD_URL);
         wallet.new_account_with_key("test", &seed).unwrap();
     }
 
@@ -311,7 +337,7 @@ mod tests {
 
     #[test]
     pub fn test_diversified_address() {
-        let wallet = Wallet::new("zec.db");
+        let wallet = Wallet::new("zec.db", LWD_URL);
         let address = wallet.new_diversified_address(1).unwrap();
         println!("{}", address);
     }

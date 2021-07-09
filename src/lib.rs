@@ -22,6 +22,7 @@ mod key;
 mod mempool;
 mod print;
 mod scan;
+mod taddr;
 mod wallet;
 
 pub use crate::builder::advance_tree;

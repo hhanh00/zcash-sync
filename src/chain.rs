@@ -1,7 +1,7 @@
 use crate::commitment::{CTree, Witness};
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
-use crate::{advance_tree, NETWORK, LWD_URL};
+use crate::{advance_tree, NETWORK};
 use ff::PrimeField;
 use group::GroupEncoding;
 use log::info;
@@ -316,9 +316,9 @@ pub fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) 
     new_witnesses
 }
 
-pub async fn connect_lightwalletd() -> anyhow::Result<CompactTxStreamerClient<Channel>> {
-    let mut channel = tonic::transport::Channel::from_shared(LWD_URL)?;
-    if LWD_URL.starts_with("https") {
+pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
+    let mut channel = tonic::transport::Channel::from_shared(url.to_owned())?;
+    if url.starts_with("https") {
         let pem = include_bytes!("ca.pem");
         let ca = Certificate::from_pem(pem);
         let tls = ClientTlsConfig::new().ca_certificate(ca);
@@ -328,7 +328,7 @@ pub async fn connect_lightwalletd() -> anyhow::Result<CompactTxStreamerClient<Ch
     Ok(client)
 }
 
-pub async fn sync(fvks: &HashMap<u32, String>) -> anyhow::Result<()> {
+pub async fn sync(fvks: &HashMap<u32, String>, ld_url: &str) -> anyhow::Result<()> {
     let fvks: HashMap<_, _> = fvks.iter().map(|(&account, fvk)| {
         let fvk =
             decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
@@ -337,7 +337,7 @@ pub async fn sync(fvks: &HashMap<u32, String>) -> anyhow::Result<()> {
         (account, fvk)
     }).collect();
     let decrypter = DecryptNode::new(fvks);
-    let mut client = connect_lightwalletd().await?;
+    let mut client = connect_lightwalletd(ld_url).await?;
     let start_height: u32 = crate::NETWORK
         .activation_height(NetworkUpgrade::Sapling)
         .unwrap()

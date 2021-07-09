@@ -38,6 +38,10 @@ bls12_381 = "^0.4.0"
 ff = "^0.9"
 group = "^0.9"
 byteorder = "^1.4"
+secp256k1 = "0.20.2"
+tiny-hderive = "0.3.0"
+ripemd160 = "0.9.1"
+sha2 = "0.9.5"
 
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 
@@ -46,6 +50,7 @@ path = "/home/hanh/projects/librustzcash/zcash_client_backend"
 
 [dependencies.zcash_primitives]
 path = "/home/hanh/projects/librustzcash/zcash_primitives"
+features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 path = "/home/hanh/projects/librustzcash/zcash_proofs"

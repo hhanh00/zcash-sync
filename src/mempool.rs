@@ -27,10 +27,11 @@ pub struct MemPool {
     transactions: HashMap<Vec<u8>, MemPoolTransacton>,
     nfs: HashMap<Vec<u8>, u64>,
     balance: i64,
+    ld_url: String,
 }
 
 impl MemPool {
-    pub fn new(db_path: &str) -> MemPool {
+    pub fn new(db_path: &str, ld_url: &str) -> MemPool {
         MemPool {
             db_path: db_path.to_string(),
             account: 0,
@@ -39,6 +40,7 @@ impl MemPool {
             transactions: HashMap::new(),
             nfs: HashMap::new(),
             balance: 0,
+            ld_url: ld_url.to_string(),
         }
     }
 
@@ -63,7 +65,7 @@ impl MemPool {
     pub async fn scan(&mut self) -> anyhow::Result<i64> {
         if self.ivk.is_some() {
             let ivk = self.ivk.as_ref().unwrap().clone();
-            let mut client = connect_lightwalletd().await?;
+            let mut client = connect_lightwalletd(&self.ld_url).await?;
             let height = BlockHeight::from(get_latest_height(&mut client).await?);
             if self.height != height {
                 // New blocks invalidate the mempool
@@ -154,14 +156,14 @@ impl MemPool {
 mod tests {
     use crate::db::DEFAULT_DB_PATH;
     use crate::mempool::MemPool;
-    use crate::DbAdapter;
+    use crate::{DbAdapter, LWD_URL};
     use std::time::Duration;
 
     #[tokio::test]
     async fn test_mempool() {
         let db = DbAdapter::new(DEFAULT_DB_PATH).unwrap();
         let ivk = db.get_ivk(1).unwrap();
-        let mut mempool = MemPool::new("zec.db");
+        let mut mempool = MemPool::new("zec.db", LWD_URL);
         mempool.set_ivk(&ivk);
         loop {
             mempool.scan().await.unwrap();

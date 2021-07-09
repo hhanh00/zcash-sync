@@ -6,6 +6,7 @@ use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, DiversifierIndex};
+use crate::taddr::{derive_tkeys, BIP44_PATH};
 
 #[allow(dead_code)]
 pub const DEFAULT_DB_PATH: &str = "zec.db";
@@ -102,6 +103,14 @@ impl DbAdapter {
             "CREATE TABLE IF NOT EXISTS diversifiers (
             account INTEGER PRIMARY KEY NOT NULL,
             diversifier_index BLOB NOT NULL)",
+            NO_PARAMS,
+        )?;
+
+        self.connection.execute(
+            "CREATE TABLE IF NOT EXISTS taddrs (
+            account INTEGER PRIMARY KEY NOT NULL,
+            sk TEXT NOT NULL,
+            address TEXT NOT NULL)",
             NO_PARAMS,
         )?;
 
@@ -447,6 +456,20 @@ impl DbAdapter {
         Ok((seed, sk, ivk))
     }
 
+    pub fn get_seed(&self, account: u32) -> anyhow::Result<Option<String>> {
+        log::info!("+get_seed");
+        let seed = self.connection.query_row(
+            "SELECT seed FROM accounts WHERE id_account = ?1",
+            params![account],
+            |row| {
+                let sk: String = row.get(0)?;
+                Ok(sk)
+            },
+        ).optional()?;
+        log::info!("-get_seed");
+        Ok(seed)
+    }
+
     pub fn get_sk(&self, account: u32) -> anyhow::Result<String> {
         log::info!("+get_sk");
         let sk = self.connection.query_row(
@@ -475,6 +498,20 @@ impl DbAdapter {
         Ok(ivk)
     }
 
+    pub fn get_address(&self, account: u32) -> anyhow::Result<String> {
+        log::debug!("+get_address");
+        let address = self.connection.query_row(
+            "SELECT address FROM accounts WHERE id_account = ?1",
+            params![account],
+            |row| {
+                let address: String = row.get(0)?;
+                Ok(address)
+            },
+        )?;
+        log::debug!("-get_address");
+        Ok(address)
+    }
+
     pub fn get_diversifier(&self, account: u32) -> anyhow::Result<DiversifierIndex> {
         let diversifier_index = self.connection.query_row(
             "SELECT diversifier_index FROM diversifiers WHERE account = ?1",
@@ -484,7 +521,7 @@ impl DbAdapter {
                 let mut div = [0u8; 11];
                 div.copy_from_slice(&d);
                 Ok(div)
-            }
+            },
         ).optional()?.unwrap_or_else(|| [0u8; 11]);
         Ok(DiversifierIndex(diversifier_index))
     }
@@ -495,6 +532,38 @@ impl DbAdapter {
             "INSERT INTO diversifiers(account, diversifier_index) VALUES (?1, ?2) ON CONFLICT \
             (account) DO UPDATE SET diversifier_index = excluded.diversifier_index",
             params![account, diversifier_bytes])?;
+        Ok(())
+    }
+
+    pub fn get_taddr(&self, account: u32) -> anyhow::Result<Option<String>> {
+        let address = self.connection.query_row(
+            "SELECT address FROM taddrs WHERE account = ?1",
+            params![account],
+            |row| {
+                let address: String = row.get(0)?;
+                Ok(address)
+            }).optional()?;
+        Ok(address)
+    }
+
+    pub fn get_tsk(&self, account: u32) -> anyhow::Result<String> {
+        let sk = self.connection.query_row(
+            "SELECT sk FROM taddrs WHERE account = ?1",
+            params![account],
+            |row| {
+                let address: String = row.get(0)?;
+                Ok(address)
+            })?;
+        Ok(sk)
+    }
+
+    pub fn create_taddr(&self, account: u32) -> anyhow::Result<()> {
+        let seed = self.get_seed(account)?;
+        if let Some(seed) = seed {
+            let (sk, address) = derive_tkeys(&seed, BIP44_PATH)?;
+            self.connection.execute("INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3) \
+            ON CONFLICT DO NOTHING", params![account, &sk, &address])?;
+        }
         Ok(())
     }
 }

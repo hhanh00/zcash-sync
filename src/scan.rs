@@ -75,10 +75,12 @@ pub async fn sync_async(
     db_path: &str,
     target_height_offset: u32,
     progress_callback: ProgressCallback,
+    ld_url: &str
 ) -> anyhow::Result<()> {
+    let ld_url = ld_url.to_owned();
     let db_path = db_path.to_string();
 
-    let mut client = connect_lightwalletd().await?;
+    let mut client = connect_lightwalletd(&ld_url).await?;
     let (start_height, mut prev_hash, fvks) = {
         let db = DbAdapter::new(&db_path)?;
         let height = db.get_db_height()?;
@@ -102,7 +104,7 @@ pub async fn sync_async(
     let (processor_tx, mut processor_rx) = mpsc::channel::<Blocks>(1);
 
     let downloader = tokio::spawn(async move {
-        let mut client = connect_lightwalletd().await?;
+        let mut client = connect_lightwalletd(&ld_url).await?;
         while let Some(range) = download_rx.recv().await {
             log::info!("+ {:?}", range);
             let blocks = download_chain(&mut client, range.start, range.end, prev_hash).await?;
@@ -302,8 +304,8 @@ pub async fn sync_async(
     Ok(())
 }
 
-pub async fn latest_height() -> anyhow::Result<u32> {
-    let mut client = connect_lightwalletd().await?;
+pub async fn latest_height(ld_url: &str) -> anyhow::Result<u32> {
+    let mut client = connect_lightwalletd(ld_url).await?;
     let height = get_latest_height(&mut client).await?;
     Ok(height)
 }

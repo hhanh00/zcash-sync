@@ -1,7 +1,7 @@
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
 use rand::RngCore;
-use sync::{DbAdapter, Wallet, ChainError, Witness, print_witness2};
+use sync::{DbAdapter, Wallet, ChainError, Witness, print_witness2, LWD_URL};
 use rusqlite::NO_PARAMS;
 
 const DB_NAME: &str = "zec.db";
@@ -22,7 +22,7 @@ async fn test() -> anyhow::Result<()> {
     let progress = |height| {
         log::info!("Height = {}", height);
     };
-    let wallet = Wallet::new(DB_NAME);
+    let wallet = Wallet::new(DB_NAME, LWD_URL);
     wallet.new_account_with_key("test", &seed).unwrap();
     let res = wallet.sync(progress).await;
     if let Err(err) = res {
@@ -34,7 +34,7 @@ async fn test() -> anyhow::Result<()> {
         }
     }
     let tx_id = wallet
-        .send_payment(1, &address, 50000, u64::max_value(), move |progress| { println!("{}", progress.cur()); })
+        .send_payment(1, &address, 50000, u64::max_value(), 2, move |progress| { println!("{}", progress.cur()); })
         .await
         .unwrap();
     println!("TXID = {}", tx_id);
