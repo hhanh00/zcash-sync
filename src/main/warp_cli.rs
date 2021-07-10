@@ -3,6 +3,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use sync::{DbAdapter, Wallet, ChainError, Witness, print_witness2, LWD_URL};
 use rusqlite::NO_PARAMS;
+use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
 
 const DB_NAME: &str = "zec.db";
 
@@ -24,7 +25,7 @@ async fn test() -> anyhow::Result<()> {
     };
     let wallet = Wallet::new(DB_NAME, LWD_URL);
     wallet.new_account_with_key("test", &seed).unwrap();
-    let res = wallet.sync(progress).await;
+    let res = wallet.sync(true, ANCHOR_OFFSET, progress).await;
     if let Err(err) = res {
         if let Some(_) = err.downcast_ref::<ChainError>() {
             println!("REORG");
@@ -33,11 +34,11 @@ async fn test() -> anyhow::Result<()> {
             panic!(err);
         }
     }
-    let tx_id = wallet
-        .send_payment(1, &address, 50000, u64::max_value(), 2, move |progress| { println!("{}", progress.cur()); })
-        .await
-        .unwrap();
-    println!("TXID = {}", tx_id);
+    // let tx_id = wallet
+    //     .send_payment(1, &address, 50000, u64::max_value(), 2, move |progress| { println!("{}", progress.cur()); })
+    //     .await
+    //     .unwrap();
+    // println!("TXID = {}", tx_id);
 
     Ok(())
 }

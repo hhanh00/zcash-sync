@@ -85,7 +85,7 @@ impl MemPool {
     fn clear(&mut self) -> anyhow::Result<()> {
         let db = DbAdapter::new(&self.db_path)?;
         self.height = BlockHeight::from_u32(0);
-        self.nfs = db.get_nullifier_amounts(self.account)?;
+        self.nfs = db.get_nullifier_amounts(self.account, true)?;
         self.transactions.clear();
         self.balance = 0;
         Ok(())

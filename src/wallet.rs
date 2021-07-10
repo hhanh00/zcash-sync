@@ -20,6 +20,8 @@ use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use zcash_proofs::prover::LocalTxProver;
 use crate::taddr::{get_taddr_balance, shield_taddr};
+use zcash_primitives::memo::Memo;
+use std::str::FromStr;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -102,13 +104,14 @@ impl Wallet {
     }
 
     async fn scan_async(
+        get_tx: bool,
         db_path: &str,
         chunk_size: u32,
         target_height_offset: u32,
         progress_callback: ProgressCallback,
         ld_url: &str
     ) -> anyhow::Result<()> {
-        crate::scan::sync_async(chunk_size, db_path, target_height_offset, progress_callback, ld_url).await
+        crate::scan::sync_async(chunk_size, get_tx, db_path, target_height_offset, progress_callback, ld_url).await
     }
 
     pub async fn get_latest_height(&self) -> anyhow::Result<u32> {
@@ -119,21 +122,25 @@ impl Wallet {
 
     // Not a method in order to avoid locking the instance
     pub async fn sync_ex(
+        get_tx: bool,
+        anchor_offset: u32,
         db_path: &str,
         progress_callback: impl Fn(u32) + Send + 'static,
         ld_url: &str
     ) -> anyhow::Result<()> {
         let cb = Arc::new(Mutex::new(progress_callback));
-        Self::scan_async(db_path, DEFAULT_CHUNK_SIZE, 10, cb.clone(), ld_url).await?;
-        Self::scan_async(db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone(), ld_url).await?;
+        Self::scan_async(get_tx, db_path, DEFAULT_CHUNK_SIZE, anchor_offset, cb.clone(), ld_url).await?;
+        Self::scan_async(get_tx, db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone(), ld_url).await?;
         Ok(())
     }
 
     pub async fn sync(
         &self,
+        get_tx: bool,
+        anchor_offset: u32,
         progress_callback: impl Fn(u32) + Send + 'static,
     ) -> anyhow::Result<()> {
-        Self::sync_ex(&self.db_path, progress_callback, &self.ld_url).await
+        Self::sync_ex(get_tx, anchor_offset, &self.db_path, progress_callback, &self.ld_url).await
     }
 
     pub async fn skip_to_last_height(&self) -> anyhow::Result<()> {
@@ -164,6 +171,7 @@ impl Wallet {
         account: u32,
         to_address: &str,
         amount: u64,
+        memo: &str,
         max_amount_per_note: u64,
         anchor_offset: u32,
         progress_callback: impl Fn(Progress) + Send + 'static,
@@ -232,7 +240,7 @@ impl Wallet {
             let note_amount = target_amount.min(max_amount_per_note);
             match &to_addr {
                 RecipientAddress::Shielded(pa) => {
-                    builder.add_sapling_output(Some(ovk), pa.clone(), note_amount, None)
+                    builder.add_sapling_output(Some(ovk), pa.clone(), note_amount, Some(Memo::from_str(memo)?.into()))
                 }
                 RecipientAddress::Transparent(t_address) => {
                     builder.add_transparent_output(&t_address, note_amount)

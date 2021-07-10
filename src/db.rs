@@ -7,6 +7,11 @@ use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, DiversifierIndex};
 use crate::taddr::{derive_tkeys, BIP44_PATH};
+use crate::db::migration::{get_schema_version, update_schema_version};
+use crate::transaction::TransactionInfo;
+use zcash_primitives::memo::Memo;
+
+mod migration;
 
 #[allow(dead_code)]
 pub const DEFAULT_DB_PATH: &str = "zec.db";
@@ -41,6 +46,16 @@ impl DbAdapter {
 
     pub fn init_db(&self) -> anyhow::Result<()> {
         self.connection.execute(
+            "CREATE TABLE IF NOT EXISTS schema_version (
+            id INTEGER PRIMARY KEY NOT NULL,
+            version INTEGER NOT NULL)",
+            NO_PARAMS,
+        )?;
+
+        let version = get_schema_version(&self.connection)?;
+        if version == 1 { return Ok(()); }
+
+        self.connection.execute(
             "CREATE TABLE IF NOT EXISTS accounts (
             id_account INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -64,11 +79,14 @@ impl DbAdapter {
             "CREATE TABLE IF NOT EXISTS transactions (
             id_tx INTEGER PRIMARY KEY,
             account INTEGER NOT NULL,
-            txid BLOB NOT NULL UNIQUE,
+            txid BLOB NOT NULL,
             height INTEGER NOT NULL,
             timestamp INTEGER NOT NULL,
             value INTEGER NOT NULL,
-            tx_index INTEGER)",
+            address TEXT,
+            memo TEXT,
+            tx_index INTEGER,
+            CONSTRAINT tx_account UNIQUE (height, tx_index, account))",
             NO_PARAMS,
         )?;
 
@@ -113,6 +131,8 @@ impl DbAdapter {
             address TEXT NOT NULL)",
             NO_PARAMS,
         )?;
+
+        update_schema_version(&self.connection, 1)?;
 
         Ok(())
     }
@@ -164,6 +184,18 @@ impl DbAdapter {
         tx.commit()?;
 
         Ok(())
+    }
+
+    pub fn get_txhash(&self, id_tx: u32) -> anyhow::Result<(u32, u32, Vec<u8>)> {
+        let (account, height, tx_hash) = self.connection.query_row(
+            "SELECT account, height, txid FROM transactions WHERE id_tx = ?1", params![id_tx],
+            |row| {
+                let account: u32 = row.get(0)?;
+                let height: u32 = row.get(1)?;
+                let tx_hash: Vec<u8> = row.get(2)?;
+                Ok((account, height, tx_hash))
+            })?;
+        Ok((account, height, tx_hash))
     }
 
     pub fn store_block(
@@ -244,6 +276,19 @@ impl DbAdapter {
             params![id_note, height, bb],
         )?;
         log::debug!("-witnesses");
+        Ok(())
+    }
+
+    pub fn store_tx_metadata(&self, id_tx: u32, tx_info: &TransactionInfo) -> anyhow::Result<()> {
+        let memo = match &tx_info.memo {
+            Memo::Empty => "".to_string(),
+            Memo::Text(text) => text.to_string(),
+            Memo::Future(_) => "Unrecognized".to_string(),
+            Memo::Arbitrary(_) => "Unrecognized".to_string(),
+        };
+        self.connection.execute(
+            "UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3", params![tx_info.address, &memo, id_tx]
+        )?;
         Ok(())
     }
 
@@ -367,10 +412,14 @@ impl DbAdapter {
         Ok(nfs)
     }
 
-    pub fn get_nullifier_amounts(&self, account: u32) -> anyhow::Result<HashMap<Vec<u8>, u64>> {
+    pub fn get_nullifier_amounts(&self, account: u32, unspent_only: bool) -> anyhow::Result<HashMap<Vec<u8>, u64>> {
+        let mut sql = "SELECT value, nf FROM received_notes WHERE account = ?1".to_string();
+        if unspent_only {
+            sql += "AND (spent IS NULL OR spent = 0)";
+        }
         let mut statement = self
             .connection
-            .prepare("SELECT value, nf FROM received_notes WHERE account = ?1 AND (spent IS NULL OR spent = 0)")?;
+            .prepare(&sql)?;
         let nfs_res = statement.query_map(params![account], |row| {
             let amount: i64 = row.get(0)?;
             let nf: Vec<u8> = row.get(1)?;

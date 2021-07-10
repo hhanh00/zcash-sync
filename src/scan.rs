@@ -19,6 +19,7 @@ use zcash_primitives::sapling::Node;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use std::panic;
 use std::collections::HashMap;
+use crate::transaction::retrieve_tx_info;
 
 pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
     let fvks: HashMap<_, _> = fvks.iter().enumerate().map(|(i, fvk)|
@@ -72,6 +73,7 @@ pub type ProgressCallback = Arc<Mutex<dyn Fn(u32) + Send>>;
 
 pub async fn sync_async(
     chunk_size: u32,
+    get_tx: bool,
     db_path: &str,
     target_height_offset: u32,
     progress_callback: ProgressCallback,
@@ -103,8 +105,9 @@ pub async fn sync_async(
     let (downloader_tx, mut download_rx) = mpsc::channel::<Range<u32>>(2);
     let (processor_tx, mut processor_rx) = mpsc::channel::<Blocks>(1);
 
+    let ld_url2 = ld_url.clone();
     let downloader = tokio::spawn(async move {
-        let mut client = connect_lightwalletd(&ld_url).await?;
+        let mut client = connect_lightwalletd(&ld_url2).await?;
         while let Some(range) = download_rx.recv().await {
             log::info!("+ {:?}", range);
             let blocks = download_chain(&mut client, range.start, range.end, prev_hash).await?;
@@ -128,6 +131,7 @@ pub async fn sync_async(
     let processor = tokio::spawn(async move {
         let db = DbAdapter::new(&db_path)?;
         let mut nfs = db.get_nullifiers()?;
+        let mut new_tx_ids: Vec<u32> = vec![];
 
         let (mut tree, mut witnesses) = db.get_tree()?;
         let mut bp = BlockProcessor::new(&tree, &witnesses);
@@ -168,6 +172,7 @@ pub async fn sync_async(
                         b.compact_block.time,
                         n.tx_index as u32,
                     )?;
+                    new_tx_ids.push(id_tx);
                     let id_note = db.store_received_note(
                         &ReceivedNote {
                             account: n.account,
@@ -205,6 +210,7 @@ pub async fn sync_async(
                                     b.compact_block.time,
                                     tx_index as u32,
                                 )?;
+                                new_tx_ids.push(id_tx);
                                 db.add_value(id_tx, -(note_value as i64))?;
                             }
                         }
@@ -256,6 +262,10 @@ pub async fn sync_async(
             for w in witnesses.iter() {
                 db.store_witnesses(w, last_height, w.id_note)?;
             }
+        }
+
+        if get_tx && !new_tx_ids.is_empty() {
+            retrieve_tx_info(&new_tx_ids, &ld_url, &db_path).await?;
         }
 
         let callback = progress_callback.lock().await;

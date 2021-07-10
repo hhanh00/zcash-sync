@@ -6,8 +6,9 @@ pub mod lw_rpc;
 pub const NETWORK: Network = Network::MainNetwork;
 
 // Mainnet
-pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
+// pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "https://lwdv3.zecwallet.co";
+pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
 
 // Testnet
 // pub const LWD_URL: &str = "https://testnet.lightwalletd.com:9067";
@@ -23,6 +24,7 @@ mod mempool;
 mod print;
 mod scan;
 mod taddr;
+mod transaction;
 mod wallet;
 
 pub use crate::builder::advance_tree;
