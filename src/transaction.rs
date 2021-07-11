@@ -7,7 +7,7 @@ use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
 use zcash_primitives::memo::{MemoBytes, Memo};
 use std::convert::TryFrom;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct TransactionInfo {
@@ -18,7 +18,8 @@ pub struct TransactionInfo {
 }
 
 pub async fn decode_transaction(client: &mut CompactTxStreamerClient<Channel>,
-                                nfs: &HashMap<Vec<u8>, u64>,
+                                nfs: &HashMap<(u32, Vec<u8>), u64>,
+                                account: u32,
                                 fvk: &str,
                                 tx_hash: &[u8],
                                 height: u32) -> anyhow::Result<TransactionInfo> {
@@ -39,7 +40,7 @@ pub async fn decode_transaction(client: &mut CompactTxStreamerClient<Channel>,
     let mut address = String::new();
     for spend in tx.shielded_spends.iter() {
         let nf = spend.nullifier.to_vec();
-        if let Some(&v) = nfs.get(&nf) {
+        if let Some(&v) = nfs.get(&(account, nf)) {
             amount -= v as i64;
         }
     }
@@ -52,8 +53,7 @@ pub async fn decode_transaction(client: &mut CompactTxStreamerClient<Channel>,
                 address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
                 tx_memo = memo;
             }
-        }
-        else if let Some((_note, pa, memo)) = try_sapling_output_recovery(&NETWORK, height, &ovk, &output) {
+        } else if let Some((_note, pa, memo)) = try_sapling_output_recovery(&NETWORK, height, &ovk, &output) {
             address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
             tx_memo = memo;
         }
@@ -65,20 +65,29 @@ pub async fn decode_transaction(client: &mut CompactTxStreamerClient<Channel>,
         address,
         memo: Memo::try_from(tx_memo)?,
         amount,
-        fee
+        fee,
     };
 
     Ok(tx_info)
 }
 
 pub async fn retrieve_tx_info(tx_ids: &[u32], ld_url: &str, db_path: &str) -> anyhow::Result<()> {
+    let mut tx_ids_set: HashSet<u32> = HashSet::new();
+    for &tx_id in tx_ids.iter() {
+        tx_ids_set.insert(tx_id);
+    }
     let mut client = connect_lightwalletd(ld_url).await?;
     let db = DbAdapter::new(db_path)?;
-    for &id_tx in tx_ids.iter() {
+    let nfs = db.get_nullifiers_raw()?;
+    let mut nf_map: HashMap<(u32, Vec<u8>), u64> = HashMap::new();
+    for nf in nfs.iter() {
+        nf_map.insert((nf.0, nf.2.clone()), nf.1);
+    }
+    for &id_tx in tx_ids_set.iter() {
+        println!("{}", id_tx);
         let (account, height, tx_hash) = db.get_txhash(id_tx)?;
-        let nfs = db.get_nullifier_amounts(account, false)?;
         let fvk = db.get_ivk(account)?;
-        let tx_info = decode_transaction(&mut client, &nfs, &fvk, &tx_hash, height).await?;
+        let tx_info = decode_transaction(&mut client, &nf_map, account, &fvk, &tx_hash, height).await?;
         db.store_tx_metadata(id_tx, &tx_info)?;
     }
 
@@ -89,6 +98,7 @@ pub async fn retrieve_tx_info(tx_ids: &[u32], ld_url: &str, db_path: &str) -> an
 mod tests {
     use crate::{connect_lightwalletd, LWD_URL, DbAdapter};
     use crate::transaction::decode_transaction;
+    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_decode_transaction() {
@@ -96,9 +106,15 @@ mod tests {
         let mut client = connect_lightwalletd(LWD_URL).await.unwrap();
         let db = DbAdapter::new("./zec.db").unwrap();
         let account = 1;
-        let nfs = db.get_nullifier_amounts(account, false).unwrap();
+        let nfs = db.get_nullifiers_raw().unwrap();
+        let mut nf_map: HashMap<(u32, Vec<u8>), u64> = HashMap::new();
+        for nf in nfs.iter() {
+            if nf.0 == account {
+                nf_map.insert((nf.0, nf.2.clone()), nf.1);
+            }
+        }
         let fvk = db.get_ivk(account).unwrap();
-        let tx_info = decode_transaction(&mut client, &nfs, &fvk, &tx_hash, 1313212).await.unwrap();
+        let tx_info = decode_transaction(&mut client, &nf_map, account, &fvk, &tx_hash, 1313212).await.unwrap();
         println!("{:?}", tx_info);
     }
 }

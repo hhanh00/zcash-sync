@@ -1,8 +1,13 @@
 use crate::commitment::{CTree, Witness};
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::*;
-use zcash_primitives::merkle_tree::Hashable;
 use zcash_primitives::sapling::Node;
+use crate::hash::pedersen_hash;
+
+#[inline(always)]
+fn node_combine(depth: usize, left: &Node, right: &Node) -> Node {
+    Node::new(pedersen_hash(depth as u8, &left.repr, &right.repr))
+}
 
 trait Builder<T, C> {
     fn collect(&mut self, commitments: &[Node], context: &C) -> usize;
@@ -70,7 +75,7 @@ impl Builder<CTree, ()> for CTreeBuilder {
 
     fn up(&mut self) {
         let h = if self.left.is_some() && self.right.is_some() {
-            Some(Node::combine(
+            Some(node_combine(
                 self.depth,
                 &self.left.unwrap(),
                 &self.right.unwrap(),
@@ -160,7 +165,7 @@ fn combine_level(commitments: &mut [Node], offset: Option<Node>, n: usize, depth
     let next_level: Vec<Node> = (0..nn)
         .into_par_iter()
         .map(|i| {
-            Node::combine(
+            node_combine(
                 depth,
                 CTreeBuilder::get(commitments, 2 * i, &offset),
                 CTreeBuilder::get(commitments, 2 * i + 1, &offset),

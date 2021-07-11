@@ -15,6 +15,7 @@ pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
 // pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
 // pub const LWD_URL: &str = "http://127.0.0.1:9067";
 
+mod hash;
 mod builder;
 mod chain;
 mod commitment;
@@ -41,3 +42,4 @@ pub use crate::scan::{latest_height, scan_all, sync_async};
 pub use crate::wallet::{Wallet, WalletBalance};
 pub use crate::print::*;
 pub use crate::key::is_valid_key;
+pub use crate::hash::pedersen_hash;

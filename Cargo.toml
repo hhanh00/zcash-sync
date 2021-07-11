@@ -42,6 +42,7 @@ secp256k1 = "0.20.2"
 tiny-hderive = "0.3.0"
 ripemd160 = "0.9.1"
 sha2 = "0.9.5"
+lazy_static = "1.4.0"
 
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 

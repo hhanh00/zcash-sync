@@ -234,8 +234,8 @@ impl DbAdapter {
             params![account, txid, height, timestamp, tx_index],
         )?;
         let id_tx: u32 = self.connection.query_row(
-            "SELECT id_tx FROM transactions WHERE txid = ?1",
-            params![txid],
+            "SELECT id_tx FROM transactions WHERE account = ?1 AND txid = ?2",
+            params![account, txid],
             |row| row.get(0),
         )?;
         log::debug!("-transaction {}", id_tx);
@@ -432,6 +432,21 @@ impl DbAdapter {
         }
 
         Ok(nfs)
+    }
+
+    pub fn get_nullifiers_raw(&self) -> anyhow::Result<Vec<(u32, u64, Vec<u8>)>> {
+        let mut statement = self.connection.prepare("SELECT account, value, nf FROM received_notes")?;
+        let res = statement.query_map(NO_PARAMS, |row| {
+            let account: u32 = row.get(0)?;
+            let amount: i64 = row.get(1)?;
+            let nf: Vec<u8> = row.get(2)?;
+            Ok((account, amount as u64, nf))
+        })?;
+        let mut v: Vec<(u32, u64, Vec<u8>)> = vec![];
+        for r in res {
+            v.push(r?);
+        }
+        Ok(v)
     }
 
     pub fn get_spendable_notes(
