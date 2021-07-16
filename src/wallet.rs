@@ -1,27 +1,29 @@
 use crate::chain::send_transaction;
 use crate::key::{decode_key, is_valid_key};
 use crate::scan::ProgressCallback;
+use crate::taddr::{get_taddr_balance, shield_taddr};
 use crate::{connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, NETWORK};
 use anyhow::Context;
 use bip39::{Language, Mnemonic};
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use std::str::FromStr;
 use std::sync::{mpsc, Arc};
 use tokio::sync::Mutex;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
-use zcash_client_backend::encoding::{decode_extended_spending_key, decode_extended_full_viewing_key, encode_payment_address};
+use zcash_client_backend::encoding::{
+    decode_extended_full_viewing_key, decode_extended_spending_key, encode_payment_address,
+};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_primitives::consensus::{BlockHeight, BranchId, Parameters};
+use zcash_primitives::memo::Memo;
 use zcash_primitives::transaction::builder::{Builder, Progress};
 use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use zcash_proofs::prover::LocalTxProver;
-use crate::taddr::{get_taddr_balance, shield_taddr};
-use zcash_primitives::memo::Memo;
-use std::str::FromStr;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -109,9 +111,17 @@ impl Wallet {
         chunk_size: u32,
         target_height_offset: u32,
         progress_callback: ProgressCallback,
-        ld_url: &str
+        ld_url: &str,
     ) -> anyhow::Result<()> {
-        crate::scan::sync_async(chunk_size, get_tx, db_path, target_height_offset, progress_callback, ld_url).await
+        crate::scan::sync_async(
+            chunk_size,
+            get_tx,
+            db_path,
+            target_height_offset,
+            progress_callback,
+            ld_url,
+        )
+        .await
     }
 
     pub async fn get_latest_height(&self) -> anyhow::Result<u32> {
@@ -126,10 +136,18 @@ impl Wallet {
         anchor_offset: u32,
         db_path: &str,
         progress_callback: impl Fn(u32) + Send + 'static,
-        ld_url: &str
+        ld_url: &str,
     ) -> anyhow::Result<()> {
         let cb = Arc::new(Mutex::new(progress_callback));
-        Self::scan_async(get_tx, db_path, DEFAULT_CHUNK_SIZE, anchor_offset, cb.clone(), ld_url).await?;
+        Self::scan_async(
+            get_tx,
+            db_path,
+            DEFAULT_CHUNK_SIZE,
+            anchor_offset,
+            cb.clone(),
+            ld_url,
+        )
+        .await?;
         Self::scan_async(get_tx, db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone(), ld_url).await?;
         Ok(())
     }
@@ -140,7 +158,14 @@ impl Wallet {
         anchor_offset: u32,
         progress_callback: impl Fn(u32) + Send + 'static,
     ) -> anyhow::Result<()> {
-        Self::sync_ex(get_tx, anchor_offset, &self.db_path, progress_callback, &self.ld_url).await
+        Self::sync_ex(
+            get_tx,
+            anchor_offset,
+            &self.db_path,
+            progress_callback,
+            &self.ld_url,
+        )
+        .await
     }
 
     pub async fn skip_to_last_height(&self) -> anyhow::Result<()> {
@@ -224,7 +249,11 @@ impl Wallet {
         }
         if amount.is_positive() {
             log::info!("Not enough balance");
-            anyhow::bail!("Not enough balance");
+            anyhow::bail!(
+                "Not enough balance, need {} zats, missing {} zats",
+                u64::from(target_amount),
+                u64::from(amount)
+            );
         }
 
         log::info!("Preparing tx");
@@ -237,10 +266,16 @@ impl Wallet {
         };
         let mut remaining_amount = target_amount;
         while remaining_amount.is_positive() {
-            let note_amount = target_amount.min(max_amount_per_note);
+            let note_amount = remaining_amount.min(max_amount_per_note);
             match &to_addr {
                 RecipientAddress::Shielded(pa) => {
-                    builder.add_sapling_output(Some(ovk), pa.clone(), note_amount, Some(Memo::from_str(memo)?.into()))
+                    log::info!("Sapling output: {}", u64::from(note_amount));
+                    builder.add_sapling_output(
+                        Some(ovk),
+                        pa.clone(),
+                        note_amount,
+                        Some(Memo::from_str(memo)?.into()),
+                    )
                 }
                 RecipientAddress::Transparent(t_address) => {
                     builder.add_transparent_output(&t_address, note_amount)
@@ -282,10 +317,16 @@ impl Wallet {
 
     pub fn new_diversified_address(&self, account: u32) -> anyhow::Result<String> {
         let ivk = self.get_ivk(account)?;
-        let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)?.unwrap();
+        let fvk = decode_extended_full_viewing_key(
+            NETWORK.hrp_sapling_extended_full_viewing_key(),
+            &ivk,
+        )?
+        .unwrap();
         let mut diversifier_index = self.db.get_diversifier(account)?;
         diversifier_index.increment().unwrap();
-        let (new_diversifier_index, pa) = fvk.address(diversifier_index).map_err(|_| anyhow::anyhow!("Cannot generate new address"))?;
+        let (new_diversifier_index, pa) = fvk
+            .address(diversifier_index)
+            .map_err(|_| anyhow::anyhow!("Cannot generate new address"))?;
         self.db.store_diversifier(account, &new_diversifier_index)?;
         let pa = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
         Ok(pa)
@@ -315,8 +356,8 @@ impl Wallet {
 mod tests {
     use crate::key::derive_secret_key;
     use crate::wallet::Wallet;
-    use bip39::{Language, Mnemonic};
     use crate::LWD_URL;
+    use bip39::{Language, Mnemonic};
 
     #[tokio::test]
     async fn test_wallet_seed() {

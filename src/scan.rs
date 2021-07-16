@@ -2,13 +2,16 @@ use crate::builder::BlockProcessor;
 use crate::chain::{Nf, NfRef};
 use crate::db::{DbAdapter, ReceivedNote};
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
+use crate::transaction::retrieve_tx_info;
 use crate::{
     calculate_tree_state_v2, connect_lightwalletd, download_chain, get_latest_height, CompactBlock,
     DecryptNode, Witness, LWD_URL, NETWORK,
 };
 use ff::PrimeField;
 use log::{debug, info};
+use std::collections::HashMap;
 use std::ops::Range;
+use std::panic;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
@@ -17,13 +20,13 @@ use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::Node;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use std::panic;
-use std::collections::HashMap;
-use crate::transaction::retrieve_tx_info;
 
 pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
-    let fvks: HashMap<_, _> = fvks.iter().enumerate().map(|(i, fvk)|
-        (i as u32, fvk.clone())).collect();
+    let fvks: HashMap<_, _> = fvks
+        .iter()
+        .enumerate()
+        .map(|(i, fvk)| (i as u32, fvk.clone()))
+        .collect();
     let decrypter = DecryptNode::new(fvks);
 
     let total_start = Instant::now();
@@ -77,7 +80,7 @@ pub async fn sync_async(
     db_path: &str,
     target_height_offset: u32,
     progress_callback: ProgressCallback,
-    ld_url: &str
+    ld_url: &str,
 ) -> anyhow::Result<()> {
     let ld_url = ld_url.to_owned();
     let db_path = db_path.to_string();
@@ -93,13 +96,18 @@ pub async fn sync_async(
     let end_height = get_latest_height(&mut client).await?;
     let end_height = (end_height - target_height_offset).max(start_height);
 
-    let fvks: HashMap<_, _> = fvks.iter().map(|(&account, fvk)| {
-        let fvk =
-            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
-                .unwrap()
-                .unwrap();
-        (account, fvk)
-    }).collect();
+    let fvks: HashMap<_, _> = fvks
+        .iter()
+        .map(|(&account, fvk)| {
+            let fvk = decode_extended_full_viewing_key(
+                NETWORK.hrp_sapling_extended_full_viewing_key(),
+                &fvk,
+            )
+            .unwrap()
+            .unwrap();
+            (account, fvk)
+        })
+        .collect();
     let decrypter = DecryptNode::new(fvks);
 
     let (downloader_tx, mut download_rx) = mpsc::channel::<Range<u32>>(2);
@@ -188,7 +196,13 @@ pub async fn sync_async(
                         n.position_in_block,
                     )?;
                     db.add_value(id_tx, note.value as i64)?;
-                    nfs.insert(Nf(nf.0), NfRef { id_note, account: n.account });
+                    nfs.insert(
+                        Nf(nf.0),
+                        NfRef {
+                            id_note,
+                            account: n.account,
+                        },
+                    );
 
                     let w = Witness::new(p as usize, id_note, Some(n.clone()));
                     witnesses.push(w);
@@ -272,6 +286,7 @@ pub async fn sync_async(
         callback(end_height);
         log::debug!("Witnesses {}", witnesses.len());
 
+        db.purge_old_witnesses(end_height - 100)?;
         Ok::<_, anyhow::Error>(())
     });
 
@@ -306,7 +321,7 @@ pub async fn sync_async(
                 panic::resume_unwind(err.into_panic());
             }
             anyhow::bail!("Join Error");
-        },
+        }
     }
 
     log::info!("Sync completed");

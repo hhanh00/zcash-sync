@@ -1,57 +1,81 @@
-use zcash_primitives::transaction::builder::Builder;
-use crate::{CompactTxStreamerClient, AddressList, DbAdapter, NETWORK, connect_lightwalletd, get_latest_height, GetAddressUtxosArg};
+use crate::chain::send_transaction;
+use crate::{
+    connect_lightwalletd, get_latest_height, AddressList, CompactTxStreamerClient, DbAdapter,
+    GetAddressUtxosArg, NETWORK,
+};
+use anyhow::Context;
+use bip39::{Language, Mnemonic, Seed};
+use ripemd160::{Digest, Ripemd160};
+use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
+use sha2::Sha256;
+use std::str::FromStr;
+use tiny_hderive::bip32::ExtendedPrivKey;
 use tonic::transport::Channel;
 use tonic::Request;
-use zcash_primitives::consensus::{BlockHeight, Parameters, BranchId};
+use zcash_client_backend::encoding::{
+    decode_extended_full_viewing_key, decode_payment_address, encode_transparent_address,
+};
+use zcash_primitives::consensus::{BlockHeight, BranchId, Parameters};
+use zcash_primitives::legacy::{Script, TransparentAddress};
+use zcash_primitives::transaction::builder::Builder;
 use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut};
-use std::str::FromStr;
-use anyhow::Context;
-use zcash_primitives::legacy::{Script, TransparentAddress};
-use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address, encode_transparent_address};
-use crate::chain::send_transaction;
 use zcash_proofs::prover::LocalTxProver;
-use ripemd160::{Ripemd160, Digest};
-use sha2::Sha256;
-use secp256k1::{SecretKey, PublicKey, Secp256k1, All};
-use tiny_hderive::bip32::ExtendedPrivKey;
-use bip39::{Mnemonic, Language, Seed};
 
 pub const BIP44_PATH: &str = "m/44'/133'/0'/0/0";
 
-pub async fn get_taddr_balance(client: &mut CompactTxStreamerClient<Channel>, address: &str) -> anyhow::Result<u64> {
+pub async fn get_taddr_balance(
+    client: &mut CompactTxStreamerClient<Channel>,
+    address: &str,
+) -> anyhow::Result<u64> {
     let req = AddressList {
         addresses: vec![address.to_string()],
     };
-    let rep = client.get_taddress_balance(Request::new(req)).await?.into_inner();
+    let rep = client
+        .get_taddress_balance(Request::new(req))
+        .await?
+        .into_inner();
     Ok(rep.value_zat as u64)
 }
 
-pub async fn shield_taddr(db: &DbAdapter, account: u32, prover: &LocalTxProver, ld_url: &str) -> anyhow::Result<String> {
+pub async fn shield_taddr(
+    db: &DbAdapter,
+    account: u32,
+    prover: &LocalTxProver,
+    ld_url: &str,
+) -> anyhow::Result<String> {
     let mut client = connect_lightwalletd(ld_url).await?;
     let last_height = get_latest_height(&mut client).await?;
     let ivk = db.get_ivk(account)?;
-    let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)?.unwrap();
+    let fvk =
+        decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)?
+            .unwrap();
     let z_address = db.get_address(account)?;
     let pa = decode_payment_address(NETWORK.hrp_sapling_payment_address(), &z_address)?.unwrap();
     let t_address = db.get_taddr(account)?;
-    if t_address.is_none() { anyhow::bail!("No transparent address"); }
+    if t_address.is_none() {
+        anyhow::bail!("No transparent address");
+    }
     let t_address = t_address.unwrap();
     let mut builder = Builder::new(NETWORK, BlockHeight::from_u32(last_height));
     let amount = Amount::from_u64(get_taddr_balance(&mut client, &t_address).await?).unwrap();
-    if amount <= DEFAULT_FEE { anyhow::bail!("Not enough balance"); }
+    if amount <= DEFAULT_FEE {
+        anyhow::bail!("Not enough balance");
+    }
     let amount = amount - DEFAULT_FEE;
 
     let sk = db.get_tsk(account)?;
-    let seckey =
-        secp256k1::SecretKey::from_str(&sk).context("Cannot parse secret key")?;
+    let seckey = secp256k1::SecretKey::from_str(&sk).context("Cannot parse secret key")?;
 
     let req = GetAddressUtxosArg {
         addresses: vec![t_address.to_string()],
         start_height: 0,
         max_entries: 0,
     };
-    let utxo_rep = client.get_address_utxos(Request::new(req)).await?.into_inner();
+    let utxo_rep = client
+        .get_address_utxos(Request::new(req))
+        .await?
+        .into_inner();
 
     for utxo in utxo_rep.address_utxos.iter() {
         let mut tx_hash = [0u8; 32];
@@ -67,8 +91,7 @@ pub async fn shield_taddr(db: &DbAdapter, account: u32, prover: &LocalTxProver, 
 
     let ovk = fvk.fvk.ovk;
     builder.add_sapling_output(Some(ovk), pa, amount, None)?;
-    let consensus_branch_id =
-        BranchId::for_height(&NETWORK, BlockHeight::from_u32(last_height));
+    let consensus_branch_id = BranchId::for_height(&NETWORK, BlockHeight::from_u32(last_height));
     let (tx, _) = builder.build(consensus_branch_id, prover)?;
     let mut raw_tx: Vec<u8> = vec![];
     tx.write(&mut raw_tx)?;
@@ -89,16 +112,20 @@ pub fn derive_tkeys(phrase: &str, path: &str) -> anyhow::Result<(String, String)
     let pub_key = pub_key.serialize();
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
     let address = TransparentAddress::PublicKey(pub_key.into());
-    let address = encode_transparent_address(&NETWORK.b58_pubkey_address_prefix(), &NETWORK.b58_script_address_prefix(), &address);
+    let address = encode_transparent_address(
+        &NETWORK.b58_pubkey_address_prefix(),
+        &NETWORK.b58_script_address_prefix(),
+        &address,
+    );
     let sk = secret_key.to_string();
     Ok((sk, address))
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{DbAdapter, LWD_URL};
     use crate::db::DEFAULT_DB_PATH;
-    use crate::taddr::{shield_taddr, derive_tkeys};
+    use crate::taddr::{derive_tkeys, shield_taddr};
+    use crate::{DbAdapter, LWD_URL};
     use zcash_proofs::prover::LocalTxProver;
 
     #[tokio::test]

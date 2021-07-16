@@ -1,11 +1,13 @@
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
-use rand::{RngCore, thread_rng};
-use sync::{DbAdapter, Wallet, ChainError, Witness, print_witness2, LWD_URL, pedersen_hash};
+use rand::{thread_rng, RngCore};
 use rusqlite::NO_PARAMS;
+use sync::{
+    is_valid_key, pedersen_hash, print_witness2, ChainError, DbAdapter, Wallet, Witness, LWD_URL,
+};
 use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
-use zcash_primitives::sapling::Node;
 use zcash_primitives::merkle_tree::Hashable;
+use zcash_primitives::sapling::Node;
 
 const DB_NAME: &str = "zec.db";
 
@@ -34,13 +36,22 @@ async fn test() -> anyhow::Result<()> {
     if let Err(err) = res {
         if let Some(_) = err.downcast_ref::<ChainError>() {
             println!("REORG");
-        }
-        else {
+        } else {
             panic!(err);
         }
     }
     let tx_id = wallet
-        .send_payment(1, &address, 50000, "test memo", u64::max_value(), 2, move |progress| { println!("{}", progress.cur()); })
+        .send_payment(
+            1,
+            &address,
+            50000,
+            "test memo",
+            u64::max_value(),
+            2,
+            move |progress| {
+                println!("{}", progress.cur());
+            },
+        )
         .await
         .unwrap();
     println!("TXID = {}", tx_id);
@@ -103,7 +114,14 @@ fn w() {
     // let w = Witness::read(0, &*w_b).unwrap();
     // print_witness2(&w);
     //
-    let w_b: Vec<u8> = db.connection.query_row("SELECT witness FROM sapling_witnesses WHERE note = 66 AND height = 1466200", NO_PARAMS, |row| row.get(0)).unwrap();
+    let w_b: Vec<u8> = db
+        .connection
+        .query_row(
+            "SELECT witness FROM sapling_witnesses WHERE note = 66 AND height = 1466200",
+            NO_PARAMS,
+            |row| row.get(0),
+        )
+        .unwrap();
     let w = Witness::read(0, &*w_b).unwrap();
     print_witness2(&w);
 
@@ -113,6 +131,7 @@ fn w() {
     print_witness2(&w);
 }
 
+#[allow(dead_code)]
 fn test_hash() {
     let mut r = thread_rng();
 
@@ -132,10 +151,7 @@ fn test_hash() {
 
         let node1 = Node::new(a);
         let node2 = Node::new(b);
-        let hash = Node::combine(
-            depth as usize,
-            &node1,
-            &node2);
+        let hash = Node::combine(depth as usize, &node1, &node2);
         let hash2 = pedersen_hash(depth, &a, &b);
         // println!("Reference Hash: {}", hex::encode(hash.repr));
         // println!("This Hash:      {}", hex::encode(hash2));
@@ -144,10 +160,9 @@ fn test_hash() {
     }
 }
 
-
 fn main() {
-    test_hash();
-
+    // test_hash();
+    //
     init();
     // test_invalid_witness()
     // test_rewind();

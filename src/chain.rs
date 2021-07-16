@@ -6,10 +6,11 @@ use ff::PrimeField;
 use group::GroupEncoding;
 use log::info;
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::time::Instant;
+use thiserror::Error;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Request;
-use thiserror::Error;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{BlockHeight, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
@@ -17,7 +18,6 @@ use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decrypt
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use std::collections::HashMap;
 
 const MAX_CHUNK: u32 = 50000;
 
@@ -87,7 +87,7 @@ pub struct Nf(pub [u8; 32]);
 #[derive(Copy, Clone)]
 pub struct NfRef {
     pub id_note: u32,
-    pub account: u32
+    pub account: u32,
 }
 
 pub struct DecryptedBlock<'a> {
@@ -219,8 +219,7 @@ pub async fn send_transaction(
     let code = rep.error_code;
     if code == 0 {
         Ok(rep.error_message)
-    }
-    else {
+    } else {
         Err(anyhow::anyhow!(rep.error_message))
     }
 }
@@ -329,13 +328,18 @@ pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamer
 }
 
 pub async fn sync(fvks: &HashMap<u32, String>, ld_url: &str) -> anyhow::Result<()> {
-    let fvks: HashMap<_, _> = fvks.iter().map(|(&account, fvk)| {
-        let fvk =
-            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
-                .unwrap()
-                .unwrap();
-        (account, fvk)
-    }).collect();
+    let fvks: HashMap<_, _> = fvks
+        .iter()
+        .map(|(&account, fvk)| {
+            let fvk = decode_extended_full_viewing_key(
+                NETWORK.hrp_sapling_extended_full_viewing_key(),
+                &fvk,
+            )
+            .unwrap()
+            .unwrap();
+            (account, fvk)
+        })
+        .collect();
     let decrypter = DecryptNode::new(fvks);
     let mut client = connect_lightwalletd(ld_url).await?;
     let start_height: u32 = crate::NETWORK
@@ -368,20 +372,20 @@ pub async fn sync(fvks: &HashMap<u32, String>, ld_url: &str) -> anyhow::Result<(
 
 #[cfg(test)]
 mod tests {
-    use crate::LWD_URL;
     #[allow(unused_imports)]
     use crate::chain::{
         calculate_tree_state_v1, calculate_tree_state_v2, download_chain, get_latest_height,
         get_tree_state, DecryptNode,
     };
     use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
+    use crate::LWD_URL;
     use crate::NETWORK;
     use dotenv;
+    use std::collections::HashMap;
     use std::time::Instant;
     use zcash_client_backend::encoding::decode_extended_full_viewing_key;
     use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
     use zcash_primitives::zip32::ExtendedFullViewingKey;
-    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_get_latest_height() -> anyhow::Result<()> {

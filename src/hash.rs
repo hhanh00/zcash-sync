@@ -1,11 +1,11 @@
-use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
-use group::{GroupEncoding, Group, Curve};
-use std::io::Read;
-use jubjub::{Fr, SubgroupPoint};
-use std::ops::AddAssign;
 use ff::PrimeField;
-use zcash_params::GENERATORS;
+use group::{Curve, Group, GroupEncoding};
+use jubjub::{Fr, SubgroupPoint};
 use lazy_static::lazy_static;
+use std::io::Read;
+use std::ops::AddAssign;
+use zcash_params::GENERATORS;
+use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 
 lazy_static! {
     static ref GENERATORS_EXP: Vec<SubgroupPoint> = read_generators_bin();
@@ -43,7 +43,7 @@ macro_rules! accumulate_scalar {
         }
 
         $acc.add_assign(&tmp);
-    }
+    };
 }
 
 pub fn pedersen_hash(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
@@ -82,16 +82,13 @@ pub fn pedersen_hash(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
             byteoffset += 1;
             if byteoffset < 31 {
                 r = (r >> 8) | (left[byteoffset + 1] as u16) << 8;
-            }
-            else if byteoffset == 31 {
+            } else if byteoffset == 31 {
                 r = ((r >> 7) & 0xFF) | (right[0] as u16) << 8;
                 bitoffset += 1;
-            }
-            else if byteoffset < 63 {
+            } else if byteoffset < 63 {
                 r = (r >> 8) | (right[r_byteoffset + 1] as u16) << 8;
                 r_byteoffset += 1;
-            }
-            else if byteoffset == 63 {
+            } else if byteoffset == 63 {
                 r = r >> 8;
             }
         }
@@ -123,7 +120,7 @@ fn generator_multiplication(acc: &Fr, gens: &[SubgroupPoint], i_generator: u32) 
 
     let mut tmp = jubjub::SubgroupPoint::identity();
     for (i, &j) in acc.iter().enumerate() {
-        let offset = (i_generator*32+i as u32)*256 + j as u32;
+        let offset = (i_generator * 32 + i as u32) * 256 + j as u32;
         let x = gens[offset as usize];
         tmp += x;
     }
@@ -132,10 +129,10 @@ fn generator_multiplication(acc: &Fr, gens: &[SubgroupPoint], i_generator: u32) 
 
 #[cfg(test)]
 mod tests {
-    use zcash_primitives::sapling::Node;
-    use zcash_primitives::merkle_tree::Hashable;
     use crate::hash::pedersen_hash;
     use rand::{thread_rng, RngCore};
+    use zcash_primitives::merkle_tree::Hashable;
+    use zcash_primitives::sapling::Node;
 
     #[test]
     fn test_hash() {
@@ -158,10 +155,7 @@ mod tests {
 
             let node1 = Node::new(a);
             let node2 = Node::new(b);
-            let hash = Node::combine(
-                depth as usize,
-                &node1,
-                &node2);
+            let hash = Node::combine(depth as usize, &node1, &node2);
             let hash2 = pedersen_hash(depth, &a, &b);
             // println!("Reference Hash: {}", hex::encode(hash.repr));
             // println!("This Hash:      {}", hex::encode(hash2));

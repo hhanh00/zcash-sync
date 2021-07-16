@@ -1,8 +1,8 @@
 use crate::commitment::{CTree, Witness};
+use crate::hash::pedersen_hash;
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::*;
 use zcash_primitives::sapling::Node;
-use crate::hash::pedersen_hash;
 
 #[inline(always)]
 fn node_combine(depth: usize, left: &Node, right: &Node) -> Node {
@@ -348,7 +348,9 @@ impl BlockProcessor {
     }
 
     pub fn add_nodes(&mut self, nodes: &mut [Node], new_witnesses: &[Witness]) {
-        if nodes.is_empty() { return }
+        if nodes.is_empty() {
+            return;
+        }
         self.prev_witnesses.extend_from_slice(new_witnesses);
         let (t, ws) = advance_tree(
             &self.prev_tree,
@@ -364,8 +366,7 @@ impl BlockProcessor {
     pub fn finalize(self) -> (CTree, Vec<Witness>) {
         if self.first_block {
             (self.prev_tree, self.prev_witnesses)
-        }
-        else {
+        } else {
             let (t, ws) = advance_tree(&self.prev_tree, &self.prev_witnesses, &mut [], false);
             (t, ws)
         }
@@ -383,22 +384,26 @@ mod tests {
     use zcash_primitives::sapling::Node;
 
     fn make_nodes(p: usize, len: usize) -> Vec<Node> {
-        let nodes: Vec<_> = (p..p+len).map(|v| {
-            let mut bb = [0u8; 32];
-            bb[0..8].copy_from_slice(&v.to_be_bytes());
-            Node::new(bb)
-        }).collect();
+        let nodes: Vec<_> = (p..p + len)
+            .map(|v| {
+                let mut bb = [0u8; 32];
+                bb[0..8].copy_from_slice(&v.to_be_bytes());
+                Node::new(bb)
+            })
+            .collect();
         nodes
     }
 
     fn make_witnesses(p: usize, len: usize) -> Vec<Witness> {
-        let witnesses: Vec<_> = (p..p+len).map(|v| {
-            Witness::new(v, 0, None)
-        }).collect();
+        let witnesses: Vec<_> = (p..p + len).map(|v| Witness::new(v, 0, None)).collect();
         witnesses
     }
 
-    fn update_witnesses1(tree: &mut CommitmentTree<Node>, ws: &mut Vec<IncrementalWitness<Node>>, nodes: &[Node]) {
+    fn update_witnesses1(
+        tree: &mut CommitmentTree<Node>,
+        ws: &mut Vec<IncrementalWitness<Node>>,
+        nodes: &[Node],
+    ) {
         for n in nodes.iter() {
             tree.append(n.clone()).unwrap();
             for w in ws.iter_mut() {
