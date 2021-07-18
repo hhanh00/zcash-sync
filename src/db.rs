@@ -1,12 +1,11 @@
 use crate::chain::{Nf, NfRef};
 use crate::db::migration::{get_schema_version, update_schema_version};
 use crate::taddr::{derive_tkeys, BIP44_PATH};
-use crate::transaction::TransactionInfo;
+use crate::transaction::{TransactionInfo, Contact};
 use crate::{CTree, Witness};
 use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS};
 use std::collections::HashMap;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
-use zcash_primitives::memo::Memo;
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
@@ -53,11 +52,8 @@ impl DbAdapter {
         )?;
 
         let version = get_schema_version(&self.connection)?;
-        if version == 2 {
-            return Ok(());
-        }
 
-        if version <= 0 {
+        if version < 1 {
             self.connection.execute(
                 "CREATE TABLE IF NOT EXISTS accounts (
             id_account INTEGER PRIMARY KEY,
@@ -136,12 +132,22 @@ impl DbAdapter {
             )?;
         }
 
-        if version <= 1 {
+        if version < 2 {
             self.connection
                 .execute("ALTER TABLE received_notes ADD excluded BOOL", NO_PARAMS)?;
         }
 
-        update_schema_version(&self.connection, 2)?;
+        if version < 3 {
+            self.connection.execute(
+                "CREATE TABLE IF NOT EXISTS contacts (
+                account INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                address TEXT NOT NULL,
+                PRIMARY KEY (account, name))", NO_PARAMS
+            )?;
+        }
+
+        update_schema_version(&self.connection, 3)?;
 
         Ok(())
     }
@@ -300,15 +306,9 @@ impl DbAdapter {
     }
 
     pub fn store_tx_metadata(&self, id_tx: u32, tx_info: &TransactionInfo) -> anyhow::Result<()> {
-        let memo = match &tx_info.memo {
-            Memo::Empty => "".to_string(),
-            Memo::Text(text) => text.to_string(),
-            Memo::Future(_) => "Unrecognized".to_string(),
-            Memo::Arbitrary(_) => "Unrecognized".to_string(),
-        };
         self.connection.execute(
             "UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3",
-            params![tx_info.address, &memo, id_tx],
+            params![tx_info.address, &tx_info.memo, id_tx],
         )?;
         Ok(())
     }
@@ -533,6 +533,12 @@ impl DbAdapter {
         self.connection
             .execute("DELETE FROM blocks WHERE height < ?1", params![height])?;
         log::debug!("-purge_old_witnesses");
+        Ok(())
+    }
+
+    pub fn store_contact(&self, account: u32, contact: &Contact) -> anyhow::Result<()> {
+        self.connection.execute("INSERT INTO contacts(account, name, address)
+        VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING", params![account, &contact.name, &contact.address])?;
         Ok(())
     }
 

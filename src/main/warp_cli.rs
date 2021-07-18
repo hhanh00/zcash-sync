@@ -3,7 +3,7 @@ use rand::rngs::OsRng;
 use rand::{thread_rng, RngCore};
 use rusqlite::NO_PARAMS;
 use sync::{
-    is_valid_key, pedersen_hash, print_witness2, ChainError, DbAdapter, Wallet, Witness, LWD_URL,
+    pedersen_hash, print_witness2, ChainError, DbAdapter, Wallet, Witness, LWD_URL,
 };
 use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
 use zcash_primitives::merkle_tree::Hashable;

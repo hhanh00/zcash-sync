@@ -110,7 +110,7 @@ pub async fn sync_async(
         .collect();
     let decrypter = DecryptNode::new(fvks);
 
-    let (downloader_tx, mut download_rx) = mpsc::channel::<Range<u32>>(2);
+    let (downloader_tx, mut download_rx) = mpsc::channel::<Range<u32>>(1);
     let (processor_tx, mut processor_rx) = mpsc::channel::<Blocks>(1);
 
     let ld_url2 = ld_url.clone();

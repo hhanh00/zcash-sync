@@ -16,9 +16,15 @@ use zcash_primitives::transaction::Transaction;
 #[derive(Debug)]
 pub struct TransactionInfo {
     pub address: String,
-    pub memo: Memo,
+    pub memo: String,
     amount: i64,
     pub fee: u64,
+}
+
+#[derive(Debug)]
+pub struct Contact {
+    pub name: String,
+    pub address: String,
 }
 
 pub async fn decode_transaction(
@@ -76,7 +82,7 @@ pub async fn decode_transaction(
                 tx_memo = memo;
             }
         } else if let Some((_note, pa, memo)) =
-            try_sapling_output_recovery(&NETWORK, height, &ovk, &output)
+        try_sapling_output_recovery(&NETWORK, height, &ovk, &output)
         {
             address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
             tx_memo = memo;
@@ -85,9 +91,15 @@ pub async fn decode_transaction(
 
     let fee = u64::from(tx.value_balance);
 
+    let memo = match Memo::try_from(tx_memo)? {
+        Memo::Empty => "".to_string(),
+        Memo::Text(text) => text.to_string(),
+        Memo::Future(_) => "Unrecognized".to_string(),
+        Memo::Arbitrary(_) => "Unrecognized".to_string(),
+    };
     let tx_info = TransactionInfo {
         address,
-        memo: Memo::try_from(tx_memo)?,
+        memo,
         amount,
         fee,
     };
@@ -112,10 +124,26 @@ pub async fn retrieve_tx_info(tx_ids: &[u32], ld_url: &str, db_path: &str) -> an
         let fvk = db.get_ivk(account)?;
         let tx_info =
             decode_transaction(&mut client, &nf_map, account, &fvk, &tx_hash, height).await?;
+        if !tx_info.address.is_empty() && !tx_info.memo.is_empty() {
+            if let Some(contact) = decode_contact(&tx_info.address, &tx_info.memo)? {
+                db.store_contact(account, &contact)?;
+            }
+        }
         db.store_tx_metadata(id_tx, &tx_info)?;
     }
 
     Ok(())
+}
+
+fn decode_contact(address: &str, memo: &str) -> anyhow::Result<Option<Contact>> {
+    let res = if let Some(memo_line) = memo.lines().next() {
+        let name = memo_line.strip_prefix("Contact: ");
+        name.map(|name| Contact {
+            name: name.to_string(),
+            address: address.to_string(),
+        })
+    } else { None };
+    Ok(res)
 }
 
 #[cfg(test)]
