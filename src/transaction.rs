@@ -109,9 +109,6 @@ pub async fn decode_transaction(
 
 pub async fn retrieve_tx_info(tx_ids: &[u32], ld_url: &str, db_path: &str) -> anyhow::Result<()> {
     let mut tx_ids_set: HashSet<u32> = HashSet::new();
-    for &tx_id in tx_ids.iter() {
-        tx_ids_set.insert(tx_id);
-    }
     let mut client = connect_lightwalletd(ld_url).await?;
     let db = DbAdapter::new(db_path)?;
     let nfs = db.get_nullifiers_raw()?;
@@ -119,7 +116,9 @@ pub async fn retrieve_tx_info(tx_ids: &[u32], ld_url: &str, db_path: &str) -> an
     for nf in nfs.iter() {
         nf_map.insert((nf.0, nf.2.clone()), nf.1);
     }
-    for &id_tx in tx_ids_set.iter() {
+    for &id_tx in tx_ids.iter() { // need to keep tx order
+        if tx_ids_set.contains(&id_tx) { continue }
+        tx_ids_set.insert(id_tx);
         let (account, height, tx_hash) = db.get_txhash(id_tx)?;
         let fvk = db.get_ivk(account)?;
         let tx_info =
@@ -137,9 +136,9 @@ pub async fn retrieve_tx_info(tx_ids: &[u32], ld_url: &str, db_path: &str) -> an
 
 fn decode_contact(address: &str, memo: &str) -> anyhow::Result<Option<Contact>> {
     let res = if let Some(memo_line) = memo.lines().next() {
-        let name = memo_line.strip_prefix("Contact: ");
+        let name = memo_line.strip_prefix("Contact:");
         name.map(|name| Contact {
-            name: name.to_string(),
+            name: name.trim().to_string(),
             address: address.to_string(),
         })
     } else { None };

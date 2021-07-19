@@ -157,7 +157,7 @@ pub async fn sync_async(
                 let mut my_nfs: Vec<Nf> = vec![];
                 for nf in b.spends.iter() {
                     if let Some(&nf_ref) = nfs.get(nf) {
-                        log::info!("NF FOUND {} {}", nf_ref.id_note, b.height);
+                        log::debug!("NF FOUND {} {}", nf_ref.id_note, b.height);
                         db.mark_spent(nf_ref.id_note, b.height)?;
                         my_nfs.push(*nf);
                     }
