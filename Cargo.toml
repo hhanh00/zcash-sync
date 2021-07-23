@@ -47,17 +47,21 @@ lazy_static = "1.4.0"
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 
 [dependencies.zcash_client_backend]
-path = "/home/hanh/projects/librustzcash/zcash_client_backend"
+git = "https://github.com/hhanh00/librustzcash.git"
+branch = "warp-sync"
 
 [dependencies.zcash_primitives]
-path = "/home/hanh/projects/librustzcash/zcash_primitives"
+git = "https://github.com/hhanh00/librustzcash.git"
+branch = "warp-sync"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
-path = "/home/hanh/projects/librustzcash/zcash_proofs"
+git = "https://github.com/hhanh00/librustzcash.git"
+branch = "warp-sync"
 
 [dependencies.zcash_params]
-path = "../zcash_params"
+git = "https://github.com/hhanh00/zcash-params.git"
+branch = "main"
 
 [build-dependencies]
 tonic-build = "0.4.2"
