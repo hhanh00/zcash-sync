@@ -37,7 +37,7 @@ async fn test() -> anyhow::Result<()> {
         if let Some(_) = err.downcast_ref::<ChainError>() {
             println!("REORG");
         } else {
-            panic!(err);
+            panic!("{}", err);
         }
     }
     let tx_id = wallet

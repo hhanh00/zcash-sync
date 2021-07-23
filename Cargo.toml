@@ -14,6 +14,10 @@ harness = false
 name = "warp-cli"
 path = "src/main/warp_cli.rs"
 
+[[bin]]
+name = "cli"
+path = "src/main/cli.rs"
+
 [dependencies]
 dotenv = "0.15.0"
 env_logger = "0.8.4"
@@ -43,6 +47,8 @@ tiny-hderive = "0.3.0"
 ripemd160 = "0.9.1"
 sha2 = "0.9.5"
 lazy_static = "1.4.0"
+rustyline = "8.2.0"
+clap = "3.0.0-beta.2"
 
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 
