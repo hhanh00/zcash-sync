@@ -1,11 +1,11 @@
 use crate::builder::BlockProcessor;
 use crate::chain::{Nf, NfRef};
-use crate::db::{DbAdapter, ReceivedNote};
+use crate::db::{DbAdapter, ReceivedNote, AccountViewKey};
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::transaction::retrieve_tx_info;
 use crate::{
     calculate_tree_state_v2, connect_lightwalletd, download_chain, get_latest_height, CompactBlock,
-    DecryptNode, Witness, LWD_URL, NETWORK,
+    DecryptNode, Witness, LWD_URL,
 };
 use ff::PrimeField;
 use log::{debug, info};
@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::Node;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
@@ -25,7 +24,7 @@ pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
     let fvks: HashMap<_, _> = fvks
         .iter()
         .enumerate()
-        .map(|(i, fvk)| (i as u32, fvk.clone()))
+        .map(|(i, fvk)| (i as u32, AccountViewKey::from_fvk(fvk)))
         .collect();
     let decrypter = DecryptNode::new(fvks);
 
@@ -66,6 +65,9 @@ struct BlockMetadata {
     timestamp: u32,
 }
 
+#[derive(Debug)]
+struct TxIdSet(Vec<u32>);
+
 impl std::fmt::Debug for Blocks {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Blocks of len {}", self.0.len())
@@ -86,34 +88,24 @@ pub async fn sync_async(
     let db_path = db_path.to_string();
 
     let mut client = connect_lightwalletd(&ld_url).await?;
-    let (start_height, mut prev_hash, fvks) = {
+    let (start_height, mut prev_hash, vks) = {
         let db = DbAdapter::new(&db_path)?;
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
-        let fvks = db.get_fvks()?;
-        (height, hash, fvks)
+        let vks = db.get_fvks()?;
+        (height, hash, vks)
     };
     let end_height = get_latest_height(&mut client).await?;
     let end_height = (end_height - target_height_offset).max(start_height);
 
-    let fvks: HashMap<_, _> = fvks
-        .iter()
-        .map(|(&account, fvk)| {
-            let fvk = decode_extended_full_viewing_key(
-                NETWORK.hrp_sapling_extended_full_viewing_key(),
-                &fvk,
-            )
-            .unwrap()
-            .unwrap();
-            (account, fvk)
-        })
-        .collect();
-    let decrypter = DecryptNode::new(fvks);
+    let decrypter = DecryptNode::new(vks);
 
     let (downloader_tx, mut download_rx) = mpsc::channel::<Range<u32>>(1);
     let (processor_tx, mut processor_rx) = mpsc::channel::<Blocks>(1);
 
     let ld_url2 = ld_url.clone();
+    let db_path2 = db_path.clone();
+
     let downloader = tokio::spawn(async move {
         let mut client = connect_lightwalletd(&ld_url2).await?;
         while let Some(range) = download_rx.recv().await {
@@ -138,8 +130,8 @@ pub async fn sync_async(
 
     let processor = tokio::spawn(async move {
         let db = DbAdapter::new(&db_path)?;
+        db.synchronous(false)?;
         let mut nfs = db.get_nullifiers()?;
-        let mut new_tx_ids: Vec<u32> = vec![];
 
         let (mut tree, mut witnesses) = db.get_tree()?;
         let mut bp = BlockProcessor::new(&tree, &witnesses);
@@ -151,15 +143,21 @@ pub async fn sync_async(
                 continue;
             }
 
+            db.begin_transaction()?;
+
+            let mut new_tx_ids: Vec<u32> = vec![];
             let dec_blocks = decrypter.decrypt_blocks(&blocks.0);
             let mut witnesses: Vec<Witness> = vec![];
+            log::info!("Dec start : {}", dec_blocks[0].height);
+            let start = Instant::now();
             for b in dec_blocks.iter() {
                 let mut my_nfs: Vec<Nf> = vec![];
                 for nf in b.spends.iter() {
                     if let Some(&nf_ref) = nfs.get(nf) {
-                        log::debug!("NF FOUND {} {}", nf_ref.id_note, b.height);
+                        log::info!("NF FOUND {} {}", nf_ref.id_note, b.height);
                         db.mark_spent(nf_ref.id_note, b.height)?;
                         my_nfs.push(*nf);
+                        nfs.remove(nf);
                     }
                 }
                 if !b.notes.is_empty() {
@@ -204,8 +202,10 @@ pub async fn sync_async(
                         },
                     );
 
-                    let w = Witness::new(p as usize, id_note, Some(n.clone()));
-                    witnesses.push(w);
+                    if !n.viewonly {
+                        let w = Witness::new(p as usize, id_note, Some(n.clone()));
+                        witnesses.push(w);
+                    }
                 }
 
                 if !my_nfs.is_empty() {
@@ -233,7 +233,9 @@ pub async fn sync_async(
 
                 absolute_position_at_block_start += b.count_outputs as usize;
             }
+            log::info!("Dec end : {}", start.elapsed().as_millis());
 
+            let start = Instant::now();
             let mut nodes: Vec<Node> = vec![];
             for cb in blocks.0.iter() {
                 for tx in cb.vtx.iter() {
@@ -260,6 +262,16 @@ pub async fn sync_async(
                     timestamp: block.time,
                 });
             }
+            log::info!("Witness : {}", start.elapsed().as_millis());
+
+            db.commit()?;
+
+            let start = Instant::now();
+            if get_tx && !new_tx_ids.is_empty() {
+                retrieve_tx_info(&mut client, &db_path2, &new_tx_ids).await.unwrap();
+            }
+            log::info!("Transaction Details : {}", start.elapsed().as_millis());
+
             log::info!("progress: {}", blocks.0[0].height);
             let callback = proc_callback.lock().await;
             callback(blocks.0[0].height as u32);
@@ -278,15 +290,12 @@ pub async fn sync_async(
             }
         }
 
-        if get_tx && !new_tx_ids.is_empty() {
-            retrieve_tx_info(&new_tx_ids, &ld_url, &db_path).await?;
-        }
-
         let callback = progress_callback.lock().await;
         callback(end_height);
         log::debug!("Witnesses {}", witnesses.len());
 
         db.purge_old_witnesses(end_height - 100)?;
+
         Ok::<_, anyhow::Error>(())
     });
 

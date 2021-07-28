@@ -11,13 +11,13 @@ use std::time::Instant;
 use thiserror::Error;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Request;
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{BlockHeight, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decryption;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+use crate::db::AccountViewKey;
 
 const MAX_CHUNK: u32 = 50000;
 
@@ -78,7 +78,7 @@ pub async fn download_chain(
 }
 
 pub struct DecryptNode {
-    fvks: HashMap<u32, ExtendedFullViewingKey>,
+    vks: HashMap<u32, AccountViewKey>,
 }
 
 #[derive(Eq, Hash, PartialEq, Copy, Clone)]
@@ -105,6 +105,7 @@ pub struct DecryptedNote {
     pub note: Note,
     pub pa: PaymentAddress,
     pub position_in_block: usize,
+    pub viewonly: bool,
 
     pub height: u32,
     pub txid: Vec<u8>,
@@ -129,7 +130,7 @@ pub fn to_output_description(co: &CompactOutput) -> CompactOutputDescription {
 
 fn decrypt_notes<'a>(
     block: &'a CompactBlock,
-    fvks: &HashMap<u32, ExtendedFullViewingKey>,
+    vks: &HashMap<u32, AccountViewKey>
 ) -> DecryptedBlock<'a> {
     let height = BlockHeight::from_u32(block.height as u32);
     let mut count_outputs = 0u32;
@@ -143,17 +144,17 @@ fn decrypt_notes<'a>(
         }
 
         for (output_index, co) in vtx.outputs.iter().enumerate() {
-            for (&account, fvk) in fvks.iter() {
-                let ivk = &fvk.fvk.vk.ivk();
+            for (&account, vk) in vks.iter() {
                 let od = to_output_description(co);
                 if let Some((note, pa)) =
-                    try_sapling_compact_note_decryption(&NETWORK, height, ivk, &od)
+                    try_sapling_compact_note_decryption(&NETWORK, height, &vk.ivk, &od)
                 {
                     notes.push(DecryptedNote {
                         account,
-                        ivk: fvk.clone(),
+                        ivk: vk.fvk.clone(),
                         note,
                         pa,
+                        viewonly: vk.viewonly,
                         position_in_block: count_outputs as usize,
                         height: block.height as u32,
                         tx_index,
@@ -175,14 +176,14 @@ fn decrypt_notes<'a>(
 }
 
 impl DecryptNode {
-    pub fn new(fvks: HashMap<u32, ExtendedFullViewingKey>) -> DecryptNode {
-        DecryptNode { fvks }
+    pub fn new(vks: HashMap<u32, AccountViewKey>) -> DecryptNode {
+        DecryptNode { vks }
     }
 
     pub fn decrypt_blocks<'a>(&self, blocks: &'a [CompactBlock]) -> Vec<DecryptedBlock<'a>> {
         let mut decrypted_blocks: Vec<DecryptedBlock> = blocks
             .par_iter()
-            .map(|b| decrypt_notes(b, &self.fvks))
+            .map(|b| decrypt_notes(b, &self.vks))
             .collect();
         decrypted_blocks.sort_by(|a, b| a.height.cmp(&b.height));
         decrypted_blocks
@@ -327,20 +328,8 @@ pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamer
     Ok(client)
 }
 
-pub async fn sync(fvks: &HashMap<u32, String>, ld_url: &str) -> anyhow::Result<()> {
-    let fvks: HashMap<_, _> = fvks
-        .iter()
-        .map(|(&account, fvk)| {
-            let fvk = decode_extended_full_viewing_key(
-                NETWORK.hrp_sapling_extended_full_viewing_key(),
-                &fvk,
-            )
-            .unwrap()
-            .unwrap();
-            (account, fvk)
-        })
-        .collect();
-    let decrypter = DecryptNode::new(fvks);
+pub async fn sync(vks: HashMap<u32, AccountViewKey>, ld_url: &str) -> anyhow::Result<()> {
+    let decrypter = DecryptNode::new(vks);
     let mut client = connect_lightwalletd(ld_url).await?;
     let start_height: u32 = crate::NETWORK
         .activation_height(NetworkUpgrade::Sapling)
@@ -385,7 +374,7 @@ mod tests {
     use std::time::Instant;
     use zcash_client_backend::encoding::decode_extended_full_viewing_key;
     use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
-    use zcash_primitives::zip32::ExtendedFullViewingKey;
+    use crate::db::AccountViewKey;
 
     #[tokio::test]
     async fn test_get_latest_height() -> anyhow::Result<()> {
@@ -400,12 +389,12 @@ mod tests {
         dotenv::dotenv().unwrap();
         let fvk = dotenv::var("FVK").unwrap();
 
-        let mut fvks: HashMap<u32, ExtendedFullViewingKey> = HashMap::new();
+        let mut fvks: HashMap<u32, AccountViewKey> = HashMap::new();
         let fvk =
             decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
                 .unwrap()
                 .unwrap();
-        fvks.insert(1, fvk);
+        fvks.insert(1, AccountViewKey::from_fvk(&fvk));
         let decrypter = DecryptNode::new(fvks);
         let mut client = CompactTxStreamerClient::connect(LWD_URL).await?;
         let start_height: u32 = crate::NETWORK

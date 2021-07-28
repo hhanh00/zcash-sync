@@ -1,4 +1,4 @@
-use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter, TxFilter, NETWORK};
+use crate::{CompactTxStreamerClient, DbAdapter, TxFilter, NETWORK};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use tonic::transport::Channel;
@@ -107,10 +107,9 @@ pub async fn decode_transaction(
     Ok(tx_info)
 }
 
-pub async fn retrieve_tx_info(tx_ids: &[u32], ld_url: &str, db_path: &str) -> anyhow::Result<()> {
-    let mut tx_ids_set: HashSet<u32> = HashSet::new();
-    let mut client = connect_lightwalletd(ld_url).await?;
+pub async fn retrieve_tx_info(client: &mut CompactTxStreamerClient<Channel>, db_path: &str, tx_ids: &[u32]) -> anyhow::Result<()> {
     let db = DbAdapter::new(db_path)?;
+    let mut tx_ids_set: HashSet<u32> = HashSet::new();
     let nfs = db.get_nullifiers_raw()?;
     let mut nf_map: HashMap<(u32, Vec<u8>), u64> = HashMap::new();
     for nf in nfs.iter() {
@@ -122,7 +121,7 @@ pub async fn retrieve_tx_info(tx_ids: &[u32], ld_url: &str, db_path: &str) -> an
         let (account, height, tx_hash) = db.get_txhash(id_tx)?;
         let fvk = db.get_ivk(account)?;
         let tx_info =
-            decode_transaction(&mut client, &nf_map, account, &fvk, &tx_hash, height).await?;
+            decode_transaction(client, &nf_map, account, &fvk, &tx_hash, height).await?;
         if !tx_info.address.is_empty() && !tx_info.memo.is_empty() {
             if let Some(contact) = decode_contact(&tx_info.address, &tx_info.memo)? {
                 db.store_contact(account, &contact)?;

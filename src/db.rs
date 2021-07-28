@@ -2,13 +2,14 @@ use crate::chain::{Nf, NfRef};
 use crate::db::migration::{get_schema_version, update_schema_version};
 use crate::taddr::{derive_tkeys, BIP44_PATH};
 use crate::transaction::{TransactionInfo, Contact};
-use crate::{CTree, Witness};
+use crate::{CTree, Witness, NETWORK};
 use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS};
 use std::collections::HashMap;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
-use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed};
+use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
+use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 
 mod migration;
 
@@ -37,10 +38,41 @@ pub struct SpendableNote {
     pub witness: IncrementalWitness<Node>,
 }
 
+pub struct AccountViewKey {
+    pub fvk: ExtendedFullViewingKey,
+    pub ivk: SaplingIvk,
+    pub viewonly: bool,
+}
+
+impl AccountViewKey {
+    pub fn from_fvk(fvk: &ExtendedFullViewingKey) -> AccountViewKey {
+        AccountViewKey {
+            fvk: fvk.clone(),
+            ivk: fvk.fvk.vk.ivk(),
+            viewonly: false,
+        }
+    }
+}
+
 impl DbAdapter {
     pub fn new(db_path: &str) -> anyhow::Result<DbAdapter> {
         let connection = Connection::open(db_path)?;
         Ok(DbAdapter { connection })
+    }
+
+    pub fn synchronous(&self, flag: bool) -> anyhow::Result<()> {
+        self.connection.execute(&format!("PRAGMA synchronous = {}", if flag { "on" } else { "off" }), NO_PARAMS)?;
+        Ok(())
+    }
+
+    pub fn begin_transaction(&self) -> anyhow::Result<()> {
+        self.connection.execute("BEGIN TRANSACTION", NO_PARAMS)?;
+        Ok(())
+    }
+
+    pub fn commit(&self) -> anyhow::Result<()> {
+        self.connection.execute("COMMIT", NO_PARAMS)?;
+        Ok(())
     }
 
     pub fn init_db(&self) -> anyhow::Result<()> {
@@ -166,23 +198,26 @@ impl DbAdapter {
             params![name, seed, sk, ivk, address],
         )?;
         let id_tx: u32 = self.connection.query_row(
-            "SELECT id_account FROM accounts WHERE sk = ?1",
-            params![sk],
+            "SELECT id_account FROM accounts WHERE ivk = ?1",
+            params![ivk],
             |row| row.get(0),
         )?;
         Ok(id_tx)
     }
 
-    pub fn get_fvks(&self) -> anyhow::Result<HashMap<u32, String>> {
+    pub fn get_fvks(&self) -> anyhow::Result<HashMap<u32, AccountViewKey>> {
         let mut statement = self
             .connection
-            .prepare("SELECT id_account, ivk FROM accounts")?;
+            .prepare("SELECT id_account, ivk, sk FROM accounts")?;
         let rows = statement.query_map(NO_PARAMS, |row| {
             let account: u32 = row.get(0)?;
             let ivk: String = row.get(1)?;
-            Ok((account, ivk))
+            let sk: Option<String> = row.get(2)?;
+            let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk).unwrap().unwrap();
+            let ivk = fvk.fvk.vk.ivk();
+            Ok((account, AccountViewKey { fvk, ivk, viewonly: sk.is_none() }))
         })?;
-        let mut fvks: HashMap<u32, String> = HashMap::new();
+        let mut fvks: HashMap<u32, AccountViewKey> = HashMap::new();
         for r in rows {
             let row = r?;
             fvks.insert(row.0, row.1);
@@ -577,11 +612,10 @@ impl DbAdapter {
                 "SELECT seed FROM accounts WHERE id_account = ?1",
                 params![account],
                 |row| {
-                    let sk: String = row.get(0)?;
+                    let sk: Option<String> = row.get(0)?;
                     Ok(sk)
                 },
-            )
-            .optional()?;
+            )?;
         log::info!("-get_seed");
         Ok(seed)
     }

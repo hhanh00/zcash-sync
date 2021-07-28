@@ -24,13 +24,15 @@ async fn test() -> anyhow::Result<()> {
 
     let seed = dotenv::var("SEED").unwrap();
     let seed2 = dotenv::var("SEED2").unwrap();
+    let ivk = dotenv::var("IVK").unwrap();
     let address = dotenv::var("ADDRESS").unwrap();
     let progress = |height| {
         log::info!("Height = {}", height);
     };
     let wallet = Wallet::new(DB_NAME, LWD_URL);
-    wallet.new_account_with_key("main", &seed).unwrap();
-    wallet.new_account_with_key("test", &seed2).unwrap();
+    // wallet.new_account_with_key("main", &seed).unwrap();
+    // wallet.new_account_with_key("test", &seed2).unwrap();
+    wallet.new_account_with_key("zecpages", &ivk).unwrap();
 
     let res = wallet.sync(true, ANCHOR_OFFSET, progress).await;
     if let Err(err) = res {
@@ -40,21 +42,21 @@ async fn test() -> anyhow::Result<()> {
             panic!("{}", err);
         }
     }
-    let tx_id = wallet
-        .send_payment(
-            1,
-            &address,
-            50000,
-            "test memo",
-            u64::max_value(),
-            2,
-            move |progress| {
-                println!("{}", progress.cur());
-            },
-        )
-        .await
-        .unwrap();
-    println!("TXID = {}", tx_id);
+    // let tx_id = wallet
+    //     .send_payment(
+    //         1,
+    //         &address,
+    //         50000,
+    //         "test memo",
+    //         u64::max_value(),
+    //         2,
+    //         move |progress| {
+    //             println!("{}", progress.cur());
+    //         },
+    //     )
+    //     .await
+    //     .unwrap();
+    // println!("TXID = {}", tx_id);
 
     Ok(())
 }

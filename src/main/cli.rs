@@ -1,6 +1,6 @@
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
-use clap::{AppSettings, Clap, App};
+use clap::{AppSettings, Clap};
 
 #[derive(Clap, Debug)]
 #[clap(setting = AppSettings::NoBinaryName)]
