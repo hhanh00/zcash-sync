@@ -1,15 +1,15 @@
 use crate::chain::{Nf, NfRef};
 use crate::db::migration::{get_schema_version, update_schema_version};
 use crate::taddr::{derive_tkeys, BIP44_PATH};
-use crate::transaction::{TransactionInfo, Contact};
+use crate::transaction::{Contact, TransactionInfo};
 use crate::{CTree, Witness, NETWORK};
 use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS};
 use std::collections::HashMap;
+use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 
 mod migration;
 
@@ -57,12 +57,8 @@ impl AccountViewKey {
 impl DbAdapter {
     pub fn new(db_path: &str) -> anyhow::Result<DbAdapter> {
         let connection = Connection::open(db_path)?;
+        connection.execute("PRAGMA synchronous = off", NO_PARAMS)?;
         Ok(DbAdapter { connection })
-    }
-
-    pub fn synchronous(&self, flag: bool) -> anyhow::Result<()> {
-        self.connection.execute(&format!("PRAGMA synchronous = {}", if flag { "on" } else { "off" }), NO_PARAMS)?;
-        Ok(())
     }
 
     pub fn begin_transaction(&self) -> anyhow::Result<()> {
@@ -175,7 +171,8 @@ impl DbAdapter {
                 account INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 address TEXT NOT NULL,
-                PRIMARY KEY (account, address))", NO_PARAMS
+                PRIMARY KEY (account, address))",
+                NO_PARAMS,
             )?;
         }
 
@@ -213,9 +210,21 @@ impl DbAdapter {
             let account: u32 = row.get(0)?;
             let ivk: String = row.get(1)?;
             let sk: Option<String> = row.get(2)?;
-            let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk).unwrap().unwrap();
+            let fvk = decode_extended_full_viewing_key(
+                NETWORK.hrp_sapling_extended_full_viewing_key(),
+                &ivk,
+            )
+            .unwrap()
+            .unwrap();
             let ivk = fvk.fvk.vk.ivk();
-            Ok((account, AccountViewKey { fvk, ivk, viewonly: sk.is_none() }))
+            Ok((
+                account,
+                AccountViewKey {
+                    fvk,
+                    ivk,
+                    viewonly: sk.is_none(),
+                },
+            ))
         })?;
         let mut fvks: HashMap<u32, AccountViewKey> = HashMap::new();
         for r in rows {
@@ -245,18 +254,19 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn get_txhash(&self, id_tx: u32) -> anyhow::Result<(u32, u32, Vec<u8>)> {
-        let (account, height, tx_hash) = self.connection.query_row(
-            "SELECT account, height, txid FROM transactions WHERE id_tx = ?1",
+    pub fn get_txhash(&self, id_tx: u32) -> anyhow::Result<(u32, u32, Vec<u8>, String)> {
+        let (account, height, tx_hash, ivk) = self.connection.query_row(
+            "SELECT account, height, txid, ivk FROM transactions t, accounts a WHERE id_tx = ?1 AND t.account = a.id_account",
             params![id_tx],
             |row| {
                 let account: u32 = row.get(0)?;
                 let height: u32 = row.get(1)?;
                 let tx_hash: Vec<u8> = row.get(2)?;
-                Ok((account, height, tx_hash))
+                let ivk: String = row.get(3)?;
+                Ok((account, height, tx_hash, ivk))
             },
         )?;
-        Ok((account, height, tx_hash))
+        Ok((account, height, tx_hash, ivk))
     }
 
     pub fn store_block(
@@ -574,13 +584,17 @@ impl DbAdapter {
     pub fn store_contact(&self, account: u32, contact: &Contact) -> anyhow::Result<()> {
         log::info!("{:?}", contact);
         if contact.name.is_empty() {
-            self.connection.execute("DELETE FROM contacts WHERE account = ?1 AND address = ?2",
-            params![account, contact.address])?;
-        }
-        else {
-            self.connection.execute("INSERT INTO contacts(account, name, address)
+            self.connection.execute(
+                "DELETE FROM contacts WHERE account = ?1 AND address = ?2",
+                params![account, contact.address],
+            )?;
+        } else {
+            self.connection.execute(
+                "INSERT INTO contacts(account, name, address)
         VALUES (?1, ?2, ?3) ON CONFLICT (account, address) DO UPDATE SET
-        name = excluded.name", params![account, &contact.name, &contact.address])?;
+        name = excluded.name",
+                params![account, &contact.name, &contact.address],
+            )?;
         }
         Ok(())
     }
@@ -606,16 +620,14 @@ impl DbAdapter {
 
     pub fn get_seed(&self, account: u32) -> anyhow::Result<Option<String>> {
         log::info!("+get_seed");
-        let seed = self
-            .connection
-            .query_row(
-                "SELECT seed FROM accounts WHERE id_account = ?1",
-                params![account],
-                |row| {
-                    let sk: Option<String> = row.get(0)?;
-                    Ok(sk)
-                },
-            )?;
+        let seed = self.connection.query_row(
+            "SELECT seed FROM accounts WHERE id_account = ?1",
+            params![account],
+            |row| {
+                let sk: Option<String> = row.get(0)?;
+                Ok(sk)
+            },
+        )?;
         log::info!("-get_seed");
         Ok(seed)
     }

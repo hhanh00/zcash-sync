@@ -1,6 +1,6 @@
-use rustyline::Editor;
-use rustyline::error::ReadlineError;
 use clap::{AppSettings, Clap};
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
 
 #[derive(Clap, Debug)]
 #[clap(setting = AppSettings::NoBinaryName)]
@@ -32,7 +32,7 @@ fn main() {
                 match Commands::try_parse_from(line.split_whitespace()) {
                     Ok(cmd) => {
                         run_cmd(&cmd.cmd);
-                    },
+                    }
                     Err(err) => {
                         eprintln!("{}", err);
                     }

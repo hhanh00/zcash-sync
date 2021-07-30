@@ -1,6 +1,6 @@
 use crate::builder::BlockProcessor;
 use crate::chain::{Nf, NfRef};
-use crate::db::{DbAdapter, ReceivedNote, AccountViewKey};
+use crate::db::{AccountViewKey, DbAdapter, ReceivedNote};
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::transaction::retrieve_tx_info;
 use crate::{
@@ -130,7 +130,6 @@ pub async fn sync_async(
 
     let processor = tokio::spawn(async move {
         let db = DbAdapter::new(&db_path)?;
-        db.synchronous(false)?;
         let mut nfs = db.get_nullifiers()?;
 
         let (mut tree, mut witnesses) = db.get_tree()?;
@@ -268,7 +267,9 @@ pub async fn sync_async(
 
             let start = Instant::now();
             if get_tx && !new_tx_ids.is_empty() {
-                retrieve_tx_info(&mut client, &db_path2, &new_tx_ids).await.unwrap();
+                retrieve_tx_info(&mut client, &db_path2, &new_tx_ids)
+                    .await
+                    .unwrap();
             }
             log::info!("Transaction Details : {}", start.elapsed().as_millis());
 

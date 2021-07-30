@@ -1,4 +1,5 @@
 use crate::commitment::{CTree, Witness};
+use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
 use crate::{advance_tree, NETWORK};
@@ -17,7 +18,6 @@ use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decrypt
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use crate::db::AccountViewKey;
 
 const MAX_CHUNK: u32 = 50000;
 
@@ -130,7 +130,7 @@ pub fn to_output_description(co: &CompactOutput) -> CompactOutputDescription {
 
 fn decrypt_notes<'a>(
     block: &'a CompactBlock,
-    vks: &HashMap<u32, AccountViewKey>
+    vks: &HashMap<u32, AccountViewKey>,
 ) -> DecryptedBlock<'a> {
     let height = BlockHeight::from_u32(block.height as u32);
     let mut count_outputs = 0u32;
@@ -366,6 +366,7 @@ mod tests {
         calculate_tree_state_v1, calculate_tree_state_v2, download_chain, get_latest_height,
         get_tree_state, DecryptNode,
     };
+    use crate::db::AccountViewKey;
     use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
     use crate::LWD_URL;
     use crate::NETWORK;
@@ -374,7 +375,6 @@ mod tests {
     use std::time::Instant;
     use zcash_client_backend::encoding::decode_extended_full_viewing_key;
     use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
-    use crate::db::AccountViewKey;
 
     #[tokio::test]
     async fn test_get_latest_height() -> anyhow::Result<()> {
