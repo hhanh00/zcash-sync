@@ -121,7 +121,7 @@ impl Wallet {
             progress_callback,
             ld_url,
         )
-        .await
+            .await
     }
 
     pub async fn get_latest_height(&self) -> anyhow::Result<u32> {
@@ -147,7 +147,7 @@ impl Wallet {
             cb.clone(),
             ld_url,
         )
-        .await?;
+            .await?;
         Self::scan_async(get_tx, db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone(), ld_url).await?;
         Ok(())
     }
@@ -165,7 +165,7 @@ impl Wallet {
             progress_callback,
             &self.ld_url,
         )
-        .await
+            .await
     }
 
     pub async fn skip_to_last_height(&self) -> anyhow::Result<()> {
@@ -189,6 +189,11 @@ impl Wallet {
 
     pub fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<()> {
         self.db.trim_to_height(height)
+    }
+
+    pub async fn send_multi_payment(&self, account: u32, recipients_json: &str,
+                                    progress_callback: impl Fn(Progress) + Send + 'static) -> anyhow::Result<String> {
+        Ok("multipay Not Implemented".to_string())
     }
 
     pub async fn send_payment(
@@ -321,7 +326,7 @@ impl Wallet {
             NETWORK.hrp_sapling_extended_full_viewing_key(),
             &ivk,
         )?
-        .unwrap();
+            .unwrap();
         let mut diversifier_index = self.db.get_diversifier(account)?;
         diversifier_index.increment().unwrap();
         let (new_diversifier_index, pa) = fvk
