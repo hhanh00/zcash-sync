@@ -24,6 +24,7 @@ use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use zcash_proofs::prover::LocalTxProver;
+use serde::Deserialize;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -49,6 +50,13 @@ impl Default for WalletBalance {
             spendable: 0,
         }
     }
+}
+
+#[derive(Deserialize)]
+pub struct Recipient {
+    pub address: String,
+    pub amount: u64,
+    pub memo: String,
 }
 
 impl Wallet {
@@ -191,9 +199,10 @@ impl Wallet {
         self.db.trim_to_height(height)
     }
 
-    pub async fn send_multi_payment(&self, account: u32, recipients_json: &str,
+    pub async fn send_multi_payment(&self, account: u32, recipients_json: &str, anchor_offset: u32,
                                     progress_callback: impl Fn(Progress) + Send + 'static) -> anyhow::Result<String> {
-        Ok("multipay Not Implemented".to_string())
+        let recipients: Vec<Recipient> = serde_json::from_str(recipients_json)?;
+        self._send_payment(account, &recipients, anchor_offset, progress_callback).await
     }
 
     pub async fn send_payment(
@@ -206,10 +215,37 @@ impl Wallet {
         anchor_offset: u32,
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
-        let secret_key = self.db.get_sk(account)?;
-        let to_addr = RecipientAddress::decode(&NETWORK, to_address)
-            .ok_or(anyhow::anyhow!("Invalid address"))?;
+        let mut recipients: Vec<Recipient> = vec![];
         let target_amount = Amount::from_u64(amount).unwrap();
+        let max_amount_per_note = if max_amount_per_note != 0 {
+            Amount::from_u64(max_amount_per_note).unwrap()
+        } else {
+            Amount::from_i64(MAX_MONEY).unwrap()
+        };
+        let mut remaining_amount = target_amount;
+        while remaining_amount.is_positive() {
+            let note_amount = remaining_amount.min(max_amount_per_note);
+            let recipient = Recipient {
+                address: to_address.to_string(),
+                amount: u64::from(note_amount),
+                memo: memo.to_string(),
+            };
+            recipients.push(recipient);
+            remaining_amount -= note_amount;
+        }
+
+        self._send_payment(account, &recipients, anchor_offset, progress_callback).await
+    }
+
+    async fn _send_payment(
+        &self,
+        account: u32,
+        recipients: &[Recipient],
+        anchor_offset: u32,
+        progress_callback: impl Fn(Progress) + Send + 'static,
+    ) -> anyhow::Result<String> {
+        let secret_key = self.db.get_sk(account)?;
+        let target_amount = Amount::from_u64(recipients.iter().map(|r| r.amount).sum()).unwrap();
         let skey =
             decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &secret_key)?
                 .unwrap();
@@ -232,6 +268,7 @@ impl Wallet {
 
         let mut amount = target_amount;
         amount += DEFAULT_FEE;
+        let target_amount_with_fee = amount;
         let mut selected_note: Vec<u32> = vec![];
         for n in notes.iter() {
             if amount.is_positive() {
@@ -256,7 +293,7 @@ impl Wallet {
             log::info!("Not enough balance");
             anyhow::bail!(
                 "Not enough balance, need {} zats, missing {} zats",
-                u64::from(target_amount),
+                u64::from(target_amount_with_fee),
                 u64::from(amount)
             );
         }
@@ -264,29 +301,24 @@ impl Wallet {
         log::info!("Preparing tx");
         builder.send_change_to(ovk, change_address);
 
-        let max_amount_per_note = if max_amount_per_note != 0 {
-            Amount::from_u64(max_amount_per_note).unwrap()
-        } else {
-            Amount::from_i64(MAX_MONEY).unwrap()
-        };
-        let mut remaining_amount = target_amount;
-        while remaining_amount.is_positive() {
-            let note_amount = remaining_amount.min(max_amount_per_note);
+        for r in recipients.iter() {
+            let to_addr = RecipientAddress::decode(&NETWORK, &r.address)
+                .ok_or(anyhow::anyhow!("Invalid address"))?;
+            let amount = Amount::from_u64(r.amount).unwrap();
             match &to_addr {
                 RecipientAddress::Shielded(pa) => {
-                    log::info!("Sapling output: {}", u64::from(note_amount));
+                    log::info!("Sapling output: {}", r.amount);
                     builder.add_sapling_output(
                         Some(ovk),
                         pa.clone(),
-                        note_amount,
-                        Some(Memo::from_str(memo)?.into()),
+                        amount,
+                        Some(Memo::from_str(&r.memo)?.into()),
                     )
                 }
                 RecipientAddress::Transparent(t_address) => {
-                    builder.add_transparent_output(&t_address, note_amount)
+                    builder.add_transparent_output(&t_address, amount)
                 }
             }?;
-            remaining_amount -= note_amount;
         }
 
         let (progress_tx, progress_rx) = mpsc::channel::<Progress>();
