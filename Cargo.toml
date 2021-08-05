@@ -18,6 +18,10 @@ path = "src/main/warp_cli.rs"
 name = "cli"
 path = "src/main/cli.rs"
 
+[[bin]]
+name = "sign"
+path = "src/main/sign.rs"
+
 [dependencies]
 dotenv = "0.15.0"
 env_logger = "0.8.4"

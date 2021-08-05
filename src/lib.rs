@@ -27,6 +27,7 @@ mod print;
 mod scan;
 mod taddr;
 mod transaction;
+mod pay;
 mod wallet;
 
 pub use crate::builder::advance_tree;
@@ -37,10 +38,11 @@ pub use crate::chain::{
 pub use crate::commitment::{CTree, Witness};
 pub use crate::db::DbAdapter;
 pub use crate::hash::pedersen_hash;
-pub use crate::key::is_valid_key;
+pub use crate::key::{is_valid_key, decode_key};
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;
 pub use crate::mempool::MemPool;
 pub use crate::print::*;
 pub use crate::scan::{latest_height, scan_all, sync_async};
 pub use crate::wallet::{Wallet, WalletBalance};
+pub use crate::pay::{sign_offline_tx, broadcast_tx, Tx};

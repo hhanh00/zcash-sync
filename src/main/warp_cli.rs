@@ -28,9 +28,9 @@ async fn test() -> anyhow::Result<()> {
         log::info!("Height = {}", height);
     };
     let wallet = Wallet::new(DB_NAME, LWD_URL);
-    // wallet.new_account_with_key("main", &seed).unwrap();
+    wallet.new_account_with_key("main", &seed).unwrap();
     // wallet.new_account_with_key("test", &seed2).unwrap();
-    wallet.new_account_with_key("zecpages", &ivk).unwrap();
+    // wallet.new_account_with_key("zecpages", &ivk).unwrap();
 
     let res = wallet.sync(true, ANCHOR_OFFSET, progress).await;
     if let Err(err) = res {
@@ -46,7 +46,7 @@ async fn test() -> anyhow::Result<()> {
     //         &address,
     //         50000,
     //         "test memo",
-    //         u64::max_value(),
+    //         0,
     //         2,
     //         move |progress| {
     //             println!("{}", progress.cur());
@@ -55,6 +55,18 @@ async fn test() -> anyhow::Result<()> {
     //     .await
     //     .unwrap();
     // println!("TXID = {}", tx_id);
+
+    let tx = wallet
+        .prepare_payment(
+            1,
+            &address,
+            50000,
+            "test memo",
+            0,
+            2)
+        .await
+        .unwrap();
+    println!("TX = {}", tx);
 
     Ok(())
 }
