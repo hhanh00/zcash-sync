@@ -201,10 +201,8 @@ pub async fn sync_async(
                         },
                     );
 
-                    if !n.viewonly {
-                        let w = Witness::new(p as usize, id_note, Some(n.clone()));
-                        witnesses.push(w);
-                    }
+                    let w = Witness::new(p as usize, id_note, Some(n.clone()));
+                    witnesses.push(w);
                 }
 
                 if !my_nfs.is_empty() {
