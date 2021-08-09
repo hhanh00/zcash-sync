@@ -28,6 +28,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use crate::db::SpendableNote;
 use crate::pay::{ColdTxBuilder, Tx};
+use crate::prices::retrieve_historical_prices;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -374,6 +375,15 @@ impl Wallet {
             remaining_amount -= note_amount;
         }
         Ok(recipients)
+    }
+
+    pub async fn sync_historical_prices(&mut self, currency: &str) -> anyhow::Result<u32> {
+        let ts = self.db.get_missing_prices_timestamp(currency)?;
+        if !ts.is_empty() {
+            let prices = retrieve_historical_prices(&ts, currency).await?;
+            self.db.store_historical_prices(prices, currency)?;
+        }
+        Ok(ts.len() as u32)
     }
 }
 

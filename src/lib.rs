@@ -29,6 +29,7 @@ mod taddr;
 mod transaction;
 mod pay;
 mod wallet;
+mod prices;
 
 pub use crate::builder::advance_tree;
 pub use crate::chain::{

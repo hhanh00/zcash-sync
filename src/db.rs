@@ -1,5 +1,4 @@
 use crate::chain::{Nf, NfRef};
-use crate::db::migration::{get_schema_version, update_schema_version};
 use crate::taddr::{derive_tkeys, BIP44_PATH};
 use crate::transaction::{Contact, TransactionInfo};
 use crate::{CTree, Witness, NETWORK};
@@ -10,6 +9,7 @@ use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
+use chrono::NaiveDateTime;
 
 mod migration;
 
@@ -72,112 +72,7 @@ impl DbAdapter {
     }
 
     pub fn init_db(&self) -> anyhow::Result<()> {
-        self.connection.execute(
-            "CREATE TABLE IF NOT EXISTS schema_version (
-            id INTEGER PRIMARY KEY NOT NULL,
-            version INTEGER NOT NULL)",
-            NO_PARAMS,
-        )?;
-
-        let version = get_schema_version(&self.connection)?;
-
-        if version < 1 {
-            self.connection.execute(
-                "CREATE TABLE IF NOT EXISTS accounts (
-            id_account INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            seed TEXT,
-            sk TEXT,
-            ivk TEXT NOT NULL UNIQUE,
-            address TEXT NOT NULL)",
-                NO_PARAMS,
-            )?;
-
-            self.connection.execute(
-                "CREATE TABLE IF NOT EXISTS blocks (
-            height INTEGER PRIMARY KEY,
-            hash BLOB NOT NULL,
-            timestamp INTEGER NOT NULL,
-            sapling_tree BLOB NOT NULL)",
-                NO_PARAMS,
-            )?;
-
-            self.connection.execute(
-                "CREATE TABLE IF NOT EXISTS transactions (
-            id_tx INTEGER PRIMARY KEY,
-            account INTEGER NOT NULL,
-            txid BLOB NOT NULL,
-            height INTEGER NOT NULL,
-            timestamp INTEGER NOT NULL,
-            value INTEGER NOT NULL,
-            address TEXT,
-            memo TEXT,
-            tx_index INTEGER,
-            CONSTRAINT tx_account UNIQUE (height, tx_index, account))",
-                NO_PARAMS,
-            )?;
-
-            self.connection.execute(
-                "CREATE TABLE IF NOT EXISTS received_notes (
-            id_note INTEGER PRIMARY KEY,
-            account INTEGER NOT NULL,
-            position INTEGER NOT NULL,
-            tx INTEGER NOT NULL,
-            height INTEGER NOT NULL,
-            output_index INTEGER NOT NULL,
-            diversifier BLOB NOT NULL,
-            value INTEGER NOT NULL,
-            rcm BLOB NOT NULL,
-            nf BLOB NOT NULL UNIQUE,
-            spent INTEGER,
-            CONSTRAINT tx_output UNIQUE (tx, output_index))",
-                NO_PARAMS,
-            )?;
-
-            self.connection.execute(
-                "CREATE TABLE IF NOT EXISTS sapling_witnesses (
-            id_witness INTEGER PRIMARY KEY,
-            note INTEGER NOT NULL,
-            height INTEGER NOT NULL,
-            witness BLOB NOT NULL,
-            CONSTRAINT witness_height UNIQUE (note, height))",
-                NO_PARAMS,
-            )?;
-
-            self.connection.execute(
-                "CREATE TABLE IF NOT EXISTS diversifiers (
-            account INTEGER PRIMARY KEY NOT NULL,
-            diversifier_index BLOB NOT NULL)",
-                NO_PARAMS,
-            )?;
-
-            self.connection.execute(
-                "CREATE TABLE IF NOT EXISTS taddrs (
-            account INTEGER PRIMARY KEY NOT NULL,
-            sk TEXT NOT NULL,
-            address TEXT NOT NULL)",
-                NO_PARAMS,
-            )?;
-        }
-
-        if version < 2 {
-            self.connection
-                .execute("ALTER TABLE received_notes ADD excluded BOOL", NO_PARAMS)?;
-        }
-
-        if version < 3 {
-            self.connection.execute(
-                "CREATE TABLE IF NOT EXISTS contacts (
-                account INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                address TEXT NOT NULL,
-                PRIMARY KEY (account, address))",
-                NO_PARAMS,
-            )?;
-        }
-
-        update_schema_version(&self.connection, 3)?;
-
+        migration::init_db(&self.connection)?;
         Ok(())
     }
 
@@ -743,6 +638,37 @@ impl DbAdapter {
                 params![account, &sk, &address],
             )?;
         }
+        Ok(())
+    }
+
+    pub fn get_missing_prices_timestamp(&self, currency: &str) -> anyhow::Result<Vec<i64>> {
+        let mut statement = self.connection.prepare(
+            "WITH t AS (SELECT timestamp, timestamp/86400 AS day FROM transactions), p AS (SELECT price, timestamp/86400 AS day FROM historical_prices WHERE currency = ?1) \
+                SELECT t.timestamp FROM t LEFT JOIN p ON t.day = p.day WHERE p.price IS NULL")?;
+        let res = statement.query_map(params![currency], |row| {
+            let timestamp: i64 = row.get(0)?;
+            Ok(timestamp)
+        })?;
+        let mut timestamps: Vec<i64> = vec![];
+        for ts in res {
+            let ts = NaiveDateTime::from_timestamp(ts?, 0);
+            let ts_date = ts.date().and_hms(0, 0, 0); // at midnight
+            timestamps.push(ts_date.timestamp());
+        }
+        timestamps.sort();
+        timestamps.dedup();
+        Ok(timestamps)
+    }
+
+    pub fn store_historical_prices(&mut self, prices: Vec<(i64, f64)>, currency: &str) -> anyhow::Result<()> {
+        let db_transaction = self.connection.transaction()?;
+        {
+            let mut statement = db_transaction.prepare("INSERT INTO historical_prices(timestamp, price, currency) VALUES (?1, ?2, ?3)")?;
+            for (ts, px) in prices {
+                statement.execute(params![ts, px, currency])?;
+            }
+        }
+        db_transaction.commit()?;
         Ok(())
     }
 }

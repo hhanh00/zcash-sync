@@ -54,6 +54,8 @@ sha2 = "0.9.5"
 lazy_static = "1.4.0"
 rustyline = "8.2.0"
 clap = "3.0.0-beta.2"
+chrono = "0.4.19"
+reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-features = false }
 
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 
