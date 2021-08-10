@@ -76,6 +76,12 @@ impl std::fmt::Debug for Blocks {
 
 pub type ProgressCallback = Arc<Mutex<dyn Fn(u32) + Send>>;
 
+#[derive(PartialEq, PartialOrd, Debug, Hash, Eq)]
+pub struct TxIdHeight {
+    height: u32,
+    index: u32,
+}
+
 pub async fn sync_async(
     chunk_size: u32,
     get_tx: bool,
@@ -144,7 +150,8 @@ pub async fn sync_async(
 
             db.begin_transaction()?;
 
-            let mut new_tx_ids: Vec<u32> = vec![];
+            let mut my_tx_ids: HashMap<TxIdHeight, u32> = HashMap::new();
+            let mut new_ids_tx: Vec<u32> = vec![];
             let dec_blocks = decrypter.decrypt_blocks(&blocks.0);
             let mut witnesses: Vec<Witness> = vec![];
             log::info!("Dec start : {}", dec_blocks[0].height);
@@ -177,7 +184,10 @@ pub async fn sync_async(
                         b.compact_block.time,
                         n.tx_index as u32,
                     )?;
-                    new_tx_ids.push(id_tx);
+                    my_tx_ids.insert(TxIdHeight {
+                        height: n.height,
+                        index: n.tx_index as u32,
+                    }, id_tx);
                     let id_note = db.store_received_note(
                         &ReceivedNote {
                             account: n.account,
@@ -205,9 +215,20 @@ pub async fn sync_async(
                     witnesses.push(w);
                 }
 
-                if !my_nfs.is_empty() {
+                if !my_nfs.is_empty() || !my_tx_ids.is_empty() {
                     for (tx_index, tx) in b.compact_block.vtx.iter().enumerate() {
+                        let mut added = false;
                         for cs in tx.spends.iter() {
+                            let tx_id = TxIdHeight {
+                                height: b.height,
+                                index: tx_index as u32,
+                            };
+                            if let Some(&id_tx) = my_tx_ids.get(&tx_id) {
+                                if !added {
+                                    new_ids_tx.push(id_tx);
+                                    added = true;
+                                }
+                            }
                             let mut nf = [0u8; 32];
                             nf.copy_from_slice(&cs.nf);
                             let nf = Nf(nf);
@@ -221,7 +242,10 @@ pub async fn sync_async(
                                     b.compact_block.time,
                                     tx_index as u32,
                                 )?;
-                                new_tx_ids.push(id_tx);
+                                if !added {
+                                    new_ids_tx.push(id_tx);
+                                    added = true;
+                                }
                                 db.add_value(id_tx, -(note_value as i64))?;
                             }
                         }
@@ -264,8 +288,8 @@ pub async fn sync_async(
             db.commit()?;
 
             let start = Instant::now();
-            if get_tx && !new_tx_ids.is_empty() {
-                retrieve_tx_info(&mut client, &db_path2, &new_tx_ids)
+            if get_tx && !my_tx_ids.is_empty() {
+                retrieve_tx_info(&mut client, &db_path2, &new_ids_tx)
                     .await
                     .unwrap();
             }

@@ -476,19 +476,19 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn store_contact(&self, account: u32, contact: &Contact) -> anyhow::Result<()> {
+    pub fn store_contact(&self, contact: &Contact) -> anyhow::Result<()> {
         log::info!("{:?}", contact);
         if contact.name.is_empty() {
             self.connection.execute(
                 "DELETE FROM contacts WHERE account = ?1 AND address = ?2",
-                params![account, contact.address],
+                params![contact.account, contact.address],
             )?;
         } else {
             self.connection.execute(
                 "INSERT INTO contacts(account, name, address)
         VALUES (?1, ?2, ?3) ON CONFLICT (account, address) DO UPDATE SET
         name = excluded.name",
-                params![account, &contact.name, &contact.address],
+                params![contact.account, &contact.name, &contact.address],
             )?;
         }
         Ok(())

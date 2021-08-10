@@ -1,5 +1,5 @@
 use crate::{CompactTxStreamerClient, DbAdapter, TxFilter, NETWORK};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -19,7 +19,8 @@ use std::sync::mpsc::SyncSender;
 
 #[derive(Debug)]
 pub struct TransactionInfo {
-    id_tx: u32,
+    index: u32, // index of tx in block
+    id_tx: u32, // id of tx in db
     account: u32,
     pub address: String,
     pub memo: String,
@@ -29,6 +30,8 @@ pub struct TransactionInfo {
 
 #[derive(Debug)]
 pub struct Contact {
+    pub account: u32,
+    index: u32,
     pub name: String,
     pub address: String,
 }
@@ -41,6 +44,7 @@ pub async fn decode_transaction(
     fvk: &ExtendedFullViewingKey,
     tx_hash: &[u8],
     height: u32,
+    index: u32,
 ) -> anyhow::Result<TransactionInfo> {
     let ivk = fvk.fvk.vk.ivk();
     let ovk = fvk.fvk.ovk;
@@ -102,6 +106,7 @@ pub async fn decode_transaction(
         Memo::Arbitrary(_) => "Unrecognized".to_string(),
     };
     let tx_info = TransactionInfo {
+        index,
         id_tx,
         account,
         address,
@@ -117,6 +122,7 @@ struct DecodeTxParams<'a> {
     tx: SyncSender<TransactionInfo>,
     client: CompactTxStreamerClient<Channel>,
     nf_map: &'a HashMap<(u32, Vec<u8>), u64>,
+    index: u32,
     id_tx: u32,
     account: u32,
     fvk: ExtendedFullViewingKey,
@@ -136,16 +142,10 @@ pub async fn retrieve_tx_info(
     for nf in nfs.iter() {
         nf_map.insert((nf.0, nf.2.clone()), nf.1);
     }
-    let mut tx_ids_set: HashSet<u32> = HashSet::new();
     let mut fvk_cache: HashMap<u32, ExtendedFullViewingKey> = HashMap::new();
     let mut decode_tx_params: Vec<DecodeTxParams> = vec![];
     let (tx, rx) = mpsc::sync_channel::<TransactionInfo>(4);
-    for &id_tx in tx_ids.iter() {
-        // need to keep tx order
-        if tx_ids_set.contains(&id_tx) {
-            continue;
-        }
-        tx_ids_set.insert(id_tx);
+    for (index, &id_tx) in tx_ids.iter().enumerate() {
         let (account, height, tx_hash, ivk) = db.get_txhash(id_tx)?;
         let fvk: &ExtendedFullViewingKey = fvk_cache.entry(account).or_insert_with(|| {
             decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)
@@ -156,6 +156,7 @@ pub async fn retrieve_tx_info(
             tx: tx.clone(),
             client: client.clone(),
             nf_map: &nf_map,
+            index: index as u32,
             id_tx,
             account,
             fvk: fvk.clone(),
@@ -166,20 +167,25 @@ pub async fn retrieve_tx_info(
     }
 
     let res = tokio_stream::iter(decode_tx_params).for_each_concurrent(None, |mut p| async move {
-        if let Ok(tx_info) = decode_transaction(&mut p.client, p.nf_map, p.id_tx, p.account, &p.fvk, &p.tx_hash, p.height).await {
+        if let Ok(tx_info) = decode_transaction(&mut p.client, p.nf_map, p.id_tx, p.account, &p.fvk, &p.tx_hash, p.height, p.index).await {
             p.tx.send(tx_info).unwrap();
             drop(p.tx);
         }
     });
 
     let f = tokio::spawn(async move {
+        let mut contacts: Vec<Contact> = vec![];
         while let Ok(tx_info) = rx.recv() {
             if !tx_info.address.is_empty() && !tx_info.memo.is_empty() {
-                if let Some(contact) = decode_contact(&tx_info.address, &tx_info.memo)? {
-                    db.store_contact(tx_info.account, &contact)?;
+                if let Some(contact) = decode_contact(tx_info.account, tx_info.index, &tx_info.address, &tx_info.memo)? {
+                    contacts.push(contact);
                 }
             }
             db.store_tx_metadata(tx_info.id_tx, &tx_info)?;
+        }
+        contacts.sort_by(|a, b| a.index.cmp(&b.index));
+        for c in contacts.iter() {
+            db.store_contact(c)?;
         }
         db.commit()?;
 
@@ -193,10 +199,12 @@ pub async fn retrieve_tx_info(
     Ok(())
 }
 
-fn decode_contact(address: &str, memo: &str) -> anyhow::Result<Option<Contact>> {
+fn decode_contact(account: u32, index: u32, address: &str, memo: &str) -> anyhow::Result<Option<Contact>> {
     let res = if let Some(memo_line) = memo.lines().next() {
         let name = memo_line.strip_prefix("Contact:");
         name.map(|name| Contact {
+            account,
+            index,
             name: name.trim().to_string(),
             address: address.to_string(),
         })
@@ -234,7 +242,7 @@ mod tests {
             decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
                 .unwrap()
                 .unwrap();
-        let tx_info = decode_transaction(&mut client, &nf_map, 1, account, &fvk, &tx_hash, 1313212)
+        let tx_info = decode_transaction(&mut client, &nf_map, 1, account, &fvk, &tx_hash, 1313212, 1)
             .await
             .unwrap();
         println!("{:?}", tx_info);
