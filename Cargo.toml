@@ -81,3 +81,6 @@ tonic-build = "0.4.2"
 
 [dev-dependencies]
 criterion = "0.3.4"
+
+[features]
+ycash = []
