@@ -2,7 +2,7 @@ use crate::chain::send_transaction;
 use crate::key::{decode_key, is_valid_key};
 use crate::scan::ProgressCallback;
 use crate::taddr::{get_taddr_balance, shield_taddr};
-use crate::{connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, NETWORK};
+use crate::{connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, NETWORK, get_branch};
 use bip39::{Language, Mnemonic};
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
@@ -15,7 +15,7 @@ use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key, encode_payment_address,
 };
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
-use zcash_primitives::consensus::{BlockHeight, BranchId, Parameters};
+use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::transaction::builder::{Builder, Progress};
 use zcash_primitives::transaction::components::amount::MAX_MONEY;
 use zcash_primitives::transaction::components::Amount;
@@ -280,8 +280,7 @@ impl Wallet {
             }
         });
 
-        let consensus_branch_id =
-            BranchId::for_height(&NETWORK, BlockHeight::from_u32(last_height));
+        let consensus_branch_id = get_branch(last_height);
         let (tx, _) = builder.build(consensus_branch_id, &self.prover)?;
         log::info!("Tx built");
         let mut raw_tx: Vec<u8> = vec![];

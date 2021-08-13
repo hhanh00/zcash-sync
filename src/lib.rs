@@ -1,9 +1,29 @@
-use zcash_primitives::consensus::Network;
-
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-pub const NETWORK: Network = Network::MainNetwork;
+#[cfg(feature="ycash")]
+mod coin {
+    use zcash_primitives::consensus::{Network, BranchId};
+
+    pub const NETWORK: Network = Network::YCashMainNetwork;
+    pub const TICKER: &str = "ycash";
+    pub fn get_branch(_height: u32) -> BranchId {
+        BranchId::Ycash
+    }
+}
+
+#[cfg(not(feature="ycash"))]
+mod coin {
+    use zcash_primitives::consensus::{Network, BranchId, BlockHeight};
+
+    pub const NETWORK: Network = Network::MainNetwork;
+    pub const TICKER: &str = "zcash";
+    pub fn get_branch(height: u32) -> BranchId {
+        BranchId::for_height(&NETWORK, BlockHeight::from_u32(height))
+    }
+}
+
+pub use coin::{NETWORK, TICKER, get_branch};
 
 // Mainnet
 // pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
