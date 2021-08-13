@@ -1,8 +1,5 @@
 use crate::chain::send_transaction;
-use crate::{
-    connect_lightwalletd, get_latest_height, AddressList, CompactTxStreamerClient, DbAdapter,
-    GetAddressUtxosArg, NETWORK,
-};
+use crate::{connect_lightwalletd, get_latest_height, AddressList, CompactTxStreamerClient, DbAdapter, GetAddressUtxosArg, NETWORK, get_branch};
 use anyhow::Context;
 use bip39::{Language, Mnemonic, Seed};
 use ripemd160::{Digest, Ripemd160};
@@ -15,7 +12,7 @@ use tonic::Request;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_payment_address, encode_transparent_address,
 };
-use zcash_primitives::consensus::{BlockHeight, BranchId, Parameters};
+use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::legacy::{Script, TransparentAddress};
 use zcash_primitives::transaction::builder::Builder;
 use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
@@ -91,7 +88,7 @@ pub async fn shield_taddr(
 
     let ovk = fvk.fvk.ovk;
     builder.add_sapling_output(Some(ovk), pa, amount, None)?;
-    let consensus_branch_id = BranchId::for_height(&NETWORK, BlockHeight::from_u32(last_height));
+    let consensus_branch_id = get_branch(last_height);
     let (tx, _) = builder.build(consensus_branch_id, prover)?;
     let mut raw_tx: Vec<u8> = vec![];
     tx.write(&mut raw_tx)?;

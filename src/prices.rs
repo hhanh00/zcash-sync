@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use std::collections::HashMap;
+use crate::TICKER;
 
 const DAY_SEC: i64 = 24*3600;
 
@@ -12,11 +13,9 @@ pub async fn retrieve_historical_prices(timestamps: &[i64], currency: &str) -> a
     let client = reqwest::Client::new();
     let start = timestamps.first().unwrap();
     let end = timestamps.last().unwrap() + DAY_SEC;
-    println!("{}", end);
-    let url = "https://api.coingecko.com/api/v3/coins/zcash/market_chart/range";
+    let url = format!("https://api.coingecko.com/api/v3/coins/{}/market_chart/range", TICKER);
     let params = [("from", start.to_string()), ("to", end.to_string()), ("vs_currency", currency.to_string())];
     let req = client.get(url).query(&params);
-    println!("{:?}", req);
     let res = req.send().await?;
     let r: serde_json::Value = res.json().await?;
     let prices = r["prices"].as_array().unwrap();
@@ -27,7 +26,6 @@ pub async fn retrieve_historical_prices(timestamps: &[i64], currency: &str) -> a
         // rounded to daily
         let date = NaiveDateTime::from_timestamp(ts, 0).date().and_hms(0, 0, 0);
         let ts = date.timestamp();
-        println!("{} - {}", date, px);
         if let Some(None) = timestamps_map.get(&ts) {
             timestamps_map.insert(ts, Some(px));
         }
