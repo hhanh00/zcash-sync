@@ -49,7 +49,7 @@ impl MemPool {
         let ivk = db.get_ivk(account)?;
         self.account = account;
         self.set_ivk(&ivk);
-        self.clear()?;
+        self.clear(0)?;
         Ok(())
     }
 
@@ -66,12 +66,11 @@ impl MemPool {
         if self.ivk.is_some() {
             let ivk = self.ivk.as_ref().unwrap().clone();
             let mut client = connect_lightwalletd(&self.ld_url).await?;
-            let height = BlockHeight::from(get_latest_height(&mut client).await?);
-            if self.height != height {
+            let height = get_latest_height(&mut client).await?;
+            if self.height != BlockHeight::from(height) {
                 // New blocks invalidate the mempool
-                self.clear()?;
+                self.clear(height)?;
             }
-            self.height = height;
             self.update(&mut client, &ivk).await?;
         }
 
@@ -82,9 +81,9 @@ impl MemPool {
         self.balance
     }
 
-    fn clear(&mut self) -> anyhow::Result<()> {
+    pub fn clear(&mut self, height: u32) -> anyhow::Result<()> {
         let db = DbAdapter::new(&self.db_path)?;
-        self.height = BlockHeight::from_u32(0);
+        self.height = BlockHeight::from_u32(height);
         self.nfs = db.get_nullifier_amounts(self.account, true)?;
         self.transactions.clear();
         self.balance = 0;
