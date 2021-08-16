@@ -1,9 +1,9 @@
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-#[cfg(feature="ycash")]
+#[cfg(feature = "ycash")]
 mod coin {
-    use zcash_primitives::consensus::{Network, BranchId};
+    use zcash_primitives::consensus::{BranchId, Network};
 
     pub const NETWORK: Network = Network::YCashMainNetwork;
     pub const TICKER: &str = "ycash";
@@ -12,9 +12,9 @@ mod coin {
     }
 }
 
-#[cfg(not(feature="ycash"))]
+#[cfg(not(feature = "ycash"))]
 mod coin {
-    use zcash_primitives::consensus::{Network, BranchId, BlockHeight};
+    use zcash_primitives::consensus::{BlockHeight, BranchId, Network};
 
     pub const NETWORK: Network = Network::MainNetwork;
     pub const TICKER: &str = "zcash";
@@ -23,7 +23,7 @@ mod coin {
     }
 }
 
-pub use coin::{NETWORK, TICKER, get_branch};
+pub use coin::{get_branch, NETWORK, TICKER};
 
 // Mainnet
 // pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
@@ -43,13 +43,13 @@ mod db;
 mod hash;
 mod key;
 mod mempool;
+mod pay;
+mod prices;
 mod print;
 mod scan;
 mod taddr;
 mod transaction;
-mod pay;
 mod wallet;
-mod prices;
 
 pub use crate::builder::advance_tree;
 pub use crate::chain::{
@@ -59,11 +59,11 @@ pub use crate::chain::{
 pub use crate::commitment::{CTree, Witness};
 pub use crate::db::DbAdapter;
 pub use crate::hash::pedersen_hash;
-pub use crate::key::{is_valid_key, decode_key};
+pub use crate::key::{decode_key, is_valid_key};
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;
 pub use crate::mempool::MemPool;
+pub use crate::pay::{broadcast_tx, sign_offline_tx, Tx};
 pub use crate::print::*;
 pub use crate::scan::{latest_height, scan_all, sync_async};
 pub use crate::wallet::{Wallet, WalletBalance};
-pub use crate::pay::{sign_offline_tx, broadcast_tx, Tx};

@@ -184,10 +184,13 @@ pub async fn sync_async(
                         b.compact_block.time,
                         n.tx_index as u32,
                     )?;
-                    my_tx_ids.insert(TxIdHeight {
-                        height: n.height,
-                        index: n.tx_index as u32,
-                    }, id_tx);
+                    my_tx_ids.insert(
+                        TxIdHeight {
+                            height: n.height,
+                            index: n.tx_index as u32,
+                        },
+                        id_tx,
+                    );
                     let id_note = db.store_received_note(
                         &ReceivedNote {
                             account: n.account,

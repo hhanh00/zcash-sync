@@ -57,13 +57,7 @@ async fn test() -> anyhow::Result<()> {
     // println!("TXID = {}", tx_id);
 
     let tx = wallet
-        .prepare_payment(
-            1,
-            &address,
-            50000,
-            "test memo",
-            0,
-            2)
+        .prepare_payment(1, &address, 50000, "test memo", 0, 2)
         .await
         .unwrap();
     println!("TX = {}", tx);

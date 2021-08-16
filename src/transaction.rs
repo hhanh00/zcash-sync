@@ -1,6 +1,9 @@
 use crate::{CompactTxStreamerClient, DbAdapter, TxFilter, NETWORK};
+use futures::StreamExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::sync::mpsc;
+use std::sync::mpsc::SyncSender;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::{
@@ -13,9 +16,6 @@ use zcash_primitives::sapling::note_encryption::{
 };
 use zcash_primitives::transaction::Transaction;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use futures::StreamExt;
-use std::sync::mpsc;
-use std::sync::mpsc::SyncSender;
 
 #[derive(Debug)]
 pub struct TransactionInfo {
@@ -167,7 +167,18 @@ pub async fn retrieve_tx_info(
     }
 
     let res = tokio_stream::iter(decode_tx_params).for_each_concurrent(None, |mut p| async move {
-        if let Ok(tx_info) = decode_transaction(&mut p.client, p.nf_map, p.id_tx, p.account, &p.fvk, &p.tx_hash, p.height, p.index).await {
+        if let Ok(tx_info) = decode_transaction(
+            &mut p.client,
+            p.nf_map,
+            p.id_tx,
+            p.account,
+            &p.fvk,
+            &p.tx_hash,
+            p.height,
+            p.index,
+        )
+        .await
+        {
             p.tx.send(tx_info).unwrap();
             drop(p.tx);
         }
@@ -177,7 +188,12 @@ pub async fn retrieve_tx_info(
         let mut contacts: Vec<Contact> = vec![];
         while let Ok(tx_info) = rx.recv() {
             if !tx_info.address.is_empty() && !tx_info.memo.is_empty() {
-                if let Some(contact) = decode_contact(tx_info.account, tx_info.index, &tx_info.address, &tx_info.memo)? {
+                if let Some(contact) = decode_contact(
+                    tx_info.account,
+                    tx_info.index,
+                    &tx_info.address,
+                    &tx_info.memo,
+                )? {
                     contacts.push(contact);
                 }
             }
@@ -199,7 +215,12 @@ pub async fn retrieve_tx_info(
     Ok(())
 }
 
-fn decode_contact(account: u32, index: u32, address: &str, memo: &str) -> anyhow::Result<Option<Contact>> {
+fn decode_contact(
+    account: u32,
+    index: u32,
+    address: &str,
+    memo: &str,
+) -> anyhow::Result<Option<Contact>> {
     let res = if let Some(memo_line) = memo.lines().next() {
         let name = memo_line.strip_prefix("Contact:");
         name.map(|name| Contact {
@@ -242,9 +263,10 @@ mod tests {
             decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
                 .unwrap()
                 .unwrap();
-        let tx_info = decode_transaction(&mut client, &nf_map, 1, account, &fvk, &tx_hash, 1313212, 1)
-            .await
-            .unwrap();
+        let tx_info =
+            decode_transaction(&mut client, &nf_map, 1, account, &fvk, &tx_hash, 1313212, 1)
+                .await
+                .unwrap();
         println!("{:?}", tx_info);
     }
 }

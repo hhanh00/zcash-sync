@@ -1,12 +1,21 @@
 use crate::chain::send_transaction;
+use crate::db::SpendableNote;
 use crate::key::{decode_key, is_valid_key};
+use crate::pay::prepare_tx;
+use crate::pay::{ColdTxBuilder, Tx};
+use crate::prices::fetch_historical_prices;
 use crate::scan::ProgressCallback;
 use crate::taddr::{get_taddr_balance, shield_taddr};
-use crate::{connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, NETWORK, get_branch};
+use crate::{
+    connect_lightwalletd, get_branch, get_latest_height, BlockId, CTree, DbAdapter, NETWORK,
+};
 use bip39::{Language, Mnemonic};
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use serde::Deserialize;
+use std::convert::TryFrom;
+use std::str::FromStr;
 use std::sync::{mpsc, Arc};
 use tokio::sync::Mutex;
 use tonic::Request;
@@ -16,19 +25,12 @@ use zcash_client_backend::encoding::{
 };
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
+use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::transaction::builder::{Builder, Progress};
 use zcash_primitives::transaction::components::amount::MAX_MONEY;
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use zcash_proofs::prover::LocalTxProver;
-use serde::Deserialize;
-use crate::pay::prepare_tx;
-use zcash_primitives::memo::{Memo, MemoBytes};
-use std::convert::TryFrom;
-use std::str::FromStr;
-use crate::db::SpendableNote;
-use crate::pay::{ColdTxBuilder, Tx};
-use crate::prices::retrieve_historical_prices;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -133,7 +135,7 @@ impl Wallet {
             progress_callback,
             ld_url,
         )
-            .await
+        .await
     }
 
     pub async fn get_latest_height(&self) -> anyhow::Result<u32> {
@@ -159,7 +161,7 @@ impl Wallet {
             cb.clone(),
             ld_url,
         )
-            .await?;
+        .await?;
         Self::scan_async(get_tx, db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone(), ld_url).await?;
         Ok(())
     }
@@ -177,7 +179,7 @@ impl Wallet {
             progress_callback,
             &self.ld_url,
         )
-            .await
+        .await
     }
 
     pub async fn skip_to_last_height(&self) -> anyhow::Result<()> {
@@ -203,10 +205,16 @@ impl Wallet {
         self.db.trim_to_height(height)
     }
 
-    pub async fn send_multi_payment(&self, account: u32, recipients_json: &str, anchor_offset: u32,
-                                    progress_callback: impl Fn(Progress) + Send + 'static) -> anyhow::Result<String> {
+    pub async fn send_multi_payment(
+        &self,
+        account: u32,
+        recipients_json: &str,
+        anchor_offset: u32,
+        progress_callback: impl Fn(Progress) + Send + 'static,
+    ) -> anyhow::Result<String> {
         let recipients: Vec<Recipient> = serde_json::from_str(recipients_json)?;
-        self._send_payment(account, &recipients, anchor_offset, progress_callback).await
+        self._send_payment(account, &recipients, anchor_offset, progress_callback)
+            .await
     }
 
     pub async fn prepare_payment(
@@ -225,10 +233,21 @@ impl Wallet {
         Ok(tx_str)
     }
 
-    fn _prepare_payment(&self, account: u32, amount: u64, last_height: u32, recipients: &Vec<Recipient>, anchor_offset: u32) -> anyhow::Result<Tx> {
+    fn _prepare_payment(
+        &self,
+        account: u32,
+        amount: u64,
+        last_height: u32,
+        recipients: &Vec<Recipient>,
+        anchor_offset: u32,
+    ) -> anyhow::Result<Tx> {
         let amount = Amount::from_u64(amount).unwrap();
         let ivk = self.db.get_ivk(account)?;
-        let extfvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)?.unwrap();
+        let extfvk = decode_extended_full_viewing_key(
+            NETWORK.hrp_sapling_extended_full_viewing_key(),
+            &ivk,
+        )?
+        .unwrap();
         let notes = self._get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
         let mut builder = ColdTxBuilder::new(last_height);
         prepare_tx(&mut builder, None, &notes, amount, &extfvk, recipients)?;
@@ -246,7 +265,8 @@ impl Wallet {
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
         let recipients = Self::_build_recipients(to_address, amount, max_amount_per_note, memo)?;
-        self._send_payment(account, &recipients, anchor_offset, progress_callback).await
+        self._send_payment(account, &recipients, anchor_offset, progress_callback)
+            .await
     }
 
     async fn _send_payment(
@@ -268,7 +288,14 @@ impl Wallet {
 
         let mut builder = Builder::new(NETWORK, BlockHeight::from_u32(last_height));
         log::info!("Preparing tx");
-        let selected_notes = prepare_tx(&mut builder, Some(skey.clone()), &notes, target_amount, &extfvk, recipients)?;
+        let selected_notes = prepare_tx(
+            &mut builder,
+            Some(skey.clone()),
+            &notes,
+            target_amount,
+            &extfvk,
+            recipients,
+        )?;
 
         let (progress_tx, progress_rx) = mpsc::channel::<Progress>();
 
@@ -306,7 +333,7 @@ impl Wallet {
             NETWORK.hrp_sapling_extended_full_viewing_key(),
             &ivk,
         )?
-            .unwrap();
+        .unwrap();
         let mut diversifier_index = self.db.get_diversifier(account)?;
         diversifier_index.increment().unwrap();
         let (new_diversifier_index, pa) = fvk
@@ -336,7 +363,13 @@ impl Wallet {
         Ok(())
     }
 
-    fn _get_spendable_notes(&self, account: u32, extfvk: &ExtendedFullViewingKey, last_height: u32, anchor_offset: u32) -> anyhow::Result<Vec<SpendableNote>> {
+    fn _get_spendable_notes(
+        &self,
+        account: u32,
+        extfvk: &ExtendedFullViewingKey,
+        last_height: u32,
+        anchor_offset: u32,
+    ) -> anyhow::Result<Vec<SpendableNote>> {
         let anchor_height = self
             .db
             .get_last_sync_height()?
@@ -352,7 +385,12 @@ impl Wallet {
         Ok(notes)
     }
 
-    fn _build_recipients(to_address: &str, amount: u64, max_amount_per_note: u64, memo: &str) -> anyhow::Result<Vec<Recipient>> {
+    fn _build_recipients(
+        to_address: &str,
+        amount: u64,
+        max_amount_per_note: u64,
+        memo: &str,
+    ) -> anyhow::Result<Vec<Recipient>> {
         let mut recipients: Vec<Recipient> = vec![];
         let target_amount = Amount::from_u64(amount).unwrap();
         let max_amount_per_note = if max_amount_per_note != 0 {
@@ -376,13 +414,17 @@ impl Wallet {
         Ok(recipients)
     }
 
-    pub async fn sync_historical_prices(&mut self, currency: &str) -> anyhow::Result<u32> {
-        let ts = self.db.get_missing_prices_timestamp(currency)?;
-        if !ts.is_empty() {
-            let prices = retrieve_historical_prices(&ts, currency).await?;
-            self.db.store_historical_prices(prices, currency)?;
-        }
-        Ok(ts.len() as u32)
+    pub async fn sync_historical_prices(
+        &mut self,
+        now: i64,
+        days: u32,
+        currency: &str,
+    ) -> anyhow::Result<u32> {
+        let quotes = fetch_historical_prices(now, days, currency, &self.db)
+            .await
+            .unwrap();
+        self.db.store_historical_prices(&quotes, currency).unwrap();
+        Ok(quotes.len() as u32)
     }
 }
 

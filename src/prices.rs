@@ -1,53 +1,88 @@
+use crate::{DbAdapter, TICKER};
 use chrono::NaiveDateTime;
-use std::collections::HashMap;
-use crate::TICKER;
 
-const DAY_SEC: i64 = 24*3600;
+const DAY_SEC: i64 = 24 * 3600;
 
-pub async fn retrieve_historical_prices(timestamps: &[i64], currency: &str) -> anyhow::Result<Vec<(i64, f64)>> {
-    if timestamps.is_empty() { return Ok(Vec::new()); }
-    let mut timestamps_map: HashMap<i64, Option<f64>> = HashMap::new();
-    for ts in timestamps {
-        timestamps_map.insert(*ts, None);
-    }
-    let client = reqwest::Client::new();
-    let start = timestamps.first().unwrap();
-    let end = timestamps.last().unwrap() + DAY_SEC;
-    let url = format!("https://api.coingecko.com/api/v3/coins/{}/market_chart/range", TICKER);
-    let params = [("from", start.to_string()), ("to", end.to_string()), ("vs_currency", currency.to_string())];
-    let req = client.get(url).query(&params);
-    let res = req.send().await?;
-    let r: serde_json::Value = res.json().await?;
-    let prices = r["prices"].as_array().unwrap();
-    for p in prices.iter() {
-        let p = p.as_array().unwrap();
-        let ts = p[0].as_i64().unwrap() / 1000;
-        let px = p[1].as_f64().unwrap();
-        // rounded to daily
-        let date = NaiveDateTime::from_timestamp(ts, 0).date().and_hms(0, 0, 0);
-        let ts = date.timestamp();
-        if let Some(None) = timestamps_map.get(&ts) {
-            timestamps_map.insert(ts, Some(px));
+#[derive(Debug)]
+pub struct Quote {
+    pub timestamp: i64,
+    pub price: f64,
+}
+
+pub async fn fetch_historical_prices(
+    now: i64,
+    days: u32,
+    currency: &str,
+    db: &DbAdapter,
+) -> anyhow::Result<Vec<Quote>> {
+    let today = now / DAY_SEC;
+    let from_day = today - days as i64;
+    let latest_quote = db.get_latest_quote(currency)?;
+    let latest_day = if let Some(latest_quote) = latest_quote {
+        latest_quote.timestamp / DAY_SEC
+    } else {
+        0
+    };
+    let latest_day = latest_day.max(from_day);
+
+    let mut quotes: Vec<Quote> = vec![];
+    if latest_day < today {
+        let from = (latest_day + 1) * DAY_SEC;
+        let to = today * DAY_SEC;
+        let client = reqwest::Client::new();
+        let url = format!(
+            "https://api.coingecko.com/api/v3/coins/{}/market_chart/range",
+            TICKER
+        );
+        let params = [
+            ("from", from.to_string()),
+            ("to", to.to_string()),
+            ("vs_currency", currency.to_string()),
+        ];
+        let req = client.get(url).query(&params);
+        let res = req.send().await?;
+        let r: serde_json::Value = res.json().await?;
+        let prices = r["prices"].as_array().unwrap();
+        let mut prev_timestamp = 0i64;
+        for p in prices.iter() {
+            let p = p.as_array().unwrap();
+            let ts = p[0].as_i64().unwrap() / 1000;
+            let price = p[1].as_f64().unwrap();
+            // rounded to daily
+            let date = NaiveDateTime::from_timestamp(ts, 0).date().and_hms(0, 0, 0);
+            let timestamp = date.timestamp();
+            if timestamp != prev_timestamp {
+                let quote = Quote { timestamp, price };
+                quotes.push(quote);
+            }
+            prev_timestamp = timestamp;
         }
     }
-    let prices: Vec<_> = timestamps_map.iter().map(|(k, v)| {
-        (*k, v.expect(&format!("missing price for ts {}", *k)))
-    }).collect();
-    Ok(prices)
+
+    Ok(quotes)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::DbAdapter;
     use crate::db::DEFAULT_DB_PATH;
-    use crate::prices::retrieve_historical_prices;
+    use crate::prices::fetch_historical_prices;
+    use crate::DbAdapter;
+    use std::time::SystemTime;
 
     #[tokio::test]
-    async fn test() {
+    async fn test_fetch_quotes() {
         let currency = "EUR";
         let mut db = DbAdapter::new(DEFAULT_DB_PATH).unwrap();
-        let ts = db.get_missing_prices_timestamp("USD").unwrap();
-        let prices = retrieve_historical_prices(&ts, currency).await.unwrap();
-        db.store_historical_prices(prices, currency).unwrap();
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let quotes = fetch_historical_prices(now, 365, currency, &db)
+            .await
+            .unwrap();
+        for q in quotes.iter() {
+            println!("{:?}", q);
+        }
+        db.store_historical_prices(&quotes, currency).unwrap();
     }
 }

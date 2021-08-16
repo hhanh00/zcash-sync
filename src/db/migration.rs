@@ -110,8 +110,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
     }
 
     if version < 2 {
-        connection
-            .execute("ALTER TABLE received_notes ADD excluded BOOL", NO_PARAMS)?;
+        connection.execute("ALTER TABLE received_notes ADD excluded BOOL", NO_PARAMS)?;
     }
 
     if version < 3 {
@@ -136,8 +135,14 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         )?;
     }
 
-    update_schema_version(&connection, 4)?;
+    if version < 5 {
+        connection.execute(
+            "DELETE FROM historical_prices",
+            NO_PARAMS,
+        )?;
+    }
+
+    update_schema_version(&connection, 5)?;
 
     Ok(())
 }
-

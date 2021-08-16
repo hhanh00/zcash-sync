@@ -1,7 +1,7 @@
 use clap::Clap;
-use sync::{decode_key, Tx, sign_offline_tx, NETWORK};
 use std::fs::File;
 use std::io::{Read, Write};
+use sync::{decode_key, sign_offline_tx, Tx, NETWORK};
 use zcash_client_backend::encoding::decode_extended_spending_key;
 use zcash_primitives::consensus::Parameters;
 
@@ -17,7 +17,8 @@ fn main() -> anyhow::Result<()> {
 
     let opts: SignArgs = SignArgs::parse();
     let sk = sk.unwrap();
-    let sk = decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &sk)?.unwrap();
+    let sk =
+        decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &sk)?.unwrap();
 
     let file_name = opts.tx_filename;
     let mut file = File::open(file_name)?;

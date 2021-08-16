@@ -1,7 +1,9 @@
 use crate::chain::{Nf, NfRef};
+use crate::prices::Quote;
 use crate::taddr::{derive_tkeys, BIP44_PATH};
 use crate::transaction::{Contact, TransactionInfo};
 use crate::{CTree, Witness, NETWORK};
+use chrono::NaiveDateTime;
 use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS};
 use std::collections::HashMap;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -9,7 +11,6 @@ use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
-use chrono::NaiveDateTime;
 
 mod migration;
 
@@ -660,16 +661,34 @@ impl DbAdapter {
         Ok(timestamps)
     }
 
-    pub fn store_historical_prices(&mut self, prices: Vec<(i64, f64)>, currency: &str) -> anyhow::Result<()> {
+    pub fn store_historical_prices(
+        &mut self,
+        prices: &[Quote],
+        currency: &str,
+    ) -> anyhow::Result<()> {
         let db_transaction = self.connection.transaction()?;
         {
-            let mut statement = db_transaction.prepare("INSERT INTO historical_prices(timestamp, price, currency) VALUES (?1, ?2, ?3)")?;
-            for (ts, px) in prices {
-                statement.execute(params![ts, px, currency])?;
+            let mut statement = db_transaction.prepare(
+                "INSERT INTO historical_prices(timestamp, price, currency) VALUES (?1, ?2, ?3)",
+            )?;
+            for q in prices {
+                statement.execute(params![q.timestamp, q.price, currency])?;
             }
         }
         db_transaction.commit()?;
         Ok(())
+    }
+
+    pub fn get_latest_quote(&self, currency: &str) -> anyhow::Result<Option<Quote>> {
+        let quote = self.connection.query_row(
+            "SELECT timestamp, price FROM historical_prices WHERE currency = ?1 ORDER BY timestamp DESC",
+            params![currency],
+            |row| {
+                let timestamp: i64 = row.get(0)?;
+                let price: f64 = row.get(1)?;
+                Ok(Quote { timestamp, price })
+            }).optional()?;
+        Ok(quote)
     }
 }
 

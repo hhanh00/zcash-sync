@@ -1,22 +1,24 @@
-use crate::{NETWORK, connect_lightwalletd, RawTransaction, get_latest_height};
-use zcash_primitives::zip32::{ExtendedSpendingKey, ExtendedFullViewingKey};
-use zcash_primitives::sapling::{Diversifier, Rseed, Node};
-use zcash_primitives::transaction::components::Amount;
-use zcash_primitives::sapling::keys::OutgoingViewingKey;
-use zcash_primitives::memo::MemoBytes;
-use zcash_client_backend::encoding::{encode_extended_full_viewing_key, decode_extended_full_viewing_key};
-use zcash_primitives::consensus::{Parameters, Network, BlockHeight, BranchId};
-use zcash_primitives::transaction::builder::Builder;
-use rand::rngs::OsRng;
-use jubjub::Fr;
-use zcash_primitives::merkle_tree::IncrementalWitness;
-use zcash_client_backend::address::RecipientAddress;
 use crate::db::SpendableNote;
 use crate::wallet::Recipient;
-use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
-use serde::{Serialize, Deserialize};
-use zcash_proofs::prover::LocalTxProver;
+use crate::{connect_lightwalletd, get_latest_height, RawTransaction, NETWORK};
+use jubjub::Fr;
+use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 use tonic::Request;
+use zcash_client_backend::address::RecipientAddress;
+use zcash_client_backend::encoding::{
+    decode_extended_full_viewing_key, encode_extended_full_viewing_key,
+};
+use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
+use zcash_primitives::memo::MemoBytes;
+use zcash_primitives::merkle_tree::IncrementalWitness;
+use zcash_primitives::sapling::keys::OutgoingViewingKey;
+use zcash_primitives::sapling::{Diversifier, Node, Rseed};
+use zcash_primitives::transaction::builder::Builder;
+use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
+use zcash_primitives::transaction::components::Amount;
+use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+use zcash_proofs::prover::LocalTxProver;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
@@ -60,10 +62,16 @@ pub trait TxBuilder {
         fvk: &ExtendedFullViewingKey,
         amount: Amount,
         rseed: &[u8],
-        witness: &[u8]
+        witness: &[u8],
     ) -> anyhow::Result<()>;
     fn add_t_output(&mut self, address: &str, amount: Amount) -> anyhow::Result<()>;
-    fn add_z_output(&mut self, address: &str, ovk: &OutgoingViewingKey, amount: Amount, memo: &MemoBytes) -> anyhow::Result<()>;
+    fn add_z_output(
+        &mut self,
+        address: &str,
+        ovk: &OutgoingViewingKey,
+        amount: Amount,
+        memo: &MemoBytes,
+    ) -> anyhow::Result<()>;
 }
 
 pub struct ColdTxBuilder {
@@ -79,10 +87,21 @@ impl ColdTxBuilder {
 }
 
 impl TxBuilder for ColdTxBuilder {
-    fn add_input(&mut self, _skey: Option<ExtendedSpendingKey>, diversifier: &Diversifier, fvk: &ExtendedFullViewingKey, amount: Amount, rseed: &[u8], witness: &[u8]) -> anyhow::Result<()> {
+    fn add_input(
+        &mut self,
+        _skey: Option<ExtendedSpendingKey>,
+        diversifier: &Diversifier,
+        fvk: &ExtendedFullViewingKey,
+        amount: Amount,
+        rseed: &[u8],
+        witness: &[u8],
+    ) -> anyhow::Result<()> {
         let tx_in = TxIn {
             diversifier: hex::encode(diversifier.0),
-            fvk: encode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk),
+            fvk: encode_extended_full_viewing_key(
+                NETWORK.hrp_sapling_extended_full_viewing_key(),
+                &fvk,
+            ),
             amount: u64::from(amount),
             rseed: hex::encode(rseed),
             witness: hex::encode(witness),
@@ -102,7 +121,13 @@ impl TxBuilder for ColdTxBuilder {
         Ok(())
     }
 
-    fn add_z_output(&mut self, address: &str, ovk: &OutgoingViewingKey, amount: Amount, memo: &MemoBytes) -> anyhow::Result<()> {
+    fn add_z_output(
+        &mut self,
+        address: &str,
+        ovk: &OutgoingViewingKey,
+        amount: Amount,
+        memo: &MemoBytes,
+    ) -> anyhow::Result<()> {
         let tx_out = TxOut {
             addr: address.to_string(),
             amount: u64::from(amount),
@@ -115,12 +140,22 @@ impl TxBuilder for ColdTxBuilder {
 }
 
 impl TxBuilder for Builder<'_, Network, OsRng> {
-    fn add_input(&mut self, skey: Option<ExtendedSpendingKey>, diversifier: &Diversifier, fvk: &ExtendedFullViewingKey, amount: Amount, rseed: &[u8], witness: &[u8]) -> anyhow::Result<()> {
+    fn add_input(
+        &mut self,
+        skey: Option<ExtendedSpendingKey>,
+        diversifier: &Diversifier,
+        fvk: &ExtendedFullViewingKey,
+        amount: Amount,
+        rseed: &[u8],
+        witness: &[u8],
+    ) -> anyhow::Result<()> {
         let pa = fvk.fvk.vk.to_payment_address(diversifier.clone()).unwrap();
         let mut rseed_bytes = [0u8; 32];
         rseed_bytes.copy_from_slice(rseed);
         let fr = Fr::from_bytes(&rseed_bytes).unwrap();
-        let note = pa.create_note(u64::from(amount), Rseed::BeforeZip212(fr)).unwrap();
+        let note = pa
+            .create_note(u64::from(amount), Rseed::BeforeZip212(fr))
+            .unwrap();
         let witness = IncrementalWitness::<Node>::read(&*witness).unwrap();
         let merkle_path = witness.path().unwrap();
         self.add_sapling_spend(skey.unwrap(), diversifier.clone(), note, merkle_path)?;
@@ -128,28 +163,38 @@ impl TxBuilder for Builder<'_, Network, OsRng> {
     }
 
     fn add_t_output(&mut self, address: &str, amount: Amount) -> anyhow::Result<()> {
-        let to_addr = RecipientAddress::decode(&NETWORK, address).ok_or(anyhow::anyhow!("Not a valid address"))?;
+        let to_addr = RecipientAddress::decode(&NETWORK, address)
+            .ok_or(anyhow::anyhow!("Not a valid address"))?;
         if let RecipientAddress::Transparent(t_address) = to_addr {
             self.add_transparent_output(&t_address, amount)?;
         }
         Ok(())
     }
 
-    fn add_z_output(&mut self, address: &str, ovk: &OutgoingViewingKey, amount: Amount, memo: &MemoBytes) -> anyhow::Result<()> {
-        let to_addr = RecipientAddress::decode(&NETWORK, address).ok_or(anyhow::anyhow!("Not a valid address"))?;
+    fn add_z_output(
+        &mut self,
+        address: &str,
+        ovk: &OutgoingViewingKey,
+        amount: Amount,
+        memo: &MemoBytes,
+    ) -> anyhow::Result<()> {
+        let to_addr = RecipientAddress::decode(&NETWORK, address)
+            .ok_or(anyhow::anyhow!("Not a valid address"))?;
         if let RecipientAddress::Shielded(pa) = to_addr {
-            self.add_sapling_output(
-                Some(ovk.clone()),
-                pa.clone(),
-                amount,
-                Some(memo.clone()),
-            )?;
+            self.add_sapling_output(Some(ovk.clone()), pa.clone(), amount, Some(memo.clone()))?;
         }
         Ok(())
     }
 }
 
-pub fn prepare_tx<B: TxBuilder>(builder: &mut B, skey: Option<ExtendedSpendingKey>, notes: &[SpendableNote], target_amount: Amount, fvk: &ExtendedFullViewingKey, recipients: &[Recipient]) -> anyhow::Result<Vec<u32>> {
+pub fn prepare_tx<B: TxBuilder>(
+    builder: &mut B,
+    skey: Option<ExtendedSpendingKey>,
+    notes: &[SpendableNote],
+    target_amount: Amount,
+    fvk: &ExtendedFullViewingKey,
+    recipients: &[Recipient],
+) -> anyhow::Result<Vec<u32>> {
     let mut amount = target_amount;
     amount += DEFAULT_FEE;
     let target_amount_with_fee = amount;
@@ -157,13 +202,13 @@ pub fn prepare_tx<B: TxBuilder>(builder: &mut B, skey: Option<ExtendedSpendingKe
     for n in notes.iter() {
         if amount.is_positive() {
             let a = amount.min(
-                Amount::from_u64(n.note.value)
-                    .map_err(|_| anyhow::anyhow!("Invalid amount"))?,
+                Amount::from_u64(n.note.value).map_err(|_| anyhow::anyhow!("Invalid amount"))?,
             );
             amount -= a;
             let mut witness_bytes: Vec<u8> = vec![];
             n.witness.write(&mut witness_bytes)?;
-            if let Rseed::BeforeZip212(rseed) = n.note.rseed { // rseed are stored as pre-zip212
+            if let Rseed::BeforeZip212(rseed) = n.note.rseed {
+                // rseed are stored as pre-zip212
                 builder.add_input(
                     skey.clone(),
                     &n.diversifier,
@@ -179,10 +224,10 @@ pub fn prepare_tx<B: TxBuilder>(builder: &mut B, skey: Option<ExtendedSpendingKe
     if amount.is_positive() {
         log::info!("Not enough balance");
         anyhow::bail!(
-                "Not enough balance, need {} zats, missing {} zats",
-                u64::from(target_amount_with_fee),
-                u64::from(amount)
-            );
+            "Not enough balance, need {} zats, missing {} zats",
+            u64::from(target_amount_with_fee),
+            u64::from(amount)
+        );
     }
 
     log::info!("Preparing tx");
@@ -197,16 +242,9 @@ pub fn prepare_tx<B: TxBuilder>(builder: &mut B, skey: Option<ExtendedSpendingKe
                 log::info!("Sapling output: {}", r.amount);
                 let memo_bytes = hex::decode(&r.memo).unwrap();
                 let memo = MemoBytes::from_bytes(&memo_bytes)?;
-                builder.add_z_output(
-                    &r.address,
-                    ovk,
-                    amount,
-                    &memo,
-                )
+                builder.add_z_output(&r.address, ovk, amount, &memo)
             }
-            RecipientAddress::Transparent(_address) => {
-                builder.add_t_output(&r.address, amount)
-            }
+            RecipientAddress::Transparent(_address) => builder.add_t_output(&r.address, amount),
         }?;
     }
 
@@ -220,12 +258,18 @@ pub fn sign_offline_tx(tx: &Tx, sk: &ExtendedSpendingKey) -> anyhow::Result<Vec<
         let mut diversifier = [0u8; 11];
         hex::decode_to_slice(&txin.diversifier, &mut diversifier)?;
         let diversifier = Diversifier(diversifier);
-        let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &txin.fvk)?.unwrap();
+        let fvk = decode_extended_full_viewing_key(
+            NETWORK.hrp_sapling_extended_full_viewing_key(),
+            &txin.fvk,
+        )?
+        .unwrap();
         let pa = fvk.fvk.vk.to_payment_address(diversifier).unwrap();
         let mut rseed_bytes = [0u8; 32];
         hex::decode_to_slice(&txin.rseed, &mut rseed_bytes)?;
         let rseed = Fr::from_bytes(&rseed_bytes).unwrap();
-        let note = pa.create_note(txin.amount, Rseed::BeforeZip212(rseed)).unwrap();
+        let note = pa
+            .create_note(txin.amount, Rseed::BeforeZip212(rseed))
+            .unwrap();
         let w = hex::decode(&txin.witness)?;
         let witness = IncrementalWitness::<Node>::read(&*w)?;
         let merkle_path = witness.path().unwrap();
@@ -264,10 +308,13 @@ pub fn sign_offline_tx(tx: &Tx, sk: &ExtendedSpendingKey) -> anyhow::Result<Vec<
 pub async fn broadcast_tx(tx: &[u8], ld_url: &str) -> anyhow::Result<String> {
     let mut client = connect_lightwalletd(ld_url).await?;
     let latest_height = get_latest_height(&mut client).await?;
-    let raw_tx =  RawTransaction {
+    let raw_tx = RawTransaction {
         data: tx.to_vec(),
         height: latest_height as u64,
     };
-    let rep = client.send_transaction(Request::new(raw_tx)).await?.into_inner();
+    let rep = client
+        .send_transaction(Request::new(raw_tx))
+        .await?
+        .into_inner();
     Ok(rep.error_message)
 }

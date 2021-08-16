@@ -1,5 +1,8 @@
 use crate::chain::send_transaction;
-use crate::{connect_lightwalletd, get_latest_height, AddressList, CompactTxStreamerClient, DbAdapter, GetAddressUtxosArg, NETWORK, get_branch};
+use crate::{
+    connect_lightwalletd, get_branch, get_latest_height, AddressList, CompactTxStreamerClient,
+    DbAdapter, GetAddressUtxosArg, NETWORK,
+};
 use anyhow::Context;
 use bip39::{Language, Mnemonic, Seed};
 use ripemd160::{Digest, Ripemd160};
