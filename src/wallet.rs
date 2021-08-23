@@ -5,7 +5,7 @@ use crate::pay::prepare_tx;
 use crate::pay::{ColdTxBuilder, Tx};
 use crate::prices::fetch_historical_prices;
 use crate::scan::ProgressCallback;
-use crate::taddr::{get_taddr_balance, shield_taddr};
+use crate::taddr::{get_taddr_balance, shield_taddr, add_shield_taddr};
 use crate::{
     connect_lightwalletd, get_branch, get_latest_height, BlockId, CTree, DbAdapter, NETWORK,
 };
@@ -213,7 +213,7 @@ impl Wallet {
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
         let recipients: Vec<Recipient> = serde_json::from_str(recipients_json)?;
-        self._send_payment(account, &recipients, anchor_offset, progress_callback)
+        self._send_payment(account, &recipients, anchor_offset, false, progress_callback)
             .await
     }
 
@@ -262,10 +262,11 @@ impl Wallet {
         memo: &str,
         max_amount_per_note: u64,
         anchor_offset: u32,
+        shield_transparent_balance: bool,
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
         let recipients = Self::_build_recipients(to_address, amount, max_amount_per_note, memo)?;
-        self._send_payment(account, &recipients, anchor_offset, progress_callback)
+        self._send_payment(account, &recipients, anchor_offset, shield_transparent_balance, progress_callback)
             .await
     }
 
@@ -274,6 +275,7 @@ impl Wallet {
         account: u32,
         recipients: &[Recipient],
         anchor_offset: u32,
+        shield_transparent_balance: bool,
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
         let secret_key = self.db.get_sk(account)?;
@@ -306,6 +308,14 @@ impl Wallet {
                 progress_callback(progress);
             }
         });
+
+        if shield_transparent_balance {
+            add_shield_taddr(&mut builder,
+                             &self.db,
+                             account,
+                             &self.ld_url,
+                             Amount::zero()).await?;
+        }
 
         let consensus_branch_id = get_branch(last_height);
         let (tx, _) = builder.build(consensus_branch_id, &self.prover)?;

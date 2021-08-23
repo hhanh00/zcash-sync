@@ -15,12 +15,13 @@ use tonic::Request;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_payment_address, encode_transparent_address,
 };
-use zcash_primitives::consensus::{BlockHeight, Parameters};
+use zcash_primitives::consensus::{BlockHeight, Parameters, Network};
 use zcash_primitives::legacy::{Script, TransparentAddress};
 use zcash_primitives::transaction::builder::Builder;
 use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut};
 use zcash_proofs::prover::LocalTxProver;
+use rand::rngs::OsRng;
 
 pub const BIP44_PATH: &str = "m/44'/133'/0'/0/0";
 
@@ -46,6 +47,26 @@ pub async fn shield_taddr(
 ) -> anyhow::Result<String> {
     let mut client = connect_lightwalletd(ld_url).await?;
     let last_height = get_latest_height(&mut client).await?;
+    let mut builder = Builder::new(NETWORK, BlockHeight::from_u32(last_height));
+    add_shield_taddr(&mut builder, db, account, ld_url, DEFAULT_FEE).await?;
+
+    let consensus_branch_id = get_branch(last_height);
+    let (tx, _) = builder.build(consensus_branch_id, prover)?;
+    let mut raw_tx: Vec<u8> = vec![];
+    tx.write(&mut raw_tx)?;
+
+    let tx_id = send_transaction(&mut client, &raw_tx, last_height).await?;
+    log::info!("Tx ID = {}", tx_id);
+
+    Ok(tx_id)
+}
+
+pub async fn add_shield_taddr(builder: &mut Builder<'_, Network, OsRng>,
+                        db: &DbAdapter,
+                        account: u32,
+                        ld_url: &str,
+                        fee: Amount) -> anyhow::Result<()> {
+    let mut client = connect_lightwalletd(ld_url).await?;
     let ivk = db.get_ivk(account)?;
     let fvk =
         decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)?
@@ -57,12 +78,11 @@ pub async fn shield_taddr(
         anyhow::bail!("No transparent address");
     }
     let t_address = t_address.unwrap();
-    let mut builder = Builder::new(NETWORK, BlockHeight::from_u32(last_height));
     let amount = Amount::from_u64(get_taddr_balance(&mut client, &t_address).await?).unwrap();
-    if amount <= DEFAULT_FEE {
+    if amount < fee {
         anyhow::bail!("Not enough balance");
     }
-    let amount = amount - DEFAULT_FEE;
+    let amount = amount - fee;
 
     let sk = db.get_tsk(account)?;
     let seckey = secp256k1::SecretKey::from_str(&sk).context("Cannot parse secret key")?;
@@ -91,15 +111,7 @@ pub async fn shield_taddr(
 
     let ovk = fvk.fvk.ovk;
     builder.add_sapling_output(Some(ovk), pa, amount, None)?;
-    let consensus_branch_id = get_branch(last_height);
-    let (tx, _) = builder.build(consensus_branch_id, prover)?;
-    let mut raw_tx: Vec<u8> = vec![];
-    tx.write(&mut raw_tx)?;
-
-    let tx_id = send_transaction(&mut client, &raw_tx, last_height).await?;
-    log::info!("Tx ID = {}", tx_id);
-
-    Ok(tx_id)
+    Ok(())
 }
 
 pub fn derive_tkeys(phrase: &str, path: &str) -> anyhow::Result<(String, String)> {
