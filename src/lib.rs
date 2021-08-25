@@ -1,28 +1,7 @@
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-#[cfg(feature = "ycash")]
-mod coin {
-    use zcash_primitives::consensus::{BranchId, Network};
-
-    pub const NETWORK: Network = Network::YCashMainNetwork;
-    pub const TICKER: &str = "ycash";
-    pub fn get_branch(_height: u32) -> BranchId {
-        BranchId::Ycash
-    }
-}
-
-#[cfg(not(feature = "ycash"))]
-mod coin {
-    use zcash_primitives::consensus::{BlockHeight, BranchId, Network};
-
-    pub const NETWORK: Network = Network::MainNetwork;
-    pub const TICKER: &str = "zcash";
-    pub fn get_branch(height: u32) -> BranchId {
-        BranchId::for_height(&NETWORK, BlockHeight::from_u32(height))
-    }
-}
-
+mod coin;
 pub use coin::{get_branch, NETWORK, TICKER};
 
 // Mainnet
