@@ -10,7 +10,7 @@ use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, encode_extended_full_viewing_key,
 };
 use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
-use zcash_primitives::memo::MemoBytes;
+use zcash_primitives::memo::{MemoBytes, Memo};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::keys::OutgoingViewingKey;
 use zcash_primitives::sapling::{Diversifier, Node, Rseed};
@@ -19,6 +19,8 @@ use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 use zcash_proofs::prover::LocalTxProver;
+use std::str::FromStr;
+use std::convert::TryFrom;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
@@ -240,8 +242,8 @@ pub fn prepare_tx<B: TxBuilder>(
         match &to_addr {
             RecipientAddress::Shielded(_pa) => {
                 log::info!("Sapling output: {}", r.amount);
-                let memo_bytes = hex::decode(&r.memo).unwrap();
-                let memo = MemoBytes::from_bytes(&memo_bytes)?;
+                let memo = Memo::from_str(&r.memo)?;
+                let memo = MemoBytes::try_from(memo)?;
                 builder.add_z_output(&r.address, ovk, amount, &memo)
             }
             RecipientAddress::Transparent(_address) => builder.add_t_output(&r.address, amount),

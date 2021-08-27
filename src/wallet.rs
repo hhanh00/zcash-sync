@@ -14,8 +14,6 @@ use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::Deserialize;
-use std::convert::TryFrom;
-use std::str::FromStr;
 use std::sync::{mpsc, Arc};
 use tokio::sync::Mutex;
 use tonic::Request;
@@ -25,7 +23,6 @@ use zcash_client_backend::encoding::{
 };
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
-use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::transaction::builder::{Builder, Progress};
 use zcash_primitives::transaction::components::amount::MAX_MONEY;
 use zcash_primitives::transaction::components::Amount;
@@ -409,14 +406,12 @@ impl Wallet {
             Amount::from_i64(MAX_MONEY).unwrap()
         };
         let mut remaining_amount = target_amount;
-        let memo = Memo::from_str(memo)?;
-        let memo_bytes = MemoBytes::try_from(memo)?;
         while remaining_amount.is_positive() {
             let note_amount = remaining_amount.min(max_amount_per_note);
             let recipient = Recipient {
                 address: to_address.to_string(),
                 amount: u64::from(note_amount),
-                memo: hex::encode(memo_bytes.as_slice()),
+                memo: memo.to_string(),
             };
             recipients.push(recipient);
             remaining_amount -= note_amount;
