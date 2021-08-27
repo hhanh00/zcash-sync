@@ -76,6 +76,11 @@ branch = "warp-sync"
 git = "https://github.com/hhanh00/zcash-params.git"
 branch = "main"
 
+[dependencies.zcash_address]
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "19a97f16945c68c33aedcc89f2a4f4d398658b05"
+
+
 [build-dependencies]
 tonic-build = "0.4.2"
 
