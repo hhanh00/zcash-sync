@@ -1,6 +1,6 @@
 use ff::PrimeField;
-use group::{Curve, Group, GroupEncoding};
-use jubjub::{Fr, SubgroupPoint};
+use group::{Curve, GroupEncoding};
+use jubjub::{Fr, SubgroupPoint, ExtendedPoint, ExtendedNielsPoint};
 use lazy_static::lazy_static;
 use std::io::Read;
 use std::ops::AddAssign;
@@ -8,19 +8,19 @@ use zcash_params::GENERATORS;
 use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 
 lazy_static! {
-    static ref GENERATORS_EXP: Vec<SubgroupPoint> = read_generators_bin();
+    static ref GENERATORS_EXP: Vec<ExtendedNielsPoint> = read_generators_bin();
 }
 
-fn read_generators_bin() -> Vec<SubgroupPoint> {
+fn read_generators_bin() -> Vec<ExtendedNielsPoint> {
     let mut generators_bin = GENERATORS;
-    let mut gens: Vec<SubgroupPoint> = vec![];
+    let mut gens: Vec<ExtendedNielsPoint> = vec![];
     gens.reserve_exact(3 * 32 * 256);
     for _i in 0..3 {
         for _j in 0..32 {
             for _k in 0..256 {
                 let mut bb = [0u8; 32];
                 generators_bin.read(&mut bb).unwrap();
-                let p = SubgroupPoint::from_bytes_unchecked(&bb).unwrap();
+                let p = ExtendedPoint::from(SubgroupPoint::from_bytes_unchecked(&bb).unwrap()).to_niels();
                 gens.push(p);
             }
         }
@@ -46,8 +46,20 @@ macro_rules! accumulate_scalar {
     };
 }
 
-pub fn pedersen_hash(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
-    let mut result = SubgroupPoint::identity();
+type Hash = [u8; 32];
+
+pub fn pedersen_hash(depth: u8, left: &Hash, right: &Hash) -> Hash {
+    let p = pedersen_hash_inner(depth, left, right);
+
+    let h = jubjub::ExtendedPoint::from(p)
+        .to_affine()
+        .get_u()
+        .to_repr();
+    h
+}
+
+pub fn pedersen_hash_inner(depth: u8, left: &Hash, right: &Hash) -> ExtendedPoint {
+    let mut result = ExtendedPoint::identity();
     let mut bitoffset = 0;
     let mut byteoffset = 0;
     let mut r_byteoffset = 0;
@@ -108,17 +120,13 @@ pub fn pedersen_hash(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
         }
     }
     result += generator_multiplication(&acc, &GENERATORS_EXP, i_generator);
-
-    jubjub::ExtendedPoint::from(result)
-        .to_affine()
-        .get_u()
-        .to_repr()
+    result
 }
 
-fn generator_multiplication(acc: &Fr, gens: &[SubgroupPoint], i_generator: u32) -> SubgroupPoint {
+fn generator_multiplication(acc: &Fr, gens: &[ExtendedNielsPoint], i_generator: u32) -> ExtendedPoint {
     let acc = acc.to_repr();
 
-    let mut tmp = jubjub::SubgroupPoint::identity();
+    let mut tmp = jubjub::ExtendedPoint::identity();
     for (i, &j) in acc.iter().enumerate() {
         let offset = (i_generator * 32 + i as u32) * 256 + j as u32;
         let x = gens[offset as usize];
@@ -138,7 +146,7 @@ mod tests {
     fn test_hash() {
         let mut r = thread_rng();
 
-        for _ in 0..100 {
+        for _ in 0..1 {
             let mut a = [0u8; 32];
             r.fill_bytes(&mut a);
             let mut b = [0u8; 32];
