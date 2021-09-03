@@ -203,7 +203,7 @@ impl Wallet {
     }
 
     pub async fn send_multi_payment(
-        &self,
+        &mut self,
         account: u32,
         recipients_json: &str,
         anchor_offset: u32,
@@ -252,7 +252,7 @@ impl Wallet {
     }
 
     pub async fn send_payment(
-        &self,
+        &mut self,
         account: u32,
         to_address: &str,
         amount: u64,
@@ -268,7 +268,7 @@ impl Wallet {
     }
 
     async fn _send_payment(
-        &self,
+        &mut self,
         account: u32,
         recipients: &[Recipient],
         anchor_offset: u32,
@@ -324,8 +324,9 @@ impl Wallet {
         let tx_id = send_transaction(&mut client, &raw_tx, last_height).await?;
         log::info!("Tx ID = {}", tx_id);
 
+        let db_tx = self.db.begin_transaction()?;
         for id_note in selected_notes.iter() {
-            self.db.mark_spent(*id_note, 0)?;
+            DbAdapter::mark_spent(*id_note, 0, &db_tx)?;
         }
         Ok(tx_id)
     }

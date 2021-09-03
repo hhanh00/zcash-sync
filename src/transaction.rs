@@ -136,7 +136,7 @@ pub async fn retrieve_tx_info(
     tx_ids: &[u32],
 ) -> anyhow::Result<()> {
     let db = DbAdapter::new(db_path)?;
-    db.begin_transaction()?;
+
     let nfs = db.get_nullifiers_raw()?;
     let mut nf_map: HashMap<(u32, Vec<u8>), u64> = HashMap::new();
     for nf in nfs.iter() {
@@ -203,7 +203,6 @@ pub async fn retrieve_tx_info(
         for c in contacts.iter() {
             db.store_contact(c)?;
         }
-        db.commit()?;
 
         Ok::<_, anyhow::Error>(())
     });

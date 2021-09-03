@@ -23,8 +23,6 @@ use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut};
 use zcash_proofs::prover::LocalTxProver;
 use rand::rngs::OsRng;
 
-pub const BIP44_PATH: &str = "m/44'/133'/0'/0/0";
-
 pub async fn get_taddr_balance(
     client: &mut CompactTxStreamerClient<Channel>,
     address: &str,

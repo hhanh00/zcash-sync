@@ -1,10 +1,10 @@
 use crate::chain::{Nf, NfRef};
 use crate::prices::Quote;
-use crate::taddr::{derive_tkeys, BIP44_PATH};
+use crate::taddr::derive_tkeys;
 use crate::transaction::{Contact, TransactionInfo};
 use crate::{CTree, Witness, NETWORK};
 use chrono::NaiveDateTime;
-use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS};
+use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS, Transaction};
 use std::collections::HashMap;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
@@ -62,16 +62,16 @@ impl DbAdapter {
         Ok(DbAdapter { connection })
     }
 
-    pub fn begin_transaction(&self) -> anyhow::Result<()> {
-        self.connection.execute("BEGIN TRANSACTION", NO_PARAMS)?;
-        Ok(())
+    pub fn begin_transaction(&mut self) -> anyhow::Result<Transaction> {
+        let tx = self.connection.transaction()?;
+        Ok(tx)
     }
-
-    pub fn commit(&self) -> anyhow::Result<()> {
-        self.connection.execute("COMMIT", NO_PARAMS)?;
-        Ok(())
-    }
-
+    //
+    // pub fn commit(&self) -> anyhow::Result<()> {
+    //     self.connection.execute("COMMIT", NO_PARAMS)?;
+    //     Ok(())
+    // }
+    //
     pub fn init_db(&self) -> anyhow::Result<()> {
         migration::init_db(&self.connection)?;
         Ok(())
@@ -186,21 +186,21 @@ impl DbAdapter {
     }
 
     pub fn store_transaction(
-        &self,
         txid: &[u8],
         account: u32,
         height: u32,
         timestamp: u32,
         tx_index: u32,
+        db_tx: &Transaction
     ) -> anyhow::Result<u32> {
         log::debug!("+transaction");
-        self.connection.execute(
+        db_tx.execute(
             "INSERT INTO transactions(account, txid, height, timestamp, tx_index, value)
         VALUES (?1, ?2, ?3, ?4, ?5, 0)
         ON CONFLICT DO NOTHING",
             params![account, txid, height, timestamp, tx_index],
         )?;
-        let id_tx: u32 = self.connection.query_row(
+        let id_tx: u32 = db_tx.query_row(
             "SELECT id_tx FROM transactions WHERE account = ?1 AND txid = ?2",
             params![account, txid],
             |row| row.get(0),
@@ -210,16 +210,16 @@ impl DbAdapter {
     }
 
     pub fn store_received_note(
-        &self,
         note: &ReceivedNote,
         id_tx: u32,
         position: usize,
+        db_tx: &Transaction
     ) -> anyhow::Result<u32> {
         log::debug!("+received_note {}", id_tx);
-        self.connection.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, nf, spent)
+        db_tx.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, nf, spent)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
         ON CONFLICT DO NOTHING", params![note.account, id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.nf, note.spent])?;
-        let id_note: u32 = self.connection.query_row(
+        let id_note: u32 = db_tx.query_row(
             "SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2",
             params![id_tx, note.output_index],
             |row| row.get(0),
@@ -254,16 +254,16 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn add_value(&self, id_tx: u32, value: i64) -> anyhow::Result<()> {
-        self.connection.execute(
+    pub fn add_value(id_tx: u32, value: i64, db_tx: &Transaction) -> anyhow::Result<()> {
+        db_tx.execute(
             "UPDATE transactions SET value = value + ?2 WHERE id_tx = ?1",
             params![id_tx, value],
         )?;
         Ok(())
     }
 
-    pub fn get_received_note_value(&self, nf: &Nf) -> anyhow::Result<(u32, i64)> {
-        let (account, value) = self.connection.query_row(
+    pub fn get_received_note_value(nf: &Nf, db_tx: &Transaction) -> anyhow::Result<(u32, i64)> {
+        let (account, value) = db_tx.query_row(
             "SELECT account, value FROM received_notes WHERE nf = ?1",
             params![nf.0.to_vec()],
             |row| {
@@ -455,9 +455,9 @@ impl DbAdapter {
         Ok(spendable_notes)
     }
 
-    pub fn mark_spent(&self, id: u32, height: u32) -> anyhow::Result<()> {
+    pub fn mark_spent(id: u32, height: u32, tx: &Transaction) -> anyhow::Result<()> {
         log::debug!("+mark_spent");
-        self.connection.execute(
+        tx.execute(
             "UPDATE received_notes SET spent = ?1 WHERE id_note = ?2",
             params![height, id],
         )?;
@@ -632,7 +632,8 @@ impl DbAdapter {
     pub fn create_taddr(&self, account: u32) -> anyhow::Result<()> {
         let seed = self.get_seed(account)?;
         if let Some(seed) = seed {
-            let (sk, address) = derive_tkeys(&seed, BIP44_PATH)?;
+            let bip44_path = format!("m/44'/{}'/0'/0/0", NETWORK.coin_type());
+            let (sk, address) = derive_tkeys(&seed, &bip44_path)?;
             self.connection.execute(
                 "INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3) \
             ON CONFLICT DO NOTHING",
@@ -704,8 +705,9 @@ mod tests {
         db.trim_to_height(0).unwrap();
 
         db.store_block(1, &[0u8; 32], 0, &CTree::new()).unwrap();
-        let id_tx = db.store_transaction(&[0; 32], 1, 1, 0, 20).unwrap();
-        db.store_received_note(
+        let db_tx = db.begin_transaction().unwrap();
+        let id_tx = DbAdapter::store_transaction(&[0; 32], 1, 1, 0, 20, &db_tx).unwrap();
+        DbAdapter::store_received_note(
             &ReceivedNote {
                 account: 1,
                 height: 1,
@@ -718,6 +720,7 @@ mod tests {
             },
             id_tx,
             5,
+            &db_tx
         )
         .unwrap();
         let witness = Witness {
@@ -728,6 +731,7 @@ mod tests {
             filled: vec![],
             cursor: CTree::new(),
         };
+        db_tx.commit().unwrap();
         db.store_witnesses(&witness, 1000, 1).unwrap();
     }
 
