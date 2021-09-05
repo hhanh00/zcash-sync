@@ -328,6 +328,7 @@ impl Wallet {
         for id_note in selected_notes.iter() {
             DbAdapter::mark_spent(*id_note, 0, &db_tx)?;
         }
+        db_tx.commit()?;
         Ok(tx_id)
     }
 
