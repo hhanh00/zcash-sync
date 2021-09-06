@@ -84,13 +84,18 @@ impl DbAdapter {
         sk: Option<&str>,
         ivk: &str,
         address: &str,
-    ) -> anyhow::Result<u32> {
+    ) -> anyhow::Result<i32> {
+        let mut statement = self.connection.prepare("SELECT id_account FROM accounts WHERE ivk = ?1")?;
+        if statement.exists(
+            params![ivk])? {
+            return Ok(-1)
+        }
         self.connection.execute(
             "INSERT INTO accounts(name, seed, sk, ivk, address) VALUES (?1, ?2, ?3, ?4, ?5)
             ON CONFLICT DO NOTHING",
             params![name, seed, sk, ivk, address],
         )?;
-        let id_tx: u32 = self.connection.query_row(
+        let id_tx: i32 = self.connection.query_row(
             "SELECT id_account FROM accounts WHERE ivk = ?1",
             params![ivk],
             |row| row.get(0),

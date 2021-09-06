@@ -84,7 +84,7 @@ impl Wallet {
         recipient.is_some()
     }
 
-    pub fn new_account(&self, name: &str, data: &str) -> anyhow::Result<u32> {
+    pub fn new_account(&self, name: &str, data: &str) -> anyhow::Result<i32> {
         if data.is_empty() {
             let mut entropy = [0u8; 32];
             OsRng.fill_bytes(&mut entropy);
@@ -107,12 +107,14 @@ impl Wallet {
         Ok(ivk)
     }
 
-    pub fn new_account_with_key(&self, name: &str, key: &str) -> anyhow::Result<u32> {
+    pub fn new_account_with_key(&self, name: &str, key: &str) -> anyhow::Result<i32> {
         let (seed, sk, ivk, pa) = decode_key(key)?;
         let account = self
             .db
             .store_account(name, seed.as_deref(), sk.as_deref(), &ivk, &pa)?;
-        self.db.create_taddr(account)?;
+        if account > 0 {
+            self.db.create_taddr(account as u32)?;
+        }
         Ok(account)
     }
 
