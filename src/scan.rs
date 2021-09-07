@@ -298,8 +298,7 @@ pub async fn sync_async(
             let start = Instant::now();
             if get_tx && !my_tx_ids.is_empty() {
                 retrieve_tx_info(&mut client, &db_path2, &new_ids_tx)
-                    .await
-                    .unwrap();
+                    .await?;
             }
             log::info!("Transaction Details : {}", start.elapsed().as_millis());
 

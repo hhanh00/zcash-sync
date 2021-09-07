@@ -15,6 +15,7 @@ pub async fn fetch_historical_prices(
     currency: &str,
     db: &DbAdapter,
 ) -> anyhow::Result<Vec<Quote>> {
+    let json_error = || anyhow::anyhow!("Invalid JSON");
     let today = now / DAY_SEC;
     let from_day = today - days as i64;
     let latest_quote = db.get_latest_quote(currency)?;
@@ -42,12 +43,12 @@ pub async fn fetch_historical_prices(
         let req = client.get(url).query(&params);
         let res = req.send().await?;
         let r: serde_json::Value = res.json().await?;
-        let prices = r["prices"].as_array().unwrap();
+        let prices = r["prices"].as_array().ok_or_else(json_error)?;
         let mut prev_timestamp = 0i64;
         for p in prices.iter() {
-            let p = p.as_array().unwrap();
-            let ts = p[0].as_i64().unwrap() / 1000;
-            let price = p[1].as_f64().unwrap();
+            let p = p.as_array().ok_or_else(json_error)?;
+            let ts = p[0].as_i64().ok_or_else(json_error)? / 1000;
+            let price = p[1].as_f64().ok_or_else(json_error)?;
             // rounded to daily
             let date = NaiveDateTime::from_timestamp(ts, 0).date().and_hms(0, 0, 0);
             let timestamp = date.timestamp();
