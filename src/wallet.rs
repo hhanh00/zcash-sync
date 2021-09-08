@@ -24,10 +24,13 @@ use zcash_client_backend::encoding::{
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::transaction::builder::{Builder, Progress};
-use zcash_primitives::transaction::components::amount::MAX_MONEY;
+use zcash_primitives::transaction::components::amount::{MAX_MONEY, DEFAULT_FEE};
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use zcash_proofs::prover::LocalTxProver;
+use zcash_primitives::memo::Memo;
+use std::str::FromStr;
+use crate::contact::{Contact, serialize_contacts};
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -60,6 +63,22 @@ pub struct Recipient {
     pub address: String,
     pub amount: u64,
     pub memo: String,
+}
+
+pub struct RecipientMemo {
+    pub address: String,
+    pub amount: u64,
+    pub memo: Memo,
+}
+
+impl From<&Recipient> for RecipientMemo {
+    fn from(r: &Recipient) -> Self {
+        RecipientMemo {
+            address: r.address.clone(),
+            amount: r.amount,
+            memo: Memo::from_str(&r.memo).unwrap(),
+        }
+    }
 }
 
 impl Wallet {
@@ -212,6 +231,7 @@ impl Wallet {
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
         let recipients: Vec<Recipient> = serde_json::from_str(recipients_json)?;
+        let recipients: Vec<_> = recipients.iter().map(|r| RecipientMemo::from(r)).collect();
         self._send_payment(account, &recipients, anchor_offset, false, progress_callback)
             .await
     }
@@ -237,7 +257,7 @@ impl Wallet {
         account: u32,
         amount: u64,
         last_height: u32,
-        recipients: &Vec<Recipient>,
+        recipients: &[RecipientMemo],
         anchor_offset: u32,
     ) -> anyhow::Result<Tx> {
         let amount = Amount::from_u64(amount).unwrap();
@@ -247,7 +267,7 @@ impl Wallet {
             &ivk,
         )?
         .unwrap();
-        let notes = self._get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
+        let notes = self.get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
         let mut builder = ColdTxBuilder::new(last_height);
         prepare_tx(&mut builder, None, &notes, amount, &extfvk, recipients)?;
         Ok(builder.tx)
@@ -272,7 +292,7 @@ impl Wallet {
     async fn _send_payment(
         &mut self,
         account: u32,
-        recipients: &[Recipient],
+        recipients: &[RecipientMemo],
         anchor_offset: u32,
         shield_transparent_balance: bool,
         progress_callback: impl Fn(Progress) + Send + 'static,
@@ -284,7 +304,7 @@ impl Wallet {
                 .unwrap();
         let extfvk = ExtendedFullViewingKey::from(&skey);
         let last_height = self.get_latest_height().await?;
-        let notes = self._get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
+        let notes = self.get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
         log::info!("Spendable notes = {}", notes.len());
 
         let mut builder = Builder::new(NETWORK, BlockHeight::from_u32(last_height));
@@ -369,26 +389,72 @@ impl Wallet {
         shield_taddr(&self.db, account, &self.prover, &self.ld_url).await
     }
 
+    pub fn store_contact(&self, id: u32, name: &str, address: &str, dirty: bool) -> anyhow::Result<()> {
+        let contact = Contact {
+            id,
+            name: name.to_string(),
+            address: address.to_string(),
+        };
+        self.db.store_contact(&contact, dirty)?;
+        Ok(())
+    }
+
+    pub async fn commit_unsaved_contacts(&self, account: u32, anchor_offset: u32) -> anyhow::Result<String> {
+        let contacts = self.db.get_unsaved_contacts()?;
+        let memos = serialize_contacts(&contacts)?;
+        let tx_id = self.save_contacts_tx(&memos, account, anchor_offset).await.unwrap();
+        Ok(tx_id)
+    }
+
+    pub async fn save_contacts_tx(&self, memos: &[Memo], account: u32, anchor_offset: u32) -> anyhow::Result<String> {
+        let mut client = connect_lightwalletd(&self.ld_url).await?;
+        let last_height = get_latest_height(&mut client).await?;
+
+        let secret_key = self.db.get_sk(account)?;
+        let address = self.db.get_address(account)?;
+        let skey = decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &secret_key)?.unwrap();
+        let extfvk = ExtendedFullViewingKey::from(&skey);
+        let notes = self.get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
+
+        let mut builder = Builder::new(NETWORK, BlockHeight::from_u32(last_height));
+
+        let recipients: Vec<_> = memos.iter().map(|m| {
+            RecipientMemo {
+                address: address.clone(),
+                amount: 0,
+                memo: m.clone(),
+            }
+        }).collect();
+        prepare_tx(&mut builder, Some(skey), &notes, DEFAULT_FEE, &extfvk, &recipients)?;
+
+        let consensus_branch_id = get_branch(last_height);
+        let (tx, _) = builder.build(consensus_branch_id, &self.prover)?;
+        let mut raw_tx: Vec<u8> = vec![];
+        tx.write(&mut raw_tx)?;
+
+        let tx_id = send_transaction(&mut client, &raw_tx, last_height).await?;
+        log::info!("Tx ID = {}", tx_id);
+        Ok(tx_id)
+    }
+
     pub fn set_lwd_url(&mut self, ld_url: &str) -> anyhow::Result<()> {
         self.ld_url = ld_url.to_string();
         Ok(())
     }
 
-    fn _get_spendable_notes(
+    pub fn get_spendable_notes(
         &self,
         account: u32,
         extfvk: &ExtendedFullViewingKey,
         last_height: u32,
         anchor_offset: u32,
     ) -> anyhow::Result<Vec<SpendableNote>> {
-        let anchor_height = self
-            .db
+        let anchor_height = self.db
             .get_last_sync_height()?
             .ok_or_else(|| anyhow::anyhow!("No spendable notes"))?;
         let anchor_height = anchor_height.min(last_height - anchor_offset);
         log::info!("Anchor = {}", anchor_height);
-        let mut notes = self
-            .db
+        let mut notes = self.db
             .get_spendable_notes(account, anchor_height, extfvk)?;
         notes.shuffle(&mut OsRng);
         log::info!("Spendable notes = {}", notes.len());
@@ -401,8 +467,8 @@ impl Wallet {
         amount: u64,
         max_amount_per_note: u64,
         memo: &str,
-    ) -> anyhow::Result<Vec<Recipient>> {
-        let mut recipients: Vec<Recipient> = vec![];
+    ) -> anyhow::Result<Vec<RecipientMemo>> {
+        let mut recipients: Vec<RecipientMemo> = vec![];
         let target_amount = Amount::from_u64(amount).unwrap();
         let max_amount_per_note = if max_amount_per_note != 0 {
             Amount::from_u64(max_amount_per_note).unwrap()
@@ -412,10 +478,10 @@ impl Wallet {
         let mut remaining_amount = target_amount;
         while remaining_amount.is_positive() {
             let note_amount = remaining_amount.min(max_amount_per_note);
-            let recipient = Recipient {
+            let recipient = RecipientMemo {
                 address: to_address.to_string(),
                 amount: u64::from(note_amount),
-                memo: memo.to_string(),
+                memo: Memo::from_str(memo)?,
             };
             recipients.push(recipient);
             remaining_amount -= note_amount;
@@ -434,6 +500,10 @@ impl Wallet {
             .unwrap();
         self.db.store_historical_prices(&quotes, currency).unwrap();
         Ok(quotes.len() as u32)
+    }
+
+    pub fn truncate_data(&self) -> anyhow::Result<()> {
+        self.db.truncate_data()
     }
 }
 

@@ -8,12 +8,12 @@ pub use coin::{get_branch, NETWORK, TICKER};
 // pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "https://lwdv3.zecwallet.co";
 // pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
-pub const LWD_URL: &str = "http://127.0.0.1:9067";
+// pub const LWD_URL: &str = "http://127.0.0.1:9067";
 
 // Testnet
 // pub const LWD_URL: &str = "https://testnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
-// pub const LWD_URL: &str = "http://127.0.0.1:9067";
+pub const LWD_URL: &str = "http://127.0.0.1:9067";
 
 mod builder;
 mod chain;
@@ -29,6 +29,7 @@ mod print;
 mod scan;
 mod taddr;
 mod transaction;
+mod contact;
 mod wallet;
 
 pub use crate::builder::advance_tree;

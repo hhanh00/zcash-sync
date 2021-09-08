@@ -1,7 +1,7 @@
 use crate::chain::{Nf, NfRef};
 use crate::prices::Quote;
 use crate::taddr::derive_tkeys;
-use crate::transaction::{Contact, TransactionInfo};
+use crate::transaction::TransactionInfo;
 use crate::{CTree, Witness, NETWORK};
 use chrono::NaiveDateTime;
 use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS, Transaction};
@@ -11,6 +11,7 @@ use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
+use crate::contact::Contact;
 
 mod migration;
 
@@ -482,22 +483,44 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn store_contact(&self, contact: &Contact) -> anyhow::Result<()> {
-        log::info!("{:?}", contact);
-        if contact.name.is_empty() {
+    pub fn store_contact(&self, contact: &Contact, dirty: bool) -> anyhow::Result<()> {
+        if contact.id == 0 {
             self.connection.execute(
-                "DELETE FROM contacts WHERE account = ?1 AND address = ?2",
-                params![contact.account, contact.address],
+                "INSERT INTO contacts(name, address, dirty)
+                VALUES (?1, ?2, ?3)",
+                params![&contact.name, &contact.address, dirty],
             )?;
-        } else {
+        }
+        else {
             self.connection.execute(
-                "INSERT INTO contacts(account, name, address)
-        VALUES (?1, ?2, ?3) ON CONFLICT (account, address) DO UPDATE SET
-        name = excluded.name",
-                params![contact.account, &contact.name, &contact.address],
+                "INSERT INTO contacts(id, name, address, dirty)
+                VALUES (?1, ?2, ?3, ?4) ON CONFLICT (id) DO UPDATE SET
+                name = excluded.name, address = excluded.address, dirty = excluded.dirty",
+                params![contact.id, &contact.name, &contact.address, dirty],
             )?;
         }
         Ok(())
+    }
+
+    pub fn get_unsaved_contacts(&self) -> anyhow::Result<Vec<Contact>> {
+        let mut statement = self.connection.prepare("SELECT id, name, address FROM contacts WHERE dirty = TRUE")?;
+        let rows = statement.query_map(NO_PARAMS, |row| {
+            let id: u32 = row.get(0)?;
+            let name: String = row.get(1)?;
+            let address: String = row.get(2)?;
+            let contact = Contact {
+                id,
+                name,
+                address,
+            };
+            Ok(contact)
+        })?;
+        let mut contacts: Vec<Contact> = vec![];
+        for r in rows {
+            contacts.push(r?);
+        }
+
+        Ok(contacts)
     }
 
     pub fn get_backup(
@@ -695,6 +718,17 @@ impl DbAdapter {
                 Ok(Quote { timestamp, price })
             }).optional()?;
         Ok(quote)
+    }
+
+    pub fn truncate_data(&self) -> anyhow::Result<()> {
+        self.connection.execute("DELETE FROM blocks", NO_PARAMS)?;
+        self.connection.execute("DELETE FROM contacts", NO_PARAMS)?;
+        self.connection.execute("DELETE FROM diversifiers", NO_PARAMS)?;
+        self.connection.execute("DELETE FROM historical_prices", NO_PARAMS)?;
+        self.connection.execute("DELETE FROM received_notes", NO_PARAMS)?;
+        self.connection.execute("DELETE FROM sapling_witnesses", NO_PARAMS)?;
+        self.connection.execute("DELETE FROM transactions", NO_PARAMS)?;
+        Ok(())
     }
 }
 

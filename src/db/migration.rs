@@ -142,7 +142,22 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         )?;
     }
 
-    update_schema_version(&connection, 5)?;
+    if version < 6 {
+        connection.execute(
+            "DROP TABLE contacts",
+            NO_PARAMS,
+        )?;
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS contacts (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                address TEXT NOT NULL,
+                dirty BOOL NOT NULL)",
+            NO_PARAMS,
+        )?;
+    }
+
+    update_schema_version(&connection, 6)?;
 
     Ok(())
 }

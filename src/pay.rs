@@ -1,5 +1,5 @@
 use crate::db::SpendableNote;
-use crate::wallet::Recipient;
+use crate::wallet::RecipientMemo;
 use crate::{connect_lightwalletd, get_latest_height, RawTransaction, NETWORK};
 use jubjub::Fr;
 use rand::rngs::OsRng;
@@ -19,8 +19,6 @@ use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
 use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 use zcash_proofs::prover::LocalTxProver;
-use std::str::FromStr;
-use std::convert::TryFrom;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
@@ -72,7 +70,7 @@ pub trait TxBuilder {
         address: &str,
         ovk: &OutgoingViewingKey,
         amount: Amount,
-        memo: &MemoBytes,
+        memo: &Memo,
     ) -> anyhow::Result<()>;
 }
 
@@ -128,13 +126,13 @@ impl TxBuilder for ColdTxBuilder {
         address: &str,
         ovk: &OutgoingViewingKey,
         amount: Amount,
-        memo: &MemoBytes,
+        memo: &Memo,
     ) -> anyhow::Result<()> {
         let tx_out = TxOut {
             addr: address.to_string(),
             amount: u64::from(amount),
             ovk: hex::encode(ovk.0),
-            memo: hex::encode(memo.as_slice()),
+            memo: hex::encode(MemoBytes::from(memo).as_slice()),
         };
         self.tx.outputs.push(tx_out);
         Ok(())
@@ -178,12 +176,13 @@ impl TxBuilder for Builder<'_, Network, OsRng> {
         address: &str,
         ovk: &OutgoingViewingKey,
         amount: Amount,
-        memo: &MemoBytes,
+        memo: &Memo,
     ) -> anyhow::Result<()> {
         let to_addr = RecipientAddress::decode(&NETWORK, address)
             .ok_or(anyhow::anyhow!("Not a valid address"))?;
         if let RecipientAddress::Shielded(pa) = to_addr {
-            self.add_sapling_output(Some(ovk.clone()), pa.clone(), amount, Some(memo.clone()))?;
+            let memo_bytes = MemoBytes::from(memo);
+            self.add_sapling_output(Some(ovk.clone()), pa.clone(), amount, Some(memo_bytes))?;
         }
         Ok(())
     }
@@ -195,7 +194,7 @@ pub fn prepare_tx<B: TxBuilder>(
     notes: &[SpendableNote],
     target_amount: Amount,
     fvk: &ExtendedFullViewingKey,
-    recipients: &[Recipient],
+    recipients: &[RecipientMemo],
 ) -> anyhow::Result<Vec<u32>> {
     let mut amount = target_amount;
     amount += DEFAULT_FEE;
@@ -242,9 +241,7 @@ pub fn prepare_tx<B: TxBuilder>(
         match &to_addr {
             RecipientAddress::Shielded(_pa) => {
                 log::info!("Sapling output: {}", r.amount);
-                let memo = Memo::from_str(&r.memo)?;
-                let memo = MemoBytes::try_from(memo)?;
-                builder.add_z_output(&r.address, ovk, amount, &memo)
+                builder.add_z_output(&r.address, ovk, amount, &r.memo)
             }
             RecipientAddress::Transparent(_address) => builder.add_t_output(&r.address, amount),
         }?;

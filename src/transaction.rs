@@ -16,9 +16,11 @@ use zcash_primitives::sapling::note_encryption::{
 };
 use zcash_primitives::transaction::Transaction;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+use crate::contact::{ContactDecoder, Contact};
 
 #[derive(Debug)]
 pub struct TransactionInfo {
+    height: u32,
     index: u32, // index of tx in block
     id_tx: u32, // id of tx in db
     account: u32,
@@ -26,14 +28,14 @@ pub struct TransactionInfo {
     pub memo: String,
     amount: i64,
     pub fee: u64,
+    pub contacts: Vec<Contact>,
 }
 
 #[derive(Debug)]
-pub struct Contact {
-    pub account: u32,
-    index: u32,
-    pub name: String,
-    pub address: String,
+pub struct ContactRef {
+    pub height: u32,
+    pub index: u32,
+    pub contact: Contact,
 }
 
 pub async fn decode_transaction(
@@ -70,6 +72,8 @@ pub async fn decode_transaction(
         }
     }
 
+    let mut contact_decoder = ContactDecoder::new(tx.shielded_outputs.len());
+
     let mut tx_memo = MemoBytes::empty();
     for output in tx.vout.iter() {
         if let Some(t_address) = output.script_pubkey.address() {
@@ -85,6 +89,7 @@ pub async fn decode_transaction(
         if let Some((note, pa, memo)) = try_sapling_note_decryption(&NETWORK, height, &ivk, output)
         {
             amount += note.value as i64; // change or self transfer
+            contact_decoder.add_memo(&memo)?;
             if address.is_empty() {
                 address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
                 tx_memo = memo;
@@ -105,7 +110,9 @@ pub async fn decode_transaction(
         Memo::Future(_) => "Unrecognized".to_string(),
         Memo::Arbitrary(_) => "Unrecognized".to_string(),
     };
+    let contacts = contact_decoder.finalize()?;
     let tx_info = TransactionInfo {
+        height: u32::from(height),
         index,
         id_tx,
         account,
@@ -113,6 +120,7 @@ pub async fn decode_transaction(
         memo,
         amount,
         fee,
+        contacts,
     };
 
     Ok(tx_info)
@@ -185,23 +193,20 @@ pub async fn retrieve_tx_info(
     });
 
     let f = tokio::spawn(async move {
-        let mut contacts: Vec<Contact> = vec![];
+        let mut contacts: Vec<ContactRef> = vec![];
         while let Ok(tx_info) = rx.recv() {
-            if !tx_info.address.is_empty() && !tx_info.memo.is_empty() {
-                if let Some(contact) = decode_contact(
-                    tx_info.account,
-                    tx_info.index,
-                    &tx_info.address,
-                    &tx_info.memo,
-                )? {
-                    contacts.push(contact);
-                }
+            for c in tx_info.contacts.iter() {
+                contacts.push(ContactRef {
+                    height: tx_info.height,
+                    index: tx_info.index,
+                    contact: c.clone(),
+                });
             }
             db.store_tx_metadata(tx_info.id_tx, &tx_info)?;
         }
         contacts.sort_by(|a, b| a.index.cmp(&b.index));
-        for c in contacts.iter() {
-            db.store_contact(c)?;
+        for cref in contacts.iter() {
+            db.store_contact(&cref.contact, false)?;
         }
 
         Ok::<_, anyhow::Error>(())
@@ -212,26 +217,6 @@ pub async fn retrieve_tx_info(
     f.await??;
 
     Ok(())
-}
-
-fn decode_contact(
-    account: u32,
-    index: u32,
-    address: &str,
-    memo: &str,
-) -> anyhow::Result<Option<Contact>> {
-    let res = if let Some(memo_line) = memo.lines().next() {
-        let name = memo_line.strip_prefix("Contact:");
-        name.map(|name| Contact {
-            account,
-            index,
-            name: name.trim().to_string(),
-            address: address.to_string(),
-        })
-    } else {
-        None
-    };
-    Ok(res)
 }
 
 #[cfg(test)]
