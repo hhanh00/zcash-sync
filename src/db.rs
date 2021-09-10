@@ -730,6 +730,13 @@ impl DbAdapter {
         self.connection.execute("DELETE FROM transactions", NO_PARAMS)?;
         Ok(())
     }
+
+    pub fn delete_account(&self, account: u32) -> anyhow::Result<()> {
+        self.connection.execute("DELETE FROM received_notes WHERE account = ?1", params![account])?;
+        self.connection.execute("DELETE FROM accounts WHERE id_account = ?1", params![account])?;
+        self.connection.execute("DELETE FROM taddrs WHERE account = ?1", params![account])?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

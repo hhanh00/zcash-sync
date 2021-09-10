@@ -502,6 +502,11 @@ impl Wallet {
         Ok(quotes.len() as u32)
     }
 
+    pub fn delete_account(&self, account: u32) -> anyhow::Result<()> {
+        self.db.delete_account(account)?;
+        Ok(())
+    }
+
     pub fn truncate_data(&self) -> anyhow::Result<()> {
         self.db.truncate_data()
     }
