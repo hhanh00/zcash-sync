@@ -10,7 +10,7 @@ use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, encode_payment_address, encode_transparent_address,
 };
 use zcash_primitives::consensus::{BlockHeight, Parameters};
-use zcash_primitives::memo::{Memo, MemoBytes};
+use zcash_primitives::memo::Memo;
 use zcash_primitives::sapling::note_encryption::{
     try_sapling_note_decryption, try_sapling_output_recovery,
 };
@@ -74,7 +74,7 @@ pub async fn decode_transaction(
 
     let mut contact_decoder = ContactDecoder::new(tx.shielded_outputs.len());
 
-    let mut tx_memo = MemoBytes::empty();
+    let mut tx_memo: Memo = Memo::Empty;
     for output in tx.vout.iter() {
         if let Some(t_address) = output.script_pubkey.address() {
             address = encode_transparent_address(
@@ -90,26 +90,33 @@ pub async fn decode_transaction(
         {
             amount += note.value as i64; // change or self transfer
             contact_decoder.add_memo(&memo)?;
+            let memo = Memo::try_from(memo)?;
             if address.is_empty() {
                 address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
+            }
+            if memo != Memo::Empty {
                 tx_memo = memo;
             }
         } else if let Some((_note, pa, memo)) =
             try_sapling_output_recovery(&NETWORK, height, &ovk, &output)
         {
             address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
-            tx_memo = memo;
+            let memo = Memo::try_from(memo)?;
+            if memo != Memo::Empty {
+                tx_memo = memo;
+            }
         }
     }
 
     let fee = u64::from(tx.value_balance);
 
-    let memo = match Memo::try_from(tx_memo)? {
-        Memo::Empty => "".to_string(),
-        Memo::Text(text) => text.to_string(),
-        Memo::Future(_) => "Unrecognized".to_string(),
-        Memo::Arbitrary(_) => "Unrecognized".to_string(),
-    };
+    let memo =
+        match tx_memo {
+            Memo::Empty => "".to_string(),
+            Memo::Text(text) => text.to_string(),
+            Memo::Future(_) => "Unrecognized".to_string(),
+            Memo::Arbitrary(_) => "Unrecognized".to_string(),
+        };
     let contacts = contact_decoder.finalize()?;
     let tx_info = TransactionInfo {
         height: u32::from(height),
