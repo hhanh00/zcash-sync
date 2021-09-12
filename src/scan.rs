@@ -224,17 +224,15 @@ pub async fn sync_async(
                     if !my_nfs.is_empty() || !my_tx_ids.is_empty() {
                         for (tx_index, tx) in b.compact_block.vtx.iter().enumerate() {
                             let mut added = false;
+                            let tx_id = TxIdHeight {
+                                height: b.height,
+                                index: tx_index as u32,
+                            };
+                            if let Some(&id_tx) = my_tx_ids.get(&tx_id) {
+                                new_ids_tx.push(id_tx);
+                                added = true;
+                            }
                             for cs in tx.spends.iter() {
-                                let tx_id = TxIdHeight {
-                                    height: b.height,
-                                    index: tx_index as u32,
-                                };
-                                if let Some(&id_tx) = my_tx_ids.get(&tx_id) {
-                                    if !added {
-                                        new_ids_tx.push(id_tx);
-                                        added = true;
-                                    }
-                                }
                                 let mut nf = [0u8; 32];
                                 nf.copy_from_slice(&cs.nf);
                                 let nf = Nf(nf);
@@ -296,7 +294,7 @@ pub async fn sync_async(
             log::info!("Witness : {}", start.elapsed().as_millis());
 
             let start = Instant::now();
-            if get_tx && !my_tx_ids.is_empty() {
+            if get_tx && !new_ids_tx.is_empty() {
                 retrieve_tx_info(&mut client, &db_path2, &new_ids_tx)
                     .await?;
             }

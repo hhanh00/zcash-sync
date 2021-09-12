@@ -75,21 +75,12 @@ pub async fn decode_transaction(
     let mut contact_decoder = ContactDecoder::new(tx.shielded_outputs.len());
 
     let mut tx_memo: Memo = Memo::Empty;
-    for output in tx.vout.iter() {
-        if let Some(t_address) = output.script_pubkey.address() {
-            address = encode_transparent_address(
-                &NETWORK.b58_pubkey_address_prefix(),
-                &NETWORK.b58_script_address_prefix(),
-                &t_address,
-            );
-        }
-    }
 
     for output in tx.shielded_outputs.iter() {
         if let Some((note, pa, memo)) = try_sapling_note_decryption(&NETWORK, height, &ivk, output)
         {
             amount += note.value as i64; // change or self transfer
-            contact_decoder.add_memo(&memo)?;
+            let _ = contact_decoder.add_memo(&memo); // ignore memo that is not for contacts
             let memo = Memo::try_from(memo)?;
             if address.is_empty() {
                 address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
