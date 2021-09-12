@@ -108,6 +108,14 @@ pub async fn decode_transaction(
         }
     }
 
+    for output in tx.vout.iter() {
+        if let Some(taddr) = output.script_pubkey.address() {
+            if address.is_empty() {
+                address = encode_transparent_address(&NETWORK.b58_pubkey_address_prefix(), &NETWORK.b58_script_address_prefix(), &taddr);
+            }
+        }
+    }
+
     let fee = u64::from(tx.value_balance);
 
     let memo =
