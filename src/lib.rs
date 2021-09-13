@@ -13,7 +13,10 @@ pub use coin::{get_branch, NETWORK, TICKER};
 // Testnet
 // pub const LWD_URL: &str = "https://testnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
-pub const LWD_URL: &str = "http://127.0.0.1:9067";
+// pub const LWD_URL: &str = "http://127.0.0.1:9067";
+
+// YCash
+pub const LWD_URL: &str = "https://lite.ycash.xyz:9067";
 
 mod builder;
 mod chain;
