@@ -9,7 +9,7 @@ use crate::{
 };
 use ff::PrimeField;
 use log::{debug, info};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ops::Range;
 use std::panic;
 use std::sync::Arc;
@@ -19,6 +19,7 @@ use tokio::sync::Mutex;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::Node;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+use std::cmp::Ordering;
 
 pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
     let fvks: HashMap<_, _> = fvks
@@ -78,6 +79,7 @@ pub type ProgressCallback = Arc<Mutex<dyn Fn(u32) + Send>>;
 
 #[derive(PartialEq, PartialOrd, Debug, Hash, Eq)]
 pub struct TxIdHeight {
+    id_tx: u32,
     height: u32,
     index: u32,
 }
@@ -148,7 +150,7 @@ pub async fn sync_async(
                 continue;
             }
 
-            let mut new_ids_tx: HashSet<u32> = HashSet::new();
+            let mut new_ids_tx: HashMap<u32, TxIdHeight> = HashMap::new();
             let mut witnesses: Vec<Witness> = vec![];
 
             { // db tx scope
@@ -185,7 +187,11 @@ pub async fn sync_async(
                             n.tx_index as u32,
                             &db_tx,
                         )?;
-                        new_ids_tx.insert(id_tx);
+                        new_ids_tx.insert(id_tx, TxIdHeight {
+                            id_tx,
+                            height: n.height,
+                            index: n.tx_index as u32,
+                        });
                         let id_note = DbAdapter::store_received_note(
                             &ReceivedNote {
                                 account: n.account,
@@ -231,7 +237,11 @@ pub async fn sync_async(
                                         tx_index as u32,
                                         &db_tx
                                     )?;
-                                    new_ids_tx.insert(id_tx);
+                                    new_ids_tx.insert(id_tx, TxIdHeight {
+                                        id_tx,
+                                        height: b.height,
+                                        index: tx_index as u32,
+                                    });
                                     DbAdapter::add_value(id_tx, -(note_value as i64), &db_tx)?;
                                 }
                             }
@@ -276,8 +286,15 @@ pub async fn sync_async(
 
             let start = Instant::now();
             if get_tx && !new_ids_tx.is_empty() {
-                let mut ids: Vec<_> = new_ids_tx.into_iter().collect();
-                ids.sort();
+                let mut ids: Vec<_> = new_ids_tx.into_iter().map(|(_,v)| v).collect();
+                ids.sort_by(|a, b| {
+                    let c = a.height.cmp(&b.height);
+                    if c == Ordering::Equal {
+                        return a.index.cmp(&b.index);
+                    }
+                    return c;
+                });
+                let ids: Vec<_> = ids.into_iter().map(|e| e.id_tx).collect();
                 retrieve_tx_info(&mut client, &db_path2, &ids)
                     .await?;
             }
