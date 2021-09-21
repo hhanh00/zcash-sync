@@ -496,9 +496,8 @@ impl Wallet {
         currency: &str,
     ) -> anyhow::Result<u32> {
         let quotes = fetch_historical_prices(now, days, currency, &self.db)
-            .await
-            .unwrap();
-        self.db.store_historical_prices(&quotes, currency).unwrap();
+            .await?;
+        self.db.store_historical_prices(&quotes, currency)?;
         Ok(quotes.len() as u32)
     }
 
