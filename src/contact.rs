@@ -108,7 +108,7 @@ mod tests {
             println!("{:?}", m);
         }
 
-        let wallet = Wallet::new("zec.db", LWD_URL);
+        let mut wallet = Wallet::new("zec.db", LWD_URL);
         let tx_id = wallet.save_contacts_tx(&memos, 1, 3).await.unwrap();
         println!("{}", tx_id);
     }

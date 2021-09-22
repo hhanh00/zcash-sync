@@ -31,13 +31,14 @@ use zcash_proofs::prover::LocalTxProver;
 use zcash_primitives::memo::Memo;
 use std::str::FromStr;
 use crate::contact::{Contact, serialize_contacts};
+use lazycell::AtomicLazyCell;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
 pub struct Wallet {
     pub db_path: String,
     db: DbAdapter,
-    prover: LocalTxProver,
+    prover: AtomicLazyCell<LocalTxProver>,
     pub ld_url: String,
 }
 
@@ -83,13 +84,12 @@ impl From<&Recipient> for RecipientMemo {
 
 impl Wallet {
     pub fn new(db_path: &str, ld_url: &str) -> Wallet {
-        let prover = LocalTxProver::from_bytes(SPEND_PARAMS, OUTPUT_PARAMS);
         let db = DbAdapter::new(db_path).unwrap();
         db.init_db().unwrap();
         Wallet {
             db_path: db_path.to_string(),
             db,
-            prover,
+            prover: AtomicLazyCell::new(),
             ld_url: ld_url.to_string(),
         }
     }
@@ -336,8 +336,11 @@ impl Wallet {
                              Amount::zero()).await?;
         }
 
+        self._ensure_prover()?;
+        let prover = self.prover.borrow().unwrap();
+
         let consensus_branch_id = get_branch(last_height);
-        let (tx, _) = builder.build(consensus_branch_id, &self.prover)?;
+        let (tx, _) = builder.build(consensus_branch_id, prover)?;
         log::info!("Tx built");
         let mut raw_tx: Vec<u8> = vec![];
         tx.write(&mut raw_tx)?;
@@ -352,6 +355,14 @@ impl Wallet {
         }
         db_tx.commit()?;
         Ok(tx_id)
+    }
+
+    fn _ensure_prover(&mut self) -> anyhow::Result<()> {
+        if !self.prover.filled() {
+            let prover = LocalTxProver::from_bytes(SPEND_PARAMS, OUTPUT_PARAMS);
+            self.prover.fill(prover).map_err(|_| anyhow::anyhow!("dup prover"))?;
+        }
+        Ok(())
     }
 
     pub fn get_ivk(&self, account: u32) -> anyhow::Result<String> {
@@ -385,8 +396,10 @@ impl Wallet {
         Ok(balance)
     }
 
-    pub async fn shield_taddr(&self, account: u32) -> anyhow::Result<String> {
-        shield_taddr(&self.db, account, &self.prover, &self.ld_url).await
+    pub async fn shield_taddr(&mut self, account: u32) -> anyhow::Result<String> {
+        self._ensure_prover()?;
+        let prover = self.prover.borrow().unwrap();
+        shield_taddr(&self.db, account, prover, &self.ld_url).await
     }
 
     pub fn store_contact(&self, id: u32, name: &str, address: &str, dirty: bool) -> anyhow::Result<()> {
@@ -399,14 +412,14 @@ impl Wallet {
         Ok(())
     }
 
-    pub async fn commit_unsaved_contacts(&self, account: u32, anchor_offset: u32) -> anyhow::Result<String> {
+    pub async fn commit_unsaved_contacts(&mut self, account: u32, anchor_offset: u32) -> anyhow::Result<String> {
         let contacts = self.db.get_unsaved_contacts()?;
         let memos = serialize_contacts(&contacts)?;
         let tx_id = self.save_contacts_tx(&memos, account, anchor_offset).await.unwrap();
         Ok(tx_id)
     }
 
-    pub async fn save_contacts_tx(&self, memos: &[Memo], account: u32, anchor_offset: u32) -> anyhow::Result<String> {
+    pub async fn save_contacts_tx(&mut self, memos: &[Memo], account: u32, anchor_offset: u32) -> anyhow::Result<String> {
         let mut client = connect_lightwalletd(&self.ld_url).await?;
         let last_height = get_latest_height(&mut client).await?;
 
@@ -427,8 +440,10 @@ impl Wallet {
         }).collect();
         prepare_tx(&mut builder, Some(skey), &notes, DEFAULT_FEE, &extfvk, &recipients)?;
 
+        self._ensure_prover()?;
+        let prover = self.prover.borrow().unwrap();
         let consensus_branch_id = get_branch(last_height);
-        let (tx, _) = builder.build(consensus_branch_id, &self.prover)?;
+        let (tx, _) = builder.build(consensus_branch_id, prover)?;
         let mut raw_tx: Vec<u8> = vec![];
         tx.write(&mut raw_tx)?;
 
