@@ -76,6 +76,12 @@ pub async fn decode_transaction(
 
     let mut tx_memo: Memo = Memo::Empty;
 
+    for output in tx.vout.iter() {
+        if let Some(taddr) = output.script_pubkey.address() {
+            address = encode_transparent_address(&NETWORK.b58_pubkey_address_prefix(), &NETWORK.b58_script_address_prefix(), &taddr);
+        }
+    }
+
     for output in tx.shielded_outputs.iter() {
         if let Some((note, pa, memo)) = try_sapling_note_decryption(&NETWORK, height, &ivk, output)
         {
@@ -95,14 +101,6 @@ pub async fn decode_transaction(
             let memo = Memo::try_from(memo)?;
             if memo != Memo::Empty {
                 tx_memo = memo;
-            }
-        }
-    }
-
-    for output in tx.vout.iter() {
-        if let Some(taddr) = output.script_pubkey.address() {
-            if address.is_empty() {
-                address = encode_transparent_address(&NETWORK.b58_pubkey_address_prefix(), &NETWORK.b58_script_address_prefix(), &taddr);
             }
         }
     }
