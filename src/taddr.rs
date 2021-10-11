@@ -82,6 +82,14 @@ pub async fn add_shield_taddr(builder: &mut Builder<'_, Network, OsRng>,
     }
     let amount = amount - fee;
 
+    add_utxos(builder, &mut client, db, account, &t_address).await?;
+
+    let ovk = fvk.fvk.ovk;
+    builder.add_sapling_output(Some(ovk), pa, amount, None)?;
+    Ok(())
+}
+
+pub async fn add_utxos(builder: &mut Builder<'_, Network, OsRng>, client: &mut CompactTxStreamerClient<Channel>, db: &DbAdapter, account: u32, t_address: &str) -> anyhow::Result<()> {
     let sk = db.get_tsk(account)?;
     let seckey = secp256k1::SecretKey::from_str(&sk).context("Cannot parse secret key")?;
 
@@ -107,8 +115,6 @@ pub async fn add_shield_taddr(builder: &mut Builder<'_, Network, OsRng>,
         builder.add_transparent_input(seckey, op, txout)?;
     }
 
-    let ovk = fvk.fvk.ovk;
-    builder.add_sapling_output(Some(ovk), pa, amount, None)?;
     Ok(())
 }
 

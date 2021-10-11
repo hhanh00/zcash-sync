@@ -13,7 +13,7 @@ use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
 use zcash_primitives::memo::{MemoBytes, Memo};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::keys::OutgoingViewingKey;
-use zcash_primitives::sapling::{Diversifier, Node, Rseed};
+use zcash_primitives::sapling::{Diversifier, Node, Rseed, PaymentAddress};
 use zcash_primitives::transaction::builder::Builder;
 use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
 use zcash_primitives::transaction::components::Amount;
@@ -72,6 +72,7 @@ pub trait TxBuilder {
         amount: Amount,
         memo: &Memo,
     ) -> anyhow::Result<()>;
+    fn set_change(&mut self, ovk: &OutgoingViewingKey, address: &PaymentAddress) -> anyhow::Result<()>;
 }
 
 pub struct ColdTxBuilder {
@@ -137,6 +138,8 @@ impl TxBuilder for ColdTxBuilder {
         self.tx.outputs.push(tx_out);
         Ok(())
     }
+
+    fn set_change(&mut self, _ovk: &OutgoingViewingKey, _address: &PaymentAddress) -> anyhow::Result<()> { Ok(()) }
 }
 
 impl TxBuilder for Builder<'_, Network, OsRng> {
@@ -186,53 +189,63 @@ impl TxBuilder for Builder<'_, Network, OsRng> {
         }
         Ok(())
     }
+
+    fn set_change(&mut self,
+                  ovk: &OutgoingViewingKey,
+                  address: &PaymentAddress) -> anyhow::Result<()> {
+        self.send_change_to(ovk.clone(), address.clone());
+        Ok(())
+    }
 }
 
 pub fn prepare_tx<B: TxBuilder>(
     builder: &mut B,
     skey: Option<ExtendedSpendingKey>,
     notes: &[SpendableNote],
-    target_amount: Amount,
+    target_amount: Option<Amount>,
     fvk: &ExtendedFullViewingKey,
     recipients: &[RecipientMemo],
 ) -> anyhow::Result<Vec<u32>> {
-    let mut amount = target_amount;
-    amount += DEFAULT_FEE;
-    let target_amount_with_fee = amount;
     let mut selected_notes: Vec<u32> = vec![];
-    for n in notes.iter() {
-        if amount.is_positive() {
-            let a = amount.min(
-                Amount::from_u64(n.note.value).map_err(|_| anyhow::anyhow!("Invalid amount"))?,
-            );
-            amount -= a;
-            let mut witness_bytes: Vec<u8> = vec![];
-            n.witness.write(&mut witness_bytes)?;
-            if let Rseed::BeforeZip212(rseed) = n.note.rseed {
-                // rseed are stored as pre-zip212
-                builder.add_input(
-                    skey.clone(),
-                    &n.diversifier,
-                    fvk,
-                    Amount::from_u64(n.note.value).unwrap(),
-                    &rseed.to_bytes(),
-                    &witness_bytes,
-                )?;
-                selected_notes.push(n.id);
+    if let Some(a) = target_amount {
+        let mut amount = a + DEFAULT_FEE;
+        let target_amount_with_fee = amount;
+        for n in notes.iter() {
+            if amount.is_positive() {
+                let a = amount.min(
+                    Amount::from_u64(n.note.value).map_err(|_| anyhow::anyhow!("Invalid amount"))?,
+                );
+                amount -= a;
+                let mut witness_bytes: Vec<u8> = vec![];
+                n.witness.write(&mut witness_bytes)?;
+                if let Rseed::BeforeZip212(rseed) = n.note.rseed {
+                    // rseed are stored as pre-zip212
+                    builder.add_input(
+                        skey.clone(),
+                        &n.diversifier,
+                        fvk,
+                        Amount::from_u64(n.note.value).unwrap(),
+                        &rseed.to_bytes(),
+                        &witness_bytes,
+                    )?;
+                    selected_notes.push(n.id);
+                }
             }
         }
-    }
-    if amount.is_positive() {
-        log::info!("Not enough balance");
-        anyhow::bail!(
+        if amount.is_positive() {
+            log::info!("Not enough balance");
+            anyhow::bail!(
             "Not enough balance, need {} zats, missing {} zats",
             u64::from(target_amount_with_fee),
             u64::from(amount)
         );
+        }
     }
 
     log::info!("Preparing tx");
     let ovk = &fvk.fvk.ovk;
+    let (_, change) = fvk.default_address().unwrap();
+    builder.set_change(&ovk, &change)?;
 
     for r in recipients.iter() {
         let to_addr = RecipientAddress::decode(&NETWORK, &r.address)

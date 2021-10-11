@@ -5,7 +5,7 @@ use crate::pay::prepare_tx;
 use crate::pay::{ColdTxBuilder, Tx};
 use crate::prices::fetch_historical_prices;
 use crate::scan::ProgressCallback;
-use crate::taddr::{get_taddr_balance, shield_taddr, add_shield_taddr};
+use crate::taddr::{get_taddr_balance, shield_taddr, add_utxos};
 use crate::{
     connect_lightwalletd, get_branch, get_latest_height, BlockId, CTree, DbAdapter, NETWORK,
 };
@@ -273,7 +273,7 @@ impl Wallet {
         .unwrap();
         let notes = self.get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
         let mut builder = ColdTxBuilder::new(last_height);
-        prepare_tx(&mut builder, None, &notes, amount, &extfvk, recipients)?;
+        prepare_tx(&mut builder, None, &notes, Some(amount), &extfvk, recipients)?;
         Ok(builder.tx)
     }
 
@@ -285,11 +285,11 @@ impl Wallet {
         memo: &str,
         max_amount_per_note: u64,
         anchor_offset: u32,
-        shield_transparent_balance: bool,
+        use_transparent: bool,
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
         let recipients = Self::_build_recipients(to_address, amount, max_amount_per_note, memo)?;
-        self._send_payment(account, &recipients, anchor_offset, shield_transparent_balance, progress_callback)
+        self._send_payment(account, &recipients, anchor_offset, use_transparent, progress_callback)
             .await
     }
 
@@ -298,11 +298,28 @@ impl Wallet {
         account: u32,
         recipients: &[RecipientMemo],
         anchor_offset: u32,
-        shield_transparent_balance: bool,
+        use_transparent: bool,
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<String> {
+        let mut client = connect_lightwalletd(&self.ld_url).await?;
+        let mut t_amount = Amount::zero();
+        if use_transparent {
+            let t_address = self.db.get_taddr(account)?;
+            if let Some(t_address) = t_address {
+                t_amount = Amount::from_u64(get_taddr_balance(&mut client, &t_address).await?).unwrap();
+            }
+        }
+
         let secret_key = self.db.get_sk(account)?;
-        let target_amount = Amount::from_u64(recipients.iter().map(|r| r.amount).sum()).unwrap();
+        let _target_amount = Amount::from_u64(recipients.iter().map(|r| r.amount).sum()).unwrap();
+        let target_amount =
+            if _target_amount + DEFAULT_FEE > t_amount {
+                Some(_target_amount - t_amount)
+            }
+            else {
+                None
+            }; // DEFAULT_FEE is not part of target_amount
+
         let skey =
             decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &secret_key)?
                 .unwrap();
@@ -332,12 +349,13 @@ impl Wallet {
             }
         });
 
-        if shield_transparent_balance {
-            add_shield_taddr(&mut builder,
-                             &self.db,
-                             account,
-                             &self.ld_url,
-                             Amount::zero()).await?;
+        if use_transparent {
+            let t_address = self.db.get_taddr(account)?.unwrap();
+            add_utxos(&mut builder,
+                     &mut client,
+                     &self.db,
+                     account,
+                     &t_address).await?;
         }
 
         self._ensure_prover()?;
@@ -442,7 +460,7 @@ impl Wallet {
                 memo: m.clone(),
             }
         }).collect();
-        prepare_tx(&mut builder, Some(skey), &notes, DEFAULT_FEE, &extfvk, &recipients)?;
+        prepare_tx(&mut builder, Some(skey), &notes, Some(Amount::zero()), &extfvk, &recipients)?;
 
         self._ensure_prover()?;
         let prover = self.prover.borrow().unwrap();
