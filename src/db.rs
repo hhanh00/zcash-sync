@@ -473,12 +473,20 @@ impl DbAdapter {
 
     pub fn purge_old_witnesses(&self, height: u32) -> anyhow::Result<()> {
         log::debug!("+purge_old_witnesses");
-        self.connection.execute(
-            "DELETE FROM sapling_witnesses WHERE height < ?1",
-            params![height],
-        )?;
-        self.connection
-            .execute("DELETE FROM blocks WHERE height < ?1", params![height])?;
+        let min_height: Option<u32> = self.connection.query_row(
+            "SELECT MAX(height) FROM sapling_witnesses WHERE height <= ?1",
+           params![height], |row| row.get(0))?;
+
+        // Leave at least one sapling witness
+        if let Some(min_height) = min_height {
+            log::debug!("Purging witnesses older than {}", min_height);
+            self.connection.execute(
+                "DELETE FROM sapling_witnesses WHERE height < ?1",
+                params![min_height],
+            )?;
+            self.connection
+                .execute("DELETE FROM blocks WHERE height < ?1", params![min_height])?;
+        }
         log::debug!("-purge_old_witnesses");
         Ok(())
     }
