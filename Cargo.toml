@@ -63,16 +63,16 @@ reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-featu
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
-branch = "warp-sync"
+rev = "6baf1ba63261dda09e5b1d4b476977842a1f61c8"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
-branch = "warp-sync"
+rev = "6baf1ba63261dda09e5b1d4b476977842a1f61c8"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 git = "https://github.com/hhanh00/librustzcash.git"
-branch = "warp-sync"
+rev = "6baf1ba63261dda09e5b1d4b476977842a1f61c8"
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
