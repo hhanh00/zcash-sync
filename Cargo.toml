@@ -79,8 +79,7 @@ git = "https://github.com/hhanh00/librustzcash.git"
 rev = "1518b145f8ee67e144fa8337c7dfd4c8cff899c9"
 
 [dependencies.zcash_params]
-git = "https://github.com/hhanh00/zcash-params.git"
-rev = "f54214d0a6752188efd1404e39b10be58a27ea0f"
+path = "../zcash-params"
 
 [dependencies.zcash_address]
 git = "https://github.com/hhanh00/librustzcash.git"
