@@ -32,7 +32,6 @@ use zcash_primitives::memo::Memo;
 use zcash_primitives::transaction::builder::Progress;
 use zcash_primitives::transaction::components::Amount;
 use zcash_proofs::prover::LocalTxProver;
-use zcash_multisig::{SecretShare, split_account};
 use zcash_params::coin::TICKER;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
@@ -134,6 +133,11 @@ impl Wallet {
             return Ok(sk);
         }
         Ok(ivk)
+    }
+
+    pub fn get_sk(&self, account: u32) -> anyhow::Result<String> {
+        let sk = self.db.get_sk(account)?;
+        Ok(sk)
     }
 
     pub fn new_account_with_key(&self, name: &str, key: &str) -> anyhow::Result<i32> {
@@ -531,32 +535,18 @@ impl Wallet {
         Ok(payment_json)
     }
 
-    pub fn store_share_secret(&self, account: u32, secret: &str) -> anyhow::Result<()> {
-        let share = SecretShare::decode(secret)?;
+    pub fn store_share_secret(&self, account: u32, secret: &str, index: usize, threshold: usize, participants: usize) -> anyhow::Result<()> {
         self.db.store_share_secret(
             account,
             secret,
-            share.index,
-            share.threshold,
-            share.participants,
+            index,
+            threshold,
+            participants,
         )
     }
 
     pub fn get_share_secret(&self, account: u32) -> anyhow::Result<String> {
         self.db.get_share_secret(account)
-    }
-
-    pub fn split_account(&self, t: usize, n: usize, account: u32) -> anyhow::Result<String> {
-        let sk = self.db.get_sk(account)?;
-        let esk = decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &sk)
-            .unwrap()
-            .unwrap();
-        let secret_key = esk.expsk.ask;
-        let nsk = esk.expsk.nsk;
-        let shares = split_account(t, n, secret_key, nsk)?;
-        let shares: Vec<_> = shares.iter().map(|s| s.encode().unwrap()).collect();
-        let res = shares.join("|");
-        Ok(res)
     }
 
     pub fn parse_recipients(recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> {

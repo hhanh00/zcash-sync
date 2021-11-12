@@ -63,10 +63,6 @@ bech32 = "0.8.1"
 rand_chacha = "0.3.1"
 blake2b_simd = "0.5.11"
 
-[dependencies.zcash_multisig]
-git = "https://github.com/hhanh00/zcash-multisig.git"
-rev = "ce5baab5a25021950f51a9d53dc6c39ea9fe2997"
-
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 
 [dependencies.zcash_client_backend]
