@@ -2,7 +2,9 @@ use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
 use rand::{thread_rng, RngCore};
 use rusqlite::NO_PARAMS;
-use sync::{pedersen_hash, print_witness2, ChainError, DbAdapter, Wallet, Witness, LWD_URL};
+use sync::{
+    pedersen_hash, print_witness2, ChainError, DbAdapter, RecipientMemo, Wallet, Witness, LWD_URL,
+};
 use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
 use zcash_primitives::merkle_tree::Hashable;
 use zcash_primitives::sapling::Node;
@@ -20,14 +22,14 @@ async fn test() -> anyhow::Result<()> {
     dotenv::dotenv().unwrap();
     env_logger::init();
 
-    let seed = dotenv::var("SEED").unwrap();
-    let seed2 = dotenv::var("SEED2").unwrap();
-    let ivk = dotenv::var("IVK").unwrap();
+    let seed = dotenv::var("SEED3").unwrap();
+    // let seed2 = dotenv::var("SEED2").unwrap();
+    // let ivk = dotenv::var("IVK").unwrap();
     let address = dotenv::var("ADDRESS").unwrap();
     let progress = |height| {
         log::info!("Height = {}", height);
     };
-    let wallet = Wallet::new(DB_NAME, LWD_URL);
+    let mut wallet = Wallet::new(DB_NAME, LWD_URL);
     wallet.new_account_with_key("main", &seed).unwrap();
     // wallet.new_account_with_key("test", &seed2).unwrap();
     // wallet.new_account_with_key("zecpages", &ivk).unwrap();
@@ -56,11 +58,24 @@ async fn test() -> anyhow::Result<()> {
     //     .unwrap();
     // println!("TXID = {}", tx_id);
 
-    let tx = wallet
-        .prepare_payment(1, &address, 50000, "test memo", 0, 2)
-        .await
-        .unwrap();
-    println!("TX = {}", tx);
+    // let last_height = wallet.get_latest_height().await.unwrap();
+    // let tx = wallet
+    //     .build_sign_send_multi_payment(
+    //         1,
+    //         last_height,
+    //         &[RecipientMemo {
+    //             address,
+    //             amount: 1000,
+    //             memo: Default::default(),
+    //             max_amount_per_note: 0,
+    //         }],
+    //         false,
+    //         ANCHOR_OFFSET,
+    //         |_| {},
+    //     )
+    //     .await
+    //     .unwrap();
+    // println!("TX = {}", tx);
 
     Ok(())
 }

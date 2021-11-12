@@ -1,41 +1,39 @@
-use crate::chain::send_transaction;
-use crate::db::SpendableNote;
+use crate::contact::{serialize_contacts, Contact};
 use crate::key::{decode_key, is_valid_key};
-use crate::pay::prepare_tx;
-use crate::pay::{ColdTxBuilder, Tx};
+use crate::pay::Tx;
+use crate::pay::TxBuilder;
 use crate::prices::fetch_historical_prices;
 use crate::scan::ProgressCallback;
-use crate::taddr::{get_taddr_balance, shield_taddr, add_utxos};
+use crate::taddr::{get_taddr_balance, get_utxos};
 use crate::{
-    connect_lightwalletd, get_branch, get_latest_height, BlockId, CTree, DbAdapter, NETWORK,
+    broadcast_tx, connect_lightwalletd, get_latest_height, BlockId, CTree,
+    DbAdapter, NETWORK,
 };
 use bip39::{Language, Mnemonic};
-use rand::prelude::SliceRandom;
+use lazycell::AtomicLazyCell;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use secp256k1::SecretKey;
 use serde::Deserialize;
-use std::sync::{mpsc, Arc};
+use serde::Serialize;
+use std::convert::TryFrom;
+use std::str::FromStr;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key, encode_payment_address,
 };
-use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
-use zcash_primitives::consensus::{BlockHeight, Parameters};
-use zcash_primitives::transaction::builder::{Builder, Progress};
-use zcash_primitives::transaction::components::amount::{MAX_MONEY, DEFAULT_FEE};
-use zcash_primitives::transaction::components::Amount;
-use zcash_primitives::zip32::ExtendedFullViewingKey;
-use zcash_proofs::prover::LocalTxProver;
-use zcash_primitives::memo::Memo;
-use std::str::FromStr;
-use crate::contact::{Contact, serialize_contacts};
-use lazycell::AtomicLazyCell;
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
-use crate::coin::TICKER;
-use std::convert::TryFrom;
-use serde::Serialize;
+use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
+use zcash_primitives::consensus::Parameters;
+use zcash_primitives::memo::Memo;
+use zcash_primitives::transaction::builder::Progress;
+use zcash_primitives::transaction::components::Amount;
+use zcash_proofs::prover::LocalTxProver;
+use zcash_multisig::{SecretShare, split_account};
+use zcash_params::coin::TICKER;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -63,17 +61,24 @@ impl Default for WalletBalance {
     }
 }
 
+//     to_address: &str,
+//     amount: u64,
+//     memo: &str,
+//     max_amount_per_note: u64,
+
 #[derive(Deserialize)]
 pub struct Recipient {
     pub address: String,
     pub amount: u64,
     pub memo: String,
+    pub max_amount_per_note: u64,
 }
 
 pub struct RecipientMemo {
     pub address: String,
     pub amount: u64,
     pub memo: Memo,
+    pub max_amount_per_note: u64,
 }
 
 impl From<&Recipient> for RecipientMemo {
@@ -82,6 +87,7 @@ impl From<&Recipient> for RecipientMemo {
             address: r.address.clone(),
             amount: r.amount,
             memo: Memo::from_str(&r.memo).unwrap(),
+            max_amount_per_note: r.max_amount_per_note,
         }
     }
 }
@@ -98,7 +104,7 @@ impl Wallet {
         }
     }
 
-    pub fn valid_key(key: &str) -> bool {
+    pub fn valid_key(key: &str) -> i8 {
         is_valid_key(key)
     }
 
@@ -227,162 +233,128 @@ impl Wallet {
         self.db.trim_to_height(height)
     }
 
-    pub async fn send_multi_payment(
-        &mut self,
-        account: u32,
-        recipients_json: &str,
-        anchor_offset: u32,
-        progress_callback: impl Fn(Progress) + Send + 'static,
-    ) -> anyhow::Result<String> {
-        let recipients: Vec<Recipient> = serde_json::from_str(recipients_json)?;
-        let recipients: Vec<_> = recipients.iter().map(|r| RecipientMemo::from(r)).collect();
-        self._send_payment(account, &recipients, anchor_offset, false, progress_callback)
-            .await
-    }
-
-    pub async fn prepare_payment(
+    async fn prepare_multi_payment(
         &self,
         account: u32,
-        to_address: &str,
-        amount: u64,
-        memo: &str,
-        max_amount_per_note: u64,
-        anchor_offset: u32,
-    ) -> anyhow::Result<String> {
-        let last_height = self.get_latest_height().await?;
-        let recipients = Self::_build_recipients(to_address, amount, max_amount_per_note, memo)?;
-        let tx = self._prepare_payment(account, amount, last_height, &recipients, anchor_offset)?;
-        let tx_str = serde_json::to_string(&tx)?;
-        Ok(tx_str)
-    }
-
-    fn _prepare_payment(
-        &self,
-        account: u32,
-        amount: u64,
         last_height: u32,
         recipients: &[RecipientMemo],
-        anchor_offset: u32,
-    ) -> anyhow::Result<Tx> {
-        let amount = Amount::from_u64(amount).unwrap();
-        let ivk = self.db.get_ivk(account)?;
-        let extfvk = decode_extended_full_viewing_key(
-            NETWORK.hrp_sapling_extended_full_viewing_key(),
-            &ivk,
-        )?
-        .unwrap();
-        let notes = self.get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
-        let mut builder = ColdTxBuilder::new(last_height);
-        prepare_tx(&mut builder, None, &notes, Some(amount), &extfvk, recipients)?;
-        Ok(builder.tx)
-    }
-
-    pub async fn send_payment(
-        &mut self,
-        account: u32,
-        to_address: &str,
-        amount: u64,
-        memo: &str,
-        max_amount_per_note: u64,
-        anchor_offset: u32,
         use_transparent: bool,
-        progress_callback: impl Fn(Progress) + Send + 'static,
-    ) -> anyhow::Result<String> {
-        let recipients = Self::_build_recipients(to_address, amount, max_amount_per_note, memo)?;
-        self._send_payment(account, &recipients, anchor_offset, use_transparent, progress_callback)
-            .await
-    }
-
-    async fn _send_payment(
-        &mut self,
-        account: u32,
-        recipients: &[RecipientMemo],
         anchor_offset: u32,
-        use_transparent: bool,
-        progress_callback: impl Fn(Progress) + Send + 'static,
-    ) -> anyhow::Result<String> {
-        let mut client = connect_lightwalletd(&self.ld_url).await?;
-        let mut t_amount = Amount::zero();
-        if use_transparent {
-            let t_address = self.db.get_taddr(account)?;
-            if let Some(t_address) = t_address {
-                t_amount = Amount::from_u64(get_taddr_balance(&mut client, &t_address).await?).unwrap();
-            }
-        }
+    ) -> anyhow::Result<(Tx, Vec<u32>)> {
+        let mut tx_builder = TxBuilder::new(last_height);
 
-        let secret_key = self.db.get_sk(account)?;
-        let _target_amount = Amount::from_u64(recipients.iter().map(|r| r.amount).sum()).unwrap();
-        let target_amount =
-            if _target_amount + DEFAULT_FEE > t_amount {
-                Some(_target_amount - t_amount)
-            }
-            else {
-                None
-            }; // DEFAULT_FEE is not part of target_amount
-
-        let skey =
-            decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &secret_key)?
+        let fvk = self.db.get_ivk(account)?;
+        let fvk =
+            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
+                .unwrap()
                 .unwrap();
-        let extfvk = ExtendedFullViewingKey::from(&skey);
-        let last_height = self.get_latest_height().await?;
-        let notes = self.get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
-        log::info!("Spendable notes = {}", notes.len());
+        let utxos = if use_transparent {
+            let mut client = connect_lightwalletd(&self.ld_url).await?;
+            get_utxos(&mut client, &self.db, account).await?
+        } else {
+            vec![]
+        };
 
-        let mut builder = Builder::new(NETWORK, BlockHeight::from_u32(last_height));
-        log::info!("Preparing tx");
-        let selected_notes = prepare_tx(
-            &mut builder,
-            Some(skey.clone()),
-            &notes,
-            target_amount,
-            &extfvk,
-            recipients,
-        )?;
+        let target_amount: u64 = recipients.iter().map(|r| r.amount).sum();
+        let anchor_height = last_height.saturating_sub(anchor_offset);
+        let spendable_notes = self.db.get_spendable_notes(account, anchor_height, &fvk)?;
+        let note_ids = tx_builder.select_inputs(&fvk, &spendable_notes, &utxos, target_amount)?;
+        tx_builder.select_outputs(&fvk, recipients)?;
+        Ok((tx_builder.tx, note_ids))
+    }
 
-        let (progress_tx, progress_rx) = mpsc::channel::<Progress>();
-
-        builder.with_progress_notifier(progress_tx);
-        tokio::spawn(async move {
-            while let Ok(progress) = progress_rx.recv() {
-                log::info!("Progress: {}", progress.cur());
-                progress_callback(progress);
-            }
-        });
-
-        if use_transparent {
-            let t_address = self.db.get_taddr(account)?.unwrap();
-            add_utxos(&mut builder,
-                     &mut client,
-                     &self.db,
-                     account,
-                     &t_address).await?;
-        }
-
+    fn sign(
+        &mut self,
+        tx: &Tx,
+        account: u32,
+        progress_callback: impl Fn(Progress) + Send + 'static,
+    ) -> anyhow::Result<Vec<u8>> {
         self._ensure_prover()?;
-        let prover = self.prover.borrow().unwrap();
+        let zsk = self.db.get_sk(account)?;
+        let tsk = self
+            .db
+            .get_tsk(account)?
+            .map(|tsk| SecretKey::from_str(&tsk).unwrap());
+        let extsk = decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &zsk)
+            .unwrap()
+            .unwrap();
+        let prover = self
+            .prover
+            .borrow()
+            .ok_or_else(|| anyhow::anyhow!("Prover not initialized"))?;
+        let raw_tx = tx.sign(tsk, &extsk, prover, progress_callback)?;
+        Ok(raw_tx)
+    }
 
-        let consensus_branch_id = get_branch(last_height);
-        let (tx, _) = builder.build(consensus_branch_id, prover)?;
-        log::info!("Tx built");
-        let mut raw_tx: Vec<u8> = vec![];
-        tx.write(&mut raw_tx)?;
-
-        let mut client = connect_lightwalletd(&self.ld_url).await?;
-        let tx_id = send_transaction(&mut client, &raw_tx, last_height).await?;
-        log::info!("Tx ID = {}", tx_id);
-
+    fn mark_spend(&mut self, selected_notes: &[u32]) -> anyhow::Result<()> {
         let db_tx = self.db.begin_transaction()?;
         for id_note in selected_notes.iter() {
             DbAdapter::mark_spent(*id_note, 0, &db_tx)?;
         }
         db_tx.commit()?;
+        Ok(())
+    }
+
+    /// Build a multi payment for offline signing
+    pub async fn build_only_multi_payment(
+        &mut self,
+        account: u32,
+        last_height: u32,
+        recipients: &[RecipientMemo],
+        use_transparent: bool,
+        anchor_offset: u32,
+    ) -> anyhow::Result<String> {
+        let (tx, _) = self
+            .prepare_multi_payment(
+                account,
+                last_height,
+                recipients,
+                use_transparent,
+                anchor_offset,
+            )
+            .await?;
+        let tx_str = serde_json::to_string(&tx)?;
+        Ok(tx_str)
+    }
+
+    /// Build, sign and broadcast a multi payment
+    pub async fn build_sign_send_multi_payment(
+        &mut self,
+        account: u32,
+        last_height: u32,
+        recipients: &[RecipientMemo],
+        use_transparent: bool,
+        anchor_offset: u32,
+        progress_callback: impl Fn(Progress) + Send + 'static,
+    ) -> anyhow::Result<String> {
+        let (tx, note_ids) = self
+            .prepare_multi_payment(
+                account,
+                last_height,
+                recipients,
+                use_transparent,
+                anchor_offset,
+            )
+            .await?;
+        let raw_tx = self.sign(&tx, account, progress_callback)?;
+        let tx_id = broadcast_tx(&raw_tx, &self.ld_url).await?;
+        self.mark_spend(&note_ids)?;
+        Ok(tx_id)
+    }
+
+    pub async fn shield_taddr(&mut self, account: u32, last_height: u32) -> anyhow::Result<String> {
+        let tx_id = self
+            .build_sign_send_multi_payment(account, last_height, &[], true, 0, |_| {})
+            .await?;
         Ok(tx_id)
     }
 
     fn _ensure_prover(&mut self) -> anyhow::Result<()> {
         if !self.prover.filled() {
             let prover = LocalTxProver::from_bytes(SPEND_PARAMS, OUTPUT_PARAMS);
-            self.prover.fill(prover).map_err(|_| anyhow::anyhow!("dup prover"))?;
+            self.prover
+                .fill(prover)
+                .map_err(|_| anyhow::anyhow!("dup prover"))?;
         }
         Ok(())
     }
@@ -418,13 +390,13 @@ impl Wallet {
         Ok(balance)
     }
 
-    pub async fn shield_taddr(&mut self, account: u32) -> anyhow::Result<String> {
-        self._ensure_prover()?;
-        let prover = self.prover.borrow().unwrap();
-        shield_taddr(&self.db, account, prover, &self.ld_url).await
-    }
-
-    pub fn store_contact(&self, id: u32, name: &str, address: &str, dirty: bool) -> anyhow::Result<()> {
+    pub fn store_contact(
+        &self,
+        id: u32,
+        name: &str,
+        address: &str,
+        dirty: bool,
+    ) -> anyhow::Result<()> {
         let contact = Contact {
             id,
             name: name.to_string(),
@@ -434,43 +406,49 @@ impl Wallet {
         Ok(())
     }
 
-    pub async fn commit_unsaved_contacts(&mut self, account: u32, anchor_offset: u32) -> anyhow::Result<String> {
+    pub async fn commit_unsaved_contacts(
+        &mut self,
+        account: u32,
+        anchor_offset: u32,
+    ) -> anyhow::Result<String> {
         let contacts = self.db.get_unsaved_contacts()?;
         let memos = serialize_contacts(&contacts)?;
-        let tx_id = self.save_contacts_tx(&memos, account, anchor_offset).await.unwrap();
+        let tx_id = self
+            .save_contacts_tx(&memos, account, anchor_offset)
+            .await
+            .unwrap();
         Ok(tx_id)
     }
 
-    pub async fn save_contacts_tx(&mut self, memos: &[Memo], account: u32, anchor_offset: u32) -> anyhow::Result<String> {
+    pub async fn save_contacts_tx(
+        &mut self,
+        memos: &[Memo],
+        account: u32,
+        anchor_offset: u32,
+    ) -> anyhow::Result<String> {
         let mut client = connect_lightwalletd(&self.ld_url).await?;
         let last_height = get_latest_height(&mut client).await?;
-
-        let secret_key = self.db.get_sk(account)?;
         let address = self.db.get_address(account)?;
-        let skey = decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &secret_key)?.unwrap();
-        let extfvk = ExtendedFullViewingKey::from(&skey);
-        let notes = self.get_spendable_notes(account, &extfvk, last_height, anchor_offset)?;
-
-        let mut builder = Builder::new(NETWORK, BlockHeight::from_u32(last_height));
-
-        let recipients: Vec<_> = memos.iter().map(|m| {
-            RecipientMemo {
+        let recipients: Vec<_> = memos
+            .iter()
+            .map(|m| RecipientMemo {
                 address: address.clone(),
                 amount: 0,
                 memo: m.clone(),
-            }
-        }).collect();
-        prepare_tx(&mut builder, Some(skey), &notes, Some(Amount::zero()), &extfvk, &recipients)?;
+                max_amount_per_note: 0,
+            })
+            .collect();
 
-        self._ensure_prover()?;
-        let prover = self.prover.borrow().unwrap();
-        let consensus_branch_id = get_branch(last_height);
-        let (tx, _) = builder.build(consensus_branch_id, prover)?;
-        let mut raw_tx: Vec<u8> = vec![];
-        tx.write(&mut raw_tx)?;
-
-        let tx_id = send_transaction(&mut client, &raw_tx, last_height).await?;
-        log::info!("Tx ID = {}", tx_id);
+        let tx_id = self
+            .build_sign_send_multi_payment(
+                account,
+                last_height,
+                &recipients,
+                false,
+                anchor_offset,
+                |_| {},
+            )
+            .await?;
         Ok(tx_id)
     }
 
@@ -479,61 +457,13 @@ impl Wallet {
         Ok(())
     }
 
-    pub fn get_spendable_notes(
-        &self,
-        account: u32,
-        extfvk: &ExtendedFullViewingKey,
-        last_height: u32,
-        anchor_offset: u32,
-    ) -> anyhow::Result<Vec<SpendableNote>> {
-        let anchor_height = self.db
-            .get_last_sync_height()?
-            .ok_or_else(|| anyhow::anyhow!("No spendable notes"))?;
-        let anchor_height = anchor_height.min(last_height - anchor_offset);
-        log::info!("Anchor = {}", anchor_height);
-        let mut notes = self.db
-            .get_spendable_notes(account, anchor_height, extfvk)?;
-        notes.shuffle(&mut OsRng);
-        log::info!("Spendable notes = {}", notes.len());
-
-        Ok(notes)
-    }
-
-    fn _build_recipients(
-        to_address: &str,
-        amount: u64,
-        max_amount_per_note: u64,
-        memo: &str,
-    ) -> anyhow::Result<Vec<RecipientMemo>> {
-        let mut recipients: Vec<RecipientMemo> = vec![];
-        let target_amount = Amount::from_u64(amount).unwrap();
-        let max_amount_per_note = if max_amount_per_note != 0 {
-            Amount::from_u64(max_amount_per_note).unwrap()
-        } else {
-            Amount::from_i64(MAX_MONEY).unwrap()
-        };
-        let mut remaining_amount = target_amount;
-        while remaining_amount.is_positive() {
-            let note_amount = remaining_amount.min(max_amount_per_note);
-            let recipient = RecipientMemo {
-                address: to_address.to_string(),
-                amount: u64::from(note_amount),
-                memo: Memo::from_str(memo)?,
-            };
-            recipients.push(recipient);
-            remaining_amount -= note_amount;
-        }
-        Ok(recipients)
-    }
-
     pub async fn sync_historical_prices(
         &mut self,
         now: i64,
         days: u32,
         currency: &str,
     ) -> anyhow::Result<u32> {
-        let quotes = fetch_historical_prices(now, days, currency, &self.db)
-            .await?;
+        let quotes = fetch_historical_prices(now, days, currency, &self.db).await?;
         self.db.store_historical_prices(&quotes, currency)?;
         Ok(quotes.len() as u32)
     }
@@ -548,19 +478,22 @@ impl Wallet {
     }
 
     pub fn make_payment_uri(address: &str, amount: u64, memo: &str) -> anyhow::Result<String> {
-        let addr = RecipientAddress::decode(&NETWORK, address).ok_or_else(|| anyhow::anyhow!("Invalid address"))?;
+        let addr = RecipientAddress::decode(&NETWORK, address)
+            .ok_or_else(|| anyhow::anyhow!("Invalid address"))?;
         let payment = Payment {
             recipient_address: addr,
             amount: Amount::from_u64(amount).map_err(|_| anyhow::anyhow!("Invalid amount"))?,
             memo: Some(Memo::from_str(memo)?.into()),
             label: None,
             message: None,
-            other_params: vec![]
+            other_params: vec![],
         };
         let treq = TransactionRequest {
             payments: vec![payment],
         };
-        let uri = treq.to_uri(&NETWORK).ok_or_else(|| anyhow::anyhow!("Cannot build Payment URI"))?;
+        let uri = treq
+            .to_uri(&NETWORK)
+            .ok_or_else(|| anyhow::anyhow!("Cannot build Payment URI"))?;
         let uri = format!("{}{}", TICKER, &uri[5..]); // hack to replace the URI scheme
         Ok(uri)
     }
@@ -570,8 +503,11 @@ impl Wallet {
             anyhow::bail!("Invalid Payment URI");
         }
         let uri = format!("zcash{}", &uri[5..]); // hack to replace the URI scheme
-        let treq = TransactionRequest::from_uri(&NETWORK, &uri).map_err(|_| anyhow::anyhow!("Invalid Payment URI"))?;
-        if treq.payments.len() != 1 { anyhow::bail!("Invalid Payment URI") }
+        let treq = TransactionRequest::from_uri(&NETWORK, &uri)
+            .map_err(|_| anyhow::anyhow!("Invalid Payment URI"))?;
+        if treq.payments.len() != 1 {
+            anyhow::bail!("Invalid Payment URI")
+        }
         let payment = &treq.payments[0];
         let memo = match payment.memo {
             Some(ref memo) => {
@@ -582,7 +518,7 @@ impl Wallet {
                     _ => Err(anyhow::anyhow!("Invalid Memo")),
                 }
             }
-            None => Ok(String::new())
+            None => Ok(String::new()),
         }?;
         let payment = MyPayment {
             address: payment.recipient_address.encode(&NETWORK),
@@ -593,6 +529,40 @@ impl Wallet {
         let payment_json = serde_json::to_string(&payment)?;
 
         Ok(payment_json)
+    }
+
+    pub fn store_share_secret(&self, account: u32, secret: &str) -> anyhow::Result<()> {
+        let share = SecretShare::decode(secret)?;
+        self.db.store_share_secret(
+            account,
+            secret,
+            share.index,
+            share.threshold,
+            share.participants,
+        )
+    }
+
+    pub fn get_share_secret(&self, account: u32) -> anyhow::Result<String> {
+        self.db.get_share_secret(account)
+    }
+
+    pub fn split_account(&self, t: usize, n: usize, account: u32) -> anyhow::Result<String> {
+        let sk = self.db.get_sk(account)?;
+        let esk = decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &sk)
+            .unwrap()
+            .unwrap();
+        let secret_key = esk.expsk.ask;
+        let nsk = esk.expsk.nsk;
+        let shares = split_account(t, n, secret_key, nsk)?;
+        let shares: Vec<_> = shares.iter().map(|s| s.encode().unwrap()).collect();
+        let res = shares.join("|");
+        Ok(res)
+    }
+
+    pub fn parse_recipients(recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> {
+        let recipients: Vec<Recipient> = serde_json::from_str(recipients)?;
+        let recipient_memos: Vec<_> = recipients.iter().map(|r| RecipientMemo::from(r)).collect();
+        Ok(recipient_memos)
     }
 }
 

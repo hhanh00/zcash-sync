@@ -1,17 +1,17 @@
 use crate::chain::{Nf, NfRef};
+use crate::contact::Contact;
 use crate::prices::Quote;
 use crate::taddr::derive_tkeys;
 use crate::transaction::TransactionInfo;
 use crate::{CTree, Witness, NETWORK};
 use chrono::NaiveDateTime;
-use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS, Transaction};
+use rusqlite::{params, Connection, OptionalExtension, Transaction, NO_PARAMS};
 use std::collections::HashMap;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
-use crate::contact::Contact;
 
 mod migration;
 
@@ -33,6 +33,7 @@ pub struct ReceivedNote {
     pub spent: Option<u32>,
 }
 
+#[derive(Clone)]
 pub struct SpendableNote {
     pub id: u32,
     pub note: Note,
@@ -86,10 +87,11 @@ impl DbAdapter {
         ivk: &str,
         address: &str,
     ) -> anyhow::Result<i32> {
-        let mut statement = self.connection.prepare("SELECT id_account FROM accounts WHERE ivk = ?1")?;
-        if statement.exists(
-            params![ivk])? {
-            return Ok(-1)
+        let mut statement = self
+            .connection
+            .prepare("SELECT id_account FROM accounts WHERE ivk = ?1")?;
+        if statement.exists(params![ivk])? {
+            return Ok(-1);
         }
         self.connection.execute(
             "INSERT INTO accounts(name, seed, sk, ivk, address) VALUES (?1, ?2, ?3, ?4, ?5)
@@ -197,7 +199,7 @@ impl DbAdapter {
         height: u32,
         timestamp: u32,
         tx_index: u32,
-        db_tx: &Transaction
+        db_tx: &Transaction,
     ) -> anyhow::Result<u32> {
         log::debug!("+transaction");
         db_tx.execute(
@@ -219,7 +221,7 @@ impl DbAdapter {
         note: &ReceivedNote,
         id_tx: u32,
         position: usize,
-        db_tx: &Transaction
+        db_tx: &Transaction,
     ) -> anyhow::Result<u32> {
         log::debug!("+received_note {}", id_tx);
         db_tx.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, nf, spent)
@@ -475,7 +477,9 @@ impl DbAdapter {
         log::debug!("+purge_old_witnesses");
         let min_height: Option<u32> = self.connection.query_row(
             "SELECT MAX(height) FROM sapling_witnesses WHERE height <= ?1",
-           params![height], |row| row.get(0))?;
+            params![height],
+            |row| row.get(0),
+        )?;
 
         // Leave at least one sapling witness
         if let Some(min_height) = min_height {
@@ -498,8 +502,7 @@ impl DbAdapter {
                 VALUES (?1, ?2, ?3)",
                 params![&contact.name, &contact.address, dirty],
             )?;
-        }
-        else {
+        } else {
             self.connection.execute(
                 "INSERT INTO contacts(id, name, address, dirty)
                 VALUES (?1, ?2, ?3, ?4) ON CONFLICT (id) DO UPDATE SET
@@ -511,16 +514,14 @@ impl DbAdapter {
     }
 
     pub fn get_unsaved_contacts(&self) -> anyhow::Result<Vec<Contact>> {
-        let mut statement = self.connection.prepare("SELECT id, name, address FROM contacts WHERE dirty = TRUE")?;
+        let mut statement = self
+            .connection
+            .prepare("SELECT id, name, address FROM contacts WHERE dirty = TRUE")?;
         let rows = statement.query_map(NO_PARAMS, |row| {
             let id: u32 = row.get(0)?;
             let name: String = row.get(1)?;
             let address: String = row.get(2)?;
-            let contact = Contact {
-                id,
-                name,
-                address,
-            };
+            let contact = Contact { id, name, address };
             Ok(contact)
         })?;
         let mut contacts: Vec<Contact> = vec![];
@@ -653,15 +654,18 @@ impl DbAdapter {
         Ok(address)
     }
 
-    pub fn get_tsk(&self, account: u32) -> anyhow::Result<String> {
-        let sk = self.connection.query_row(
-            "SELECT sk FROM taddrs WHERE account = ?1",
-            params![account],
-            |row| {
-                let address: String = row.get(0)?;
-                Ok(address)
-            },
-        )?;
+    pub fn get_tsk(&self, account: u32) -> anyhow::Result<Option<String>> {
+        let sk = self
+            .connection
+            .query_row(
+                "SELECT sk FROM taddrs WHERE account = ?1",
+                params![account],
+                |row| {
+                    let address: String = row.get(0)?;
+                    Ok(address)
+                },
+            )
+            .optional()?;
         Ok(sk)
     }
 
@@ -728,21 +732,68 @@ impl DbAdapter {
         Ok(quote)
     }
 
+    pub fn store_share_secret(
+        &self,
+        account: u32,
+        secret: &str,
+        index: usize,
+        threshold: usize,
+        participants: usize,
+    ) -> anyhow::Result<()> {
+        self.connection.execute(
+            "INSERT INTO secret_shares(account, secret, idx, threshold, participants) VALUES (?1, ?2, ?3, ?4, ?5) \
+            ON CONFLICT (account) DO UPDATE SET secret = excluded.secret, threshold = excluded.threshold, participants = excluded.participants",
+            params![account, &secret, index as u32, threshold as u32, participants as u32],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_share_secret(&self, account: u32) -> anyhow::Result<String> {
+        let secret = self
+            .connection
+            .query_row(
+                "SELECT secret FROM secret_shares WHERE account = ?1",
+                params![account],
+                |row| {
+                    let secret: String = row.get(0)?;
+                    Ok(secret)
+                },
+            )
+            .optional()?;
+        Ok(secret.unwrap_or("".to_string()))
+    }
+
     pub fn truncate_data(&self) -> anyhow::Result<()> {
         self.connection.execute("DELETE FROM blocks", NO_PARAMS)?;
         self.connection.execute("DELETE FROM contacts", NO_PARAMS)?;
-        self.connection.execute("DELETE FROM diversifiers", NO_PARAMS)?;
-        self.connection.execute("DELETE FROM historical_prices", NO_PARAMS)?;
-        self.connection.execute("DELETE FROM received_notes", NO_PARAMS)?;
-        self.connection.execute("DELETE FROM sapling_witnesses", NO_PARAMS)?;
-        self.connection.execute("DELETE FROM transactions", NO_PARAMS)?;
+        self.connection
+            .execute("DELETE FROM diversifiers", NO_PARAMS)?;
+        self.connection
+            .execute("DELETE FROM historical_prices", NO_PARAMS)?;
+        self.connection
+            .execute("DELETE FROM received_notes", NO_PARAMS)?;
+        self.connection
+            .execute("DELETE FROM sapling_witnesses", NO_PARAMS)?;
+        self.connection
+            .execute("DELETE FROM transactions", NO_PARAMS)?;
         Ok(())
     }
 
     pub fn delete_account(&self, account: u32) -> anyhow::Result<()> {
-        self.connection.execute("DELETE FROM received_notes WHERE account = ?1", params![account])?;
-        self.connection.execute("DELETE FROM accounts WHERE id_account = ?1", params![account])?;
-        self.connection.execute("DELETE FROM taddrs WHERE account = ?1", params![account])?;
+        self.connection.execute(
+            "DELETE FROM received_notes WHERE account = ?1",
+            params![account],
+        )?;
+        self.connection.execute(
+            "DELETE FROM accounts WHERE id_account = ?1",
+            params![account],
+        )?;
+        self.connection
+            .execute("DELETE FROM taddrs WHERE account = ?1", params![account])?;
+        self.connection.execute(
+            "DELETE FROM secret_shares WHERE account = ?1",
+            params![account],
+        )?;
         Ok(())
     }
 }
@@ -774,7 +825,7 @@ mod tests {
             },
             id_tx,
             5,
-            &db_tx
+            &db_tx,
         )
         .unwrap();
         let witness = Witness {

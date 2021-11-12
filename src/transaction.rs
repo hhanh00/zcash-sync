@@ -1,3 +1,4 @@
+use crate::contact::{Contact, ContactDecoder};
 use crate::{CompactTxStreamerClient, DbAdapter, TxFilter, NETWORK};
 use futures::StreamExt;
 use std::collections::HashMap;
@@ -16,7 +17,6 @@ use zcash_primitives::sapling::note_encryption::{
 };
 use zcash_primitives::transaction::Transaction;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use crate::contact::{ContactDecoder, Contact};
 
 #[derive(Debug)]
 pub struct TransactionInfo {
@@ -78,7 +78,11 @@ pub async fn decode_transaction(
 
     for output in tx.vout.iter() {
         if let Some(taddr) = output.script_pubkey.address() {
-            address = encode_transparent_address(&NETWORK.b58_pubkey_address_prefix(), &NETWORK.b58_script_address_prefix(), &taddr);
+            address = encode_transparent_address(
+                &NETWORK.b58_pubkey_address_prefix(),
+                &NETWORK.b58_script_address_prefix(),
+                &taddr,
+            );
         }
     }
 
@@ -107,13 +111,12 @@ pub async fn decode_transaction(
 
     let fee = u64::from(tx.value_balance);
 
-    let memo =
-        match tx_memo {
-            Memo::Empty => "".to_string(),
-            Memo::Text(text) => text.to_string(),
-            Memo::Future(_) => "Unrecognized".to_string(),
-            Memo::Arbitrary(_) => "Unrecognized".to_string(),
-        };
+    let memo = match tx_memo {
+        Memo::Empty => "".to_string(),
+        Memo::Text(text) => text.to_string(),
+        Memo::Future(_) => "Unrecognized".to_string(),
+        Memo::Arbitrary(_) => "Unrecognized".to_string(),
+    };
     let contacts = contact_decoder.finalize()?;
     let tx_info = TransactionInfo {
         height: u32::from(height),

@@ -1,6 +1,6 @@
 use ff::PrimeField;
 use group::{Curve, GroupEncoding};
-use jubjub::{Fr, SubgroupPoint, ExtendedPoint, ExtendedNielsPoint};
+use jubjub::{ExtendedNielsPoint, ExtendedPoint, Fr, SubgroupPoint};
 use lazy_static::lazy_static;
 use std::io::Read;
 use std::ops::AddAssign;
@@ -20,7 +20,8 @@ fn read_generators_bin() -> Vec<ExtendedNielsPoint> {
             for _k in 0..256 {
                 let mut bb = [0u8; 32];
                 generators_bin.read(&mut bb).unwrap();
-                let p = ExtendedPoint::from(SubgroupPoint::from_bytes_unchecked(&bb).unwrap()).to_niels();
+                let p = ExtendedPoint::from(SubgroupPoint::from_bytes_unchecked(&bb).unwrap())
+                    .to_niels();
                 gens.push(p);
             }
         }
@@ -51,10 +52,7 @@ type Hash = [u8; 32];
 pub fn pedersen_hash(depth: u8, left: &Hash, right: &Hash) -> Hash {
     let p = pedersen_hash_inner(depth, left, right);
 
-    let h = jubjub::ExtendedPoint::from(p)
-        .to_affine()
-        .get_u()
-        .to_repr();
+    let h = jubjub::ExtendedPoint::from(p).to_affine().get_u().to_repr();
     h
 }
 
@@ -123,7 +121,11 @@ pub fn pedersen_hash_inner(depth: u8, left: &Hash, right: &Hash) -> ExtendedPoin
     result
 }
 
-fn generator_multiplication(acc: &Fr, gens: &[ExtendedNielsPoint], i_generator: u32) -> ExtendedPoint {
+fn generator_multiplication(
+    acc: &Fr,
+    gens: &[ExtendedNielsPoint],
+    i_generator: u32,
+) -> ExtendedPoint {
     let acc = acc.to_repr();
 
     let mut tmp = jubjub::ExtendedPoint::identity();

@@ -1,7 +1,7 @@
-use prost::bytes::{BufMut, Buf};
+use prost::bytes::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
-use zcash_primitives::memo::{Memo, MemoBytes};
 use std::convert::TryFrom;
+use zcash_primitives::memo::{Memo, MemoBytes};
 
 const CONTACT_COOKIE: u32 = 0x434E5440;
 
@@ -15,17 +15,20 @@ pub struct Contact {
 pub fn serialize_contacts(contacts: &[Contact]) -> anyhow::Result<Vec<Memo>> {
     let cs_bin = bincode::serialize(&contacts)?;
     let chunks = cs_bin.chunks(500);
-    let memos: Vec<_> = chunks.enumerate().map(|(i, c)| {
-        let n = i as u8;
-        let mut bytes = [0u8; 511];
-        let mut bb: Vec<u8> = vec![];
-        bb.put_u32(CONTACT_COOKIE);
-        bb.put_u8(n);
-        bb.put_u16(c.len() as u16);
-        bb.put_slice(c);
-        bytes[0..bb.len()].copy_from_slice(&bb);
-        Memo::Arbitrary(Box::new(bytes))
-    }).collect();
+    let memos: Vec<_> = chunks
+        .enumerate()
+        .map(|(i, c)| {
+            let n = i as u8;
+            let mut bytes = [0u8; 511];
+            let mut bb: Vec<u8> = vec![];
+            bb.put_u32(CONTACT_COOKIE);
+            bb.put_u8(n);
+            bb.put_u16(c.len() as u16);
+            bb.put_slice(c);
+            bytes[0..bb.len()].copy_from_slice(&bb);
+            Memo::Arbitrary(Box::new(bytes))
+        })
+        .collect();
 
     Ok(memos)
 }
@@ -41,7 +44,7 @@ impl ContactDecoder {
         chunks.resize(n, vec![]);
         ContactDecoder {
             has_contacts: false,
-            chunks
+            chunks,
         }
     }
 
@@ -58,7 +61,7 @@ impl ContactDecoder {
 
     pub fn finalize(&self) -> anyhow::Result<Vec<Contact>> {
         if !self.has_contacts {
-            return Ok(Vec::new())
+            return Ok(Vec::new());
         }
         let data: Vec<_> = self.chunks.iter().cloned().flatten().collect();
         let contacts = bincode::deserialize::<Vec<Contact>>(&data)?;
@@ -84,9 +87,9 @@ impl ContactDecoder {
 
 #[cfg(test)]
 mod tests {
-    use crate::{DbAdapter, LWD_URL, Wallet};
     use crate::contact::{serialize_contacts, Contact};
     use crate::db::DEFAULT_DB_PATH;
+    use crate::{DbAdapter, Wallet, LWD_URL};
 
     #[test]
     fn test_contacts() {
@@ -94,7 +97,9 @@ mod tests {
         let contact = Contact {
             id: 0,
             name: "hanh".to_string(),
-            address: "zs1lvzgfzzwl9n85446j292zg0valw2p47hmxnw42wnqsehsmyuvjk0mhxktcs0pqrplacm2vchh35".to_string(),
+            address:
+                "zs1lvzgfzzwl9n85446j292zg0valw2p47hmxnw42wnqsehsmyuvjk0mhxktcs0pqrplacm2vchh35"
+                    .to_string(),
         };
         db.store_contact(&contact, true).unwrap();
     }

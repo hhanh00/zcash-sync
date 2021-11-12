@@ -1,14 +1,15 @@
+// #![allow(dead_code)]
+// #![allow(unused_imports)]
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-mod coin;
-pub use coin::{get_branch, NETWORK, TICKER};
+pub use zcash_params::coin::{get_branch, NETWORK, TICKER};
 
 // Mainnet
 // pub const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "https://lwdv3.zecwallet.co";
 // pub const LWD_URL: &str = "http://lwd.hanh.me:9067";
-// pub const LWD_URL: &str = "http://127.0.0.1:9067";
+pub const LWD_URL: &str = "http://127.0.0.1:9067";
 
 // Testnet
 // pub const LWD_URL: &str = "https://testnet.lightwalletd.com:9067";
@@ -16,15 +17,15 @@ pub use coin::{get_branch, NETWORK, TICKER};
 // pub const LWD_URL: &str = "http://127.0.0.1:9067";
 
 // YCash
-pub const LWD_URL: &str = "https://lite.ycash.xyz:9067";
+// pub const LWD_URL: &str = "https://lite.ycash.xyz:9067";
 
 mod builder;
 mod chain;
 mod commitment;
+mod contact;
 mod db;
 mod hash;
 mod key;
-mod ua;
 mod mempool;
 mod pay;
 mod prices;
@@ -32,8 +33,14 @@ mod print;
 mod scan;
 mod taddr;
 mod transaction;
-mod contact;
+mod ua;
 mod wallet;
+
+pub fn hex_to_hash(hex: &str) -> anyhow::Result<[u8; 32]> {
+    let mut hash = [0u8; 32];
+    hex::decode_to_slice(hex, &mut hash)?;
+    Ok(hash)
+}
 
 pub use crate::builder::advance_tree;
 pub use crate::chain::{
@@ -47,8 +54,8 @@ pub use crate::key::{decode_key, is_valid_key};
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;
 pub use crate::mempool::MemPool;
-pub use crate::pay::{broadcast_tx, sign_offline_tx, Tx};
+pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
 pub use crate::print::*;
 pub use crate::scan::{latest_height, scan_all, sync_async};
-pub use crate::wallet::{Wallet, WalletBalance};
 pub use crate::ua::{get_sapling, get_ua};
+pub use crate::wallet::{RecipientMemo, Wallet, WalletBalance};

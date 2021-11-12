@@ -136,17 +136,11 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
     }
 
     if version < 5 {
-        connection.execute(
-            "DELETE FROM historical_prices",
-            NO_PARAMS,
-        )?;
+        connection.execute("DELETE FROM historical_prices", NO_PARAMS)?;
     }
 
     if version < 6 {
-        connection.execute(
-            "DROP TABLE contacts",
-            NO_PARAMS,
-        )?;
+        connection.execute("DROP TABLE contacts", NO_PARAMS)?;
         connection.execute(
             "CREATE TABLE IF NOT EXISTS contacts (
                 id INTEGER PRIMARY KEY,
@@ -157,7 +151,19 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         )?;
     }
 
-    update_schema_version(&connection, 6)?;
+    if version < 7 {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS secret_shares (
+                account INTEGER PRIMARY KEY,
+                idx INTEGER NOT NULL,
+                participants INTEGER NOT NULL,
+                threshold INTEGER NOT NULL,
+                secret TEXT NOT NULL)",
+            NO_PARAMS,
+        )?;
+    }
+
+    update_schema_version(&connection, 7)?;
 
     Ok(())
 }

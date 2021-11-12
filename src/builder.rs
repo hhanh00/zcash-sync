@@ -1,11 +1,11 @@
 use crate::commitment::{CTree, Witness};
 use crate::hash::{pedersen_hash, pedersen_hash_inner};
+use ff::PrimeField;
+use group::Curve;
+use jubjub::{AffinePoint, ExtendedPoint};
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::*;
 use zcash_primitives::sapling::Node;
-use jubjub::{ExtendedPoint, AffinePoint};
-use group::Curve;
-use ff::PrimeField;
 
 #[inline(always)]
 fn batch_node_combine1(depth: usize, left: &Node, right: &Node) -> ExtendedPoint {
@@ -171,33 +171,35 @@ fn combine_level(commitments: &mut [Node], offset: Option<Node>, n: usize, depth
     assert_eq!(n % 2, 0);
 
     let nn = n / 2;
-    let next_level: Vec<_> =
-        if nn > 100 {
-            let hash_extended: Vec<_> = (0..nn)
-                .into_par_iter()
-                .map(|i| {
-                    batch_node_combine1(
-                        depth,
-                        CTreeBuilder::get(commitments, 2 * i, &offset),
-                        CTreeBuilder::get(commitments, 2 * i + 1, &offset),
-                    )
-                })
-                .collect();
-            let mut hash_affine: Vec<AffinePoint> = vec![AffinePoint::identity(); nn];
-            ExtendedPoint::batch_normalize(&hash_extended, &mut hash_affine);
-            hash_affine.iter().map(|p| Node::new(p.get_u().to_repr())).collect()
-        } else {
-            (0..nn)
-                .into_par_iter()
-                .map(|i| {
-                    node_combine(
-                        depth,
-                        CTreeBuilder::get(commitments, 2 * i, &offset),
-                        CTreeBuilder::get(commitments, 2 * i + 1, &offset),
-                    )
-                })
-                .collect()
-        };
+    let next_level: Vec<_> = if nn > 100 {
+        let hash_extended: Vec<_> = (0..nn)
+            .into_par_iter()
+            .map(|i| {
+                batch_node_combine1(
+                    depth,
+                    CTreeBuilder::get(commitments, 2 * i, &offset),
+                    CTreeBuilder::get(commitments, 2 * i + 1, &offset),
+                )
+            })
+            .collect();
+        let mut hash_affine: Vec<AffinePoint> = vec![AffinePoint::identity(); nn];
+        ExtendedPoint::batch_normalize(&hash_extended, &mut hash_affine);
+        hash_affine
+            .iter()
+            .map(|p| Node::new(p.get_u().to_repr()))
+            .collect()
+    } else {
+        (0..nn)
+            .into_par_iter()
+            .map(|i| {
+                node_combine(
+                    depth,
+                    CTreeBuilder::get(commitments, 2 * i, &offset),
+                    CTreeBuilder::get(commitments, 2 * i + 1, &offset),
+                )
+            })
+            .collect()
+    };
 
     commitments[0..nn].copy_from_slice(&next_level);
     nn

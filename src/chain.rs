@@ -204,27 +204,6 @@ async fn get_tree_state(client: &mut CompactTxStreamerClient<Channel>, height: u
     rep.tree
 }
 
-pub async fn send_transaction(
-    client: &mut CompactTxStreamerClient<Channel>,
-    raw_tx: &[u8],
-    height: u32,
-) -> anyhow::Result<String> {
-    let raw_tx = RawTransaction {
-        data: raw_tx.to_vec(),
-        height: height as u64,
-    };
-    let rep = client
-        .send_transaction(Request::new(raw_tx))
-        .await?
-        .into_inner();
-    let code = rep.error_code;
-    if code == 0 {
-        Ok(rep.error_message)
-    } else {
-        Err(anyhow::anyhow!(rep.error_message))
-    }
-}
-
 /* Using the IncrementalWitness */
 #[allow(dead_code)]
 fn calculate_tree_state_v1(

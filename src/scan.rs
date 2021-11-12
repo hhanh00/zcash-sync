@@ -9,6 +9,7 @@ use crate::{
 };
 use ff::PrimeField;
 use log::{debug, info};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::panic;
@@ -19,7 +20,6 @@ use tokio::sync::Mutex;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::Node;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use std::cmp::Ordering;
 
 pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
     let fvks: HashMap<_, _> = fvks
@@ -153,7 +153,8 @@ pub async fn sync_async(
             let mut new_ids_tx: HashMap<u32, TxIdHeight> = HashMap::new();
             let mut witnesses: Vec<Witness> = vec![];
 
-            { // db tx scope
+            {
+                // db tx scope
                 let db_tx = db.begin_transaction()?;
                 let dec_blocks = decrypter.decrypt_blocks(&blocks.0);
                 log::info!("Dec start : {}", dec_blocks[0].height);
@@ -187,11 +188,14 @@ pub async fn sync_async(
                             n.tx_index as u32,
                             &db_tx,
                         )?;
-                        new_ids_tx.insert(id_tx, TxIdHeight {
+                        new_ids_tx.insert(
                             id_tx,
-                            height: n.height,
-                            index: n.tx_index as u32,
-                        });
+                            TxIdHeight {
+                                id_tx,
+                                height: n.height,
+                                index: n.tx_index as u32,
+                            },
+                        );
                         let id_note = DbAdapter::store_received_note(
                             &ReceivedNote {
                                 account: n.account,
@@ -205,7 +209,7 @@ pub async fn sync_async(
                             },
                             id_tx,
                             n.position_in_block,
-                            &db_tx
+                            &db_tx,
                         )?;
                         DbAdapter::add_value(id_tx, note.value as i64, &db_tx)?;
                         nfs.insert(
@@ -227,7 +231,8 @@ pub async fn sync_async(
                                 nf.copy_from_slice(&cs.nf);
                                 let nf = Nf(nf);
                                 if my_nfs.contains(&nf) {
-                                    let (account, note_value) = DbAdapter::get_received_note_value(&nf, &db_tx)?;
+                                    let (account, note_value) =
+                                        DbAdapter::get_received_note_value(&nf, &db_tx)?;
                                     let txid = &*tx.hash;
                                     let id_tx = DbAdapter::store_transaction(
                                         txid,
@@ -235,13 +240,16 @@ pub async fn sync_async(
                                         b.height,
                                         b.compact_block.time,
                                         tx_index as u32,
-                                        &db_tx
+                                        &db_tx,
                                     )?;
-                                    new_ids_tx.insert(id_tx, TxIdHeight {
+                                    new_ids_tx.insert(
                                         id_tx,
-                                        height: b.height,
-                                        index: tx_index as u32,
-                                    });
+                                        TxIdHeight {
+                                            id_tx,
+                                            height: b.height,
+                                            index: tx_index as u32,
+                                        },
+                                    );
                                     DbAdapter::add_value(id_tx, -(note_value as i64), &db_tx)?;
                                 }
                             }
@@ -286,7 +294,7 @@ pub async fn sync_async(
 
             let start = Instant::now();
             if get_tx && !new_ids_tx.is_empty() {
-                let mut ids: Vec<_> = new_ids_tx.into_iter().map(|(_,v)| v).collect();
+                let mut ids: Vec<_> = new_ids_tx.into_iter().map(|(_, v)| v).collect();
                 ids.sort_by(|a, b| {
                     let c = a.height.cmp(&b.height);
                     if c == Ordering::Equal {
@@ -295,8 +303,7 @@ pub async fn sync_async(
                     return c;
                 });
                 let ids: Vec<_> = ids.into_iter().map(|e| e.id_tx).collect();
-                retrieve_tx_info(&mut client, &db_path2, &ids)
-                    .await?;
+                retrieve_tx_info(&mut client, &db_path2, &ids).await?;
             }
             log::info!("Transaction Details : {}", start.elapsed().as_millis());
 

@@ -27,21 +27,21 @@ pub fn decode_key(key: &str) -> anyhow::Result<(Option<String>, Option<String>, 
     res
 }
 
-pub fn is_valid_key(key: &str) -> bool {
+pub fn is_valid_key(key: &str) -> i8 {
     if Mnemonic::from_phrase(&key, Language::English).is_ok() {
-        return true;
+        return 0;
     }
     if let Ok(Some(_)) =
         decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &key)
     {
-        return true;
+        return 1;
     }
     if let Ok(Some(_)) =
         decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &key)
     {
-        return true;
+        return 2;
     }
-    false
+    -1
 }
 
 pub fn derive_secret_key(mnemonic: &Mnemonic) -> anyhow::Result<(String, String, String)> {

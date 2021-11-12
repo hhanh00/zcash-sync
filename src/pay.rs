@@ -1,96 +1,103 @@
 use crate::db::SpendableNote;
 use crate::wallet::RecipientMemo;
-use crate::{connect_lightwalletd, get_latest_height, RawTransaction, NETWORK};
+use crate::{
+    connect_lightwalletd, get_branch, get_latest_height, hex_to_hash, GetAddressUtxosReply,
+    RawTransaction, NETWORK,
+};
 use jubjub::Fr;
+use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
+use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
+use std::sync::mpsc;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
-    decode_extended_full_viewing_key, encode_extended_full_viewing_key,
+    decode_extended_full_viewing_key, decode_payment_address, encode_extended_full_viewing_key,
+    encode_payment_address,
 };
-use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
-use zcash_primitives::memo::{MemoBytes, Memo};
+use zcash_primitives::consensus::{BlockHeight, Parameters};
+use zcash_primitives::legacy::Script;
+use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::keys::OutgoingViewingKey;
-use zcash_primitives::sapling::{Diversifier, Node, Rseed, PaymentAddress};
-use zcash_primitives::transaction::builder::Builder;
-use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
-use zcash_primitives::transaction::components::Amount;
+use zcash_primitives::sapling::prover::TxProver;
+use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
+use zcash_primitives::transaction::builder::{Builder, Progress};
+use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
+use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut as ZTxOut};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
-use zcash_proofs::prover::LocalTxProver;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
-    height: u32,
-    inputs: Vec<TxIn>,
-    outputs: Vec<TxOut>,
+    pub height: u32,
+    pub t_inputs: Vec<TTxIn>,
+    pub inputs: Vec<TxIn>,
+    pub outputs: Vec<TxOut>,
+    pub change: String,
+    pub ovk: String,
 }
 
 impl Tx {
     pub fn new(height: u32) -> Self {
         Tx {
             height,
+            t_inputs: vec![],
             inputs: vec![],
             outputs: vec![],
+            change: "".to_string(),
+            ovk: "".to_string(),
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TxIn {
-    diversifier: String,
-    fvk: String,
-    amount: u64,
-    rseed: String,
-    witness: String,
+    pub diversifier: String,
+    pub fvk: String,
+    pub amount: u64,
+    pub rseed: String,
+    pub witness: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct TTxIn {
+    pub op: String,
+    pub n: u32,
+    pub amount: u64,
+    pub script: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TxOut {
-    addr: String,
-    amount: u64,
-    ovk: String,
-    memo: String,
+    pub addr: String,
+    pub amount: u64,
+    pub ovk: String,
+    pub memo: String,
 }
 
-pub trait TxBuilder {
-    fn add_input(
-        &mut self,
-        skey: Option<ExtendedSpendingKey>,
-        diversifier: &Diversifier,
-        fvk: &ExtendedFullViewingKey,
-        amount: Amount,
-        rseed: &[u8],
-        witness: &[u8],
-    ) -> anyhow::Result<()>;
-    fn add_t_output(&mut self, address: &str, amount: Amount) -> anyhow::Result<()>;
-    fn add_z_output(
-        &mut self,
-        address: &str,
-        ovk: &OutgoingViewingKey,
-        amount: Amount,
-        memo: &Memo,
-    ) -> anyhow::Result<()>;
-    fn set_change(&mut self, ovk: &OutgoingViewingKey, address: &PaymentAddress) -> anyhow::Result<()>;
-}
-
-pub struct ColdTxBuilder {
+pub struct TxBuilder {
     pub tx: Tx,
 }
 
-impl ColdTxBuilder {
+impl TxBuilder {
     pub fn new(height: u32) -> Self {
-        ColdTxBuilder {
+        TxBuilder {
             tx: Tx::new(height),
         }
     }
-}
 
-impl TxBuilder for ColdTxBuilder {
-    fn add_input(
+    fn add_t_input(&mut self, op: OutPoint, amount: u64, script: &[u8]) {
+        self.tx.t_inputs.push(TTxIn {
+            op: hex::encode(op.hash()),
+            n: op.n(),
+            amount,
+            script: hex::encode(script),
+        });
+    }
+
+    fn add_z_input(
         &mut self,
-        _skey: Option<ExtendedSpendingKey>,
         diversifier: &Diversifier,
         fvk: &ExtendedFullViewingKey,
         amount: Amount,
@@ -139,182 +146,232 @@ impl TxBuilder for ColdTxBuilder {
         Ok(())
     }
 
-    fn set_change(&mut self, _ovk: &OutgoingViewingKey, _address: &PaymentAddress) -> anyhow::Result<()> { Ok(()) }
-}
-
-impl TxBuilder for Builder<'_, Network, OsRng> {
-    fn add_input(
+    fn set_change(
         &mut self,
-        skey: Option<ExtendedSpendingKey>,
-        diversifier: &Diversifier,
-        fvk: &ExtendedFullViewingKey,
-        amount: Amount,
-        rseed: &[u8],
-        witness: &[u8],
-    ) -> anyhow::Result<()> {
-        let pa = fvk.fvk.vk.to_payment_address(diversifier.clone()).unwrap();
-        let mut rseed_bytes = [0u8; 32];
-        rseed_bytes.copy_from_slice(rseed);
-        let fr = Fr::from_bytes(&rseed_bytes).unwrap();
-        let note = pa
-            .create_note(u64::from(amount), Rseed::BeforeZip212(fr))
-            .unwrap();
-        let witness = IncrementalWitness::<Node>::read(&*witness).unwrap();
-        let merkle_path = witness.path().unwrap();
-        self.add_sapling_spend(skey.unwrap(), diversifier.clone(), note, merkle_path)?;
-        Ok(())
-    }
-
-    fn add_t_output(&mut self, address: &str, amount: Amount) -> anyhow::Result<()> {
-        let to_addr = RecipientAddress::decode(&NETWORK, address)
-            .ok_or(anyhow::anyhow!("Not a valid address"))?;
-        if let RecipientAddress::Transparent(t_address) = to_addr {
-            self.add_transparent_output(&t_address, amount)?;
-        }
-        Ok(())
-    }
-
-    fn add_z_output(
-        &mut self,
-        address: &str,
         ovk: &OutgoingViewingKey,
-        amount: Amount,
-        memo: &Memo,
+        address: &PaymentAddress,
     ) -> anyhow::Result<()> {
-        let to_addr = RecipientAddress::decode(&NETWORK, address)
-            .ok_or(anyhow::anyhow!("Not a valid address"))?;
-        if let RecipientAddress::Shielded(pa) = to_addr {
-            let memo_bytes = MemoBytes::from(memo);
-            self.add_sapling_output(Some(ovk.clone()), pa.clone(), amount, Some(memo_bytes))?;
-        }
+        self.tx.change = encode_payment_address(NETWORK.hrp_sapling_payment_address(), address);
+        self.tx.ovk = hex::encode(ovk.0);
         Ok(())
     }
 
-    fn set_change(&mut self,
-                  ovk: &OutgoingViewingKey,
-                  address: &PaymentAddress) -> anyhow::Result<()> {
-        self.send_change_to(ovk.clone(), address.clone());
+    /// Add inputs to the transaction
+    ///
+    /// Select utxos and shielded notes and add them to
+    /// the transaction
+    ///
+    /// Returns an array of received note ids
+    pub fn select_inputs(
+        &mut self,
+        fvk: &ExtendedFullViewingKey,
+        notes: &[SpendableNote],
+        utxos: &[GetAddressUtxosReply],
+        target_amount: u64,
+    ) -> anyhow::Result<Vec<u32>> {
+        let mut selected_notes: Vec<u32> = vec![];
+        let target_amount = Amount::from_u64(target_amount).unwrap();
+        let mut t_amount = Amount::zero();
+        // If we use the transparent address, we use all the utxos
+        if !utxos.is_empty() {
+            for utxo in utxos.iter() {
+                let mut tx_hash = [0u8; 32];
+                tx_hash.copy_from_slice(&utxo.txid);
+                let op = OutPoint::new(tx_hash, utxo.index as u32);
+                self.add_t_input(op, utxo.value_zat as u64, &utxo.script);
+                t_amount += Amount::from_i64(utxo.value_zat).unwrap();
+            }
+        }
+        let target_amount_with_fee = target_amount + DEFAULT_FEE;
+        if target_amount_with_fee > t_amount {
+            // We need to use some shielded notes because the transparent balance is not enough
+            let mut amount = target_amount_with_fee - t_amount;
+
+            // Pick spendable notes until we exceed the target_amount_with_fee or we ran out of notes
+            let mut notes = notes.to_vec();
+            notes.shuffle(&mut OsRng);
+
+            for n in notes.iter() {
+                if amount.is_positive() {
+                    let a = amount.min(
+                        Amount::from_u64(n.note.value)
+                            .map_err(|_| anyhow::anyhow!("Invalid amount"))?,
+                    );
+                    amount -= a;
+                    let mut witness_bytes: Vec<u8> = vec![];
+                    n.witness.write(&mut witness_bytes)?;
+                    if let Rseed::BeforeZip212(rseed) = n.note.rseed {
+                        // rseed are stored as pre-zip212
+                        self.add_z_input(
+                            &n.diversifier,
+                            fvk,
+                            Amount::from_u64(n.note.value).unwrap(),
+                            &rseed.to_bytes(),
+                            &witness_bytes,
+                        )?;
+                        selected_notes.push(n.id);
+                    }
+                }
+            }
+
+            if amount.is_positive() {
+                log::info!("Not enough balance");
+                anyhow::bail!(
+                    "Not enough balance, need {} zats, missing {} zats",
+                    u64::from(target_amount_with_fee),
+                    u64::from(amount)
+                );
+            }
+        }
+
+        Ok(selected_notes)
+    }
+
+    /// Add outputs
+    ///
+    /// Expand the recipients if their amount exceeds the max amount per note
+    /// Set the change
+    pub fn select_outputs(
+        &mut self,
+        fvk: &ExtendedFullViewingKey,
+        recipients: &[RecipientMemo],
+    ) -> anyhow::Result<()> {
+        let ovk = &fvk.fvk.ovk;
+        let (_, change) = fvk.default_address().unwrap();
+        self.set_change(&ovk, &change)?;
+
+        for r in recipients.iter() {
+            let to_addr = RecipientAddress::decode(&NETWORK, &r.address)
+                .ok_or(anyhow::anyhow!("Invalid address"))?;
+            let memo = &r.memo;
+
+            let amount = Amount::from_u64(r.amount).unwrap();
+            let max_amount_per_note = r.max_amount_per_note;
+            let max_amount_per_note = if max_amount_per_note != 0 {
+                Amount::from_u64(max_amount_per_note).unwrap()
+            } else {
+                Amount::from_i64(MAX_MONEY).unwrap()
+            };
+
+            let mut remaining_amount = amount;
+            while remaining_amount.is_positive() {
+                let note_amount = remaining_amount.min(max_amount_per_note);
+                remaining_amount -= note_amount;
+
+                match &to_addr {
+                    RecipientAddress::Shielded(_pa) => {
+                        log::info!("Sapling output: {}", r.amount);
+                        self.add_z_output(&r.address, ovk, note_amount, &memo)
+                    }
+                    RecipientAddress::Transparent(_address) => {
+                        self.add_t_output(&r.address, note_amount)
+                    }
+                }?;
+            }
+        }
+
         Ok(())
     }
 }
 
-pub fn prepare_tx<B: TxBuilder>(
-    builder: &mut B,
-    skey: Option<ExtendedSpendingKey>,
-    notes: &[SpendableNote],
-    target_amount: Option<Amount>,
-    fvk: &ExtendedFullViewingKey,
-    recipients: &[RecipientMemo],
-) -> anyhow::Result<Vec<u32>> {
-    let mut selected_notes: Vec<u32> = vec![];
-    if let Some(a) = target_amount {
-        let mut amount = a + DEFAULT_FEE;
-        let target_amount_with_fee = amount;
-        for n in notes.iter() {
-            if amount.is_positive() {
-                let a = amount.min(
-                    Amount::from_u64(n.note.value).map_err(|_| anyhow::anyhow!("Invalid amount"))?,
-                );
-                amount -= a;
-                let mut witness_bytes: Vec<u8> = vec![];
-                n.witness.write(&mut witness_bytes)?;
-                if let Rseed::BeforeZip212(rseed) = n.note.rseed {
-                    // rseed are stored as pre-zip212
-                    builder.add_input(
-                        skey.clone(),
-                        &n.diversifier,
-                        fvk,
-                        Amount::from_u64(n.note.value).unwrap(),
-                        &rseed.to_bytes(),
-                        &witness_bytes,
-                    )?;
-                    selected_notes.push(n.id);
+impl Tx {
+    /// Sign the transaction with the transparent and shielded secret keys
+    ///
+    /// Returns the raw transaction bytes
+    pub fn sign(
+        &self,
+        tsk: Option<SecretKey>,
+        zsk: &ExtendedSpendingKey,
+        prover: &impl TxProver<OsRng>,
+        progress_callback: impl Fn(Progress) + Send + 'static,
+    ) -> anyhow::Result<Vec<u8>> {
+        let last_height = BlockHeight::from_u32(self.height as u32);
+        let mut builder = Builder::new(NETWORK, last_height);
+
+        let ovk = hex_to_hash(&self.ovk)?;
+        builder.send_change_to(
+            OutgoingViewingKey(ovk),
+            decode_payment_address(NETWORK.hrp_sapling_payment_address(), &self.change)
+                .unwrap()
+                .unwrap(),
+        );
+
+        if let Some(tsk) = tsk {
+            for txin in self.t_inputs.iter() {
+                let mut txid = [0u8; 32];
+                hex::decode_to_slice(&txin.op, &mut txid)?;
+                builder.add_transparent_input(
+                    tsk,
+                    OutPoint::new(txid, txin.n),
+                    ZTxOut {
+                        value: Amount::from_u64(txin.amount).unwrap(),
+                        script_pubkey: Script(hex::decode(&txin.script).unwrap()),
+                    },
+                )?;
+            }
+        } else if !self.t_inputs.is_empty() {
+            anyhow::bail!("Missing secret key of transparent account");
+        }
+
+        for txin in self.inputs.iter() {
+            let mut diversifier = [0u8; 11];
+            hex::decode_to_slice(&txin.diversifier, &mut diversifier)?;
+            let diversifier = Diversifier(diversifier);
+            let fvk = decode_extended_full_viewing_key(
+                NETWORK.hrp_sapling_extended_full_viewing_key(),
+                &txin.fvk,
+            )?
+            .unwrap();
+            let pa = fvk.fvk.vk.to_payment_address(diversifier).unwrap();
+            let mut rseed_bytes = [0u8; 32];
+            hex::decode_to_slice(&txin.rseed, &mut rseed_bytes)?;
+            let rseed = Fr::from_bytes(&rseed_bytes).unwrap();
+            let note = pa
+                .create_note(txin.amount, Rseed::BeforeZip212(rseed))
+                .unwrap();
+            let w = hex::decode(&txin.witness)?;
+            let witness = IncrementalWitness::<Node>::read(&*w)?;
+            let merkle_path = witness.path().unwrap();
+
+            builder.add_sapling_spend(zsk.clone(), diversifier, note, merkle_path)?;
+        }
+
+        for txout in self.outputs.iter() {
+            let recipient = RecipientAddress::decode(&NETWORK, &txout.addr).unwrap();
+            let amount = Amount::from_u64(txout.amount).unwrap();
+            match recipient {
+                RecipientAddress::Transparent(ta) => {
+                    builder.add_transparent_output(&ta, amount)?;
+                }
+                RecipientAddress::Shielded(pa) => {
+                    let mut ovk = [0u8; 32];
+                    hex::decode_to_slice(&txout.ovk, &mut ovk)?;
+                    let ovk = OutgoingViewingKey(ovk);
+                    let mut memo = vec![0; 512];
+                    let m = hex::decode(&txout.memo)?;
+                    memo[..m.len()].copy_from_slice(&m);
+                    let memo = MemoBytes::from_bytes(&memo)?;
+                    builder.add_sapling_output(Some(ovk), pa, amount, Some(memo))?;
                 }
             }
         }
-        if amount.is_positive() {
-            log::info!("Not enough balance");
-            anyhow::bail!(
-            "Not enough balance, need {} zats, missing {} zats",
-            u64::from(target_amount_with_fee),
-            u64::from(amount)
-        );
-        }
-    }
 
-    log::info!("Preparing tx");
-    let ovk = &fvk.fvk.ovk;
-    let (_, change) = fvk.default_address().unwrap();
-    builder.set_change(&ovk, &change)?;
+        let (progress_tx, progress_rx) = mpsc::channel::<Progress>();
 
-    for r in recipients.iter() {
-        let to_addr = RecipientAddress::decode(&NETWORK, &r.address)
-            .ok_or(anyhow::anyhow!("Invalid address"))?;
-        let amount = Amount::from_u64(r.amount).unwrap();
-        match &to_addr {
-            RecipientAddress::Shielded(_pa) => {
-                log::info!("Sapling output: {}", r.amount);
-                builder.add_z_output(&r.address, ovk, amount, &r.memo)
+        builder.with_progress_notifier(progress_tx);
+        tokio::spawn(async move {
+            while let Ok(progress) = progress_rx.recv() {
+                log::info!("Progress: {}", progress.cur());
+                progress_callback(progress);
             }
-            RecipientAddress::Transparent(_address) => builder.add_t_output(&r.address, amount),
-        }?;
+        });
+        let consensus_branch_id = get_branch(u32::from(last_height));
+        let (tx, _) = builder.build(consensus_branch_id, prover)?;
+        let mut raw_tx = vec![];
+        tx.write(&mut raw_tx)?;
+
+        Ok(raw_tx)
     }
-
-    Ok(selected_notes)
-}
-
-pub fn sign_offline_tx(tx: &Tx, sk: &ExtendedSpendingKey) -> anyhow::Result<Vec<u8>> {
-    let last_height = BlockHeight::from_u32(tx.height as u32);
-    let mut builder = Builder::new(NETWORK, last_height);
-    for txin in tx.inputs.iter() {
-        let mut diversifier = [0u8; 11];
-        hex::decode_to_slice(&txin.diversifier, &mut diversifier)?;
-        let diversifier = Diversifier(diversifier);
-        let fvk = decode_extended_full_viewing_key(
-            NETWORK.hrp_sapling_extended_full_viewing_key(),
-            &txin.fvk,
-        )?
-        .unwrap();
-        let pa = fvk.fvk.vk.to_payment_address(diversifier).unwrap();
-        let mut rseed_bytes = [0u8; 32];
-        hex::decode_to_slice(&txin.rseed, &mut rseed_bytes)?;
-        let rseed = Fr::from_bytes(&rseed_bytes).unwrap();
-        let note = pa
-            .create_note(txin.amount, Rseed::BeforeZip212(rseed))
-            .unwrap();
-        let w = hex::decode(&txin.witness)?;
-        let witness = IncrementalWitness::<Node>::read(&*w)?;
-        let merkle_path = witness.path().unwrap();
-
-        builder.add_sapling_spend(sk.clone(), diversifier, note, merkle_path)?;
-    }
-    for txout in tx.outputs.iter() {
-        let recipient = RecipientAddress::decode(&NETWORK, &txout.addr).unwrap();
-        let amount = Amount::from_u64(txout.amount).unwrap();
-        match recipient {
-            RecipientAddress::Transparent(ta) => {
-                builder.add_transparent_output(&ta, amount)?;
-            }
-            RecipientAddress::Shielded(pa) => {
-                let mut ovk = [0u8; 32];
-                hex::decode_to_slice(&txout.ovk, &mut ovk)?;
-                let ovk = OutgoingViewingKey(ovk);
-                let mut memo = vec![0; 512];
-                let m = hex::decode(&txout.memo)?;
-                memo[..m.len()].copy_from_slice(&m);
-                let memo = MemoBytes::from_bytes(&memo)?;
-                builder.add_sapling_output(Some(ovk), pa, amount, Some(memo))?;
-            }
-        }
-    }
-
-    let prover = LocalTxProver::with_default_location().unwrap();
-    let consensus_branch_id = BranchId::for_height(&NETWORK, last_height);
-    let (tx, _) = builder.build(consensus_branch_id, &prover)?;
-    let mut raw_tx = vec![];
-    tx.write(&mut raw_tx)?;
-
-    Ok(raw_tx)
 }
 
 pub async fn broadcast_tx(tx: &[u8], ld_url: &str) -> anyhow::Result<String> {
@@ -328,5 +385,10 @@ pub async fn broadcast_tx(tx: &[u8], ld_url: &str) -> anyhow::Result<String> {
         .send_transaction(Request::new(raw_tx))
         .await?
         .into_inner();
-    Ok(rep.error_message)
+    let code = rep.error_code;
+    if code == 0 {
+        Ok(rep.error_message)
+    } else {
+        Err(anyhow::anyhow!(rep.error_message))
+    }
 }
