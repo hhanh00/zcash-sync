@@ -253,8 +253,10 @@ impl TxBuilder {
                 Amount::from_i64(MAX_MONEY).unwrap()
             };
 
+            let mut is_first = true; // make at least an output note
             let mut remaining_amount = amount;
-            while remaining_amount.is_positive() {
+            while remaining_amount.is_positive() || is_first {
+                is_first = false;
                 let note_amount = remaining_amount.min(max_amount_per_note);
                 remaining_amount -= note_amount;
 
