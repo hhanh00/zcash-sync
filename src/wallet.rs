@@ -103,6 +103,10 @@ impl Wallet {
         }
     }
 
+    pub fn reset_db(&self)  -> anyhow::Result<()> {
+        self.db.reset_db()
+    }
+
     pub fn valid_key(key: &str) -> i8 {
         is_valid_key(key)
     }

@@ -20,6 +20,18 @@ pub fn update_schema_version(connection: &Connection, version: u32) -> anyhow::R
     Ok(())
 }
 
+pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
+    // don't drop account data: accounts, taddrs, secret_shares
+    connection.execute("DROP TABLE blocks", NO_PARAMS)?;
+    connection.execute("DROP TABLE transactions", NO_PARAMS)?;
+    connection.execute("DROP TABLE received_notes", NO_PARAMS)?;
+    connection.execute("DROP TABLE sapling_witnesses", NO_PARAMS)?;
+    connection.execute("DROP TABLE diversifiers", NO_PARAMS)?;
+    connection.execute("DROP TABLE historical_prices", NO_PARAMS)?;
+    update_schema_version(&connection, 0)?;
+    Ok(())
+}
+
 pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS schema_version (

@@ -79,6 +79,11 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn reset_db(&self) -> anyhow::Result<()> {
+        migration::reset_db(&self.connection)?;
+        Ok(())
+    }
+
     pub fn store_account(
         &self,
         name: &str,
