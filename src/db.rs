@@ -155,6 +155,10 @@ impl DbAdapter {
             params![height],
         )?;
         tx.execute(
+            "UPDATE received_notes SET spent = NULL WHERE spent >= ?1",
+            params![height],
+        )?;
+        tx.execute(
             "DELETE FROM transactions WHERE height >= ?1",
             params![height],
         )?;
