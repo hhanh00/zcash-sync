@@ -794,6 +794,14 @@ impl DbAdapter {
             params![account],
         )?;
         self.connection.execute(
+            "DELETE FROM transactions WHERE account = ?1",
+            params![account],
+        )?;
+        self.connection.execute(
+            "DELETE FROM diversifiers WHERE account = ?1",
+            params![account],
+        )?;
+        self.connection.execute(
             "DELETE FROM accounts WHERE id_account = ?1",
             params![account],
         )?;
