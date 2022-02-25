@@ -23,10 +23,10 @@ pub struct TransactionInfo {
     height: u32,
     index: u32, // index of tx in block
     id_tx: u32, // id of tx in db
-    account: u32,
+    pub account: u32,
     pub address: String,
     pub memo: String,
-    amount: i64,
+    pub amount: i64,
     pub fee: u64,
     pub contacts: Vec<Contact>,
 }

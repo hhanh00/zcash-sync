@@ -423,8 +423,7 @@ impl Wallet {
         let memos = serialize_contacts(&contacts)?;
         let tx_id = self
             .save_contacts_tx(&memos, account, anchor_offset)
-            .await
-            .unwrap();
+            .await?;
         Ok(tx_id)
     }
 
