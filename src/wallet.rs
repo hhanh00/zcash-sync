@@ -538,6 +538,14 @@ impl Wallet {
         Ok(payment_json)
     }
 
+    pub fn get_full_backup(&self, key: &str) -> anyhow::Result<String> {
+        self.db.get_full_backup(key)
+    }
+
+    pub fn restore_full_backup(&self, key: &str, backup: &str) -> anyhow::Result<()> {
+        self.db.restore_full_backup(key, backup)
+    }
+
     pub fn store_share_secret(&self, account: u32, secret: &str, index: usize, threshold: usize, participants: usize) -> anyhow::Result<()> {
         self.db.store_share_secret(
             account,
