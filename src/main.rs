@@ -1,9 +1,11 @@
 use std::time::Instant;
-use sync::{advance_tree, scan_all, CTree, Witness, NETWORK};
+use sync::{advance_tree, scan_all, CTree, Witness};
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_primitives::consensus::Parameters;
+use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::Node;
+
+const NETWORK: Network = Network::MainNetwork;
 
 #[tokio::main]
 #[allow(dead_code)]
@@ -17,7 +19,7 @@ async fn main_scan() {
             .unwrap()
             .unwrap();
 
-    scan_all(&vec![fvk]).await.unwrap();
+    scan_all(&NETWORK, &vec![fvk]).await.unwrap();
 }
 
 #[allow(dead_code)]

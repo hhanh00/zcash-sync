@@ -1,5 +1,5 @@
 use crate::contact::{Contact, ContactDecoder};
-use crate::{CompactTxStreamerClient, DbAdapter, TxFilter, NETWORK};
+use crate::{CompactTxStreamerClient, DbAdapter, TxFilter};
 use futures::StreamExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -10,13 +10,14 @@ use tonic::Request;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, encode_payment_address, encode_transparent_address,
 };
-use zcash_primitives::consensus::{BlockHeight, Parameters};
+use zcash_primitives::consensus::{BlockHeight, Network, Parameters};
 use zcash_primitives::memo::Memo;
 use zcash_primitives::sapling::note_encryption::{
     try_sapling_note_decryption, try_sapling_output_recovery,
 };
 use zcash_primitives::transaction::Transaction;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_params::coin::{CoinType, get_coin_chain};
 
 #[derive(Debug)]
 pub struct TransactionInfo {
@@ -39,6 +40,7 @@ pub struct ContactRef {
 }
 
 pub async fn decode_transaction(
+    network: &Network,
     client: &mut CompactTxStreamerClient<Channel>,
     nfs: &HashMap<(u32, Vec<u8>), u64>,
     id_tx: u32,
@@ -79,29 +81,29 @@ pub async fn decode_transaction(
     for output in tx.vout.iter() {
         if let Some(taddr) = output.script_pubkey.address() {
             address = encode_transparent_address(
-                &NETWORK.b58_pubkey_address_prefix(),
-                &NETWORK.b58_script_address_prefix(),
+                &network.b58_pubkey_address_prefix(),
+                &network.b58_script_address_prefix(),
                 &taddr,
             );
         }
     }
 
     for output in tx.shielded_outputs.iter() {
-        if let Some((note, pa, memo)) = try_sapling_note_decryption(&NETWORK, height, &ivk, output)
+        if let Some((note, pa, memo)) = try_sapling_note_decryption(network, height, &ivk, output)
         {
             amount += note.value as i64; // change or self transfer
             let _ = contact_decoder.add_memo(&memo); // ignore memo that is not for contacts
             let memo = Memo::try_from(memo)?;
             if address.is_empty() {
-                address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
+                address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
             }
             if memo != Memo::Empty {
                 tx_memo = memo;
             }
         } else if let Some((_note, pa, memo)) =
-            try_sapling_output_recovery(&NETWORK, height, &ovk, &output)
+            try_sapling_output_recovery(network, height, &ovk, &output)
         {
-            address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
+            address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
             let memo = Memo::try_from(memo)?;
             if memo != Memo::Empty {
                 tx_memo = memo;
@@ -146,11 +148,16 @@ struct DecodeTxParams<'a> {
 }
 
 pub async fn retrieve_tx_info(
+    coin_type: CoinType,
     client: &mut CompactTxStreamerClient<Channel>,
     db_path: &str,
     tx_ids: &[u32],
 ) -> anyhow::Result<()> {
-    let db = DbAdapter::new(db_path)?;
+    let network = {
+        let chain = get_coin_chain(coin_type);
+        chain.network().clone()
+    };
+    let db = DbAdapter::new(coin_type, db_path)?;
 
     let nfs = db.get_nullifiers_raw()?;
     let mut nf_map: HashMap<(u32, Vec<u8>), u64> = HashMap::new();
@@ -163,7 +170,7 @@ pub async fn retrieve_tx_info(
     for (index, &id_tx) in tx_ids.iter().enumerate() {
         let (account, height, tx_hash, ivk) = db.get_txhash(id_tx)?;
         let fvk: &ExtendedFullViewingKey = fvk_cache.entry(account).or_insert_with(|| {
-            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)
+            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &ivk)
                 .unwrap()
                 .unwrap()
         });
@@ -183,6 +190,7 @@ pub async fn retrieve_tx_info(
 
     let res = tokio_stream::iter(decode_tx_params).for_each_concurrent(None, |mut p| async move {
         if let Ok(tx_info) = decode_transaction(
+            &network,
             &mut p.client,
             p.nf_map,
             p.id_tx,
@@ -229,10 +237,11 @@ pub async fn retrieve_tx_info(
 #[cfg(test)]
 mod tests {
     use crate::transaction::decode_transaction;
-    use crate::{connect_lightwalletd, DbAdapter, LWD_URL, NETWORK};
+    use crate::{connect_lightwalletd, DbAdapter, LWD_URL};
     use std::collections::HashMap;
     use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-    use zcash_primitives::consensus::Parameters;
+    use zcash_primitives::consensus::{Network, Parameters};
+    use zcash_params::coin::CoinType;
 
     #[tokio::test]
     async fn test_decode_transaction() {
@@ -240,7 +249,7 @@ mod tests {
             hex::decode("b47da170329dc311b98892eac23e83025f8bb3ce10bb07535698c91fb37e1e54")
                 .unwrap();
         let mut client = connect_lightwalletd(LWD_URL).await.unwrap();
-        let db = DbAdapter::new("./zec.db").unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, "./zec.db").unwrap();
         let account = 1;
         let nfs = db.get_nullifiers_raw().unwrap();
         let mut nf_map: HashMap<(u32, Vec<u8>), u64> = HashMap::new();
@@ -251,11 +260,11 @@ mod tests {
         }
         let fvk = db.get_ivk(account).unwrap();
         let fvk =
-            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
+            decode_extended_full_viewing_key(Network::MainNetwork.hrp_sapling_extended_full_viewing_key(), &fvk)
                 .unwrap()
                 .unwrap();
         let tx_info =
-            decode_transaction(&mut client, &nf_map, 1, account, &fvk, &tx_hash, 1313212, 1)
+            decode_transaction(&Network::MainNetwork, &mut client, &nf_map, 1, account, &fvk, &tx_hash, 1313212, 1)
                 .await
                 .unwrap();
         println!("{:?}", tx_info);

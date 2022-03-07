@@ -2,7 +2,7 @@ use crate::db::SpendableNote;
 use crate::wallet::RecipientMemo;
 use crate::{
     connect_lightwalletd, get_branch, get_latest_height, hex_to_hash, GetAddressUtxosReply,
-    RawTransaction, NETWORK,
+    RawTransaction
 };
 use jubjub::Fr;
 use rand::prelude::SliceRandom;
@@ -27,9 +27,11 @@ use zcash_primitives::transaction::builder::{Builder, Progress};
 use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut as ZTxOut};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+use zcash_params::coin::{CoinChain, CoinType, get_coin_chain};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
+    pub coin_type: CoinType,
     pub height: u32,
     pub t_inputs: Vec<TTxIn>,
     pub inputs: Vec<TxIn>,
@@ -39,8 +41,9 @@ pub struct Tx {
 }
 
 impl Tx {
-    pub fn new(height: u32) -> Self {
+    pub fn new(coin_type: CoinType, height: u32) -> Self {
         Tx {
+            coin_type,
             height,
             t_inputs: vec![],
             inputs: vec![],
@@ -78,12 +81,14 @@ pub struct TxOut {
 
 pub struct TxBuilder {
     pub tx: Tx,
+    coin_type: CoinType,
 }
 
 impl TxBuilder {
-    pub fn new(height: u32) -> Self {
+    pub fn new(coin_type: CoinType, height: u32) -> Self {
         TxBuilder {
-            tx: Tx::new(height),
+            coin_type,
+            tx: Tx::new(coin_type, height),
         }
     }
 
@@ -107,7 +112,7 @@ impl TxBuilder {
         let tx_in = TxIn {
             diversifier: hex::encode(diversifier.0),
             fvk: encode_extended_full_viewing_key(
-                NETWORK.hrp_sapling_extended_full_viewing_key(),
+                self.chain().network().hrp_sapling_extended_full_viewing_key(),
                 &fvk,
             ),
             amount: u64::from(amount),
@@ -151,7 +156,7 @@ impl TxBuilder {
         ovk: &OutgoingViewingKey,
         address: &PaymentAddress,
     ) -> anyhow::Result<()> {
-        self.tx.change = encode_payment_address(NETWORK.hrp_sapling_payment_address(), address);
+        self.tx.change = encode_payment_address(self.chain().network().hrp_sapling_payment_address(), address);
         self.tx.ovk = hex::encode(ovk.0);
         Ok(())
     }
@@ -241,7 +246,7 @@ impl TxBuilder {
         self.set_change(&ovk, &change)?;
 
         for r in recipients.iter() {
-            let to_addr = RecipientAddress::decode(&NETWORK, &r.address)
+            let to_addr = RecipientAddress::decode(self.chain().network(), &r.address)
                 .ok_or(anyhow::anyhow!("Invalid address"))?;
             let memo = &r.memo;
 
@@ -274,6 +279,8 @@ impl TxBuilder {
 
         Ok(())
     }
+
+    fn chain(&self) -> &dyn CoinChain { get_coin_chain(self.coin_type) }
 }
 
 impl Tx {
@@ -287,13 +294,14 @@ impl Tx {
         prover: &impl TxProver<OsRng>,
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<Vec<u8>> {
+        let chain = get_coin_chain(self.coin_type);
         let last_height = BlockHeight::from_u32(self.height as u32);
-        let mut builder = Builder::new(NETWORK, last_height);
+        let mut builder = Builder::new(*chain.network(), last_height);
 
         let ovk = hex_to_hash(&self.ovk)?;
         builder.send_change_to(
             OutgoingViewingKey(ovk),
-            decode_payment_address(NETWORK.hrp_sapling_payment_address(), &self.change)
+            decode_payment_address(chain.network().hrp_sapling_payment_address(), &self.change)
                 .unwrap()
                 .unwrap(),
         );
@@ -320,7 +328,7 @@ impl Tx {
             hex::decode_to_slice(&txin.diversifier, &mut diversifier)?;
             let diversifier = Diversifier(diversifier);
             let fvk = decode_extended_full_viewing_key(
-                NETWORK.hrp_sapling_extended_full_viewing_key(),
+                chain.network().hrp_sapling_extended_full_viewing_key(),
                 &txin.fvk,
             )?
             .unwrap();
@@ -339,7 +347,7 @@ impl Tx {
         }
 
         for txout in self.outputs.iter() {
-            let recipient = RecipientAddress::decode(&NETWORK, &txout.addr).unwrap();
+            let recipient = RecipientAddress::decode(chain.network(), &txout.addr).unwrap();
             let amount = Amount::from_u64(txout.amount).unwrap();
             match recipient {
                 RecipientAddress::Transparent(ta) => {
@@ -367,7 +375,7 @@ impl Tx {
                 progress_callback(progress);
             }
         });
-        let consensus_branch_id = get_branch(u32::from(last_height));
+        let consensus_branch_id = get_branch(chain.network(), u32::from(last_height));
         let (tx, _) = builder.build(consensus_branch_id, prover)?;
         let mut raw_tx = vec![];
         tx.write(&mut raw_tx)?;

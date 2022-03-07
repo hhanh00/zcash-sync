@@ -87,13 +87,14 @@ impl ContactDecoder {
 
 #[cfg(test)]
 mod tests {
+    use zcash_params::coin::CoinType;
     use crate::contact::{serialize_contacts, Contact};
     use crate::db::DEFAULT_DB_PATH;
     use crate::{DbAdapter, Wallet, LWD_URL};
 
     #[test]
     fn test_contacts() {
-        let db = DbAdapter::new(DEFAULT_DB_PATH).unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
         let contact = Contact {
             id: 0,
             name: "hanh".to_string(),
@@ -106,14 +107,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_serialize() {
-        let db = DbAdapter::new(DEFAULT_DB_PATH).unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
         let contacts = db.get_unsaved_contacts().unwrap();
         let memos = serialize_contacts(&contacts).unwrap();
         for m in memos.iter() {
             println!("{:?}", m);
         }
 
-        let mut wallet = Wallet::new("zec.db", LWD_URL);
+        let mut wallet = Wallet::new(CoinType::Zcash, "zec.db");
+        wallet.set_lwd_url(LWD_URL).unwrap();
         let tx_id = wallet.save_contacts_tx(&memos, 1, 3).await.unwrap();
         println!("{}", tx_id);
     }

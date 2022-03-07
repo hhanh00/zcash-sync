@@ -1,7 +1,7 @@
 use crate::chain::to_output_description;
 use crate::{
     connect_lightwalletd, get_latest_height, CompactTx, CompactTxStreamerClient, DbAdapter,
-    Exclude, NETWORK,
+    Exclude
 };
 use std::collections::HashMap;
 use tonic::transport::Channel;
@@ -10,6 +10,7 @@ use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decryption;
 use zcash_primitives::sapling::SaplingIvk;
+use zcash_params::coin::{CoinChain, CoinType, get_coin_chain};
 
 const DEFAULT_EXCLUDE_LEN: u8 = 1;
 
@@ -20,6 +21,7 @@ struct MemPoolTransacton {
 }
 
 pub struct MemPool {
+    coin_type: CoinType,
     db_path: String,
     account: u32,
     ivk: Option<SaplingIvk>,
@@ -31,8 +33,9 @@ pub struct MemPool {
 }
 
 impl MemPool {
-    pub fn new(db_path: &str, ld_url: &str) -> MemPool {
+    pub fn new(coin_type: CoinType, db_path: &str) -> MemPool {
         MemPool {
+            coin_type,
             db_path: db_path.to_string(),
             account: 0,
             ivk: None,
@@ -40,12 +43,12 @@ impl MemPool {
             transactions: HashMap::new(),
             nfs: HashMap::new(),
             balance: 0,
-            ld_url: ld_url.to_string(),
+            ld_url: "".to_string(),
         }
     }
 
     pub fn set_account(&mut self, account: u32) -> anyhow::Result<()> {
-        let db = DbAdapter::new(&self.db_path)?;
+        let db = DbAdapter::new(self.coin_type, &self.db_path)?;
         let ivk = db.get_ivk(account)?;
         self.account = account;
         self.set_ivk(&ivk);
@@ -55,7 +58,7 @@ impl MemPool {
 
     fn set_ivk(&mut self, ivk: &str) {
         let fvk =
-            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)
+            decode_extended_full_viewing_key(self.chain().network().hrp_sapling_extended_full_viewing_key(), &ivk)
                 .unwrap()
                 .unwrap();
         let ivk = fvk.fvk.vk.ivk();
@@ -82,7 +85,7 @@ impl MemPool {
     }
 
     pub fn clear(&mut self, height: u32) -> anyhow::Result<()> {
-        let db = DbAdapter::new(&self.db_path)?;
+        let db = DbAdapter::new(self.coin_type, &self.db_path)?;
         self.height = BlockHeight::from_u32(height);
         self.nfs = db.get_nullifier_amounts(self.account, true)?;
         self.transactions.clear();
@@ -141,7 +144,7 @@ impl MemPool {
         for co in tx.outputs.iter() {
             let od = to_output_description(co);
             if let Some((note, _)) =
-                try_sapling_compact_note_decryption(&NETWORK, self.height, ivk, &od)
+                try_sapling_compact_note_decryption(self.chain().network(), self.height, ivk, &od)
             {
                 balance += note.value as i64; // value is incoming
             }
@@ -149,6 +152,13 @@ impl MemPool {
 
         balance
     }
+
+    pub fn set_lwd_url(&mut self, ld_url: &str) -> anyhow::Result<()> {
+        self.ld_url = ld_url.to_string();
+        Ok(())
+    }
+
+    fn chain(&self) -> &dyn CoinChain { get_coin_chain(self.coin_type) }
 }
 
 #[cfg(test)]
@@ -157,12 +167,14 @@ mod tests {
     use crate::mempool::MemPool;
     use crate::{DbAdapter, LWD_URL};
     use std::time::Duration;
+    use zcash_params::coin::CoinType;
 
     #[tokio::test]
     async fn test_mempool() {
-        let db = DbAdapter::new(DEFAULT_DB_PATH).unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
         let ivk = db.get_ivk(1).unwrap();
-        let mut mempool = MemPool::new("zec.db", LWD_URL);
+        let mut mempool = MemPool::new(CoinType::Zcash, "zec.db");
+        mempool.set_lwd_url(LWD_URL).unwrap();
         mempool.set_ivk(&ivk);
         loop {
             mempool.scan().await.unwrap();

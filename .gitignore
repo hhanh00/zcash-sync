@@ -4,3 +4,4 @@
 src/generated/*.rs
 docs/_site/
 *.db
+Cargo.lock

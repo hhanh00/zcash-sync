@@ -1,18 +1,23 @@
 use clap::{App, Arg};
 use std::fs::File;
 use std::io::{Read, Write};
-use sync::{decode_key, Tx, NETWORK};
+use std::str::FromStr;
+use sync::{KeyHelpers, Tx};
 use zcash_client_backend::encoding::decode_extended_spending_key;
-use zcash_primitives::consensus::Parameters;
+use zcash_primitives::consensus::{Network, Parameters};
 use zcash_proofs::prover::LocalTxProver;
+use zcash_params::coin::CoinType;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let key = dotenv::var("KEY").unwrap();
-    let (_seed, sk, _ivk, _address) = decode_key(&key)?;
-
-    let matches = App::new("Multisig CLI")
+    let matches = App::new("Cold wallet Signer CLI")
         .version("1.0")
+        .arg(
+            Arg::with_name("coin")
+                .short("coin")
+                .long("coin")
+                .takes_value(true),
+        )
         .arg(
             Arg::with_name("tx_filename")
                 .short("tx")
@@ -27,12 +32,23 @@ async fn main() -> anyhow::Result<()> {
         )
         .get_matches();
 
-    let tx_filename = matches.value_of("tx_filename").unwrap();
-    let out_filename = matches.value_of("out_filename").unwrap();
+    let coin = matches.value_of("coin").expect("coin argument missing");
+    let tx_filename = matches.value_of("tx_filename").expect("input filename missing");
+    let out_filename = matches.value_of("out_filename").expect("output filename missing");
+
+    let (coin_type, network) = match coin {
+        "zcash" => (CoinType::Zcash, Network::MainNetwork),
+        "ycash" => (CoinType::Ycash, Network::YCashMainNetwork),
+        _ => panic!("Invalid coin")
+    };
+    let key = dotenv::var("KEY").unwrap();
+    let index = u32::from_str(&dotenv::var("INDEX").unwrap_or_else(|_| "0".to_string())).unwrap();
+    let kh = KeyHelpers::new(coin_type);
+    let (_seed, sk, _ivk, _address) = kh.decode_key(&key, index)?;
 
     let sk = sk.unwrap();
     let sk =
-        decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &sk)?.unwrap();
+        decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &sk)?.unwrap();
 
     let mut file = File::open(tx_filename)?;
     let mut s = String::new();

@@ -48,6 +48,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             id_account INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             seed TEXT,
+            aindex INTEGER NOT NULL,
             sk TEXT,
             ivk TEXT NOT NULL UNIQUE,
             address TEXT NOT NULL)",
@@ -91,6 +92,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             rcm BLOB NOT NULL,
             nf BLOB NOT NULL UNIQUE,
             spent INTEGER,
+            excluded BOOL,
             CONSTRAINT tx_output UNIQUE (tx, output_index))",
             NO_PARAMS,
         )?;
@@ -119,24 +121,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             address TEXT NOT NULL)",
             NO_PARAMS,
         )?;
-    }
 
-    if version < 2 {
-        connection.execute("ALTER TABLE received_notes ADD excluded BOOL", NO_PARAMS)?;
-    }
-
-    if version < 3 {
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS contacts (
-                account INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                address TEXT NOT NULL,
-                PRIMARY KEY (account, address))",
-            NO_PARAMS,
-        )?;
-    }
-
-    if version < 4 {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS historical_prices (
                 currency TEXT NOT NULL,
@@ -145,14 +130,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
                 PRIMARY KEY (currency, timestamp))",
             NO_PARAMS,
         )?;
-    }
 
-    if version < 5 {
-        connection.execute("DELETE FROM historical_prices", NO_PARAMS)?;
-    }
-
-    if version < 6 {
-        connection.execute("DROP TABLE contacts", NO_PARAMS)?;
         connection.execute(
             "CREATE TABLE IF NOT EXISTS contacts (
                 id INTEGER PRIMARY KEY,
@@ -163,19 +141,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         )?;
     }
 
-    if version < 7 {
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS secret_shares (
-                account INTEGER PRIMARY KEY,
-                idx INTEGER NOT NULL,
-                participants INTEGER NOT NULL,
-                threshold INTEGER NOT NULL,
-                secret TEXT NOT NULL)",
-            NO_PARAMS,
-        )?;
-    }
-
-    update_schema_version(&connection, 7)?;
+    update_schema_version(&connection, 1)?;
 
     Ok(())
 }

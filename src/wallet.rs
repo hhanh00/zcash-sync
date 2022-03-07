@@ -1,5 +1,5 @@
 use crate::contact::{serialize_contacts, Contact};
-use crate::key::{decode_key, is_valid_key};
+use crate::key::KeyHelpers;
 use crate::pay::Tx;
 use crate::pay::TxBuilder;
 use crate::prices::fetch_historical_prices;
@@ -7,7 +7,7 @@ use crate::scan::ProgressCallback;
 use crate::taddr::{get_taddr_balance, get_utxos};
 use crate::{
     broadcast_tx, connect_lightwalletd, get_latest_height, BlockId, CTree,
-    DbAdapter, NETWORK,
+    DbAdapter,
 };
 use bip39::{Language, Mnemonic};
 use lazycell::AtomicLazyCell;
@@ -19,6 +19,10 @@ use serde::Serialize;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
+use anyhow::anyhow;
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use chacha20poly1305::aead::{Aead, NewAead};
+use bech32::FromBase32;
 use tokio::sync::Mutex;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
@@ -27,18 +31,21 @@ use zcash_client_backend::encoding::{
 };
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
-use zcash_primitives::consensus::Parameters;
+use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::memo::Memo;
 use zcash_primitives::transaction::builder::Progress;
 use zcash_primitives::transaction::components::Amount;
 use zcash_proofs::prover::LocalTxProver;
-use zcash_params::coin::TICKER;
+use zcash_params::coin::{CoinChain, CoinType, get_coin_chain};
+use crate::db::AccountBackup;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
 pub struct Wallet {
+    coin_type: CoinType,
     pub db_path: String,
     db: DbAdapter,
+    key_helpers: KeyHelpers,
     prover: AtomicLazyCell<LocalTxProver>,
     pub ld_url: String,
 }
@@ -92,14 +99,17 @@ impl From<&Recipient> for RecipientMemo {
 }
 
 impl Wallet {
-    pub fn new(db_path: &str, ld_url: &str) -> Wallet {
-        let db = DbAdapter::new(db_path).unwrap();
+    pub fn new(coin_type: CoinType, db_path: &str) -> Wallet {
+        let db = DbAdapter::new(coin_type, db_path).unwrap();
+        let key_helpers = KeyHelpers::new(coin_type);
         db.init_db().unwrap();
         Wallet {
+            coin_type,
             db_path: db_path.to_string(),
             db,
+            key_helpers,
             prover: AtomicLazyCell::new(),
-            ld_url: ld_url.to_string(),
+            ld_url: "".to_string(),
         }
     }
 
@@ -107,25 +117,27 @@ impl Wallet {
         self.db.reset_db()
     }
 
-    pub fn valid_key(key: &str) -> i8 {
-        is_valid_key(key)
+    pub fn valid_key(&self, key: &str) -> i8 {
+        self.key_helpers.is_valid_key(key)
     }
 
-    pub fn valid_address(address: &str) -> bool {
-        let recipient = RecipientAddress::decode(&NETWORK, address);
-        recipient.is_some()
-    }
-
-    pub fn new_account(&self, name: &str, data: &str) -> anyhow::Result<i32> {
+    pub fn new_account(&self, name: &str, data: &str, index: u32) -> anyhow::Result<i32> {
         if data.is_empty() {
             let mut entropy = [0u8; 32];
             OsRng.fill_bytes(&mut entropy);
             let mnemonic = Mnemonic::from_entropy(&entropy, Language::English)?;
             let seed = mnemonic.phrase();
-            self.new_account_with_key(name, seed)
+            self.new_account_with_key(name, seed, index)
         } else {
-            self.new_account_with_key(name, data)
+            self.new_account_with_key(name, data, index)
         }
+    }
+
+    pub fn new_sub_account(&self, id: u32, name: &str) -> anyhow::Result<i32> {
+        let seed = self.db.get_seed(id)?.ok_or_else(|| anyhow!("Account has no seed"))?;
+        let index = self.db.next_account_id(&seed)?;
+        let new_id = self.new_account_with_key(name, &seed, index as u32)?;
+        Ok(new_id)
     }
 
     pub fn get_backup(&self, account: u32) -> anyhow::Result<String> {
@@ -144,11 +156,11 @@ impl Wallet {
         Ok(sk)
     }
 
-    pub fn new_account_with_key(&self, name: &str, key: &str) -> anyhow::Result<i32> {
-        let (seed, sk, ivk, pa) = decode_key(key)?;
+    pub fn new_account_with_key(&self, name: &str, key: &str, index: u32) -> anyhow::Result<i32> {
+        let (seed, sk, ivk, pa) = self.key_helpers.decode_key(key, index)?;
         let account = self
             .db
-            .store_account(name, seed.as_deref(), sk.as_deref(), &ivk, &pa)?;
+            .store_account(name, seed.as_deref(), index, sk.as_deref(), &ivk, &pa)?;
         if account > 0 {
             self.db.create_taddr(account as u32)?;
         }
@@ -156,6 +168,7 @@ impl Wallet {
     }
 
     async fn scan_async(
+        coin_type: CoinType,
         get_tx: bool,
         db_path: &str,
         chunk_size: u32,
@@ -164,6 +177,7 @@ impl Wallet {
         ld_url: &str,
     ) -> anyhow::Result<()> {
         crate::scan::sync_async(
+            coin_type,
             chunk_size,
             get_tx,
             db_path,
@@ -182,6 +196,7 @@ impl Wallet {
 
     // Not a method in order to avoid locking the instance
     pub async fn sync_ex(
+        coin_type: CoinType,
         get_tx: bool,
         anchor_offset: u32,
         db_path: &str,
@@ -190,6 +205,7 @@ impl Wallet {
     ) -> anyhow::Result<()> {
         let cb = Arc::new(Mutex::new(progress_callback));
         Self::scan_async(
+            coin_type,
             get_tx,
             db_path,
             DEFAULT_CHUNK_SIZE,
@@ -198,7 +214,7 @@ impl Wallet {
             ld_url,
         )
         .await?;
-        Self::scan_async(get_tx, db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone(), ld_url).await?;
+        Self::scan_async(coin_type, get_tx, db_path, DEFAULT_CHUNK_SIZE, 0, cb.clone(), ld_url).await?;
         Ok(())
     }
 
@@ -209,6 +225,7 @@ impl Wallet {
         progress_callback: impl Fn(u32) + Send + 'static,
     ) -> anyhow::Result<()> {
         Self::sync_ex(
+            self.db.coin_type,
             get_tx,
             anchor_offset,
             &self.db_path,
@@ -249,11 +266,11 @@ impl Wallet {
         use_transparent: bool,
         anchor_offset: u32,
     ) -> anyhow::Result<(Tx, Vec<u32>)> {
-        let mut tx_builder = TxBuilder::new(last_height);
+        let mut tx_builder = TxBuilder::new(self.db.coin_type, last_height);
 
         let fvk = self.db.get_ivk(account)?;
         let fvk =
-            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
+            decode_extended_full_viewing_key(self.network().hrp_sapling_extended_full_viewing_key(), &fvk)
                 .unwrap()
                 .unwrap();
         let utxos = if use_transparent {
@@ -283,7 +300,7 @@ impl Wallet {
             .db
             .get_tsk(account)?
             .map(|tsk| SecretKey::from_str(&tsk).unwrap());
-        let extsk = decode_extended_spending_key(NETWORK.hrp_sapling_extended_spending_key(), &zsk)
+        let extsk = decode_extended_spending_key(self.network().hrp_sapling_extended_spending_key(), &zsk)
             .unwrap()
             .unwrap();
         let prover = self
@@ -374,7 +391,7 @@ impl Wallet {
     pub fn new_diversified_address(&self, account: u32) -> anyhow::Result<String> {
         let ivk = self.get_ivk(account)?;
         let fvk = decode_extended_full_viewing_key(
-            NETWORK.hrp_sapling_extended_full_viewing_key(),
+            self.network().hrp_sapling_extended_full_viewing_key(),
             &ivk,
         )?
         .unwrap();
@@ -384,7 +401,7 @@ impl Wallet {
             .address(diversifier_index)
             .map_err(|_| anyhow::anyhow!("Cannot generate new address"))?;
         self.db.store_diversifier(account, &new_diversifier_index)?;
-        let pa = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
+        let pa = encode_payment_address(self.network().hrp_sapling_payment_address(), &pa);
         Ok(pa)
     }
 
@@ -484,8 +501,8 @@ impl Wallet {
         self.db.truncate_data()
     }
 
-    pub fn make_payment_uri(address: &str, amount: u64, memo: &str) -> anyhow::Result<String> {
-        let addr = RecipientAddress::decode(&NETWORK, address)
+    pub fn make_payment_uri(&self, address: &str, amount: u64, memo: &str) -> anyhow::Result<String> {
+        let addr = RecipientAddress::decode(self.network(), address)
             .ok_or_else(|| anyhow::anyhow!("Invalid address"))?;
         let payment = Payment {
             recipient_address: addr,
@@ -499,18 +516,18 @@ impl Wallet {
             payments: vec![payment],
         };
         let uri = treq
-            .to_uri(&NETWORK)
+            .to_uri(self.network())
             .ok_or_else(|| anyhow::anyhow!("Cannot build Payment URI"))?;
-        let uri = format!("{}{}", TICKER, &uri[5..]); // hack to replace the URI scheme
+        let uri = format!("{}{}", self.chain().ticker(), &uri[5..]); // hack to replace the URI scheme
         Ok(uri)
     }
 
-    pub fn parse_payment_uri(uri: &str) -> anyhow::Result<String> {
-        if uri[..5].ne(TICKER) {
+    pub fn parse_payment_uri(&self, uri: &str) -> anyhow::Result<String> {
+        if uri[..5].ne(self.chain().ticker()) {
             anyhow::bail!("Invalid Payment URI");
         }
         let uri = format!("zcash{}", &uri[5..]); // hack to replace the URI scheme
-        let treq = TransactionRequest::from_uri(&NETWORK, &uri)
+        let treq = TransactionRequest::from_uri(self.network(), &uri)
             .map_err(|_| anyhow::anyhow!("Invalid Payment URI"))?;
         if treq.payments.len() != 1 {
             anyhow::bail!("Invalid Payment URI")
@@ -528,7 +545,7 @@ impl Wallet {
             None => Ok(String::new()),
         }?;
         let payment = MyPayment {
-            address: payment.recipient_address.encode(&NETWORK),
+            address: payment.recipient_address.encode(self.network()),
             amount: u64::from(payment.amount),
             memo,
         };
@@ -538,12 +555,12 @@ impl Wallet {
         Ok(payment_json)
     }
 
-    pub fn get_full_backup(&self, key: &str) -> anyhow::Result<String> {
-        self.db.get_full_backup(key)
+    pub fn get_full_backup(&self) -> anyhow::Result<Vec<AccountBackup>> {
+        self.db.get_full_backup()
     }
 
-    pub fn restore_full_backup(&self, key: &str, backup: &str) -> anyhow::Result<()> {
-        self.db.restore_full_backup(key, backup)
+    pub fn restore_full_backup(&self, accounts: &[AccountBackup]) -> anyhow::Result<()> {
+        self.db.restore_full_backup(accounts)
     }
 
     pub fn store_share_secret(&self, account: u32, secret: &str, index: usize, threshold: usize, participants: usize) -> anyhow::Result<()> {
@@ -565,6 +582,40 @@ impl Wallet {
         let recipient_memos: Vec<_> = recipients.iter().map(|r| RecipientMemo::from(r)).collect();
         Ok(recipient_memos)
     }
+
+    fn chain(&self) -> &dyn CoinChain { get_coin_chain(self.coin_type) }
+    fn network(&self) -> &Network { self.chain().network() }
+}
+
+const NONCE: &'static[u8; 12] = b"unique nonce";
+
+pub fn encrypt_backup(accounts: &[AccountBackup], key: &str) -> anyhow::Result<String> {
+    let accounts_bin = bincode::serialize(&accounts)?;
+
+    let (hrp, key, _) = bech32::decode(key)?;
+    if hrp != "zwk" { anyhow::bail!("Invalid backup key") }
+    let key = Vec::<u8>::from_base32(&key)?;
+    let key = Key::from_slice(&key);
+
+    let cipher = ChaCha20Poly1305::new(key);
+    // nonce is constant because we always use a different key!
+    let cipher_text = cipher.encrypt(Nonce::from_slice(NONCE), &*accounts_bin).map_err(|_e| anyhow::anyhow!("Failed to encrypt backup"))?;
+    let backup = base64::encode(cipher_text);
+    Ok(backup)
+}
+
+pub fn decrypt_backup(key: &str, backup: &str) -> anyhow::Result<Vec<AccountBackup>> {
+    let (hrp, key, _) = bech32::decode(key)?;
+    if hrp != "zwk" { anyhow::bail!("Not a valid decryption key"); }
+    let key = Vec::<u8>::from_base32(&key)?;
+    let key = Key::from_slice(&key);
+
+    let cipher = ChaCha20Poly1305::new(key);
+    let backup = base64::decode(backup)?;
+    let backup = cipher.decrypt(Nonce::from_slice(NONCE), &*backup).map_err(|_e| anyhow::anyhow!("Failed to decrypt backup"))?;
+
+    let accounts: Vec<AccountBackup> = bincode::deserialize(&backup)?;
+    Ok(accounts)
 }
 
 #[derive(Serialize)]
@@ -576,10 +627,11 @@ struct MyPayment {
 
 #[cfg(test)]
 mod tests {
-    use crate::key::derive_secret_key;
+    use crate::key::KeyHelpers;
     use crate::wallet::Wallet;
     use crate::LWD_URL;
     use bip39::{Language, Mnemonic};
+    use zcash_params::coin::CoinType;
 
     #[tokio::test]
     async fn test_wallet_seed() {
@@ -587,8 +639,9 @@ mod tests {
         env_logger::init();
 
         let seed = dotenv::var("SEED").unwrap();
-        let wallet = Wallet::new("zec.db", LWD_URL);
-        wallet.new_account_with_key("test", &seed).unwrap();
+        let mut wallet = Wallet::new(CoinType::Zcash, "zec.db");
+        wallet.set_lwd_url(LWD_URL).unwrap();
+        wallet.new_account_with_key("test", &seed, 0).unwrap();
     }
 
     #[tokio::test]
@@ -597,8 +650,9 @@ mod tests {
         env_logger::init();
 
         let seed = dotenv::var("SEED").unwrap();
+        let kh = KeyHelpers::new(CoinType::Zcash);
         let (sk, vk, pa) =
-            derive_secret_key(&Mnemonic::from_phrase(&seed, Language::English).unwrap()).unwrap();
+            kh.derive_secret_key(&Mnemonic::from_phrase(&seed, Language::English).unwrap(), 0).unwrap();
         println!("{} {} {}", sk, vk, pa);
         // let wallet = Wallet::new("zec.db");
         //
@@ -608,7 +662,8 @@ mod tests {
 
     #[test]
     pub fn test_diversified_address() {
-        let wallet = Wallet::new("zec.db", LWD_URL);
+        let mut wallet = Wallet::new(CoinType::Zcash, "zec.db");
+        wallet.set_lwd_url(LWD_URL).unwrap();
         let address = wallet.new_diversified_address(1).unwrap();
         println!("{}", address);
     }

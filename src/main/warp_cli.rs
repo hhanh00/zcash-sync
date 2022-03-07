@@ -10,11 +10,12 @@ use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
 use zcash_primitives::memo::Memo;
 use zcash_primitives::merkle_tree::Hashable;
 use zcash_primitives::sapling::Node;
+use zcash_params::coin::CoinType;
 
 const DB_NAME: &str = "zec.db";
 
 fn init() {
-    let db = DbAdapter::new(DB_NAME).unwrap();
+    let db = DbAdapter::new(CoinType::Zcash, DB_NAME).unwrap();
     db.init_db().unwrap();
 }
 
@@ -31,8 +32,9 @@ async fn test() -> anyhow::Result<()> {
     let progress = |height| {
         log::info!("Height = {}", height);
     };
-    let mut wallet = Wallet::new(DB_NAME, LWD_URL);
-    wallet.new_account_with_key("main", &seed).unwrap();
+    let mut wallet = Wallet::new(CoinType::Zcash, DB_NAME);
+    wallet.set_lwd_url(LWD_URL).unwrap();
+    wallet.new_account_with_key("main", &seed, 0).unwrap();
     // wallet.new_account_with_key("test", &seed2).unwrap();
     // wallet.new_account_with_key("zecpages", &ivk).unwrap();
 
@@ -94,7 +96,8 @@ async fn test_sync() {
         log::info!("Height = {}", height);
     };
 
-    let wallet = Wallet::new(DB_NAME, LWD_URL);
+    let mut wallet = Wallet::new(CoinType::Zcash, DB_NAME);
+    wallet.set_lwd_url(LWD_URL).unwrap();
     wallet.sync(true, ANCHOR_OFFSET, progress).await.unwrap();
 }
 
@@ -109,13 +112,13 @@ fn test_make_wallet() {
 
 #[allow(dead_code)]
 fn test_rewind() {
-    let mut db = DbAdapter::new(DB_NAME).unwrap();
+    let mut db = DbAdapter::new(CoinType::Zcash, DB_NAME).unwrap();
     db.trim_to_height(1314000).unwrap();
 }
 
 #[allow(dead_code)]
 fn test_get_balance() {
-    let db = DbAdapter::new(DB_NAME).unwrap();
+    let db = DbAdapter::new(CoinType::Zcash, DB_NAME).unwrap();
     let balance = db.get_balance(1).unwrap();
     println!("Balance = {}", (balance as f64) / 100_000_000.0);
 }
@@ -138,7 +141,7 @@ fn test_invalid_witness() {
 
 #[allow(dead_code)]
 fn w() {
-    let db = DbAdapter::new("zec.db").unwrap();
+    let db = DbAdapter::new(CoinType::Zcash, "zec.db").unwrap();
     // let w_b: Vec<u8> = db.connection.query_row("SELECT witness FROM sapling_witnesses WHERE note = 66 AND height = 1466097", NO_PARAMS, |row| row.get(0)).unwrap();
     // let w = Witness::read(0, &*w_b).unwrap();
     // print_witness2(&w);

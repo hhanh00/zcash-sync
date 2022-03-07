@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use sync::{scan_all, NETWORK};
+use sync::scan_all;
 use tokio::runtime::Runtime;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_primitives::consensus::Parameters;
+use zcash_primitives::consensus::{Network, Parameters};
 
 fn scan(c: &mut Criterion) {
     dotenv::dotenv().unwrap();
@@ -10,7 +10,7 @@ fn scan(c: &mut Criterion) {
 
     let ivk = dotenv::var("IVK").unwrap();
     let fvk =
-        decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &ivk)
+        decode_extended_full_viewing_key(Network::MainNetwork.hrp_sapling_extended_full_viewing_key(), &ivk)
             .unwrap()
             .unwrap();
 
@@ -19,7 +19,7 @@ fn scan(c: &mut Criterion) {
     c.bench_function("scan all", |b| {
         b.iter(|| {
             let r = Runtime::new().unwrap();
-            r.block_on(scan_all(fvks.clone().as_slice())).unwrap();
+            r.block_on(scan_all(&Network::MainNetwork, fvks.clone().as_slice())).unwrap();
         });
     });
 }

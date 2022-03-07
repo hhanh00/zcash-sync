@@ -17,11 +17,12 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
-use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
+use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::Node;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_params::coin::{CoinType, get_coin_chain};
 
-pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
+pub async fn scan_all(network: &Network, fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
     let fvks: HashMap<_, _> = fvks
         .iter()
         .enumerate()
@@ -31,7 +32,7 @@ pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
 
     let total_start = Instant::now();
     let mut client = CompactTxStreamerClient::connect(LWD_URL).await?;
-    let start_height: u32 = crate::NETWORK
+    let start_height: u32 = network
         .activation_height(NetworkUpgrade::Sapling)
         .unwrap()
         .into();
@@ -42,7 +43,7 @@ pub async fn scan_all(fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
     info!("Download chain: {} ms", start.elapsed().as_millis());
 
     let start = Instant::now();
-    let blocks = decrypter.decrypt_blocks(&cbs);
+    let blocks = decrypter.decrypt_blocks(network, &cbs);
     info!("Decrypt Notes: {} ms", start.elapsed().as_millis());
 
     let witnesses = calculate_tree_state_v2(&cbs, &blocks);
@@ -85,6 +86,7 @@ pub struct TxIdHeight {
 }
 
 pub async fn sync_async(
+    coin_type: CoinType,
     chunk_size: u32,
     get_tx: bool,
     db_path: &str,
@@ -94,10 +96,14 @@ pub async fn sync_async(
 ) -> anyhow::Result<()> {
     let ld_url = ld_url.to_owned();
     let db_path = db_path.to_string();
+    let network = {
+        let chain = get_coin_chain(coin_type);
+        chain.network().clone()
+    };
 
     let mut client = connect_lightwalletd(&ld_url).await?;
     let (start_height, mut prev_hash, vks) = {
-        let db = DbAdapter::new(&db_path)?;
+        let db = DbAdapter::new(coin_type, &db_path)?;
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
         let vks = db.get_fvks()?;
@@ -137,7 +143,7 @@ pub async fn sync_async(
     let proc_callback = progress_callback.clone();
 
     let processor = tokio::spawn(async move {
-        let mut db = DbAdapter::new(&db_path)?;
+        let mut db = DbAdapter::new(coin_type, &db_path)?;
         let mut nfs = db.get_nullifiers()?;
 
         let (mut tree, mut witnesses) = db.get_tree()?;
@@ -156,7 +162,7 @@ pub async fn sync_async(
             {
                 // db tx scope
                 let db_tx = db.begin_transaction()?;
-                let dec_blocks = decrypter.decrypt_blocks(&blocks.0);
+                let dec_blocks = decrypter.decrypt_blocks(&network, &blocks.0);
                 log::info!("Dec start : {}", dec_blocks[0].height);
                 let start = Instant::now();
                 for b in dec_blocks.iter() {
@@ -303,7 +309,7 @@ pub async fn sync_async(
                     return c;
                 });
                 let ids: Vec<_> = ids.into_iter().map(|e| e.id_tx).collect();
-                retrieve_tx_info(&mut client, &db_path2, &ids).await?;
+                retrieve_tx_info(coin_type, &mut client, &db_path2, &ids).await?;
             }
             log::info!("Transaction Details : {}", start.elapsed().as_millis());
 

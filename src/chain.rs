@@ -2,7 +2,7 @@ use crate::commitment::{CTree, Witness};
 use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
-use crate::{advance_tree, NETWORK};
+use crate::advance_tree;
 use ff::PrimeField;
 use group::GroupEncoding;
 use log::info;
@@ -12,7 +12,7 @@ use std::time::Instant;
 use thiserror::Error;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Request;
-use zcash_primitives::consensus::{BlockHeight, NetworkUpgrade, Parameters};
+use zcash_primitives::consensus::{BlockHeight, Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decryption;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
@@ -128,7 +128,8 @@ pub fn to_output_description(co: &CompactOutput) -> CompactOutputDescription {
     od
 }
 
-fn decrypt_notes<'a>(
+fn decrypt_notes<'a, N: Parameters>(
+    network: &N,
     block: &'a CompactBlock,
     vks: &HashMap<u32, AccountViewKey>,
 ) -> DecryptedBlock<'a> {
@@ -147,7 +148,7 @@ fn decrypt_notes<'a>(
             for (&account, vk) in vks.iter() {
                 let od = to_output_description(co);
                 if let Some((note, pa)) =
-                    try_sapling_compact_note_decryption(&NETWORK, height, &vk.ivk, &od)
+                    try_sapling_compact_note_decryption(network, height, &vk.ivk, &od)
                 {
                     notes.push(DecryptedNote {
                         account,
@@ -180,10 +181,10 @@ impl DecryptNode {
         DecryptNode { vks }
     }
 
-    pub fn decrypt_blocks<'a>(&self, blocks: &'a [CompactBlock]) -> Vec<DecryptedBlock<'a>> {
+    pub fn decrypt_blocks<'a>(&self, network: &Network, blocks: &'a [CompactBlock]) -> Vec<DecryptedBlock<'a>> {
         let mut decrypted_blocks: Vec<DecryptedBlock> = blocks
             .par_iter()
-            .map(|b| decrypt_notes(b, &self.vks))
+            .map(|b| decrypt_notes(network, b, &self.vks))
             .collect();
         decrypted_blocks.sort_by(|a, b| a.height.cmp(&b.height));
         decrypted_blocks
@@ -307,10 +308,10 @@ pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamer
     Ok(client)
 }
 
-pub async fn sync(vks: HashMap<u32, AccountViewKey>, ld_url: &str) -> anyhow::Result<()> {
+pub async fn sync(network: &Network, vks: HashMap<u32, AccountViewKey>, ld_url: &str) -> anyhow::Result<()> {
     let decrypter = DecryptNode::new(vks);
     let mut client = connect_lightwalletd(ld_url).await?;
-    let start_height: u32 = crate::NETWORK
+    let start_height: u32 = network
         .activation_height(NetworkUpgrade::Sapling)
         .unwrap()
         .into();
@@ -321,7 +322,7 @@ pub async fn sync(vks: HashMap<u32, AccountViewKey>, ld_url: &str) -> anyhow::Re
     eprintln!("Download chain: {} ms", start.elapsed().as_millis());
 
     let start = Instant::now();
-    let blocks = decrypter.decrypt_blocks(&cbs);
+    let blocks = decrypter.decrypt_blocks(network, &cbs);
     eprintln!("Decrypt Notes: {} ms", start.elapsed().as_millis());
 
     let start = Instant::now();
@@ -348,12 +349,13 @@ mod tests {
     use crate::db::AccountViewKey;
     use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
     use crate::LWD_URL;
-    use crate::NETWORK;
     use dotenv;
     use std::collections::HashMap;
     use std::time::Instant;
     use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-    use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
+    use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
+
+    const NETWORK: &Network = &Network::MainNetwork;
 
     #[tokio::test]
     async fn test_get_latest_height() -> anyhow::Result<()> {
@@ -376,7 +378,7 @@ mod tests {
         fvks.insert(1, AccountViewKey::from_fvk(&fvk));
         let decrypter = DecryptNode::new(fvks);
         let mut client = CompactTxStreamerClient::connect(LWD_URL).await?;
-        let start_height: u32 = crate::NETWORK
+        let start_height: u32 = NETWORK
             .activation_height(NetworkUpgrade::Sapling)
             .unwrap()
             .into();
@@ -387,7 +389,7 @@ mod tests {
         eprintln!("Download chain: {} ms", start.elapsed().as_millis());
 
         let start = Instant::now();
-        let blocks = decrypter.decrypt_blocks(&cbs);
+        let blocks = decrypter.decrypt_blocks(&Network::MainNetwork, &cbs);
         eprintln!("Decrypt Notes: {} ms", start.elapsed().as_millis());
 
         // no need to calculate tree before the first note if we can
