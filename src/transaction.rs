@@ -66,7 +66,8 @@ pub async fn decode_transaction(
 
     let height = BlockHeight::from_u32(height);
     let mut amount = 0i64;
-    let mut address = String::new();
+    let mut taddress = String::new();
+    let mut zaddress = String::new();
     for spend in tx.shielded_spends.iter() {
         let nf = spend.nullifier.to_vec();
         if let Some(&v) = nfs.get(&(account, nf)) {
@@ -80,7 +81,7 @@ pub async fn decode_transaction(
 
     for output in tx.vout.iter() {
         if let Some(taddr) = output.script_pubkey.address() {
-            address = encode_transparent_address(
+            taddress = encode_transparent_address(
                 &network.b58_pubkey_address_prefix(),
                 &network.b58_script_address_prefix(),
                 &taddr,
@@ -94,8 +95,8 @@ pub async fn decode_transaction(
             amount += note.value as i64; // change or self transfer
             let _ = contact_decoder.add_memo(&memo); // ignore memo that is not for contacts
             let memo = Memo::try_from(memo)?;
-            if address.is_empty() {
-                address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
+            if zaddress.is_empty() {
+                zaddress = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
             }
             if memo != Memo::Empty {
                 tx_memo = memo;
@@ -103,7 +104,7 @@ pub async fn decode_transaction(
         } else if let Some((_note, pa, memo)) =
             try_sapling_output_recovery(network, height, &ovk, &output)
         {
-            address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
+            zaddress = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
             let memo = Memo::try_from(memo)?;
             if memo != Memo::Empty {
                 tx_memo = memo;
@@ -112,6 +113,12 @@ pub async fn decode_transaction(
     }
 
     let fee = u64::from(tx.value_balance);
+
+    // zaddress must be one of ours
+    // taddress is not always ours
+    let address =
+        // let's use the zaddr from ovk first, then the ivk then the taddr
+        if taddress.is_empty() { zaddress } else { taddress };
 
     let memo = match tx_memo {
         Memo::Empty => "".to_string(),
