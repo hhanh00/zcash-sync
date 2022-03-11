@@ -587,18 +587,19 @@ impl DbAdapter {
         Ok((seed, sk, ivk))
     }
 
-    pub fn get_seed(&self, account: u32) -> anyhow::Result<Option<String>> {
+    pub fn get_seed(&self, account: u32) -> anyhow::Result<(Option<String>, u32)> {
         log::info!("+get_seed");
-        let seed = self.connection.query_row(
-            "SELECT seed FROM accounts WHERE id_account = ?1",
+        let (seed, index) = self.connection.query_row(
+            "SELECT seed, aindex FROM accounts WHERE id_account = ?1",
             params![account],
             |row| {
                 let sk: Option<String> = row.get(0)?;
-                Ok(sk)
+                let index: u32 = row.get(1)?;
+                Ok((sk, index))
             },
         )?;
         log::info!("-get_seed");
-        Ok(seed)
+        Ok((seed, index))
     }
 
     pub fn get_sk(&self, account: u32) -> anyhow::Result<String> {
@@ -706,9 +707,9 @@ impl DbAdapter {
     }
 
     pub fn create_taddr(&self, account: u32) -> anyhow::Result<()> {
-        let seed = self.get_seed(account)?;
+        let (seed, index) = self.get_seed(account)?;
         if let Some(seed) = seed {
-            let bip44_path = format!("m/44'/{}'/0'/0/0", self.network().coin_type());
+            let bip44_path = format!("m/44'/{}'/0'/0/{}", self.network().coin_type(), index);
             let (sk, address) = derive_tkeys(self.network(), &seed, &bip44_path)?;
             self.connection.execute(
                 "INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3) \

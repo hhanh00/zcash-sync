@@ -134,7 +134,8 @@ impl Wallet {
     }
 
     pub fn new_sub_account(&self, id: u32, name: &str) -> anyhow::Result<i32> {
-        let seed = self.db.get_seed(id)?.ok_or_else(|| anyhow!("Account has no seed"))?;
+        let (seed, _) = self.db.get_seed(id)?;
+        let seed = seed.ok_or_else(|| anyhow!("Account has no seed"))?;
         let index = self.db.next_account_id(&seed)?;
         let new_id = self.new_account_with_key(name, &seed, index as u32)?;
         Ok(new_id)
