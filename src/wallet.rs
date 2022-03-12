@@ -592,28 +592,37 @@ const NONCE: &'static[u8; 12] = b"unique nonce";
 
 pub fn encrypt_backup(accounts: &[AccountBackup], key: &str) -> anyhow::Result<String> {
     let accounts_bin = bincode::serialize(&accounts)?;
+    let backup = if !key.is_empty() {
+        let (hrp, key, _) = bech32::decode(key)?;
+        if hrp != "zwk" { anyhow::bail!("Invalid backup key") }
+        let key = Vec::<u8>::from_base32(&key)?;
+        let key = Key::from_slice(&key);
 
-    let (hrp, key, _) = bech32::decode(key)?;
-    if hrp != "zwk" { anyhow::bail!("Invalid backup key") }
-    let key = Vec::<u8>::from_base32(&key)?;
-    let key = Key::from_slice(&key);
-
-    let cipher = ChaCha20Poly1305::new(key);
-    // nonce is constant because we always use a different key!
-    let cipher_text = cipher.encrypt(Nonce::from_slice(NONCE), &*accounts_bin).map_err(|_e| anyhow::anyhow!("Failed to encrypt backup"))?;
-    let backup = base64::encode(cipher_text);
+        let cipher = ChaCha20Poly1305::new(key);
+        // nonce is constant because we always use a different key!
+        let cipher_text = cipher.encrypt(Nonce::from_slice(NONCE), &*accounts_bin).map_err(|_e| anyhow::anyhow!("Failed to encrypt backup"))?;
+        base64::encode(cipher_text)
+    }
+    else {
+        base64::encode(accounts_bin)
+    };
     Ok(backup)
 }
 
 pub fn decrypt_backup(key: &str, backup: &str) -> anyhow::Result<Vec<AccountBackup>> {
-    let (hrp, key, _) = bech32::decode(key)?;
-    if hrp != "zwk" { anyhow::bail!("Not a valid decryption key"); }
-    let key = Vec::<u8>::from_base32(&key)?;
-    let key = Key::from_slice(&key);
+    let backup = if !key.is_empty() {
+        let (hrp, key, _) = bech32::decode(key)?;
+        if hrp != "zwk" { anyhow::bail!("Not a valid decryption key"); }
+        let key = Vec::<u8>::from_base32(&key)?;
+        let key = Key::from_slice(&key);
 
-    let cipher = ChaCha20Poly1305::new(key);
-    let backup = base64::decode(backup)?;
-    let backup = cipher.decrypt(Nonce::from_slice(NONCE), &*backup).map_err(|_e| anyhow::anyhow!("Failed to decrypt backup"))?;
+        let cipher = ChaCha20Poly1305::new(key);
+        let backup = base64::decode(backup)?;
+        cipher.decrypt(Nonce::from_slice(NONCE), &*backup).map_err(|_e| anyhow::anyhow!("Failed to decrypt backup"))?
+    }
+    else {
+        base64::decode(backup)?
+    };
 
     let accounts: Vec<AccountBackup> = bincode::deserialize(&backup)?;
     Ok(accounts)
