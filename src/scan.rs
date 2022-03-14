@@ -151,10 +151,12 @@ pub async fn sync_async(
         let mut absolute_position_at_block_start = tree.get_position();
         let mut last_block: Option<BlockMetadata> = None;
         while let Some(blocks) = processor_rx.recv().await {
-            log::info!("{:?}", blocks);
             if blocks.0.is_empty() {
                 continue;
             }
+            log::info!("start processing - {}", blocks.0[0].height);
+            log::info!("Time {:?}", chrono::offset::Local::now());
+            let start = Instant::now();
 
             let mut new_ids_tx: HashMap<u32, TxIdHeight> = HashMap::new();
             let mut witnesses: Vec<Witness> = vec![];
@@ -163,8 +165,6 @@ pub async fn sync_async(
                 // db tx scope
                 let db_tx = db.begin_transaction()?;
                 let dec_blocks = decrypter.decrypt_blocks(&network, &blocks.0);
-                log::info!("Dec start : {}", dec_blocks[0].height);
-                let start = Instant::now();
                 for b in dec_blocks.iter() {
                     let mut my_nfs: Vec<Nf> = vec![];
                     for nf in b.spends.iter() {

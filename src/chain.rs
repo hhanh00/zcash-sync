@@ -145,8 +145,8 @@ fn decrypt_notes<'a, N: Parameters>(
         }
 
         for (output_index, co) in vtx.outputs.iter().enumerate() {
+            let od = to_output_description(co);
             for (&account, vk) in vks.iter() {
-                let od = to_output_description(co);
                 if let Some((note, pa)) =
                     try_sapling_compact_note_decryption(network, height, &vk.ivk, &od)
                 {
