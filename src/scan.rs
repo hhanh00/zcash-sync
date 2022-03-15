@@ -311,7 +311,7 @@ pub async fn sync_async(
                     return c;
                 });
                 let ids: Vec<_> = ids.into_iter().map(|e| e.id_tx).collect();
-                retrieve_tx_info(coin_type, &mut client, &db_path2, &ids).await?;
+                retrieve_tx_info(coin_type, &mut client, &db_path2, &ids).await.unwrap();
             }
             log::info!("Transaction Details : {}", start.elapsed().as_millis());
 

@@ -15,7 +15,7 @@ use tonic::Request;
 use zcash_note_encryption::batch::try_compact_note_decryption;
 use zcash_primitives::consensus::{BlockHeight, Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
-use zcash_primitives::sapling::note_encryption::{SaplingDomain, try_sapling_compact_note_decryption};
+use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
@@ -137,6 +137,7 @@ struct AccountOutput<'a, N: Parameters> {
     epk: EphemeralKeyBytes,
     cmu: <SaplingDomain<N> as Domain>::ExtractedCommitmentBytes,
     ciphertext: [u8; COMPACT_NOTE_SIZE],
+    tx_index: usize,
     output_index: usize,
     block_output_index: usize,
     vtx: &'a CompactTx,
@@ -144,7 +145,7 @@ struct AccountOutput<'a, N: Parameters> {
 }
 
 impl <'a, N: Parameters> AccountOutput<'a, N> {
-    fn new(output_index: usize, block_output_index: usize, vtx: &'a CompactTx, co: &CompactOutput) -> Self {
+    fn new(tx_index: usize, output_index: usize, block_output_index: usize, vtx: &'a CompactTx, co: &CompactOutput) -> Self {
         let mut epk_bytes = [0u8; 32];
         epk_bytes.copy_from_slice(&co.epk);
         let epk = EphemeralKeyBytes::from(epk_bytes);
@@ -155,6 +156,7 @@ impl <'a, N: Parameters> AccountOutput<'a, N> {
         ciphertext_bytes.copy_from_slice(&co.ciphertext);
 
         AccountOutput {
+            tx_index,
             output_index,
             block_output_index,
             vtx,
@@ -200,7 +202,7 @@ fn decrypt_notes<'a, N: Parameters>(
 
         for (output_index, co) in vtx.outputs.iter().enumerate() {
             let domain = SaplingDomain::<N>::for_height(network.clone(), height);
-            let output = AccountOutput::<N>::new(output_index, count_outputs as usize, vtx, co);
+            let output = AccountOutput::<N>::new(tx_index, output_index, count_outputs as usize, vtx, co);
             outputs.push((domain, output));
 
             // let od = to_output_description(co);
@@ -245,7 +247,7 @@ fn decrypt_notes<'a, N: Parameters>(
                 viewonly: vk.1.viewonly,
                 position_in_block: output.1.block_output_index,
                 height: block.height as u32,
-                tx_index: output.1.vtx.index as usize,
+                tx_index: output.1.tx_index,
                 txid: output.1.vtx.hash.clone(),
                 output_index: output.1.output_index,
             });

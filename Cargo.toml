@@ -69,31 +69,31 @@ base64 = "^0.13"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "a25bb7aaa9bf35669280a2c1b7d6fb8b52f30b2d"
+rev = "67689473e4edbfbd6d2ff33f6ddd5dd2a402bb20"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "a25bb7aaa9bf35669280a2c1b7d6fb8b52f30b2d"
+rev = "67689473e4edbfbd6d2ff33f6ddd5dd2a402bb20"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "a25bb7aaa9bf35669280a2c1b7d6fb8b52f30b2d"
+rev = "67689473e4edbfbd6d2ff33f6ddd5dd2a402bb20"
 
 [dependencies.zcash_params]
 path = "../zcash-params"
 
 [dependencies.zcash_address]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "a25bb7aaa9bf35669280a2c1b7d6fb8b52f30b2d"
+rev = "67689473e4edbfbd6d2ff33f6ddd5dd2a402bb20"
 
 [dependencies.zcash_encoding]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "a25bb7aaa9bf35669280a2c1b7d6fb8b52f30b2d"
+rev = "67689473e4edbfbd6d2ff33f6ddd5dd2a402bb20"
 
 [dependencies.zcash_note_encryption]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "a25bb7aaa9bf35669280a2c1b7d6fb8b52f30b2d"
+rev = "67689473e4edbfbd6d2ff33f6ddd5dd2a402bb20"
 
 [build-dependencies]
 tonic-build = "0.4.2"

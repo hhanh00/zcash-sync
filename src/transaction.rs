@@ -72,6 +72,7 @@ pub async fn decode_transaction(
     let mut zaddress = String::new();
 
     let tx = tx.into_data();
+    // log::info!("{:?}", tx);
     let sapling_bundle = tx.sapling_bundle().ok_or(anyhow!("No sapling bundle"))?;
     for spend in sapling_bundle.shielded_spends.iter() {
         let nf = spend.nullifier.to_vec();
@@ -80,17 +81,19 @@ pub async fn decode_transaction(
         }
     }
 
-    let mut contact_decoder = ContactDecoder::new(tx.sapling_bundle().unwrap().shielded_outputs.len());
+    let mut contact_decoder = ContactDecoder::new(sapling_bundle.shielded_outputs.len());
 
     let mut tx_memo: Memo = Memo::Empty;
 
-    for output in tx.transparent_bundle().ok_or(anyhow!("No transparent bundle"))?.vout.iter() {
-        if let Some(taddr) = output.script_pubkey.address() {
-            taddress = encode_transparent_address(
-                &network.b58_pubkey_address_prefix(),
-                &network.b58_script_address_prefix(),
-                &taddr,
-            );
+    if let Some(transparent_bundle) = tx.transparent_bundle() {
+        for output in transparent_bundle.vout.iter() {
+            if let Some(taddr) = output.script_pubkey.address() {
+                taddress = encode_transparent_address(
+                    &network.b58_pubkey_address_prefix(),
+                    &network.b58_script_address_prefix(),
+                    &taddr,
+                );
+            }
         }
     }
 
