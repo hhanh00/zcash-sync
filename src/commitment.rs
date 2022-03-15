@@ -3,7 +3,7 @@ use byteorder::WriteBytesExt;
 use std::io::{Read, Write};
 use zcash_primitives::merkle_tree::{CommitmentTree, Hashable};
 use zcash_primitives::sapling::Node;
-use zcash_primitives::serialize::{Optional, Vector};
+use zcash_encoding::{Optional, Vector};
 
 /*
 Same behavior and structure as CommitmentTree<Node> from librustzcash
@@ -139,10 +139,10 @@ impl CTree {
     }
 
     pub fn write<W: Write>(&self, mut writer: W) -> std::io::Result<()> {
-        Optional::write(&mut writer, &self.left, |w, n| n.write(w))?;
-        Optional::write(&mut writer, &self.right, |w, n| n.write(w))?;
+        Optional::write(&mut writer, self.left, |w, n| n.write(w))?;
+        Optional::write(&mut writer, self.right, |w, n| n.write(w))?;
         Vector::write(&mut writer, &self.parents, |w, e| {
-            Optional::write(w, e, |w, n| n.write(w))
+            Optional::write(w, *e, |w, n| n.write(w))
         })
     }
 

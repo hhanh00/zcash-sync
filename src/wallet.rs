@@ -399,8 +399,8 @@ impl Wallet {
         let mut diversifier_index = self.db.get_diversifier(account)?;
         diversifier_index.increment().unwrap();
         let (new_diversifier_index, pa) = fvk
-            .address(diversifier_index)
-            .map_err(|_| anyhow::anyhow!("Cannot generate new address"))?;
+            .find_address(diversifier_index)
+            .ok_or_else(|| anyhow::anyhow!("Cannot generate new address"))?;
         self.db.store_diversifier(account, &new_diversifier_index)?;
         let pa = encode_payment_address(self.network().hrp_sapling_payment_address(), &pa);
         Ok(pa)

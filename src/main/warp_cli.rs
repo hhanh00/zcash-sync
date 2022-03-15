@@ -6,7 +6,6 @@ use rusqlite::NO_PARAMS;
 use sync::{
     pedersen_hash, print_witness2, ChainError, DbAdapter, RecipientMemo, Wallet, Witness, LWD_URL,
 };
-use zcash_client_backend::data_api::wallet::ANCHOR_OFFSET;
 use zcash_primitives::memo::Memo;
 use zcash_primitives::merkle_tree::Hashable;
 use zcash_primitives::sapling::Node;
@@ -38,7 +37,7 @@ async fn test() -> anyhow::Result<()> {
     // wallet.new_account_with_key("test", &seed2).unwrap();
     // wallet.new_account_with_key("zecpages", &ivk).unwrap();
 
-    let res = wallet.sync(true, ANCHOR_OFFSET, progress).await;
+    let res = wallet.sync(true, 10, progress).await;
     if let Err(err) = res {
         if let Some(_) = err.downcast_ref::<ChainError>() {
             println!("REORG");
@@ -98,7 +97,7 @@ async fn test_sync() {
 
     let mut wallet = Wallet::new(CoinType::Zcash, DB_NAME);
     wallet.set_lwd_url(LWD_URL).unwrap();
-    wallet.sync(true, ANCHOR_OFFSET, progress).await.unwrap();
+    wallet.sync(true, 10, progress).await.unwrap();
 }
 
 #[allow(dead_code)]

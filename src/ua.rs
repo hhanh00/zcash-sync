@@ -1,5 +1,4 @@
-use std::convert::TryFrom;
-use zcash_address::unified::{Address, Receiver};
+use zcash_address::unified::{Address, Container, Receiver};
 use zcash_address::{FromAddress, Network, ToAddress, UnsupportedAddress, ZcashAddress};
 
 #[derive(Debug, Clone)]
@@ -17,7 +16,7 @@ impl FromAddress for MyReceiver {
     }
 
     fn from_unified(net: Network, data: Address) -> Result<Self, UnsupportedAddress> {
-        for r in data.receivers().iter() {
+        for r in data.items_as_parsed().iter() {
             match r {
                 Receiver::Sapling(data) => {
                     return Ok(MyReceiver {
@@ -39,18 +38,19 @@ impl FromAddress for MyReceiver {
     }
 }
 
-pub fn get_ua(sapling_addr: &str, transparent_addr: &str) -> anyhow::Result<ZcashAddress> {
-    let sapling_addr = ZcashAddress::try_from_encoded(sapling_addr)?;
-    let transparent_addr = ZcashAddress::try_from_encoded(transparent_addr)?;
-    let receivers: Vec<_> = vec![sapling_addr, transparent_addr]
-        .iter()
-        .map(|r| r.clone().convert::<MyReceiver>().unwrap())
-        .collect();
-    let net = receivers.first().unwrap().net.clone();
-    let receivers: Vec<_> = receivers.iter().map(|r| r.receiver.clone()).collect();
-    let ua: Address = Address::try_from(receivers)?;
-    let ua_address = ZcashAddress::from_unified(net, ua);
-    Ok(ua_address)
+pub fn get_ua(_sapling_addr: &str, _transparent_addr: &str) -> anyhow::Result<ZcashAddress> {
+    todo!()
+    // let sapling_addr = ZcashAddress::try_from_encoded(sapling_addr)?;
+    // let transparent_addr = ZcashAddress::try_from_encoded(transparent_addr)?;
+    // let receivers: Vec<_> = vec![sapling_addr, transparent_addr]
+    //     .iter()
+    //     .map(|r| r.clone().convert::<MyReceiver>().unwrap())
+    //     .collect();
+    // let net = receivers.first().unwrap().net.clone();
+    // let receivers: Vec<_> = receivers.iter().map(|r| r.receiver.clone()).collect();
+    // let ua: Address = Address::from_inner(receivers)?;
+    // let ua_address = ZcashAddress::from_unified(net, ua);
+    // Ok(ua_address)
 }
 
 pub fn get_sapling(ua_addr: &str) -> anyhow::Result<ZcashAddress> {

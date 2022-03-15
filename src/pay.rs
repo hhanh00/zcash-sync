@@ -1,7 +1,7 @@
 use crate::db::SpendableNote;
 use crate::wallet::RecipientMemo;
 use crate::{
-    connect_lightwalletd, get_branch, get_latest_height, hex_to_hash, GetAddressUtxosReply,
+    connect_lightwalletd, get_latest_height, hex_to_hash, GetAddressUtxosReply,
     RawTransaction
 };
 use jubjub::Fr;
@@ -10,6 +10,7 @@ use rand::rngs::OsRng;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
+use anyhow::anyhow;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
@@ -20,7 +21,7 @@ use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::legacy::Script;
 use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::merkle_tree::IncrementalWitness;
-use zcash_primitives::sapling::keys::OutgoingViewingKey;
+use zcash_primitives::keys::OutgoingViewingKey;
 use zcash_primitives::sapling::prover::TxProver;
 use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
 use zcash_primitives::transaction::builder::{Builder, Progress};
@@ -187,10 +188,10 @@ impl TxBuilder {
                 t_amount += Amount::from_i64(utxo.value_zat).unwrap();
             }
         }
-        let target_amount_with_fee = target_amount + DEFAULT_FEE;
+        let target_amount_with_fee = (target_amount + DEFAULT_FEE).ok_or(anyhow!("Invalid amount"))?;
         if target_amount_with_fee > t_amount {
             // We need to use some shielded notes because the transparent balance is not enough
-            let mut amount = target_amount_with_fee - t_amount;
+            let mut amount = (target_amount_with_fee - t_amount).unwrap();
 
             // Pick spendable notes until we exceed the target_amount_with_fee or we ran out of notes
             let mut notes = notes.to_vec();
@@ -242,7 +243,7 @@ impl TxBuilder {
         recipients: &[RecipientMemo],
     ) -> anyhow::Result<()> {
         let ovk = &fvk.fvk.ovk;
-        let (_, change) = fvk.default_address().unwrap();
+        let (_, change) = fvk.default_address();
         self.set_change(&ovk, &change)?;
 
         for r in recipients.iter() {
@@ -291,7 +292,7 @@ impl Tx {
         &self,
         tsk: Option<SecretKey>,
         zsk: &ExtendedSpendingKey,
-        prover: &impl TxProver<OsRng>,
+        prover: &impl TxProver,
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<Vec<u8>> {
         let chain = get_coin_chain(self.coin_type);
@@ -361,7 +362,7 @@ impl Tx {
                     let m = hex::decode(&txout.memo)?;
                     memo[..m.len()].copy_from_slice(&m);
                     let memo = MemoBytes::from_bytes(&memo)?;
-                    builder.add_sapling_output(Some(ovk), pa, amount, Some(memo))?;
+                    builder.add_sapling_output(Some(ovk), pa, amount, memo)?;
                 }
             }
         }
@@ -375,8 +376,7 @@ impl Tx {
                 progress_callback(progress);
             }
         });
-        let consensus_branch_id = get_branch(chain.network(), u32::from(last_height));
-        let (tx, _) = builder.build(consensus_branch_id, prover)?;
+        let (tx, _) = builder.build(prover)?;
         let mut raw_tx = vec![];
         tx.write(&mut raw_tx)?;
 

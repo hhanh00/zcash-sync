@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
+use anyhow::anyhow;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::{
@@ -17,7 +18,7 @@ use zcash_primitives::sapling::note_encryption::{
 };
 use zcash_primitives::transaction::Transaction;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use zcash_params::coin::{CoinType, get_coin_chain};
+use zcash_params::coin::{CoinType, get_coin_chain, get_branch};
 
 #[derive(Debug)]
 pub struct TransactionInfo {
@@ -28,7 +29,7 @@ pub struct TransactionInfo {
     pub address: String,
     pub memo: String,
     pub amount: i64,
-    pub fee: u64,
+    // pub fee: u64,
     pub contacts: Vec<Contact>,
 }
 
@@ -50,6 +51,7 @@ pub async fn decode_transaction(
     height: u32,
     index: u32,
 ) -> anyhow::Result<TransactionInfo> {
+    let consensus_branch_id = get_branch(network, u32::from(height));
     let ivk = fvk.fvk.vk.ivk();
     let ovk = fvk.fvk.ovk;
 
@@ -62,24 +64,27 @@ pub async fn decode_transaction(
         .get_transaction(Request::new(tx_filter))
         .await?
         .into_inner();
-    let tx = Transaction::read(&*raw_tx.data)?;
+    let tx = Transaction::read(&*raw_tx.data, consensus_branch_id)?;
 
     let height = BlockHeight::from_u32(height);
     let mut amount = 0i64;
     let mut taddress = String::new();
     let mut zaddress = String::new();
-    for spend in tx.shielded_spends.iter() {
+
+    let tx = tx.into_data();
+    let sapling_bundle = tx.sapling_bundle().ok_or(anyhow!("No sapling bundle"))?;
+    for spend in sapling_bundle.shielded_spends.iter() {
         let nf = spend.nullifier.to_vec();
         if let Some(&v) = nfs.get(&(account, nf)) {
             amount -= v as i64;
         }
     }
 
-    let mut contact_decoder = ContactDecoder::new(tx.shielded_outputs.len());
+    let mut contact_decoder = ContactDecoder::new(tx.sapling_bundle().unwrap().shielded_outputs.len());
 
     let mut tx_memo: Memo = Memo::Empty;
 
-    for output in tx.vout.iter() {
+    for output in tx.transparent_bundle().ok_or(anyhow!("No transparent bundle"))?.vout.iter() {
         if let Some(taddr) = output.script_pubkey.address() {
             taddress = encode_transparent_address(
                 &network.b58_pubkey_address_prefix(),
@@ -89,7 +94,7 @@ pub async fn decode_transaction(
         }
     }
 
-    for output in tx.shielded_outputs.iter() {
+    for output in sapling_bundle.shielded_outputs.iter() {
         if let Some((note, pa, memo)) = try_sapling_note_decryption(network, height, &ivk, output)
         {
             amount += note.value as i64; // change or self transfer
@@ -112,7 +117,9 @@ pub async fn decode_transaction(
         }
     }
 
-    let fee = u64::from(tx.value_balance);
+    // let fee =
+    //     u64::from() +
+    //     u64::from(tx.sapling_bundle().unwrap().value_balance);
 
     // zaddress must be one of ours
     // taddress is not always ours
@@ -135,7 +142,7 @@ pub async fn decode_transaction(
         address,
         memo,
         amount,
-        fee,
+        // fee,
         contacts,
     };
 

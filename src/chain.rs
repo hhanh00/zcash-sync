@@ -4,7 +4,6 @@ use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
 use crate::advance_tree;
 use ff::PrimeField;
-use group::GroupEncoding;
 use log::info;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -18,6 +17,7 @@ use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decrypt
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_note_encryption::EphemeralKeyBytes;
 
 const MAX_CHUNK: u32 = 50000;
 
@@ -119,11 +119,13 @@ pub fn to_output_description(co: &CompactOutput) -> CompactOutputDescription {
     let cmu = bls12_381::Scalar::from_repr(cmu).unwrap();
     let mut epk = [0u8; 32];
     epk.copy_from_slice(&co.epk);
-    let epk = jubjub::ExtendedPoint::from_bytes(&epk).unwrap();
+    // let epk = jubjub::ExtendedPoint::from_bytes(&epk).unwrap();
+    let mut enc_ciphertext = [0u8; 52];
+    enc_ciphertext.copy_from_slice(&co.ciphertext);
     let od = CompactOutputDescription {
-        epk,
+        ephemeral_key: EphemeralKeyBytes::from(epk),
         cmu,
-        enc_ciphertext: co.ciphertext.to_vec(),
+        enc_ciphertext,
     };
     od
 }
@@ -143,6 +145,11 @@ fn decrypt_notes<'a, N: Parameters>(
             nf.copy_from_slice(&cs.nf);
             spends.push(Nf(nf));
         }
+
+        // let _epks: Vec<_> = vtx.outputs.iter().map(|o| {
+        //     &o.epk
+        // }).collect();
+
 
         for (output_index, co) in vtx.outputs.iter().enumerate() {
             let od = to_output_description(co);

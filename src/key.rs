@@ -90,7 +90,7 @@ impl KeyHelpers {
 
     pub fn derive_address(&self, fvk: &ExtendedFullViewingKey) -> anyhow::Result<String> {
         let network = self.chain().network();
-        let (_, payment_address) = fvk.default_address().unwrap();
+        let (_, payment_address) = fvk.default_address();
         let address = encode_payment_address(network.hrp_sapling_payment_address(), &payment_address);
         Ok(address)
     }
