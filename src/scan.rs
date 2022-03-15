@@ -165,6 +165,8 @@ pub async fn sync_async(
                 // db tx scope
                 let db_tx = db.begin_transaction()?;
                 let dec_blocks = decrypter.decrypt_blocks(&network, &blocks.0);
+                let batch_decrypt_elapsed: usize = dec_blocks.iter().map(|b| b.elapsed).sum();
+                log::info!("  Batch Decrypt: {} ms", batch_decrypt_elapsed);
                 for b in dec_blocks.iter() {
                     let mut my_nfs: Vec<Nf> = vec![];
                     for nf in b.spends.iter() {

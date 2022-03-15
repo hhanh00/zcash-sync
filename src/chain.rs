@@ -7,17 +7,19 @@ use ff::PrimeField;
 use log::info;
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::time::Instant;
 use thiserror::Error;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Request;
+use zcash_note_encryption::batch::try_compact_note_decryption;
 use zcash_primitives::consensus::{BlockHeight, Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
-use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decryption;
+use zcash_primitives::sapling::note_encryption::{SaplingDomain, try_sapling_compact_note_decryption};
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use zcash_note_encryption::EphemeralKeyBytes;
+use zcash_note_encryption::{COMPACT_NOTE_SIZE, Domain, EphemeralKeyBytes, ShieldedOutput};
 
 const MAX_CHUNK: u32 = 50000;
 
@@ -96,6 +98,7 @@ pub struct DecryptedBlock<'a> {
     pub count_outputs: u32,
     pub spends: Vec<Nf>,
     pub compact_block: &'a CompactBlock,
+    pub elapsed: usize,
 }
 
 #[derive(Clone)]
@@ -130,15 +133,64 @@ pub fn to_output_description(co: &CompactOutput) -> CompactOutputDescription {
     od
 }
 
+struct AccountOutput<'a, N: Parameters> {
+    epk: EphemeralKeyBytes,
+    cmu: <SaplingDomain<N> as Domain>::ExtractedCommitmentBytes,
+    ciphertext: [u8; COMPACT_NOTE_SIZE],
+    output_index: usize,
+    block_output_index: usize,
+    vtx: &'a CompactTx,
+    _phantom: PhantomData<N>,
+}
+
+impl <'a, N: Parameters> AccountOutput<'a, N> {
+    fn new(output_index: usize, block_output_index: usize, vtx: &'a CompactTx, co: &CompactOutput) -> Self {
+        let mut epk_bytes = [0u8; 32];
+        epk_bytes.copy_from_slice(&co.epk);
+        let epk = EphemeralKeyBytes::from(epk_bytes);
+        let mut cmu_bytes = [0u8; 32];
+        cmu_bytes.copy_from_slice(&co.cmu);
+        let cmu = <SaplingDomain<N> as Domain>::ExtractedCommitmentBytes::from(cmu_bytes);
+        let mut ciphertext_bytes = [0u8; COMPACT_NOTE_SIZE];
+        ciphertext_bytes.copy_from_slice(&co.ciphertext);
+
+        AccountOutput {
+            output_index,
+            block_output_index,
+            vtx,
+            epk,
+            cmu,
+            ciphertext: ciphertext_bytes,
+            _phantom: PhantomData::default(),
+        }
+    }
+}
+
+impl <'a, N: Parameters> ShieldedOutput<SaplingDomain<N>, COMPACT_NOTE_SIZE> for AccountOutput<'a, N> {
+    fn ephemeral_key(&self) -> EphemeralKeyBytes {
+        self.epk.clone()
+    }
+
+    fn cmstar_bytes(&self) -> <SaplingDomain<N> as Domain>::ExtractedCommitmentBytes {
+        self.cmu
+    }
+
+    fn enc_ciphertext(&self) -> &[u8; COMPACT_NOTE_SIZE] {
+        &self.ciphertext
+    }
+}
+
 fn decrypt_notes<'a, N: Parameters>(
     network: &N,
     block: &'a CompactBlock,
-    vks: &HashMap<u32, AccountViewKey>,
+    vks: &[(&u32, &AccountViewKey)],
 ) -> DecryptedBlock<'a> {
     let height = BlockHeight::from_u32(block.height as u32);
     let mut count_outputs = 0u32;
     let mut spends: Vec<Nf> = vec![];
     let mut notes: Vec<DecryptedNote> = vec![];
+    let vvks: Vec<_> = vks.iter().map(|vk| vk.1.ivk.clone()).collect();
+    let mut outputs: Vec<(SaplingDomain<N>, AccountOutput<N>)> = vec![];
     for (tx_index, vtx) in block.vtx.iter().enumerate() {
         for cs in vtx.spends.iter() {
             let mut nf = [0u8; 32];
@@ -146,40 +198,67 @@ fn decrypt_notes<'a, N: Parameters>(
             spends.push(Nf(nf));
         }
 
-        // let _epks: Vec<_> = vtx.outputs.iter().map(|o| {
-        //     &o.epk
-        // }).collect();
-
-
         for (output_index, co) in vtx.outputs.iter().enumerate() {
-            let od = to_output_description(co);
-            for (&account, vk) in vks.iter() {
-                if let Some((note, pa)) =
-                    try_sapling_compact_note_decryption(network, height, &vk.ivk, &od)
-                {
-                    notes.push(DecryptedNote {
-                        account,
-                        ivk: vk.fvk.clone(),
-                        note,
-                        pa,
-                        viewonly: vk.viewonly,
-                        position_in_block: count_outputs as usize,
-                        height: block.height as u32,
-                        tx_index,
-                        txid: vtx.hash.clone(),
-                        output_index,
-                    });
-                }
-            }
+            let domain = SaplingDomain::<N>::for_height(network.clone(), height);
+            let output = AccountOutput::<N>::new(output_index, count_outputs as usize, vtx, co);
+            outputs.push((domain, output));
+
+            // let od = to_output_description(co);
+            //
+            // for (&account, vk) in vks.iter() {
+            //     if let Some((note, pa)) =
+            //         try_sapling_compact_note_decryption(network, height, &vk.ivk, &od)
+            //     {
+            //         notes.push(DecryptedNote {
+            //             account,
+            //             ivk: vk.fvk.clone(),
+            //             note,
+            //             pa,
+            //             viewonly: vk.viewonly,
+            //             position_in_block: count_outputs as usize,
+            //             height: block.height as u32,
+            //             tx_index,
+            //             txid: vtx.hash.clone(),
+            //             output_index,
+            //         });
+            //     }
+            // }
+
             count_outputs += 1;
         }
     }
+
+    let start = Instant::now();
+    let notes_decrypted = try_compact_note_decryption::<SaplingDomain<N>, AccountOutput<N>>
+        (&vvks, &outputs);
+    let elapsed = start.elapsed().as_millis() as usize;
+
+    for (pos, opt_note) in notes_decrypted.iter().enumerate() {
+        if let Some((note, pa)) = opt_note {
+            let vk = &vks[pos / outputs.len()];
+            let output = &outputs[pos % outputs.len()];
+            notes.push(DecryptedNote {
+                account: *vk.0,
+                ivk: vk.1.fvk.clone(),
+                note: note.clone(),
+                pa: pa.clone(),
+                viewonly: vk.1.viewonly,
+                position_in_block: output.1.block_output_index,
+                height: block.height as u32,
+                tx_index: output.1.vtx.index as usize,
+                txid: output.1.vtx.hash.clone(),
+                output_index: output.1.output_index,
+            });
+        }
+    }
+
     DecryptedBlock {
         height: block.height as u32,
         spends,
         notes,
         count_outputs,
         compact_block: block,
+        elapsed,
     }
 }
 
@@ -189,9 +268,10 @@ impl DecryptNode {
     }
 
     pub fn decrypt_blocks<'a>(&self, network: &Network, blocks: &'a [CompactBlock]) -> Vec<DecryptedBlock<'a>> {
+        let vks: Vec<_> = self.vks.iter().collect();
         let mut decrypted_blocks: Vec<DecryptedBlock> = blocks
             .par_iter()
-            .map(|b| decrypt_notes(network, b, &self.vks))
+            .map(|b| decrypt_notes(network, b, &vks))
             .collect();
         decrypted_blocks.sort_by(|a, b| a.height.cmp(&b.height));
         decrypted_blocks
@@ -331,6 +411,8 @@ pub async fn sync(network: &Network, vks: HashMap<u32, AccountViewKey>, ld_url: 
     let start = Instant::now();
     let blocks = decrypter.decrypt_blocks(network, &cbs);
     eprintln!("Decrypt Notes: {} ms", start.elapsed().as_millis());
+    let batch_decrypt_elapsed: usize = blocks.iter().map(|b| b.elapsed).sum();
+    eprintln!("  Batch Decrypt: {} ms", batch_decrypt_elapsed);
 
     let start = Instant::now();
     let witnesses = calculate_tree_state_v2(&cbs, &blocks);
