@@ -139,6 +139,17 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
                 dirty BOOL NOT NULL)",
             NO_PARAMS,
         )?;
+
+        connection.execute(
+            "CREATE INDEX i_received_notes ON received_notes(account)", NO_PARAMS)?;
+        connection.execute(
+            "CREATE INDEX i_account ON accounts(address)", NO_PARAMS)?;
+        connection.execute(
+            "CREATE INDEX i_contact ON contacts(address)", NO_PARAMS)?;
+        connection.execute(
+            "CREATE INDEX i_transaction ON transactions(account)", NO_PARAMS)?;
+        connection.execute(
+            "CREATE INDEX i_witness ON sapling_witnesses(height)", NO_PARAMS)?;
     }
 
     update_schema_version(&connection, 1)?;

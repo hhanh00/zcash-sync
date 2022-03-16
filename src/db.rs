@@ -4,7 +4,6 @@ use crate::prices::Quote;
 use crate::taddr::derive_tkeys;
 use crate::transaction::TransactionInfo;
 use crate::{CTree, Witness};
-use chrono::NaiveDateTime;
 use rusqlite::{params, Connection, OptionalExtension, Transaction, NO_PARAMS};
 use std::collections::HashMap;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -718,25 +717,6 @@ impl DbAdapter {
             )?;
         }
         Ok(())
-    }
-
-    pub fn get_missing_prices_timestamp(&self, currency: &str) -> anyhow::Result<Vec<i64>> {
-        let mut statement = self.connection.prepare(
-            "WITH t AS (SELECT timestamp, timestamp/86400 AS day FROM transactions), p AS (SELECT price, timestamp/86400 AS day FROM historical_prices WHERE currency = ?1) \
-                SELECT t.timestamp FROM t LEFT JOIN p ON t.day = p.day WHERE p.price IS NULL")?;
-        let res = statement.query_map(params![currency], |row| {
-            let timestamp: i64 = row.get(0)?;
-            Ok(timestamp)
-        })?;
-        let mut timestamps: Vec<i64> = vec![];
-        for ts in res {
-            let ts = NaiveDateTime::from_timestamp(ts?, 0);
-            let ts_date = ts.date().and_hms(0, 0, 0); // at midnight
-            timestamps.push(ts_date.timestamp());
-        }
-        timestamps.sort();
-        timestamps.dedup();
-        Ok(timestamps)
     }
 
     pub fn store_historical_prices(
