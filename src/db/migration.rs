@@ -139,7 +139,9 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
                 dirty BOOL NOT NULL)",
             NO_PARAMS,
         )?;
+    }
 
+    if version < 2 {
         connection.execute(
             "CREATE INDEX i_received_notes ON received_notes(account)", NO_PARAMS)?;
         connection.execute(
@@ -152,7 +154,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             "CREATE INDEX i_witness ON sapling_witnesses(height)", NO_PARAMS)?;
     }
 
-    update_schema_version(&connection, 1)?;
+    update_schema_version(&connection, 2)?;
 
     Ok(())
 }
