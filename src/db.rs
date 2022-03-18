@@ -75,7 +75,7 @@ pub struct AccountBackup {
 impl DbAdapter {
     pub fn new(coin_type: CoinType, db_path: &str) -> anyhow::Result<DbAdapter> {
         let connection = Connection::open(db_path)?;
-        connection.execute("PRAGMA synchronous = off", NO_PARAMS)?;
+        // connection.execute("PRAGMA synchronous = off", NO_PARAMS)?;
         Ok(DbAdapter { coin_type, connection })
     }
 
