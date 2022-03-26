@@ -128,7 +128,7 @@ pub async fn decode_transaction(
     // taddress is not always ours
     let address =
         // let's use the zaddr from ovk first, then the ivk then the taddr
-        if taddress.is_empty() { zaddress } else { taddress };
+        if zaddress.is_empty() { taddress } else { zaddress };
 
     let memo = match tx_memo {
         Memo::Empty => "".to_string(),
