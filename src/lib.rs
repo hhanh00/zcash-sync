@@ -36,6 +36,14 @@ mod transaction;
 mod ua;
 mod wallet;
 
+#[cfg(feature = "ledger")]
+mod ledger;
+
+#[cfg(not(feature = "ledger"))]
+mod ledger {
+    pub async fn build_tx_ledger(_tx: &mut super::pay::Tx, _prover: &impl zcash_primitives::sapling::prover::TxProver) -> anyhow::Result<Vec<u8>> { unreachable!() }
+}
+
 pub fn hex_to_hash(hex: &str) -> anyhow::Result<[u8; 32]> {
     let mut hash = [0u8; 32];
     hex::decode_to_slice(hex, &mut hash)?;
@@ -59,3 +67,4 @@ pub use crate::print::*;
 pub use crate::scan::{latest_height, scan_all, sync_async};
 pub use crate::ua::{get_sapling, get_ua};
 pub use crate::wallet::{RecipientMemo, Wallet, WalletBalance, encrypt_backup, decrypt_backup};
+pub use crate::ledger::build_tx_ledger;

@@ -5,10 +5,7 @@ use crate::pay::TxBuilder;
 use crate::prices::fetch_historical_prices;
 use crate::scan::ProgressCallback;
 use crate::taddr::{get_taddr_balance, get_utxos};
-use crate::{
-    broadcast_tx, connect_lightwalletd, get_latest_height, BlockId, CTree,
-    DbAdapter,
-};
+use crate::{broadcast_tx, connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, build_tx_ledger};
 use bip39::{Language, Mnemonic};
 use lazycell::AtomicLazyCell;
 use rand::rngs::OsRng;
@@ -17,6 +14,7 @@ use secp256k1::SecretKey;
 use serde::Deserialize;
 use serde::Serialize;
 use std::convert::TryFrom;
+use std::fs::File;
 use std::str::FromStr;
 use std::sync::Arc;
 use anyhow::anyhow;
@@ -582,6 +580,15 @@ impl Wallet {
         let recipients: Vec<Recipient> = serde_json::from_str(recipients)?;
         let recipient_memos: Vec<_> = recipients.iter().map(|r| RecipientMemo::from(r)).collect();
         Ok(recipient_memos)
+    }
+
+    pub async fn ledger_sign(&mut self, tx_filename: &str) -> anyhow::Result<String> {
+        self._ensure_prover()?;
+        let file = File::open(tx_filename)?;
+        let mut tx: Tx = serde_json::from_reader(&file)?;
+        let raw_tx = build_tx_ledger(&mut tx, self.prover.borrow().unwrap()).await?;
+        let tx_id = broadcast_tx(&raw_tx, &self.ld_url).await?;
+        Ok(tx_id)
     }
 
     fn chain(&self) -> &dyn CoinChain { get_coin_chain(self.coin_type) }
