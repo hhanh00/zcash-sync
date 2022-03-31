@@ -178,8 +178,6 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
     assert_eq!(tin_count, 0);
     buffer.push(0u8);
     buffer.push(0u8);
-    // buffer.push(0u8);
-    // buffer.push(0u8);
     buffer.push(s_in_count as u8);
     buffer.push((s_out_count + 1) as u8); // +1 for change
 
@@ -189,7 +187,6 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
         let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &sin.fvk).unwrap().unwrap();
         let (_, pa) = fvk.default_address();
         let address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
-        assert_eq!(address, "zs1m8d7506t4rpcgaag392xae698gx8j5at63qpg54ssprg6eqej0grmkfu76tq6p495z3w6s8qlll");
         assert_eq!(pa.to_bytes().len(), 43);
         buffer.extend_from_slice(&pa.to_bytes());
         buffer.write_u64::<LE>(sin.amount)?;
@@ -199,18 +196,13 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
     // assert_eq!(buffer.len(), 4+55*s_in_count);
 
     for sout in tx.outputs.iter() {
-        println!("{} {}", buffer.len(), sout.addr);
         let pa = decode_payment_address(NETWORK.hrp_sapling_payment_address(), &sout.addr).unwrap().unwrap();
         assert_eq!(pa.to_bytes().len(), 43);
         buffer.extend_from_slice(&pa.to_bytes());
-        println!("{}", buffer.len());
         buffer.write_u64::<LE>(sout.amount)?;
-        println!("{}", buffer.len());
         buffer.push(0xF6); // no memo
-        println!("{}", buffer.len());
         buffer.push(0x01); // ovk present
         buffer.extend_from_slice(&hex::decode(&sout.ovk)?);
-        println!("{}", buffer.len());
         change -= sout.amount as i64;
     }
     assert_eq!(buffer.len(), 4 + 55 * s_in_count + 85 * (s_out_count));
@@ -235,7 +227,7 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
     buffer.extend_from_slice(&hex::decode(&tx.ovk)?);
 
     assert_eq!(buffer.len(), 4 + 55 * s_in_count + 85 * s_out_count);
-    println!("txlen {}", buffer.len());
+    log::debug!("txlen {}", buffer.len());
 
     let mut chunks: Vec<_> = buffer.chunks(250).collect();
     chunks.insert(0, &[]); // starts with empty chunk
@@ -245,7 +237,7 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             _ if index == chunks.len() - 1 => 2,
             _ => 1,
         };
-        println!("data {}", hex::encode(c));
+        log::debug!("data {}", hex::encode(c));
         let command = APDUCommand {
             cla: 0x85,
             ins: 0xA0,
@@ -254,7 +246,7 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             data: c.to_vec(),
         };
         let rep = send_request(&command).await;
-        println!("{}", rep.retcode);
+        log::debug!("{}", rep.retcode);
     }
 
     let mut buffer = Vec::<u8>::new();
@@ -270,15 +262,12 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             data: vec![],
         };
         let rep = send_request(&command).await;
-        println!("{}", rep.retcode);
+        log::debug!("{}", rep.retcode);
         let ak = &rep.data[0..32];
         let nsk = &rep.data[32..64];
         let rcv = &rep.data[64..96];
         let ar = &rep.data[96..128];
-        println!("ak {}", hex::encode(ak));
-        println!("nsk {}", hex::encode(nsk));
-        println!("rcv {}", hex::encode(rcv));
-        println!("ar {}", hex::encode(ar));
+
         let ak = SubgroupPoint::from_bytes(&slice_to_hash(&ak)).unwrap();
         let nsk = Fr::from_bytes(&slice_to_hash(&nsk)).unwrap();
         let rcv = Fr::from_bytes(&slice_to_hash(&rcv)).unwrap();
@@ -296,7 +285,6 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
         buffer.extend_from_slice(&spd.anchor);
         buffer.extend_from_slice(&spd.nullifier);
         buffer.extend_from_slice(&spd.rk.to_bytes());
-        println!("rk {}", hex::encode(spd.rk.to_bytes()));
         buffer.extend_from_slice(&spd.zkproof);
     }
 
@@ -310,11 +298,9 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             data: vec![],
         };
         let rep = send_request(&command).await;
-        println!("{}", rep.retcode);
+        log::debug!("{}", rep.retcode);
         let rcv = &rep.data[0..32];
         let rseed = &rep.data[32..64];
-        println!("rcv {}", hex::encode(rcv));
-        println!("rseed {}", hex::encode(rseed));
         let rcv = Fr::from_bytes(&slice_to_hash(&rcv)).unwrap();
         let rseed = slice_to_hash(&rseed);
         let output_description = get_output_description(tx, i, change as u64, rcv, rseed, &mut context, prover);
@@ -346,7 +332,7 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             _ if index == chunks.len() - 1 => 2,
             _ => 1,
         };
-        println!("data {}", hex::encode(c));
+        log::debug!!("data {}", hex::encode(c));
         let command = APDUCommand {
             cla: 0x85,
             ins: 0xA3,
@@ -355,9 +341,8 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             data: c.to_vec(),
         };
         let rep = send_request(&command).await;
-        println!("{}", rep.retcode);
+        log::debug!("{}", rep.retcode);
         if p1 == 2 {
-            println!("{}", rep.data.len());
             tx_hash.copy_from_slice(&rep.data[0..32]);
         }
     }
@@ -372,35 +357,27 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             data: vec![],
         };
         let rep = send_request(&command).await;
-        println!("{}", rep.retcode);
+        log::debug!("{}", rep.retcode);
         let signature = &rep.data[0..64];
-        println!("Signature: {}", hex::encode(signature));
         signatures.push(rep.data[0..64].to_vec())
     }
 
-    println!("tx hash: {}", hex::encode(tx_hash));
-    println!("sig hash: {}", hex::encode(sig_hash));
+    log::debug!("tx hash: {}", hex::encode(tx_hash));
+    log::debug!("sig hash: {}", hex::encode(sig_hash));
 
     let binding_signature = prover.binding_sig(&mut context, DEFAULT_FEE, &sig_hash).map_err(|_| anyhow!("Cannot create binding signature"))?;
     let mut sig_buffer: Vec<u8> = vec![];
     binding_signature.write(&mut sig_buffer).unwrap();
-    println!("binding_signature: {}", hex::encode(&sig_buffer));
+    log::debug!("binding_signature: {}", hex::encode(&sig_buffer));
 
     let tx = get_tx_data(tx.height, u64::from(DEFAULT_FEE), &spend_datas, &output_descriptions,
                          &signatures, &binding_signature);
-    println!("{}", hex::encode(&tx));
     Ok(tx)
 }
 
 fn get_spend_proof<T: TxProver>(tx: &Tx, i: usize, ak: SubgroupPoint, nsk: Fr, ar: Fr, rcv: Fr, context: &mut T::SaplingProvingContext, prover: &T) -> SpendData
 {
-    // get spend data
-
     let txin = &tx.inputs[i];
-    // let ak = hex::decode("36989b418770b44d5f2b1f02dab1ca09e8b3269bbc7c25c274da7d1452e55850").unwrap();
-    // let nsk = hex::decode("6806f129399fa44851e3a1280682bb7a3d771d99aa328fae9501aea833826705").unwrap();
-    // let rcv = hex::decode("6b0bd5a312e5ea1272aa3a7317d2e9b8eb534c229c046f076680b07dd8b1e509").unwrap();
-    // let alpha = hex::decode("ebc82f3378d5b25004a3b798166ed1e0ca9a006befb31e5d5ae42b9234bbc509").unwrap();
 
     let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &txin.fvk).unwrap().unwrap();
     let mut diversifier = [0u8; 11];
@@ -657,40 +634,5 @@ mod tests {
         let mut tx: Tx = serde_json::from_reader(&file).unwrap();
         let prover = LocalTxProver::with_default_location().unwrap();
         build_tx_ledger(&mut tx, &prover).await.unwrap();
-    }
-
-    // #[test]
-    // fn load_tx2() {
-    //     let file = File::open("tx.json").unwrap();
-    //     let tx: Tx = serde_json::from_reader(&file).unwrap();
-    //     let prover = LocalTxProver::with_default_location().unwrap();
-    //     get_spendinfo(&tx, &prover);
-    // }
-
-    #[test]
-    fn test_ask() {
-        let ask = slice_to_hash(&hex::decode("3cfc5d99015978bf893e9e04ded88dee2fd10b9db84e500b300d81713d9b860c").unwrap());
-        let alpha = slice_to_hash(&hex::decode("857a2184f5bfa1eb7dc22bdcae35ade9ebf96839a95c43e2b2bdd03aab37d809").unwrap());
-        let ask = Fr::from_bytes(&ask).unwrap();
-        let ak = SPENDING_KEY_GENERATOR * ask;
-        let alpha = Fr::from_bytes(&alpha).unwrap();
-        let rsk = ask + alpha;
-        let rk = SPENDING_KEY_GENERATOR * rsk;
-        println!("ak: {}", hex::encode(ak.to_bytes()));
-        println!("rk: {}", hex::encode(rk.to_bytes()));
-        let rk = PublicKey(ak.into()).randomize(alpha, SPENDING_KEY_GENERATOR);
-        println!("rk: {}", hex::encode(rk.0.to_bytes()));
-    }
-
-    #[test]
-    fn sighash() {
-        let data = hex::decode("0400008085202f89d53a633bbecf82fe9e9484d8a0e727c73bb9e68c96e72dec30144f6a84afa136a5f25f01959361ee6eb56a7401210ee268226f6ce764a4f10b7f29e54db37272869eda84eecf7257f9979a4848bbf52f4969a5736594ab7ba41452e7bb9068240000000000000000000000000000000000000000000000000000000000000000598b1eba3382c85d968e28c943d315ebd53a38d3fa5bb7fa40762cf5e753b20635b991949f54e9e17577d0a4cc1662e2c201d9d4d91bb641c93bc2799e46460800000000dba61800e80300000000000001000000").unwrap();
-        let hash: [u8; 32] = slice_to_hash(Params::new()
-            .hash_length(32)
-            .personal(&hex::decode("5a6361736853696748617368a675ffe9").unwrap())
-            .hash(&data)
-            .as_bytes());
-
-        println!("{}", hex::encode(&hash));
     }
 }
