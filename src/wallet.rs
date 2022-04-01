@@ -5,7 +5,7 @@ use crate::pay::TxBuilder;
 use crate::prices::fetch_historical_prices;
 use crate::scan::ProgressCallback;
 use crate::taddr::{get_taddr_balance, get_utxos};
-use crate::{broadcast_tx, connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, build_tx_ledger};
+use crate::{broadcast_tx, connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, build_tx_ledger, CompactTxStreamerClient};
 use bip39::{Language, Mnemonic};
 use lazycell::AtomicLazyCell;
 use rand::rngs::OsRng;
@@ -23,6 +23,7 @@ use chacha20poly1305::aead::{Aead, NewAead};
 use bech32::FromBase32;
 use tokio::sync::Mutex;
 use tonic::Request;
+use tonic::transport::Channel;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key, encode_payment_address,
@@ -35,6 +36,7 @@ use zcash_primitives::transaction::builder::Progress;
 use zcash_primitives::transaction::components::Amount;
 use zcash_proofs::prover::LocalTxProver;
 use zcash_params::coin::{CoinChain, CoinType, get_coin_chain};
+use crate::chain::{get_activation_date, get_block_by_time};
 use crate::db::AccountBackup;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
@@ -237,8 +239,13 @@ impl Wallet {
     pub async fn skip_to_last_height(&self) -> anyhow::Result<()> {
         let mut client = connect_lightwalletd(&self.ld_url).await?;
         let last_height = get_latest_height(&mut client).await?;
+        self.store_tree_state(&mut client, last_height).await?;
+        Ok(())
+    }
+
+    async fn store_tree_state(&self, client: &mut CompactTxStreamerClient<Channel>, height: u32) -> anyhow::Result<()> {
         let block_id = BlockId {
-            height: last_height as u64,
+            height: height as u64,
             hash: vec![],
         };
         let block = client.get_block(block_id.clone()).await?.into_inner();
@@ -248,13 +255,15 @@ impl Wallet {
             .into_inner();
         let tree = CTree::read(&*hex::decode(&tree_state.tree)?)?;
         self.db
-            .store_block(last_height, &block.hash, block.time, &tree)?;
-
+            .store_block(height, &block.hash, block.time, &tree)?;
         Ok(())
     }
 
-    pub fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<()> {
-        self.db.trim_to_height(height)
+    pub async fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<()> {
+        let mut client = connect_lightwalletd(&self.ld_url).await?;
+        self.db.trim_to_height(height)?;
+        self.store_tree_state(&mut client, height).await?;
+        Ok(())
     }
 
     async fn prepare_multi_payment(
@@ -589,6 +598,18 @@ impl Wallet {
         let raw_tx = build_tx_ledger(&mut tx, self.prover.borrow().unwrap()).await?;
         let tx_id = broadcast_tx(&raw_tx, &self.ld_url).await?;
         Ok(tx_id)
+    }
+
+    pub async fn get_activation_date(&self) -> anyhow::Result<u32> {
+        let mut client = connect_lightwalletd(&self.ld_url).await?;
+        let date_time = get_activation_date(self.network(), &mut client).await?;
+        Ok(date_time)
+    }
+
+    pub async fn get_block_by_time(&self, time: u32) -> anyhow::Result<u32> {
+        let mut client = connect_lightwalletd(&self.ld_url).await?;
+        let date_time = get_block_by_time(self.network(), &mut client, time).await?;
+        Ok(date_time)
     }
 
     fn chain(&self) -> &dyn CoinChain { get_coin_chain(self.coin_type) }

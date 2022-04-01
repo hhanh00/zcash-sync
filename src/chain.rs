@@ -32,6 +32,39 @@ pub async fn get_latest_height(
     Ok(block_id.height as u32)
 }
 
+pub async fn get_activation_date(network: &Network, client: &mut CompactTxStreamerClient<Channel>) -> anyhow::Result<u32> {
+    let height = network.activation_height(NetworkUpgrade::Sapling).unwrap();
+    let time = get_block_date(client, u32::from(height)).await?;
+    Ok(time)
+}
+
+pub async fn get_block_date(client: &mut CompactTxStreamerClient<Channel>, height: u32) -> anyhow::Result<u32> {
+    let block = client.get_block(Request::new(BlockId { height: height as u64, hash: vec![] })).await?.into_inner();
+    Ok(block.time)
+}
+
+pub async fn get_block_by_time(network: &Network, client: &mut CompactTxStreamerClient<Channel>, time: u32) -> anyhow::Result<u32> {
+    let mut start = u32::from(network.activation_height(NetworkUpgrade::Sapling).unwrap());
+    let mut end = get_latest_height(client).await?;
+    if time <= get_block_date(client, start).await? { return Ok(0); }
+    if time >= get_block_date(client, end).await? { return Ok(end); }
+    let mut block_mid;
+    while end - start >= 1000 {
+        block_mid = (start + end) / 2;
+        let mid = get_block_date(client, block_mid).await?;
+        if time < mid {
+            end = block_mid - 1;
+        }
+        else if time > mid {
+            start = block_mid + 1;
+        }
+        else {
+            return Ok(block_mid);
+        }
+    }
+    Ok(start)
+}
+
 #[derive(Error, Debug)]
 pub enum ChainError {
     #[error("Blockchain reorganization")]
