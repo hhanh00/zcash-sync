@@ -823,7 +823,6 @@ impl DbAdapter {
     }
 
     pub fn get_full_backup(&self) -> anyhow::Result<Vec<AccountBackup>> {
-        let coin = get_coin_id(self.coin_type);
         let mut statement = self.connection.prepare(
             "SELECT name, seed, aindex, a.sk AS z_sk, ivk, a.address AS z_addr, t.sk as t_sk, t.address AS t_addr FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account")?;
         let rows = statement.query_map(NO_PARAMS, |r| {
@@ -835,6 +834,7 @@ impl DbAdapter {
             let z_addr: String = r.get(5)?;
             let t_sk: Option<String> = r.get(6)?;
             let t_addr: Option<String> = r.get(7)?;
+            let coin = get_coin_id_by_address(&z_addr);
             Ok(AccountBackup {
                 coin,
                 name,
@@ -882,6 +882,11 @@ impl DbAdapter {
         let chain = get_coin_chain(self.coin_type);
         chain.network()
     }
+}
+
+fn get_coin_id_by_address(address: &str) -> u8 {
+    if address.starts_with("ys") { 1 }
+    else { 0 }
 }
 
 #[cfg(test)]
