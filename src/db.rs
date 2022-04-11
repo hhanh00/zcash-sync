@@ -823,6 +823,8 @@ impl DbAdapter {
     }
 
     pub fn get_full_backup(&self) -> anyhow::Result<Vec<AccountBackup>> {
+        let _ = self.connection.execute("ALTER TABLE accounts ADD COLUMN aindex INT NOT NULL DEFAULT 0", NO_PARAMS); // ignore error
+
         let mut statement = self.connection.prepare(
             "SELECT name, seed, aindex, a.sk AS z_sk, ivk, a.address AS z_addr, t.sk as t_sk, t.address AS t_addr FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account")?;
         let rows = statement.query_map(NO_PARAMS, |r| {
