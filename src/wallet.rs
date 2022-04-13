@@ -350,6 +350,17 @@ impl Wallet {
         Ok(tx_str)
     }
 
+    pub async fn sign_only_multi_payment(
+        &mut self,
+        tx_string: &str,
+        account: u32,
+        progress_callback: impl Fn(Progress) + Send + 'static,
+    ) -> anyhow::Result<Vec<u8>> {
+        let tx = serde_json::from_str::<Tx>(tx_string)?;
+        let raw_tx = self.sign(&tx, account, progress_callback)?;
+        Ok(raw_tx)
+    }
+
     /// Build, sign and broadcast a multi payment
     pub async fn build_sign_send_multi_payment(
         &mut self,
