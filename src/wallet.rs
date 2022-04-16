@@ -37,7 +37,7 @@ use zcash_primitives::transaction::components::Amount;
 use zcash_proofs::prover::LocalTxProver;
 use zcash_params::coin::{CoinChain, CoinType, get_coin_chain};
 use crate::chain::{get_activation_date, get_block_by_time};
-use crate::db::AccountBackup;
+use crate::db::{AccountBackup, ZMessage};
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -76,6 +76,8 @@ impl Default for WalletBalance {
 pub struct Recipient {
     pub address: String,
     pub amount: u64,
+    pub reply_to: bool,
+    pub subject: String,
     pub memo: String,
     pub max_amount_per_note: u64,
 }
@@ -87,15 +89,52 @@ pub struct RecipientMemo {
     pub max_amount_per_note: u64,
 }
 
-impl From<&Recipient> for RecipientMemo {
-    fn from(r: &Recipient) -> Self {
+impl RecipientMemo {
+    fn from_recipient(from: &str, r: &Recipient) -> Self {
+        let memo = if !r.reply_to && r.subject.is_empty() {
+            r.memo.clone()
+        }
+        else {
+            encode_memo(from, r.reply_to, &r.subject, &r.memo)
+        };
         RecipientMemo {
             address: r.address.clone(),
             amount: r.amount,
-            memo: Memo::from_str(&r.memo).unwrap(),
+            memo: Memo::from_str(&memo).unwrap(),
             max_amount_per_note: r.max_amount_per_note,
         }
     }
+}
+
+pub fn encode_memo(from: &str, include_from: bool, subject: &str, body: &str) -> String {
+    let from = if include_from { from } else { &"" };
+    let msg = format!("\u{1F6E1}MSG\n{}\n{}\n{}", from, subject, body);
+    msg
+}
+
+pub fn decode_memo(memo: &str, recipient: &str, timestamp: u32, height: u32) -> ZMessage {
+    let memo_lines: Vec<_> = memo.splitn(4, '\n').collect();
+    let msg = if memo_lines[0] == "\u{1F6E1}MSG" {
+        ZMessage {
+            sender: if memo_lines[1].is_empty() { None } else { Some(memo_lines[1].to_string()) },
+            recipient: recipient.to_string(),
+            subject: memo_lines[2].to_string(),
+            body: memo_lines[3].to_string(),
+            timestamp,
+            height,
+        }
+    }
+    else {
+        ZMessage {
+            sender: None,
+            recipient: recipient.to_string(),
+            subject: memo_lines[0].to_string(),
+            body: memo.to_string(),
+            timestamp,
+            height,
+        }
+    };
+    msg
 }
 
 impl Wallet {
@@ -495,6 +534,11 @@ impl Wallet {
         Ok(tx_id)
     }
 
+    pub fn mark_message_read(&self, _account: u32, message: u32, read: bool) -> anyhow::Result<()> {
+        self.db.mark_message_read(message, read)?;
+        Ok(())
+    }
+
     pub fn set_lwd_url(&mut self, ld_url: &str) -> anyhow::Result<()> {
         self.ld_url = ld_url.to_string();
         Ok(())
@@ -596,9 +640,10 @@ impl Wallet {
         self.db.get_share_secret(account)
     }
 
-    pub fn parse_recipients(recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> {
+    pub fn parse_recipients(&self, account: u32, recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> {
+        let address = self.db.get_address(account)?;
         let recipients: Vec<Recipient> = serde_json::from_str(recipients)?;
-        let recipient_memos: Vec<_> = recipients.iter().map(|r| RecipientMemo::from(r)).collect();
+        let recipient_memos: Vec<_> = recipients.iter().map(|r| RecipientMemo::from_recipient(&address, r)).collect();
         Ok(recipient_memos)
     }
 

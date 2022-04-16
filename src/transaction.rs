@@ -19,10 +19,12 @@ use zcash_primitives::sapling::note_encryption::{
 use zcash_primitives::transaction::Transaction;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use zcash_params::coin::{CoinType, get_coin_chain, get_branch};
+use crate::wallet::decode_memo;
 
 #[derive(Debug)]
 pub struct TransactionInfo {
     height: u32,
+    timestamp: u32,
     index: u32, // index of tx in block
     id_tx: u32, // id of tx in db
     pub account: u32,
@@ -49,6 +51,7 @@ pub async fn decode_transaction(
     fvk: &ExtendedFullViewingKey,
     tx_hash: &[u8],
     height: u32,
+    timestamp: u32,
     index: u32,
 ) -> anyhow::Result<TransactionInfo> {
     let consensus_branch_id = get_branch(network, u32::from(height));
@@ -139,6 +142,7 @@ pub async fn decode_transaction(
     let contacts = contact_decoder.finalize()?;
     let tx_info = TransactionInfo {
         height: u32::from(height),
+        timestamp,
         index,
         id_tx,
         account,
@@ -162,6 +166,7 @@ struct DecodeTxParams<'a> {
     fvk: ExtendedFullViewingKey,
     tx_hash: Vec<u8>,
     height: u32,
+    timestamp: u32,
 }
 
 pub async fn retrieve_tx_info(
@@ -185,7 +190,7 @@ pub async fn retrieve_tx_info(
     let mut decode_tx_params: Vec<DecodeTxParams> = vec![];
     let (tx, rx) = mpsc::sync_channel::<TransactionInfo>(4);
     for (index, &id_tx) in tx_ids.iter().enumerate() {
-        let (account, height, tx_hash, ivk) = db.get_txhash(id_tx)?;
+        let (account, height, timestamp, tx_hash, ivk) = db.get_txhash(id_tx)?;
         let fvk: &ExtendedFullViewingKey = fvk_cache.entry(account).or_insert_with(|| {
             decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &ivk)
                 .unwrap()
@@ -201,6 +206,7 @@ pub async fn retrieve_tx_info(
             fvk: fvk.clone(),
             tx_hash: tx_hash.clone(),
             height,
+            timestamp,
         };
         decode_tx_params.push(params);
     }
@@ -215,6 +221,7 @@ pub async fn retrieve_tx_info(
             &p.fvk,
             &p.tx_hash,
             p.height,
+            p.timestamp,
             p.index,
         )
         .await
@@ -235,6 +242,8 @@ pub async fn retrieve_tx_info(
                 });
             }
             db.store_tx_metadata(tx_info.id_tx, &tx_info)?;
+            let z_msg = decode_memo(&tx_info.memo, &tx_info.address, tx_info.timestamp, tx_info.height);
+            db.store_message(tx_info.account, &z_msg)?;
         }
         contacts.sort_by(|a, b| a.index.cmp(&b.index));
         for cref in contacts.iter() {
@@ -281,7 +290,7 @@ mod tests {
                 .unwrap()
                 .unwrap();
         let tx_info =
-            decode_transaction(&Network::MainNetwork, &mut client, &nf_map, 1, account, &fvk, &tx_hash, 1313212, 1)
+            decode_transaction(&Network::MainNetwork, &mut client, &nf_map, 1, account, &fvk, &tx_hash, 1313212, 1000, 1)
                 .await
                 .unwrap();
         println!("{:?}", tx_info);

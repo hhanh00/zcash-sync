@@ -188,24 +188,29 @@ impl DbAdapter {
             "DELETE FROM transactions WHERE height >= ?1",
             params![height],
         )?;
+        tx.execute(
+            "DELETE FROM messages WHERE height >= ?1",
+            params![height],
+        )?;
         tx.commit()?;
 
         Ok(())
     }
 
-    pub fn get_txhash(&self, id_tx: u32) -> anyhow::Result<(u32, u32, Vec<u8>, String)> {
-        let (account, height, tx_hash, ivk) = self.connection.query_row(
-            "SELECT account, height, txid, ivk FROM transactions t, accounts a WHERE id_tx = ?1 AND t.account = a.id_account",
+    pub fn get_txhash(&self, id_tx: u32) -> anyhow::Result<(u32, u32, u32, Vec<u8>, String)> {
+        let (account, height, timestamp, tx_hash, ivk) = self.connection.query_row(
+            "SELECT account, height, timestamp, txid, ivk FROM transactions t, accounts a WHERE id_tx = ?1 AND t.account = a.id_account",
             params![id_tx],
             |row| {
                 let account: u32 = row.get(0)?;
                 let height: u32 = row.get(1)?;
-                let tx_hash: Vec<u8> = row.get(2)?;
-                let ivk: String = row.get(3)?;
-                Ok((account, height, tx_hash, ivk))
+                let timestamp: u32 = row.get(2)?;
+                let tx_hash: Vec<u8> = row.get(3)?;
+                let ivk: String = row.get(4)?;
+                Ok((account, height, timestamp, tx_hash, ivk))
             },
         )?;
-        Ok((account, height, tx_hash, ivk))
+        Ok((account, height, timestamp, tx_hash, ivk))
     }
 
     pub fn store_block(
@@ -793,6 +798,8 @@ impl DbAdapter {
             .execute("DELETE FROM sapling_witnesses", NO_PARAMS)?;
         self.connection
             .execute("DELETE FROM transactions", NO_PARAMS)?;
+        self.connection
+            .execute("DELETE FROM messages", NO_PARAMS)?;
         Ok(())
     }
 
@@ -880,6 +887,24 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn store_message(&self, account: u32, message: &ZMessage) -> anyhow::Result<()> {
+        self.connection.execute("INSERT INTO messages(account, sender, recipient, subject, body, timestamp, height, read) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+                                params![account, message.sender, message.recipient, message.subject, message.body, message.timestamp, message.height, false])?;
+        Ok(())
+    }
+
+    pub fn mark_message_read(&self, message_id: u32, read: bool) -> anyhow::Result<()> {
+        self.connection.execute("UPDATE messages SET read = ?1 WHERE id = ?2",
+                                params![read, message_id])?;
+        Ok(())
+    }
+
+    pub fn mark_all_message_read(&self, account: u32, read: bool) -> anyhow::Result<()> {
+        self.connection.execute("UPDATE messages SET read = ?1 WHERE account = ?2",
+                                params![read, account])?;
+        Ok(())
+    }
+
     fn network(&self) -> &'static Network {
         let chain = get_coin_chain(self.coin_type);
         chain.network()
@@ -889,6 +914,15 @@ impl DbAdapter {
 fn get_coin_id_by_address(address: &str) -> u8 {
     if address.starts_with("ys") { 1 }
     else { 0 }
+}
+
+pub struct ZMessage {
+    pub sender: Option<String>,
+    pub recipient: String,
+    pub subject: String,
+    pub body: String,
+    pub timestamp: u32,
+    pub height: u32,
 }
 
 #[cfg(test)]

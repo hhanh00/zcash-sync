@@ -154,7 +154,27 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             "CREATE INDEX i_witness ON sapling_witnesses(height)", NO_PARAMS)?;
     }
 
-    update_schema_version(&connection, 2)?;
+    if version < 3 {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY,
+            account INTEGER NOT NULL,
+            sender TEXT,
+            recipient TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            body TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            read BOOL NOT NULL)",
+            NO_PARAMS,
+        )?;
+        connection.execute(
+            "CREATE INDEX i_messages ON messages(account, height)",
+            NO_PARAMS,
+        )?;
+    }
+
+    update_schema_version(&connection, 3)?;
 
     Ok(())
 }
