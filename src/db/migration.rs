@@ -168,10 +168,11 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             read BOOL NOT NULL)",
             NO_PARAMS,
         )?;
-        connection.execute(
-            "CREATE INDEX i_messages ON messages(account, height)",
-            NO_PARAMS,
-        )?;
+        // Don't index because it *really* slows down inserts
+        // connection.execute(
+        //     "CREATE INDEX i_messages ON messages(account)",
+        //     NO_PARAMS,
+        // )?;
     }
 
     update_schema_version(&connection, 3)?;
