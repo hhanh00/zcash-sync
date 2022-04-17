@@ -823,6 +823,8 @@ impl DbAdapter {
         )?;
         self.connection
             .execute("DELETE FROM taddrs WHERE account = ?1", params![account])?;
+        self.connection
+            .execute("DELETE FROM messages WHERE account = ?1", params![account])?;
         self.connection.execute(
             "DELETE FROM secret_shares WHERE account = ?1",
             params![account],
@@ -924,6 +926,12 @@ pub struct ZMessage {
     pub body: String,
     pub timestamp: u32,
     pub height: u32,
+}
+
+impl ZMessage {
+    pub fn is_empty(&self) -> bool {
+        self.sender.is_none() && self.subject.is_empty() && self.body.is_empty()
+    }
 }
 
 #[cfg(test)]

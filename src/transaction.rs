@@ -243,7 +243,9 @@ pub async fn retrieve_tx_info(
             }
             db.store_tx_metadata(tx_info.id_tx, &tx_info)?;
             let z_msg = decode_memo(&tx_info.memo, &tx_info.address, tx_info.timestamp, tx_info.height);
-            db.store_message(tx_info.account, &z_msg)?;
+            if !z_msg.is_empty() {
+                db.store_message(tx_info.account, &z_msg)?;
+            }
         }
         contacts.sort_by(|a, b| a.index.cmp(&b.index));
         for cref in contacts.iter() {
