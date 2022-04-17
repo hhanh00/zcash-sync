@@ -14,7 +14,7 @@ use zcash_params::coin::CoinType;
 const DB_NAME: &str = "zec.db";
 
 fn init() {
-    let db = DbAdapter::new(CoinType::Zcash, DB_NAME).unwrap();
+    let db = DbAdapter::new(CoinType::Zcash, DB_NAME, true).unwrap();
     db.init_db().unwrap();
 }
 
@@ -24,7 +24,7 @@ async fn test() -> anyhow::Result<()> {
     dotenv::dotenv().unwrap();
     env_logger::init();
 
-    let seed = dotenv::var("SEED").unwrap();
+    let seed = dotenv::var("ZP_IVK").unwrap();
     // let seed2 = dotenv::var("SEED2").unwrap();
     // let ivk = dotenv::var("IVK").unwrap();
     let address = dotenv::var("ADDRESS").unwrap();
@@ -46,26 +46,26 @@ async fn test() -> anyhow::Result<()> {
         }
     }
 
-    let last_height = wallet.get_latest_height().await.unwrap();
-    let tx_id = wallet
-        .build_sign_send_multi_payment(
-            1,
-            last_height,
-            &[RecipientMemo {
-                address,
-                amount: 50000,
-                memo: Memo::from_str("test memo").unwrap(),
-                max_amount_per_note: 0,
-            }],
-            false,
-            2,
-            move |progress| {
-                println!("{}", progress.cur());
-            },
-        )
-        .await
-        .unwrap();
-    println!("TXID = {}", tx_id);
+    // let last_height = wallet.get_latest_height().await.unwrap();
+    // let tx_id = wallet
+    //     .build_sign_send_multi_payment(
+    //         1,
+    //         last_height,
+    //         &[RecipientMemo {
+    //             address,
+    //             amount: 50000,
+    //             memo: Memo::from_str("test memo").unwrap(),
+    //             max_amount_per_note: 0,
+    //         }],
+    //         false,
+    //         2,
+    //         move |progress| {
+    //             println!("{}", progress.cur());
+    //         },
+    //     )
+    //     .await
+    //     .unwrap();
+    // println!("TXID = {}", tx_id);
 
     // let last_height = wallet.get_latest_height().await.unwrap();
     // let tx = wallet
@@ -111,13 +111,13 @@ fn test_make_wallet() {
 
 #[allow(dead_code)]
 fn test_rewind() {
-    let mut db = DbAdapter::new(CoinType::Zcash, DB_NAME).unwrap();
+    let mut db = DbAdapter::new(CoinType::Zcash, DB_NAME, true).unwrap();
     db.trim_to_height(1314000).unwrap();
 }
 
 #[allow(dead_code)]
 fn test_get_balance() {
-    let db = DbAdapter::new(CoinType::Zcash, DB_NAME).unwrap();
+    let db = DbAdapter::new(CoinType::Zcash, DB_NAME, true).unwrap();
     let balance = db.get_balance(1).unwrap();
     println!("Balance = {}", (balance as f64) / 100_000_000.0);
 }
@@ -140,7 +140,7 @@ fn test_invalid_witness() {
 
 #[allow(dead_code)]
 fn w() {
-    let db = DbAdapter::new(CoinType::Zcash, "zec.db").unwrap();
+    let db = DbAdapter::new(CoinType::Zcash, "zec.db", true).unwrap();
     // let w_b: Vec<u8> = db.connection.query_row("SELECT witness FROM sapling_witnesses WHERE note = 66 AND height = 1466097", NO_PARAMS, |row| row.get(0)).unwrap();
     // let w = Witness::read(0, &*w_b).unwrap();
     // print_witness2(&w);

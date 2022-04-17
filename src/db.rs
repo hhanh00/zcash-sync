@@ -73,9 +73,10 @@ pub struct AccountBackup {
 }
 
 impl DbAdapter {
-    pub fn new(coin_type: CoinType, db_path: &str) -> anyhow::Result<DbAdapter> {
+    pub fn new(coin_type: CoinType, db_path: &str, sync: bool) -> anyhow::Result<DbAdapter> {
         let connection = Connection::open(db_path)?;
-        // connection.execute("PRAGMA synchronous = off", NO_PARAMS)?;
+        let mode = if sync { "on" } else { "off" };
+        connection.execute(&format!("PRAGMA synchronous = {}", mode), NO_PARAMS)?;
         Ok(DbAdapter { coin_type, connection })
     }
 
@@ -933,7 +934,7 @@ mod tests {
 
     #[test]
     fn test_db() {
-        let mut db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
+        let mut db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, true).unwrap();
         db.init_db().unwrap();
         db.trim_to_height(0).unwrap();
 
@@ -970,7 +971,7 @@ mod tests {
 
     #[test]
     fn test_balance() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, true).unwrap();
         let balance = db.get_balance(1).unwrap();
         println!("{}", balance);
     }

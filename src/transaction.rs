@@ -179,7 +179,7 @@ pub async fn retrieve_tx_info(
         let chain = get_coin_chain(coin_type);
         chain.network().clone()
     };
-    let db = DbAdapter::new(coin_type, db_path)?;
+    let db = DbAdapter::new(coin_type, db_path, false)?;
 
     let nfs = db.get_nullifiers_raw()?;
     let mut nf_map: HashMap<(u32, Vec<u8>), u64> = HashMap::new();
@@ -275,7 +275,7 @@ mod tests {
             hex::decode("b47da170329dc311b98892eac23e83025f8bb3ce10bb07535698c91fb37e1e54")
                 .unwrap();
         let mut client = connect_lightwalletd(LWD_URL).await.unwrap();
-        let db = DbAdapter::new(CoinType::Zcash, "./zec.db").unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, "./zec.db", true).unwrap();
         let account = 1;
         let nfs = db.get_nullifiers_raw().unwrap();
         let mut nf_map: HashMap<(u32, Vec<u8>), u64> = HashMap::new();

@@ -139,7 +139,7 @@ pub fn decode_memo(memo: &str, recipient: &str, timestamp: u32, height: u32) -> 
 
 impl Wallet {
     pub fn new(coin_type: CoinType, db_path: &str) -> Wallet {
-        let db = DbAdapter::new(coin_type, db_path).unwrap();
+        let db = DbAdapter::new(coin_type, db_path, true).unwrap();
         let key_helpers = KeyHelpers::new(coin_type);
         db.init_db().unwrap();
         Wallet {
