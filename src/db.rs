@@ -900,7 +900,7 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn mark_all_message_read(&self, account: u32, read: bool) -> anyhow::Result<()> {
+    pub fn mark_all_messages_read(&self, account: u32, read: bool) -> anyhow::Result<()> {
         self.connection.execute("UPDATE messages SET read = ?1 WHERE account = ?2",
                                 params![read, account])?;
         Ok(())

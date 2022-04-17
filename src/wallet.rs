@@ -539,6 +539,11 @@ impl Wallet {
         Ok(())
     }
 
+    pub fn mark_all_messages_read(&self, account: u32, read: bool) -> anyhow::Result<()> {
+        self.db.mark_all_messages_read(account, read)?;
+        Ok(())
+    }
+
     pub fn set_lwd_url(&mut self, ld_url: &str) -> anyhow::Result<()> {
         self.ld_url = ld_url.to_string();
         Ok(())
