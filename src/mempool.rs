@@ -48,7 +48,7 @@ impl MemPool {
     }
 
     pub fn set_account(&mut self, account: u32) -> anyhow::Result<()> {
-        let db = DbAdapter::new(self.coin_type, &self.db_path, true)?;
+        let db = DbAdapter::new(self.coin_type, &self.db_path)?;
         let ivk = db.get_ivk(account)?;
         self.account = account;
         self.set_ivk(&ivk);
@@ -85,7 +85,7 @@ impl MemPool {
     }
 
     pub fn clear(&mut self, height: u32) -> anyhow::Result<()> {
-        let db = DbAdapter::new(self.coin_type, &self.db_path, true)?;
+        let db = DbAdapter::new(self.coin_type, &self.db_path)?;
         self.height = BlockHeight::from_u32(height);
         self.nfs = db.get_nullifier_amounts(self.account, true)?;
         self.transactions.clear();
@@ -171,7 +171,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mempool() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, true).unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
         let ivk = db.get_ivk(1).unwrap();
         let mut mempool = MemPool::new(CoinType::Zcash, "zec.db");
         mempool.set_lwd_url(LWD_URL).unwrap();

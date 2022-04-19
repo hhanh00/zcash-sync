@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_contacts() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, true).unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
         let contact = Contact {
             id: 0,
             name: "hanh".to_string(),
@@ -107,7 +107,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_serialize() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, true).unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
         let contacts = db.get_unsaved_contacts().unwrap();
         let memos = serialize_contacts(&contacts).unwrap();
         for m in memos.iter() {

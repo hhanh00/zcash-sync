@@ -103,7 +103,7 @@ pub async fn sync_async(
 
     let mut client = connect_lightwalletd(&ld_url).await?;
     let (start_height, mut prev_hash, vks) = {
-        let db = DbAdapter::new(coin_type, &db_path, false)?;
+        let db = DbAdapter::new(coin_type, &db_path)?;
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
         let vks = db.get_fvks()?;
@@ -143,7 +143,7 @@ pub async fn sync_async(
     let proc_callback = progress_callback.clone();
 
     let processor = tokio::spawn(async move {
-        let mut db = DbAdapter::new(coin_type, &db_path2, false)?;
+        let mut db = DbAdapter::new(coin_type, &db_path2)?;
         let mut nfs = db.get_nullifiers()?;
 
         let (mut tree, mut witnesses) = db.get_tree()?;

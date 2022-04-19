@@ -14,7 +14,7 @@ use zcash_params::coin::CoinType;
 const DB_NAME: &str = "zec.db";
 
 fn init() {
-    let db = DbAdapter::new(CoinType::Zcash, DB_NAME, true).unwrap();
+    let db = DbAdapter::new(CoinType::Zcash, DB_NAME).unwrap();
     db.init_db().unwrap();
 }
 
@@ -111,13 +111,13 @@ fn test_make_wallet() {
 
 #[allow(dead_code)]
 fn test_rewind() {
-    let mut db = DbAdapter::new(CoinType::Zcash, DB_NAME, true).unwrap();
+    let mut db = DbAdapter::new(CoinType::Zcash, DB_NAME).unwrap();
     db.trim_to_height(1314000).unwrap();
 }
 
 #[allow(dead_code)]
 fn test_get_balance() {
-    let db = DbAdapter::new(CoinType::Zcash, DB_NAME, true).unwrap();
+    let db = DbAdapter::new(CoinType::Zcash, DB_NAME).unwrap();
     let balance = db.get_balance(1).unwrap();
     println!("Balance = {}", (balance as f64) / 100_000_000.0);
 }
@@ -140,7 +140,7 @@ fn test_invalid_witness() {
 
 #[allow(dead_code)]
 fn w() {
-    let db = DbAdapter::new(CoinType::Zcash, "zec.db", true).unwrap();
+    let db = DbAdapter::new(CoinType::Zcash, "zec.db").unwrap();
     // let w_b: Vec<u8> = db.connection.query_row("SELECT witness FROM sapling_witnesses WHERE note = 66 AND height = 1466097", NO_PARAMS, |row| row.get(0)).unwrap();
     // let w = Witness::read(0, &*w_b).unwrap();
     // print_witness2(&w);
