@@ -175,7 +175,10 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         // )?;
     }
 
-    update_schema_version(&connection, 3)?;
+    if version != 3 {
+        update_schema_version(&connection, 3)?;
+        log::info!("Database migrated");
+    }
 
     Ok(())
 }
