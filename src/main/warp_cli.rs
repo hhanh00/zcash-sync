@@ -1,12 +1,9 @@
-use std::str::FromStr;
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
 use rand::{thread_rng, RngCore};
-use rusqlite::NO_PARAMS;
 use sync::{
-    pedersen_hash, print_witness2, ChainError, DbAdapter, RecipientMemo, Wallet, Witness, LWD_URL,
+    pedersen_hash, print_witness2, ChainError, DbAdapter, Wallet, Witness, LWD_URL,
 };
-use zcash_primitives::memo::Memo;
 use zcash_primitives::merkle_tree::Hashable;
 use zcash_primitives::sapling::Node;
 use zcash_params::coin::CoinType;
@@ -27,7 +24,7 @@ async fn test() -> anyhow::Result<()> {
     let seed = dotenv::var("ZP_IVK").unwrap();
     // let seed2 = dotenv::var("SEED2").unwrap();
     // let ivk = dotenv::var("IVK").unwrap();
-    let address = dotenv::var("ADDRESS").unwrap();
+    let _address = dotenv::var("ADDRESS").unwrap();
     let progress = |height| {
         log::info!("Height = {}", height);
     };
@@ -141,7 +138,7 @@ fn test_invalid_witness() {
 #[allow(dead_code)]
 fn w() {
     let db = DbAdapter::new(CoinType::Zcash, "zec.db").unwrap();
-    // let w_b: Vec<u8> = db.connection.query_row("SELECT witness FROM sapling_witnesses WHERE note = 66 AND height = 1466097", NO_PARAMS, |row| row.get(0)).unwrap();
+    // let w_b: Vec<u8> = db.connection.query_row("SELECT witness FROM sapling_witnesses WHERE note = 66 AND height = 1466097", [], |row| row.get(0)).unwrap();
     // let w = Witness::read(0, &*w_b).unwrap();
     // print_witness2(&w);
     //
@@ -149,7 +146,7 @@ fn w() {
         .connection
         .query_row(
             "SELECT witness FROM sapling_witnesses WHERE note = 66 AND height = 1466200",
-            NO_PARAMS,
+            [],
             |row| row.get(0),
         )
         .unwrap();

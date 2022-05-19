@@ -2,7 +2,7 @@ use crate::{
     AddressList, CompactTxStreamerClient, DbAdapter, GetAddressUtxosArg, GetAddressUtxosReply,
 };
 use bip39::{Language, Mnemonic, Seed};
-use ripemd160::{Digest, Ripemd160};
+use ripemd::{Ripemd160, Digest};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use tiny_hderive::bip32::ExtendedPrivKey;
@@ -63,6 +63,6 @@ pub fn derive_tkeys(network: &Network, phrase: &str, path: &str) -> anyhow::Resu
         &network.b58_script_address_prefix(),
         &address,
     );
-    let sk = secret_key.to_string();
+    let sk = secret_key.display_secret().to_string();
     Ok((sk, address))
 }

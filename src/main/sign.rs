@@ -1,4 +1,4 @@
-use clap::{App, Arg};
+use clap::{Command, Arg};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
@@ -10,23 +10,23 @@ use zcash_params::coin::CoinType;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let matches = App::new("Cold wallet Signer CLI")
+    let matches = Command::new("Cold wallet Signer CLI")
         .version("1.0")
         .arg(
-            Arg::with_name("coin")
-                .short("coin")
+            Arg::new("coin")
+                .short('c')
                 .long("coin")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("tx_filename")
-                .short("tx")
+            Arg::new("tx_filename")
+                .short('t')
                 .long("tx")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("out_filename")
-                .short("o")
+            Arg::new("out_filename")
+                .short('o')
                 .long("out")
                 .takes_value(true),
         )

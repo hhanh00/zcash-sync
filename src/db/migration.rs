@@ -1,10 +1,10 @@
-use rusqlite::{params, Connection, OptionalExtension, NO_PARAMS};
+use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn get_schema_version(connection: &Connection) -> anyhow::Result<u32> {
     let version: Option<u32> = connection
         .query_row(
             "SELECT version FROM schema_version WHERE id = 1",
-            NO_PARAMS,
+            [],
             |row| row.get(0),
         )
         .optional()?;
@@ -22,12 +22,12 @@ pub fn update_schema_version(connection: &Connection, version: u32) -> anyhow::R
 
 pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     // don't drop account data: accounts, taddrs, secret_shares
-    connection.execute("DROP TABLE blocks", NO_PARAMS)?;
-    connection.execute("DROP TABLE transactions", NO_PARAMS)?;
-    connection.execute("DROP TABLE received_notes", NO_PARAMS)?;
-    connection.execute("DROP TABLE sapling_witnesses", NO_PARAMS)?;
-    connection.execute("DROP TABLE diversifiers", NO_PARAMS)?;
-    connection.execute("DROP TABLE historical_prices", NO_PARAMS)?;
+    connection.execute("DROP TABLE blocks", [])?;
+    connection.execute("DROP TABLE transactions", [])?;
+    connection.execute("DROP TABLE received_notes", [])?;
+    connection.execute("DROP TABLE sapling_witnesses", [])?;
+    connection.execute("DROP TABLE diversifiers", [])?;
+    connection.execute("DROP TABLE historical_prices", [])?;
     update_schema_version(&connection, 0)?;
     Ok(())
 }
@@ -37,7 +37,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         "CREATE TABLE IF NOT EXISTS schema_version (
             id INTEGER PRIMARY KEY NOT NULL,
             version INTEGER NOT NULL)",
-        NO_PARAMS,
+        [],
     )?;
 
     let version = get_schema_version(&connection)?;
@@ -52,7 +52,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             sk TEXT,
             ivk TEXT NOT NULL UNIQUE,
             address TEXT NOT NULL)",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
@@ -61,7 +61,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             hash BLOB NOT NULL,
             timestamp INTEGER NOT NULL,
             sapling_tree BLOB NOT NULL)",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
@@ -76,7 +76,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             memo TEXT,
             tx_index INTEGER,
             CONSTRAINT tx_account UNIQUE (height, tx_index, account))",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
@@ -94,7 +94,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             spent INTEGER,
             excluded BOOL,
             CONSTRAINT tx_output UNIQUE (tx, output_index))",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
@@ -104,14 +104,14 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             height INTEGER NOT NULL,
             witness BLOB NOT NULL,
             CONSTRAINT witness_height UNIQUE (note, height))",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
             "CREATE TABLE IF NOT EXISTS diversifiers (
             account INTEGER PRIMARY KEY NOT NULL,
             diversifier_index BLOB NOT NULL)",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
@@ -119,7 +119,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             account INTEGER PRIMARY KEY NOT NULL,
             sk TEXT NOT NULL,
             address TEXT NOT NULL)",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
@@ -128,7 +128,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
                 timestamp INTEGER NOT NULL,
                 price REAL NOT NULL,
                 PRIMARY KEY (currency, timestamp))",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
@@ -137,21 +137,21 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
                 name TEXT NOT NULL,
                 address TEXT NOT NULL,
                 dirty BOOL NOT NULL)",
-            NO_PARAMS,
+            [],
         )?;
     }
 
     if version < 2 {
         connection.execute(
-            "CREATE INDEX i_received_notes ON received_notes(account)", NO_PARAMS)?;
+            "CREATE INDEX i_received_notes ON received_notes(account)", [])?;
         connection.execute(
-            "CREATE INDEX i_account ON accounts(address)", NO_PARAMS)?;
+            "CREATE INDEX i_account ON accounts(address)", [])?;
         connection.execute(
-            "CREATE INDEX i_contact ON contacts(address)", NO_PARAMS)?;
+            "CREATE INDEX i_contact ON contacts(address)", [])?;
         connection.execute(
-            "CREATE INDEX i_transaction ON transactions(account)", NO_PARAMS)?;
+            "CREATE INDEX i_transaction ON transactions(account)", [])?;
         connection.execute(
-            "CREATE INDEX i_witness ON sapling_witnesses(height)", NO_PARAMS)?;
+            "CREATE INDEX i_witness ON sapling_witnesses(height)", [])?;
     }
 
     if version < 3 {
@@ -166,12 +166,12 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
             timestamp INTEGER NOT NULL,
             height INTEGER NOT NULL,
             read BOOL NOT NULL)",
-            NO_PARAMS,
+            [],
         )?;
         // Don't index because it *really* slows down inserts
         // connection.execute(
         //     "CREATE INDEX i_messages ON messages(account)",
-        //     NO_PARAMS,
+        //     [],
         // )?;
     }
 

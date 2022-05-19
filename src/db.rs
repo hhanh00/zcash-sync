@@ -4,7 +4,7 @@ use crate::prices::Quote;
 use crate::taddr::derive_tkeys;
 use crate::transaction::TransactionInfo;
 use crate::{CTree, Witness};
-use rusqlite::{params, Connection, OptionalExtension, Transaction, NO_PARAMS};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use std::collections::HashMap;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
@@ -75,10 +75,10 @@ pub struct AccountBackup {
 impl DbAdapter {
     pub fn new(coin_type: CoinType, db_path: &str) -> anyhow::Result<DbAdapter> {
         let connection = Connection::open(db_path)?;
-        connection.query_row("PRAGMA journal_mode = WAL", NO_PARAMS, |_| {
+        connection.query_row("PRAGMA journal_mode = WAL", [], |_| {
             Ok(())
         })?;
-        connection.execute("PRAGMA synchronous = NORMAL", NO_PARAMS)?;
+        connection.execute("PRAGMA synchronous = NORMAL", [])?;
         Ok(DbAdapter { coin_type, connection })
     }
 
@@ -88,7 +88,7 @@ impl DbAdapter {
     }
     //
     // pub fn commit(&self) -> anyhow::Result<()> {
-    //     self.connection.execute("COMMIT", NO_PARAMS)?;
+    //     self.connection.execute("COMMIT", [])?;
     //     Ok(())
     // }
     //
@@ -144,7 +144,7 @@ impl DbAdapter {
         let mut statement = self
             .connection
             .prepare("SELECT id_account, ivk, sk FROM accounts")?;
-        let rows = statement.query_map(NO_PARAMS, |row| {
+        let rows = statement.query_map([], |row| {
             let account: u32 = row.get(0)?;
             let ivk: String = row.get(1)?;
             let sk: Option<String> = row.get(2)?;
@@ -338,7 +338,7 @@ impl DbAdapter {
     pub fn get_last_sync_height(&self) -> anyhow::Result<Option<u32>> {
         let height: Option<u32> =
             self.connection
-                .query_row("SELECT MAX(height) FROM blocks", NO_PARAMS, |row| {
+                .query_row("SELECT MAX(height) FROM blocks", [], |row| {
                     row.get(0)
                 })?;
         Ok(height)
@@ -373,7 +373,7 @@ impl DbAdapter {
     pub fn get_tree(&self) -> anyhow::Result<(CTree, Vec<Witness>)> {
         let res = self.connection.query_row(
             "SELECT height, sapling_tree FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)",
-            NO_PARAMS, |row| {
+            [], |row| {
                 let height: u32 = row.get(0)?;
                 let tree: Vec<u8> = row.get(1)?;
                 Ok((height, tree))
@@ -402,7 +402,7 @@ impl DbAdapter {
         let mut statement = self.connection.prepare(
             "SELECT id_note, account, nf FROM received_notes WHERE spent IS NULL OR spent = 0",
         )?;
-        let nfs_res = statement.query_map(NO_PARAMS, |row| {
+        let nfs_res = statement.query_map([], |row| {
             let id_note: u32 = row.get(0)?;
             let account: u32 = row.get(1)?;
             let nf_vec: Vec<u8> = row.get(2)?;
@@ -448,7 +448,7 @@ impl DbAdapter {
         let mut statement = self
             .connection
             .prepare("SELECT account, value, nf FROM received_notes")?;
-        let res = statement.query_map(NO_PARAMS, |row| {
+        let res = statement.query_map([], |row| {
             let account: u32 = row.get(0)?;
             let amount: i64 = row.get(1)?;
             let nf: Vec<u8> = row.get(2)?;
@@ -560,7 +560,7 @@ impl DbAdapter {
         let mut statement = self
             .connection
             .prepare("SELECT id, name, address FROM contacts WHERE dirty = TRUE")?;
-        let rows = statement.query_map(NO_PARAMS, |row| {
+        let rows = statement.query_map([], |row| {
             let id: u32 = row.get(0)?;
             let name: String = row.get(1)?;
             let address: String = row.get(2)?;
@@ -789,20 +789,20 @@ impl DbAdapter {
     }
 
     pub fn truncate_data(&self) -> anyhow::Result<()> {
-        self.connection.execute("DELETE FROM blocks", NO_PARAMS)?;
-        self.connection.execute("DELETE FROM contacts", NO_PARAMS)?;
+        self.connection.execute("DELETE FROM blocks", [])?;
+        self.connection.execute("DELETE FROM contacts", [])?;
         self.connection
-            .execute("DELETE FROM diversifiers", NO_PARAMS)?;
+            .execute("DELETE FROM diversifiers", [])?;
         self.connection
-            .execute("DELETE FROM historical_prices", NO_PARAMS)?;
+            .execute("DELETE FROM historical_prices", [])?;
         self.connection
-            .execute("DELETE FROM received_notes", NO_PARAMS)?;
+            .execute("DELETE FROM received_notes", [])?;
         self.connection
-            .execute("DELETE FROM sapling_witnesses", NO_PARAMS)?;
+            .execute("DELETE FROM sapling_witnesses", [])?;
         self.connection
-            .execute("DELETE FROM transactions", NO_PARAMS)?;
+            .execute("DELETE FROM transactions", [])?;
         self.connection
-            .execute("DELETE FROM messages", NO_PARAMS)?;
+            .execute("DELETE FROM messages", [])?;
         Ok(())
     }
 
@@ -835,11 +835,11 @@ impl DbAdapter {
     }
 
     pub fn get_full_backup(&self) -> anyhow::Result<Vec<AccountBackup>> {
-        let _ = self.connection.execute("ALTER TABLE accounts ADD COLUMN aindex INT NOT NULL DEFAULT 0", NO_PARAMS); // ignore error
+        let _ = self.connection.execute("ALTER TABLE accounts ADD COLUMN aindex INT NOT NULL DEFAULT 0", []); // ignore error
 
         let mut statement = self.connection.prepare(
             "SELECT name, seed, aindex, a.sk AS z_sk, ivk, a.address AS z_addr, t.sk as t_sk, t.address AS t_addr FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account")?;
-        let rows = statement.query_map(NO_PARAMS, |r| {
+        let rows = statement.query_map([], |r| {
             let name: String = r.get(0)?;
             let seed: Option<String> = r.get(1)?;
             let index: u32 = r.get(2)?;
