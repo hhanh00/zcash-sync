@@ -143,15 +143,13 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
 
     if version < 2 {
         connection.execute(
-            "CREATE INDEX i_received_notes ON received_notes(account)", [])?;
-        connection.execute(
-            "CREATE INDEX i_account ON accounts(address)", [])?;
-        connection.execute(
-            "CREATE INDEX i_contact ON contacts(address)", [])?;
-        connection.execute(
-            "CREATE INDEX i_transaction ON transactions(account)", [])?;
-        connection.execute(
-            "CREATE INDEX i_witness ON sapling_witnesses(height)", [])?;
+            "CREATE INDEX i_received_notes ON received_notes(account)",
+            [],
+        )?;
+        connection.execute("CREATE INDEX i_account ON accounts(address)", [])?;
+        connection.execute("CREATE INDEX i_contact ON contacts(address)", [])?;
+        connection.execute("CREATE INDEX i_transaction ON transactions(account)", [])?;
+        connection.execute("CREATE INDEX i_witness ON sapling_witnesses(height)", [])?;
     }
 
     if version < 3 {

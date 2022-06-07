@@ -2,7 +2,7 @@ use crate::{
     AddressList, CompactTxStreamerClient, DbAdapter, GetAddressUtxosArg, GetAddressUtxosReply,
 };
 use bip39::{Language, Mnemonic, Seed};
-use ripemd::{Ripemd160, Digest};
+use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use tiny_hderive::bip32::ExtendedPrivKey;
@@ -48,7 +48,44 @@ pub async fn get_utxos(
     }
 }
 
-pub fn derive_tkeys(network: &Network, phrase: &str, path: &str) -> anyhow::Result<(String, String)> {
+pub async fn scan_transparent_accounts(
+    network: &Network,
+    client: &mut CompactTxStreamerClient<Channel>,
+    db: &DbAdapter,
+    account: u32,
+    gap_limit: usize,
+) -> anyhow::Result<()> {
+    let mut addresses = vec![];
+    let (seed, mut index) = db.get_seed(account)?;
+    if let Some(seed) = seed {
+        let mut gap = 0;
+        while gap < gap_limit {
+            let bip44_path = format!("m/44'/{}'/0'/0/{}", network.coin_type(), index);
+            log::info!("{} {}", index, bip44_path);
+            let (_, address) = derive_tkeys(network, &seed, &bip44_path)?;
+            let balance = get_taddr_balance(client, &address).await?;
+            if balance > 0 {
+                addresses.push(TBalance {
+                    index,
+                    address,
+                    balance,
+                });
+                gap = 0;
+            } else {
+                gap += 1;
+            }
+            index += 1;
+        }
+    }
+    db.store_t_scan(&addresses)?;
+    Ok(())
+}
+
+pub fn derive_tkeys(
+    network: &Network,
+    phrase: &str,
+    path: &str,
+) -> anyhow::Result<(String, String)> {
     let mnemonic = Mnemonic::from_phrase(&phrase, Language::English)?;
     let seed = Seed::new(&mnemonic, "");
     let secp = Secp256k1::<All>::new();
@@ -65,4 +102,10 @@ pub fn derive_tkeys(network: &Network, phrase: &str, path: &str) -> anyhow::Resu
     );
     let sk = secret_key.display_secret().to_string();
     Ok((sk, address))
+}
+
+pub struct TBalance {
+    pub index: u32,
+    pub address: String,
+    pub balance: u64,
 }

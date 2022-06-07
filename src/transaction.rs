@@ -1,16 +1,18 @@
 use crate::contact::{Contact, ContactDecoder};
+use crate::wallet::decode_memo;
 use crate::{CompactTxStreamerClient, DbAdapter, TxFilter};
+use anyhow::anyhow;
 use futures::StreamExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
-use anyhow::anyhow;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, encode_payment_address, encode_transparent_address,
 };
+use zcash_params::coin::{get_branch, get_coin_chain, CoinType};
 use zcash_primitives::consensus::{BlockHeight, Network, Parameters};
 use zcash_primitives::memo::Memo;
 use zcash_primitives::sapling::note_encryption::{
@@ -18,8 +20,6 @@ use zcash_primitives::sapling::note_encryption::{
 };
 use zcash_primitives::transaction::Transaction;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use zcash_params::coin::{CoinType, get_coin_chain, get_branch};
-use crate::wallet::decode_memo;
 
 #[derive(Debug)]
 pub struct TransactionInfo {
@@ -101,8 +101,7 @@ pub async fn decode_transaction(
     }
 
     for output in sapling_bundle.shielded_outputs.iter() {
-        if let Some((note, pa, memo)) = try_sapling_note_decryption(network, height, &ivk, output)
-        {
+        if let Some((note, pa, memo)) = try_sapling_note_decryption(network, height, &ivk, output) {
             amount += note.value as i64; // change or self transfer
             let _ = contact_decoder.add_memo(&memo); // ignore memo that is not for contacts
             let memo = Memo::try_from(memo)?;
@@ -242,7 +241,12 @@ pub async fn retrieve_tx_info(
                 });
             }
             db.store_tx_metadata(tx_info.id_tx, &tx_info)?;
-            let z_msg = decode_memo(&tx_info.memo, &tx_info.address, tx_info.timestamp, tx_info.height);
+            let z_msg = decode_memo(
+                &tx_info.memo,
+                &tx_info.address,
+                tx_info.timestamp,
+                tx_info.height,
+            );
             if !z_msg.is_empty() {
                 db.store_message(tx_info.account, &z_msg)?;
             }
@@ -268,8 +272,8 @@ mod tests {
     use crate::{connect_lightwalletd, DbAdapter, LWD_URL};
     use std::collections::HashMap;
     use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-    use zcash_primitives::consensus::{Network, Parameters};
     use zcash_params::coin::CoinType;
+    use zcash_primitives::consensus::{Network, Parameters};
 
     #[tokio::test]
     async fn test_decode_transaction() {
@@ -287,14 +291,26 @@ mod tests {
             }
         }
         let fvk = db.get_ivk(account).unwrap();
-        let fvk =
-            decode_extended_full_viewing_key(Network::MainNetwork.hrp_sapling_extended_full_viewing_key(), &fvk)
-                .unwrap()
-                .unwrap();
-        let tx_info =
-            decode_transaction(&Network::MainNetwork, &mut client, &nf_map, 1, account, &fvk, &tx_hash, 1313212, 1000, 1)
-                .await
-                .unwrap();
+        let fvk = decode_extended_full_viewing_key(
+            Network::MainNetwork.hrp_sapling_extended_full_viewing_key(),
+            &fvk,
+        )
+        .unwrap()
+        .unwrap();
+        let tx_info = decode_transaction(
+            &Network::MainNetwork,
+            &mut client,
+            &nf_map,
+            1,
+            account,
+            &fvk,
+            &tx_hash,
+            1313212,
+            1000,
+            1,
+        )
+        .await
+        .unwrap();
         println!("{:?}", tx_info);
     }
 }

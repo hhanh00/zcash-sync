@@ -1,34 +1,33 @@
 use crate::db::SpendableNote;
 use crate::wallet::RecipientMemo;
 use crate::{
-    connect_lightwalletd, get_latest_height, hex_to_hash, GetAddressUtxosReply,
-    RawTransaction
+    connect_lightwalletd, get_latest_height, hex_to_hash, GetAddressUtxosReply, RawTransaction,
 };
+use anyhow::anyhow;
 use jubjub::Fr;
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
-use anyhow::anyhow;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_payment_address, encode_extended_full_viewing_key,
     encode_payment_address,
 };
+use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
+use zcash_primitives::keys::OutgoingViewingKey;
 use zcash_primitives::legacy::Script;
 use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::merkle_tree::IncrementalWitness;
-use zcash_primitives::keys::OutgoingViewingKey;
 use zcash_primitives::sapling::prover::TxProver;
 use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
 use zcash_primitives::transaction::builder::{Builder, Progress};
 use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut as ZTxOut};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
-use zcash_params::coin::{CoinChain, CoinType, get_coin_chain};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
@@ -113,7 +112,9 @@ impl TxBuilder {
         let tx_in = TxIn {
             diversifier: hex::encode(diversifier.0),
             fvk: encode_extended_full_viewing_key(
-                self.chain().network().hrp_sapling_extended_full_viewing_key(),
+                self.chain()
+                    .network()
+                    .hrp_sapling_extended_full_viewing_key(),
                 &fvk,
             ),
             amount: u64::from(amount),
@@ -157,7 +158,10 @@ impl TxBuilder {
         ovk: &OutgoingViewingKey,
         address: &PaymentAddress,
     ) -> anyhow::Result<()> {
-        self.tx.change = encode_payment_address(self.chain().network().hrp_sapling_payment_address(), address);
+        self.tx.change = encode_payment_address(
+            self.chain().network().hrp_sapling_payment_address(),
+            address,
+        );
         self.tx.ovk = hex::encode(ovk.0);
         Ok(())
     }
@@ -188,7 +192,8 @@ impl TxBuilder {
                 t_amount += Amount::from_i64(utxo.value_zat).unwrap();
             }
         }
-        let target_amount_with_fee = (target_amount + DEFAULT_FEE).ok_or(anyhow!("Invalid amount"))?;
+        let target_amount_with_fee =
+            (target_amount + DEFAULT_FEE).ok_or(anyhow!("Invalid amount"))?;
         if target_amount_with_fee > t_amount {
             // We need to use some shielded notes because the transparent balance is not enough
             let mut amount = (target_amount_with_fee - t_amount).unwrap();
@@ -281,7 +286,9 @@ impl TxBuilder {
         Ok(())
     }
 
-    fn chain(&self) -> &dyn CoinChain { get_coin_chain(self.coin_type) }
+    fn chain(&self) -> &dyn CoinChain {
+        get_coin_chain(self.coin_type)
+    }
 }
 
 impl Tx {

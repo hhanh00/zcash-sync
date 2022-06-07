@@ -1,12 +1,10 @@
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
 use rand::{thread_rng, RngCore};
-use sync::{
-    pedersen_hash, print_witness2, ChainError, DbAdapter, Wallet, Witness, LWD_URL,
-};
+use sync::{pedersen_hash, print_witness2, ChainError, DbAdapter, Wallet, Witness, LWD_URL};
+use zcash_params::coin::CoinType;
 use zcash_primitives::merkle_tree::Hashable;
 use zcash_primitives::sapling::Node;
-use zcash_params::coin::CoinType;
 
 const DB_NAME: &str = "zec.db";
 

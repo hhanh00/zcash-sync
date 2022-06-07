@@ -1,15 +1,15 @@
 use bech32::{ToBase32, Variant};
 use bip39::{Language, Mnemonic, Seed};
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key,
     encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address,
 };
+use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
-use zcash_params::coin::{CoinChain, CoinType, get_coin_chain};
 
 pub struct KeyHelpers {
     coin_type: CoinType,
@@ -17,25 +17,29 @@ pub struct KeyHelpers {
 
 impl KeyHelpers {
     pub fn new(coin_type: CoinType) -> Self {
-        KeyHelpers {
-            coin_type
-        }
+        KeyHelpers { coin_type }
     }
 
-    fn chain(&self) -> &dyn CoinChain { get_coin_chain(self.coin_type) }
+    fn chain(&self) -> &dyn CoinChain {
+        get_coin_chain(self.coin_type)
+    }
 
-    pub fn decode_key(&self, key: &str, index: u32) -> anyhow::Result<(Option<String>, Option<String>, String, String)> {
+    pub fn decode_key(
+        &self,
+        key: &str,
+        index: u32,
+    ) -> anyhow::Result<(Option<String>, Option<String>, String, String)> {
         let network = self.chain().network();
         let res = if let Ok(mnemonic) = Mnemonic::from_phrase(&key, Language::English) {
             let (sk, ivk, pa) = self.derive_secret_key(&mnemonic, index)?;
             Ok((Some(key.to_string()), Some(sk), ivk, pa))
         } else if let Ok(Some(sk)) =
-        decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &key)
+            decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &key)
         {
             let (ivk, pa) = self.derive_viewing_key(&sk)?;
             Ok((None, Some(key.to_string()), ivk, pa))
         } else if let Ok(Some(fvk)) =
-        decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &key)
+            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &key)
         {
             let pa = self.derive_address(&fvk)?;
             Ok((None, None, key.to_string(), pa))
@@ -51,19 +55,23 @@ impl KeyHelpers {
             return 0;
         }
         if let Ok(Some(_)) =
-        decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &key)
+            decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &key)
         {
             return 1;
         }
         if let Ok(Some(_)) =
-        decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &key)
+            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &key)
         {
             return 2;
         }
         -1
     }
 
-    pub fn derive_secret_key(&self, mnemonic: &Mnemonic, index: u32) -> anyhow::Result<(String, String, String)> {
+    pub fn derive_secret_key(
+        &self,
+        mnemonic: &Mnemonic,
+        index: u32,
+    ) -> anyhow::Result<(String, String, String)> {
         let network = self.chain().network();
         let seed = Seed::new(&mnemonic, "");
         let master = ExtendedSpendingKey::master(seed.as_bytes());
@@ -79,7 +87,10 @@ impl KeyHelpers {
         Ok((sk, fvk, pa))
     }
 
-    pub fn derive_viewing_key(&self, extsk: &ExtendedSpendingKey) -> anyhow::Result<(String, String)> {
+    pub fn derive_viewing_key(
+        &self,
+        extsk: &ExtendedSpendingKey,
+    ) -> anyhow::Result<(String, String)> {
         let network = self.chain().network();
         let fvk = ExtendedFullViewingKey::from(extsk);
         let pa = self.derive_address(&fvk)?;
@@ -91,7 +102,8 @@ impl KeyHelpers {
     pub fn derive_address(&self, fvk: &ExtendedFullViewingKey) -> anyhow::Result<String> {
         let network = self.chain().network();
         let (_, payment_address) = fvk.default_address();
-        let address = encode_payment_address(network.hrp_sapling_payment_address(), &payment_address);
+        let address =
+            encode_payment_address(network.hrp_sapling_payment_address(), &payment_address);
         Ok(address)
     }
 

@@ -1,55 +1,50 @@
 #![allow(unused_imports)]
 
+use crate::ledger::{APDUReply, APDURequest};
+use crate::{Tx, TxIn, TxOut};
 use anyhow::anyhow;
-use bip39::{Mnemonic, Language, Seed};
-use byteorder::{ByteOrder, LE, LittleEndian, WriteBytesExt};
-use ed25519_bip32::{DerivationScheme, XPrv};
-use sha2::{Sha256, Sha512};
-use hmac::{Hmac, Mac};
-use hmac::digest::{crypto_common, FixedOutput, MacMarker, Update};
+use bip39::{Language, Mnemonic, Seed};
 use blake2b_simd::Params;
-use jubjub::{ExtendedPoint, Fr, SubgroupPoint};
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt, LE};
+use ed25519_bip32::{DerivationScheme, XPrv};
 use group::GroupEncoding;
+use hmac::digest::{crypto_common, FixedOutput, MacMarker, Update};
+use hmac::{Hmac, Mac};
+use jubjub::{ExtendedPoint, Fr, SubgroupPoint};
 use ledger_apdu::{APDUAnswer, APDUCommand};
 use rand::rngs::OsRng;
-use zcash_primitives::zip32::{ExtendedSpendingKey, ChildIndex, ExtendedFullViewingKey, ChainCode, DiversifierKey};
-use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address, encode_extended_spending_key, encode_payment_address};
+use serde::{Deserialize, Serialize};
+use sha2::{Sha256, Sha512};
+use zcash_client_backend::encoding::{
+    decode_extended_full_viewing_key, decode_payment_address, encode_extended_spending_key,
+    encode_payment_address,
+};
 use zcash_primitives::consensus::Network::MainNetwork;
 use zcash_primitives::consensus::{BlockHeight, Network, Parameters};
 use zcash_primitives::constants::{PROOF_GENERATION_KEY_GENERATOR, SPENDING_KEY_GENERATOR};
 use zcash_primitives::keys::OutgoingViewingKey;
-use zcash_primitives::sapling::keys::{ExpandedSpendingKey, FullViewingKey};
-use zcash_primitives::sapling::{Diversifier, Node, Note, PaymentAddress, ProofGenerationKey, Rseed, ViewingKey};
-use serde::{Serialize, Deserialize};
-use serde::__private::de::Content::ByteBuf;
 use zcash_primitives::memo::Memo;
 use zcash_primitives::merkle_tree::IncrementalWitness;
+use zcash_primitives::sapling::keys::{ExpandedSpendingKey, FullViewingKey};
 use zcash_primitives::sapling::note_encryption::sapling_note_encryption;
 use zcash_primitives::sapling::prover::TxProver;
 use zcash_primitives::sapling::redjubjub::{PublicKey, Signature};
+use zcash_primitives::sapling::{
+    Diversifier, Node, Note, PaymentAddress, ProofGenerationKey, Rseed, ViewingKey,
+};
 use zcash_primitives::transaction::builder::Builder;
 use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
-use zcash_primitives::transaction::components::OutputDescription;
 use zcash_primitives::transaction::components::sapling::GrothProofBytes;
+use zcash_primitives::transaction::components::OutputDescription;
+use zcash_primitives::zip32::{
+    ChainCode, ChildIndex, DiversifierKey, ExtendedFullViewingKey, ExtendedSpendingKey,
+};
 use zcash_proofs::sapling::SaplingProvingContext;
-use crate::{Tx, TxIn, TxOut};
 
 const HARDENED: u32 = 0x8000_0000;
 const NETWORK: &Network = &MainNetwork;
 const EXPIRY: u32 = 50;
 const LEDGER_IP: &str = "192.168.0.101";
-
-#[derive(Serialize, Deserialize)]
-#[allow(non_snake_case)]
-struct APDURequest {
-    apduHex: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct APDUReply {
-    data: String,
-    error: Option<String>,
-}
 
 // fn get_ivk(app: &LedgerApp) -> anyhow::Result<String> {
 //     let command = ApduCommand {
@@ -184,7 +179,12 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
     let mut change = 0;
     for sin in tx.inputs.iter() {
         buffer.write_u32::<LE>(HARDENED)?;
-        let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &sin.fvk).unwrap().unwrap();
+        let fvk = decode_extended_full_viewing_key(
+            NETWORK.hrp_sapling_extended_full_viewing_key(),
+            &sin.fvk,
+        )
+        .unwrap()
+        .unwrap();
         let (_, pa) = fvk.default_address();
         let address = encode_payment_address(NETWORK.hrp_sapling_payment_address(), &pa);
         assert_eq!(pa.to_bytes().len(), 43);
@@ -196,7 +196,9 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
     // assert_eq!(buffer.len(), 4+55*s_in_count);
 
     for sout in tx.outputs.iter() {
-        let pa = decode_payment_address(NETWORK.hrp_sapling_payment_address(), &sout.addr).unwrap().unwrap();
+        let pa = decode_payment_address(NETWORK.hrp_sapling_payment_address(), &sout.addr)
+            .unwrap()
+            .unwrap();
         assert_eq!(pa.to_bytes().len(), 43);
         buffer.extend_from_slice(&pa.to_bytes());
         buffer.write_u64::<LE>(sout.amount)?;
@@ -219,7 +221,9 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
     tx.outputs.push(output_change);
     s_out_count += 1;
 
-    let pa_change = decode_payment_address(NETWORK.hrp_sapling_payment_address(), &tx.change).unwrap().unwrap();
+    let pa_change = decode_payment_address(NETWORK.hrp_sapling_payment_address(), &tx.change)
+        .unwrap()
+        .unwrap();
     buffer.extend_from_slice(&pa_change.to_bytes());
     buffer.write_u64::<LE>(change as u64)?;
     buffer.push(0xF6); // no memo
@@ -245,7 +249,7 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             p2: 0,
             data: c.to_vec(),
         };
-        let rep = send_request(&command).await;
+        let rep = send_http_request(&command).await;
         log::debug!("{}", rep.retcode());
     }
 
@@ -261,7 +265,7 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             p2: 0,
             data: vec![],
         };
-        let rep = send_request(&command).await;
+        let rep = send_http_request(&command).await;
         log::debug!("{}", rep.retcode());
         let ak = &rep.apdu_data()[0..32];
         let nsk = &rep.apdu_data()[32..64];
@@ -297,13 +301,14 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             p2: 0,
             data: vec![],
         };
-        let rep = send_request(&command).await;
+        let rep = send_http_request(&command).await;
         log::debug!("{}", rep.retcode());
         let rcv = &rep.apdu_data()[0..32];
         let rseed = &rep.apdu_data()[32..64];
         let rcv = Fr::from_bytes(&slice_to_hash(&rcv)).unwrap();
         let rseed = slice_to_hash(&rseed);
-        let output_description = get_output_description(tx, i, change as u64, rcv, rseed, &mut context, prover);
+        let output_description =
+            get_output_description(tx, i, change as u64, rcv, rseed, &mut context, prover);
         buffer.extend_from_slice(&output_description.cv.to_bytes());
         buffer.extend_from_slice(&output_description.cmu.to_bytes());
         buffer.extend_from_slice(&output_description.ephemeral_key.0);
@@ -313,14 +318,20 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
         output_descriptions.push(output_description);
     }
 
-    let hash_data = get_hash_data(tx.height, u64::from(DEFAULT_FEE),
-                                  &spend_datas, &output_descriptions);
+    let hash_data = get_hash_data(
+        tx.height,
+        u64::from(DEFAULT_FEE),
+        &spend_datas,
+        &output_descriptions,
+    );
     buffer.extend_from_slice(&hash_data);
-    let sig_hash: [u8; 32] = slice_to_hash(Params::new()
-        .hash_length(32)
-        .personal(&hex::decode("5a6361736853696748617368a675ffe9")?) // consensus branch id = canopy
-        .hash(&hash_data)
-        .as_bytes());
+    let sig_hash: [u8; 32] = slice_to_hash(
+        Params::new()
+            .hash_length(32)
+            .personal(&hex::decode("5a6361736853696748617368a675ffe9")?) // consensus branch id = canopy
+            .hash(&hash_data)
+            .as_bytes(),
+    );
 
     let mut tx_hash = [0u8; 32];
 
@@ -340,7 +351,7 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             p2: 0,
             data: c.to_vec(),
         };
-        let rep = send_request(&command).await;
+        let rep = send_http_request(&command).await;
         log::debug!("{}", rep.retcode());
         if p1 == 2 {
             tx_hash.copy_from_slice(&rep.apdu_data()[0..32]);
@@ -356,7 +367,7 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
             p2: 0,
             data: vec![],
         };
-        let rep = send_request(&command).await;
+        let rep = send_http_request(&command).await;
         log::debug!("{}", rep.retcode());
         let signature = &rep.apdu_data()[0..64];
         signatures.push(rep.apdu_data()[0..64].to_vec())
@@ -365,21 +376,42 @@ pub async fn build_tx_ledger(tx: &mut Tx, prover: &impl TxProver) -> anyhow::Res
     log::debug!("tx hash: {}", hex::encode(tx_hash));
     log::debug!("sig hash: {}", hex::encode(sig_hash));
 
-    let binding_signature = prover.binding_sig(&mut context, DEFAULT_FEE, &sig_hash).map_err(|_| anyhow!("Cannot create binding signature"))?;
+    let binding_signature = prover
+        .binding_sig(&mut context, DEFAULT_FEE, &sig_hash)
+        .map_err(|_| anyhow!("Cannot create binding signature"))?;
     let mut sig_buffer: Vec<u8> = vec![];
     binding_signature.write(&mut sig_buffer).unwrap();
     log::debug!("binding_signature: {}", hex::encode(&sig_buffer));
 
-    let tx = get_tx_data(tx.height, u64::from(DEFAULT_FEE), &spend_datas, &output_descriptions,
-                         &signatures, &binding_signature);
+    let tx = get_tx_data(
+        tx.height,
+        u64::from(DEFAULT_FEE),
+        &spend_datas,
+        &output_descriptions,
+        &signatures,
+        &binding_signature,
+    );
     Ok(tx)
 }
 
-fn get_spend_proof<T: TxProver>(tx: &Tx, i: usize, ak: SubgroupPoint, nsk: Fr, ar: Fr, rcv: Fr, context: &mut T::SaplingProvingContext, prover: &T) -> SpendData
-{
+fn get_spend_proof<T: TxProver>(
+    tx: &Tx,
+    i: usize,
+    ak: SubgroupPoint,
+    nsk: Fr,
+    ar: Fr,
+    rcv: Fr,
+    context: &mut T::SaplingProvingContext,
+    prover: &T,
+) -> SpendData {
     let txin = &tx.inputs[i];
 
-    let fvk = decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &txin.fvk).unwrap().unwrap();
+    let fvk = decode_extended_full_viewing_key(
+        NETWORK.hrp_sapling_extended_full_viewing_key(),
+        &txin.fvk,
+    )
+    .unwrap()
+    .unwrap();
     let mut diversifier = [0u8; 11];
     hex::decode_to_slice(&txin.diversifier, &mut diversifier).unwrap();
     let diversifier = Diversifier(diversifier);
@@ -397,16 +429,23 @@ fn get_spend_proof<T: TxProver>(tx: &Tx, i: usize, ak: SubgroupPoint, nsk: Fr, a
     let cmu = Node::new(note.cmu().into());
     let anchor = merkle_path.root(cmu).into();
 
-    let pgk = ProofGenerationKey {
-        ak,
-        nsk
-    };
+    let pgk = ProofGenerationKey { ak, nsk };
     let value = txin.amount;
     let vk = pgk.to_viewing_key();
 
-    let (spend_proof, cv, rk) = prover.spend_proof_with_rcv(context, rcv,
-                                                            pgk, diversifier, Rseed::BeforeZip212(rseed), ar, value, anchor, merkle_path
-    ).unwrap();
+    let (spend_proof, cv, rk) = prover
+        .spend_proof_with_rcv(
+            context,
+            rcv,
+            pgk,
+            diversifier,
+            Rseed::BeforeZip212(rseed),
+            ar,
+            value,
+            anchor,
+            merkle_path,
+        )
+        .unwrap();
     let spend_data = SpendData {
         position,
         cv,
@@ -418,8 +457,15 @@ fn get_spend_proof<T: TxProver>(tx: &Tx, i: usize, ak: SubgroupPoint, nsk: Fr, a
     spend_data
 }
 
-fn get_output_description<T: TxProver>(tx: &Tx, i: usize, change_amount: u64, rcv: Fr, rseed: [u8; 32], context: &mut T::SaplingProvingContext, prover: &T)
-                                       -> OutputDescription<GrothProofBytes> {
+fn get_output_description<T: TxProver>(
+    tx: &Tx,
+    i: usize,
+    change_amount: u64,
+    rcv: Fr,
+    rseed: [u8; 32],
+    context: &mut T::SaplingProvingContext,
+    prover: &T,
+) -> OutputDescription<GrothProofBytes> {
     let txout = if i == tx.outputs.len() {
         TxOut {
             addr: tx.change.clone(),
@@ -427,13 +473,15 @@ fn get_output_description<T: TxProver>(tx: &Tx, i: usize, change_amount: u64, rc
             ovk: tx.ovk.clone(),
             memo: "".to_string(),
         }
-    } else { tx.outputs[i].clone() };
+    } else {
+        tx.outputs[i].clone()
+    };
     let ovk = OutgoingViewingKey(string_to_hash(&tx.ovk));
-    let pa = decode_payment_address(NETWORK.hrp_sapling_payment_address(), &txout.addr).unwrap().unwrap();
-    let rseed = Rseed::AfterZip212(rseed);
-    let note = pa
-        .create_note(txout.amount, rseed)
+    let pa = decode_payment_address(NETWORK.hrp_sapling_payment_address(), &txout.addr)
+        .unwrap()
         .unwrap();
+    let rseed = Rseed::AfterZip212(rseed);
+    let note = pa.create_note(txout.amount, rseed).unwrap();
 
     let encryptor = sapling_note_encryption::<_, zcash_primitives::consensus::MainNetwork>(
         Some(ovk),
@@ -446,7 +494,14 @@ fn get_output_description<T: TxProver>(tx: &Tx, i: usize, change_amount: u64, rc
     let cmu = note.cmu();
     let epk = *encryptor.epk();
 
-    let (zkproof, cv) = prover.output_proof_with_rcv(context, rcv, *encryptor.esk(), pa.clone(), note.rcm(), txout.amount);
+    let (zkproof, cv) = prover.output_proof_with_rcv(
+        context,
+        rcv,
+        *encryptor.esk(),
+        pa.clone(),
+        note.rcm(),
+        txout.amount,
+    );
     let enc_ciphertext = encryptor.encrypt_note_plaintext();
     let out_ciphertext = encryptor.encrypt_outgoing_plaintext(&cv, &cmu, &mut OsRng);
 
@@ -456,7 +511,7 @@ fn get_output_description<T: TxProver>(tx: &Tx, i: usize, change_amount: u64, rc
         ephemeral_key: epk.to_bytes().into(),
         enc_ciphertext,
         out_ciphertext,
-        zkproof
+        zkproof,
     }
 }
 
@@ -470,34 +525,49 @@ fn slice_to_hash(s: &[u8]) -> [u8; 32] {
     b
 }
 
-async fn send_request(command: &APDUCommand<Vec<u8>>) -> APDUAnswer<Vec<u8>> {
+async fn send_http_request(command: &APDUCommand<Vec<u8>>) -> APDUAnswer<Vec<u8>> {
     let port = 9000;
     let apdu_hex = hex::encode(command.serialize());
     let client = reqwest::Client::new();
-    let rep = client.post(format!("http://{}:{}", LEDGER_IP, port)).json(&APDURequest {
-        apduHex: apdu_hex,
-    }).header("Content-Type", "application/json").send().await.unwrap();
+    let rep = client
+        .post(format!("http://{}:{}", LEDGER_IP, port))
+        .json(&APDURequest { apduHex: apdu_hex })
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .unwrap();
     let rep: APDUReply = rep.json().await.unwrap();
     let answer = APDUAnswer::from_answer(hex::decode(rep.data).unwrap());
     answer.unwrap()
 }
 
-fn get_hash_data(expiry_height: u32, sapling_value_balance: u64, spend_datas: &[SpendData], output_descriptions: &[OutputDescription<GrothProofBytes>]) -> Vec<u8> {
-    let prevout_hash: [u8; 32] = slice_to_hash(Params::new()
-        .hash_length(32)
-        .personal(b"ZcashPrevoutHash")
-        .hash(&[])
-        .as_bytes());
-    let out_hash: [u8; 32] = slice_to_hash(Params::new()
-        .hash_length(32)
-        .personal(b"ZcashOutputsHash")
-        .hash(&[])
-        .as_bytes());
-    let sequence_hash: [u8; 32] = slice_to_hash(Params::new()
-        .hash_length(32)
-        .personal(b"ZcashSequencHash")
-        .hash(&[])
-        .as_bytes());
+fn get_hash_data(
+    expiry_height: u32,
+    sapling_value_balance: u64,
+    spend_datas: &[SpendData],
+    output_descriptions: &[OutputDescription<GrothProofBytes>],
+) -> Vec<u8> {
+    let prevout_hash: [u8; 32] = slice_to_hash(
+        Params::new()
+            .hash_length(32)
+            .personal(b"ZcashPrevoutHash")
+            .hash(&[])
+            .as_bytes(),
+    );
+    let out_hash: [u8; 32] = slice_to_hash(
+        Params::new()
+            .hash_length(32)
+            .personal(b"ZcashOutputsHash")
+            .hash(&[])
+            .as_bytes(),
+    );
+    let sequence_hash: [u8; 32] = slice_to_hash(
+        Params::new()
+            .hash_length(32)
+            .personal(b"ZcashSequencHash")
+            .hash(&[])
+            .as_bytes(),
+    );
 
     let mut data: Vec<u8> = vec![];
     for sp in spend_datas.iter() {
@@ -507,10 +577,13 @@ fn get_hash_data(expiry_height: u32, sapling_value_balance: u64, spend_datas: &[
         data.extend_from_slice(&sp.rk.to_bytes());
         data.extend_from_slice(&sp.zkproof);
     }
-    let shieldedspendhash: [u8; 32] = slice_to_hash(Params::new()
-        .hash_length(32)
-        .personal(b"ZcashSSpendsHash")
-        .hash(&data).as_bytes());
+    let shieldedspendhash: [u8; 32] = slice_to_hash(
+        Params::new()
+            .hash_length(32)
+            .personal(b"ZcashSSpendsHash")
+            .hash(&data)
+            .as_bytes(),
+    );
 
     let mut data: Vec<u8> = vec![];
     for output_description in output_descriptions.iter() {
@@ -521,10 +594,13 @@ fn get_hash_data(expiry_height: u32, sapling_value_balance: u64, spend_datas: &[
         data.extend_from_slice(&output_description.out_ciphertext);
         data.extend_from_slice(&output_description.zkproof);
     }
-    let shieldedoutputhash: [u8; 32] = slice_to_hash(Params::new()
-        .hash_length(32)
-        .personal(b"ZcashSOutputHash")
-        .hash(&data).as_bytes());
+    let shieldedoutputhash: [u8; 32] = slice_to_hash(
+        Params::new()
+            .hash_length(32)
+            .personal(b"ZcashSOutputHash")
+            .hash(&data)
+            .as_bytes(),
+    );
 
     let mut tx_hash_data: Vec<u8> = vec![];
 
@@ -537,7 +613,9 @@ fn get_hash_data(expiry_height: u32, sapling_value_balance: u64, spend_datas: &[
     tx_hash_data.extend_from_slice(&shieldedspendhash);
     tx_hash_data.extend_from_slice(&shieldedoutputhash);
     tx_hash_data.write_u32::<LE>(0).unwrap();
-    tx_hash_data.write_u32::<LE>(expiry_height + EXPIRY).unwrap();
+    tx_hash_data
+        .write_u32::<LE>(expiry_height + EXPIRY)
+        .unwrap();
     tx_hash_data.write_u64::<LE>(sapling_value_balance).unwrap();
     tx_hash_data.write_u32::<LE>(1).unwrap();
 
@@ -546,8 +624,14 @@ fn get_hash_data(expiry_height: u32, sapling_value_balance: u64, spend_datas: &[
     tx_hash_data
 }
 
-fn get_tx_data(expiry_height: u32, sapling_value_balance: u64, spend_datas: &[SpendData], output_descriptions: &[OutputDescription<GrothProofBytes>],
-               signatures: &[Vec<u8>], binding_signature: &Signature) -> Vec<u8> {
+fn get_tx_data(
+    expiry_height: u32,
+    sapling_value_balance: u64,
+    spend_datas: &[SpendData],
+    output_descriptions: &[OutputDescription<GrothProofBytes>],
+    signatures: &[Vec<u8>],
+    binding_signature: &Signature,
+) -> Vec<u8> {
     let mut tx_data: Vec<u8> = vec![];
     tx_data.write_u32::<LE>(0x80000004).unwrap();
     tx_data.write_u32::<LE>(0x892F2085).unwrap();
@@ -586,17 +670,17 @@ fn get_tx_data(expiry_height: u32, sapling_value_balance: u64, spend_datas: &[Sp
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-    use std::io::Read;
+    use crate::ledger::{build_tx_ledger, send_request, slice_to_hash};
+    use crate::Tx;
     use blake2b_simd::Params;
     use group::GroupEncoding;
-    use jubjub::{Fr, ExtendedPoint, SubgroupPoint};
+    use jubjub::{ExtendedPoint, Fr, SubgroupPoint};
     use ledger_apdu::*;
+    use std::fs::File;
+    use std::io::Read;
     use zcash_primitives::constants::SPENDING_KEY_GENERATOR;
     use zcash_primitives::sapling::redjubjub::{PublicKey, Signature};
     use zcash_proofs::prover::LocalTxProver;
-    use crate::ledger::{build_tx_ledger, send_request, slice_to_hash};
-    use crate::Tx;
 
     #[tokio::test]
     async fn get_version() {
@@ -625,7 +709,10 @@ mod tests {
         let answer = send_request(&command).await;
         let address = String::from_utf8(answer.apdu_data()[43..].to_ascii_lowercase()).unwrap();
         println!("{}", address);
-        assert_eq!(address, "zs1m8d7506t4rpcgaag392xae698gx8j5at63qpg54ssprg6eqej0grmkfu76tq6p495z3w6s8qlll");
+        assert_eq!(
+            address,
+            "zs1m8d7506t4rpcgaag392xae698gx8j5at63qpg54ssprg6eqej0grmkfu76tq6p495z3w6s8qlll"
+        );
     }
 
     #[tokio::test]

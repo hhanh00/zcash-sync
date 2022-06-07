@@ -1,16 +1,15 @@
 use crate::chain::to_output_description;
 use crate::{
-    connect_lightwalletd, get_latest_height, CompactTx, CompactTxStreamerClient, DbAdapter,
-    Exclude
+    connect_lightwalletd, get_latest_height, CompactTx, CompactTxStreamerClient, DbAdapter, Exclude,
 };
 use std::collections::HashMap;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
+use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decryption;
 use zcash_primitives::sapling::SaplingIvk;
-use zcash_params::coin::{CoinChain, CoinType, get_coin_chain};
 
 const DEFAULT_EXCLUDE_LEN: u8 = 1;
 
@@ -57,10 +56,14 @@ impl MemPool {
     }
 
     fn set_ivk(&mut self, ivk: &str) {
-        let fvk =
-            decode_extended_full_viewing_key(self.chain().network().hrp_sapling_extended_full_viewing_key(), &ivk)
-                .unwrap()
-                .unwrap();
+        let fvk = decode_extended_full_viewing_key(
+            self.chain()
+                .network()
+                .hrp_sapling_extended_full_viewing_key(),
+            &ivk,
+        )
+        .unwrap()
+        .unwrap();
         let ivk = fvk.fvk.vk.ivk();
         self.ivk = Some(ivk);
     }
@@ -158,7 +161,9 @@ impl MemPool {
         Ok(())
     }
 
-    fn chain(&self) -> &dyn CoinChain { get_coin_chain(self.coin_type) }
+    fn chain(&self) -> &dyn CoinChain {
+        get_coin_chain(self.coin_type)
+    }
 }
 
 #[cfg(test)]

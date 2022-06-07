@@ -9,17 +9,20 @@ fn scan(c: &mut Criterion) {
     env_logger::init();
 
     let ivk = dotenv::var("IVK").unwrap();
-    let fvk =
-        decode_extended_full_viewing_key(Network::MainNetwork.hrp_sapling_extended_full_viewing_key(), &ivk)
-            .unwrap()
-            .unwrap();
+    let fvk = decode_extended_full_viewing_key(
+        Network::MainNetwork.hrp_sapling_extended_full_viewing_key(),
+        &ivk,
+    )
+    .unwrap()
+    .unwrap();
 
     let fvks = &vec![fvk];
 
     c.bench_function("scan all", |b| {
         b.iter(|| {
             let r = Runtime::new().unwrap();
-            r.block_on(scan_all(&Network::MainNetwork, fvks.clone().as_slice())).unwrap();
+            r.block_on(scan_all(&Network::MainNetwork, fvks.clone().as_slice()))
+                .unwrap();
         });
     });
 }

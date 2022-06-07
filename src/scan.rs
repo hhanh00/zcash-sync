@@ -17,10 +17,10 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use zcash_params::coin::{get_coin_chain, CoinType};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::Node;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use zcash_params::coin::{CoinType, get_coin_chain};
 
 pub async fn scan_all(network: &Network, fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
     let fvks: HashMap<_, _> = fvks
@@ -311,7 +311,9 @@ pub async fn sync_async(
                     return c;
                 });
                 let ids: Vec<_> = ids.into_iter().map(|e| e.id_tx).collect();
-                retrieve_tx_info(coin_type, &mut client, &db_path2, &ids).await.unwrap();
+                retrieve_tx_info(coin_type, &mut client, &db_path2, &ids)
+                    .await
+                    .unwrap();
             }
             log::info!("Transaction Details : {}", start.elapsed().as_millis());
 

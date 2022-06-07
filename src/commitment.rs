@@ -1,9 +1,9 @@
 use crate::chain::DecryptedNote;
 use byteorder::WriteBytesExt;
 use std::io::{Read, Write};
+use zcash_encoding::{Optional, Vector};
 use zcash_primitives::merkle_tree::{CommitmentTree, Hashable};
 use zcash_primitives::sapling::Node;
-use zcash_encoding::{Optional, Vector};
 
 /*
 Same behavior and structure as CommitmentTree<Node> from librustzcash

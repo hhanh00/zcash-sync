@@ -87,10 +87,10 @@ impl ContactDecoder {
 
 #[cfg(test)]
 mod tests {
-    use zcash_params::coin::CoinType;
     use crate::contact::{serialize_contacts, Contact};
     use crate::db::DEFAULT_DB_PATH;
     use crate::{DbAdapter, Wallet, LWD_URL};
+    use zcash_params::coin::CoinType;
 
     #[test]
     fn test_contacts() {

@@ -1,23 +1,18 @@
-use clap::{Command, Arg};
+use clap::{Arg, Command};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
 use sync::{KeyHelpers, Tx};
 use zcash_client_backend::encoding::decode_extended_spending_key;
+use zcash_params::coin::CoinType;
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_proofs::prover::LocalTxProver;
-use zcash_params::coin::CoinType;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let matches = Command::new("Cold wallet Signer CLI")
         .version("1.0")
-        .arg(
-            Arg::new("coin")
-                .short('c')
-                .long("coin")
-                .takes_value(true),
-        )
+        .arg(Arg::new("coin").short('c').long("coin").takes_value(true))
         .arg(
             Arg::new("tx_filename")
                 .short('t')
@@ -33,13 +28,17 @@ async fn main() -> anyhow::Result<()> {
         .get_matches();
 
     let coin = matches.value_of("coin").expect("coin argument missing");
-    let tx_filename = matches.value_of("tx_filename").expect("input filename missing");
-    let out_filename = matches.value_of("out_filename").expect("output filename missing");
+    let tx_filename = matches
+        .value_of("tx_filename")
+        .expect("input filename missing");
+    let out_filename = matches
+        .value_of("out_filename")
+        .expect("output filename missing");
 
     let (coin_type, network) = match coin {
         "zcash" => (CoinType::Zcash, Network::MainNetwork),
         "ycash" => (CoinType::Ycash, Network::YCashMainNetwork),
-        _ => panic!("Invalid coin")
+        _ => panic!("Invalid coin"),
     };
     let key = dotenv::var("KEY").unwrap();
     let index = u32::from_str(&dotenv::var("INDEX").unwrap_or_else(|_| "0".to_string())).unwrap();
