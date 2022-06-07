@@ -5,7 +5,7 @@ use crate::pay::TxBuilder;
 use crate::prices::fetch_historical_prices;
 use crate::scan::ProgressCallback;
 use crate::taddr::{get_taddr_balance, get_utxos};
-use crate::{broadcast_tx, connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, build_tx_ledger, CompactTxStreamerClient};
+use crate::{broadcast_tx, connect_lightwalletd, get_latest_height, BlockId, CTree, DbAdapter, CompactTxStreamerClient};
 use bip39::{Language, Mnemonic};
 use lazycell::AtomicLazyCell;
 use rand::rngs::OsRng;
@@ -652,11 +652,12 @@ impl Wallet {
         Ok(recipient_memos)
     }
 
+    #[cfg(feature = "ledger_sapling")]
     pub async fn ledger_sign(&mut self, tx_filename: &str) -> anyhow::Result<String> {
         self._ensure_prover()?;
         let file = File::open(tx_filename)?;
         let mut tx: Tx = serde_json::from_reader(&file)?;
-        let raw_tx = build_tx_ledger(&mut tx, self.prover.borrow().unwrap()).await?;
+        let raw_tx = crate::build_tx_ledger(&mut tx, self.prover.borrow().unwrap()).await?;
         let tx_id = broadcast_tx(&raw_tx, &self.ld_url).await?;
         Ok(tx_id)
     }

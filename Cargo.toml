@@ -13,6 +13,10 @@ harness = false
 [[bin]]
 name = "warp-cli"
 path = "src/main/warp_cli.rs"
+
+[[bin]]
+name = "ledger"
+path = "src/main/ledger.rs"
 #
 #[[bin]]
 #name = "cli"
@@ -71,6 +75,7 @@ ed25519-bip32 = { version = "0.4.1", optional = true }
 
 [features]
 ledger = ["ledger-apdu", "hmac", "ed25519-bip32"]
+ledger_sapling = ["ledger"]
 
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 

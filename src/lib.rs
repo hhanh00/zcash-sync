@@ -67,4 +67,6 @@ pub use crate::print::*;
 pub use crate::scan::{latest_height, scan_all, sync_async};
 pub use crate::ua::{get_sapling, get_ua};
 pub use crate::wallet::{RecipientMemo, Wallet, WalletBalance, encrypt_backup, decrypt_backup};
-pub use crate::ledger::build_tx_ledger;
+
+#[cfg(feature = "ledger_sapling")]
+pub use crate::ledger::sapling::build_tx_ledger;
