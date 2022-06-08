@@ -1,8 +1,8 @@
 use crate::db::SpendableNote;
-use crate::wallet::RecipientMemo;
-use crate::{
-    connect_lightwalletd, get_latest_height, hex_to_hash, GetAddressUtxosReply, RawTransaction,
-};
+// use crate::wallet::RecipientMemo;
+use crate::api::payment::RecipientMemo;
+use crate::coinconfig::CoinConfig;
+use crate::{get_latest_height, hex_to_hash, GetAddressUtxosReply, RawTransaction};
 use anyhow::anyhow;
 use jubjub::Fr;
 use rand::prelude::SliceRandom;
@@ -115,7 +115,7 @@ impl TxBuilder {
                 self.chain()
                     .network()
                     .hrp_sapling_extended_full_viewing_key(),
-                &fvk,
+                fvk,
             ),
             amount: u64::from(amount),
             rseed: hex::encode(rseed),
@@ -249,7 +249,7 @@ impl TxBuilder {
     ) -> anyhow::Result<()> {
         let ovk = &fvk.fvk.ovk;
         let (_, change) = fvk.default_address();
-        self.set_change(&ovk, &change)?;
+        self.set_change(ovk, &change)?;
 
         for r in recipients.iter() {
             let to_addr = RecipientAddress::decode(self.chain().network(), &r.address)
@@ -274,7 +274,7 @@ impl TxBuilder {
                 match &to_addr {
                     RecipientAddress::Shielded(_pa) => {
                         log::info!("Sapling output: {}", r.amount);
-                        self.add_z_output(&r.address, ovk, note_amount, &memo)
+                        self.add_z_output(&r.address, ovk, note_amount, memo)
                     }
                     RecipientAddress::Transparent(_address) => {
                         self.add_t_output(&r.address, note_amount)
@@ -391,8 +391,9 @@ impl Tx {
     }
 }
 
-pub async fn broadcast_tx(tx: &[u8], ld_url: &str) -> anyhow::Result<String> {
-    let mut client = connect_lightwalletd(ld_url).await?;
+pub async fn broadcast_tx(tx: &[u8]) -> anyhow::Result<String> {
+    let c = CoinConfig::get_active();
+    let mut client = c.connect_lwd().await?;
     let latest_height = get_latest_height(&mut client).await?;
     let raw_tx = RawTransaction {
         data: tx.to_vec(),

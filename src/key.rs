@@ -30,16 +30,16 @@ impl KeyHelpers {
         index: u32,
     ) -> anyhow::Result<(Option<String>, Option<String>, String, String)> {
         let network = self.chain().network();
-        let res = if let Ok(mnemonic) = Mnemonic::from_phrase(&key, Language::English) {
+        let res = if let Ok(mnemonic) = Mnemonic::from_phrase(key, Language::English) {
             let (sk, ivk, pa) = self.derive_secret_key(&mnemonic, index)?;
             Ok((Some(key.to_string()), Some(sk), ivk, pa))
         } else if let Ok(Some(sk)) =
-            decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &key)
+            decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key)
         {
             let (ivk, pa) = self.derive_viewing_key(&sk)?;
             Ok((None, Some(key.to_string()), ivk, pa))
         } else if let Ok(Some(fvk)) =
-            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &key)
+            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
         {
             let pa = self.derive_address(&fvk)?;
             Ok((None, None, key.to_string(), pa))
@@ -51,16 +51,16 @@ impl KeyHelpers {
 
     pub fn is_valid_key(&self, key: &str) -> i8 {
         let network = self.chain().network();
-        if Mnemonic::from_phrase(&key, Language::English).is_ok() {
+        if Mnemonic::from_phrase(key, Language::English).is_ok() {
             return 0;
         }
         if let Ok(Some(_)) =
-            decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &key)
+            decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key)
         {
             return 1;
         }
         if let Ok(Some(_)) =
-            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &key)
+            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
         {
             return 2;
         }
@@ -73,7 +73,7 @@ impl KeyHelpers {
         index: u32,
     ) -> anyhow::Result<(String, String, String)> {
         let network = self.chain().network();
-        let seed = Seed::new(&mnemonic, "");
+        let seed = Seed::new(mnemonic, "");
         let master = ExtendedSpendingKey::master(seed.as_bytes());
         let path = [
             ChildIndex::Hardened(32),

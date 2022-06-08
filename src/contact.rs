@@ -63,7 +63,7 @@ impl ContactDecoder {
         if !self.has_contacts {
             return Ok(Vec::new());
         }
-        let data: Vec<_> = self.chunks.iter().cloned().flatten().collect();
+        let data: Vec<_> = self.chunks.iter().flatten().cloned().collect();
         let contacts = bincode::deserialize::<Vec<Contact>>(&data)?;
         Ok(contacts)
     }
@@ -82,41 +82,5 @@ impl ContactDecoder {
 
         let data = &bb[0..len];
         Ok((n, data.to_vec()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::contact::{serialize_contacts, Contact};
-    use crate::db::DEFAULT_DB_PATH;
-    use crate::{DbAdapter, Wallet, LWD_URL};
-    use zcash_params::coin::CoinType;
-
-    #[test]
-    fn test_contacts() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
-        let contact = Contact {
-            id: 0,
-            name: "hanh".to_string(),
-            address:
-                "zs1lvzgfzzwl9n85446j292zg0valw2p47hmxnw42wnqsehsmyuvjk0mhxktcs0pqrplacm2vchh35"
-                    .to_string(),
-        };
-        db.store_contact(&contact, true).unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_serialize() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
-        let contacts = db.get_unsaved_contacts().unwrap();
-        let memos = serialize_contacts(&contacts).unwrap();
-        for m in memos.iter() {
-            println!("{:?}", m);
-        }
-
-        let mut wallet = Wallet::new(CoinType::Zcash, "zec.db");
-        wallet.set_lwd_url(LWD_URL).unwrap();
-        let tx_id = wallet.save_contacts_tx(&memos, 1, 3).await.unwrap();
-        println!("{}", tx_id);
     }
 }

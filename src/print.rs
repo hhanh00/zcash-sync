@@ -25,7 +25,7 @@ pub fn print_witness(w: &IncrementalWitness<Node>) {
         print_node(n);
     }
     println!("Cursor");
-    w.cursor.as_ref().map(|c| print_tree(c));
+    w.cursor.as_ref().map(print_tree);
 }
 
 pub fn print_ctree(t: &CTree) {

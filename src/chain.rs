@@ -176,12 +176,12 @@ pub fn to_output_description(co: &CompactOutput) -> CompactOutputDescription {
     // let epk = jubjub::ExtendedPoint::from_bytes(&epk).unwrap();
     let mut enc_ciphertext = [0u8; 52];
     enc_ciphertext.copy_from_slice(&co.ciphertext);
-    let od = CompactOutputDescription {
+
+    CompactOutputDescription {
         ephemeral_key: EphemeralKeyBytes::from(epk),
         cmu,
         enc_ciphertext,
-    };
-    od
+    }
 }
 
 struct AccountOutput<'a, N: Parameters> {
@@ -208,7 +208,7 @@ impl<'a, N: Parameters> AccountOutput<'a, N> {
         let epk = EphemeralKeyBytes::from(epk_bytes);
         let mut cmu_bytes = [0u8; 32];
         cmu_bytes.copy_from_slice(&co.cmu);
-        let cmu = <SaplingDomain<N> as Domain>::ExtractedCommitmentBytes::from(cmu_bytes);
+        let cmu = cmu_bytes;
         let mut ciphertext_bytes = [0u8; COMPACT_NOTE_SIZE];
         ciphertext_bytes.copy_from_slice(&co.ciphertext);
 
@@ -508,7 +508,7 @@ mod tests {
     use crate::db::AccountViewKey;
     use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
     use crate::LWD_URL;
-    use dotenv;
+
     use std::collections::HashMap;
     use std::time::Instant;
     use zcash_client_backend::encoding::decode_extended_full_viewing_key;

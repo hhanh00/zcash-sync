@@ -10,7 +10,7 @@ pub struct MyReceiver {
 impl FromAddress for MyReceiver {
     fn from_sapling(net: Network, data: [u8; 43]) -> Result<Self, UnsupportedAddress> {
         Ok(MyReceiver {
-            net: net,
+            net,
             receiver: Receiver::Sapling(data),
         })
     }
@@ -20,19 +20,19 @@ impl FromAddress for MyReceiver {
             match r {
                 Receiver::Sapling(data) => {
                     return Ok(MyReceiver {
-                        net: net,
-                        receiver: Receiver::Sapling(data.clone()),
+                        net,
+                        receiver: Receiver::Sapling(*data),
                     });
                 }
                 _ => (),
             }
         }
-        return FromAddress::from_unified(net, data);
+        FromAddress::from_unified(net, data)
     }
 
     fn from_transparent_p2pkh(net: Network, data: [u8; 20]) -> Result<Self, UnsupportedAddress> {
         Ok(MyReceiver {
-            net: net,
+            net,
             receiver: Receiver::P2pkh(data),
         })
     }

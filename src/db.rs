@@ -111,27 +111,25 @@ impl DbAdapter {
         sk: Option<&str>,
         ivk: &str,
         address: &str,
-    ) -> anyhow::Result<i32> {
+    ) -> anyhow::Result<(u32, bool)> {
         let mut statement = self
             .connection
             .prepare("SELECT id_account FROM accounts WHERE ivk = ?1")?;
-        if statement.exists(params![ivk])? {
-            return Ok(-1);
-        }
+        let exists = statement.exists(params![ivk])?;
         self.connection.execute(
             "INSERT INTO accounts(name, seed, aindex, sk, ivk, address) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
             ON CONFLICT DO NOTHING",
             params![name, seed, index, sk, ivk, address],
         )?;
-        let id_tx: i32 = self.connection.query_row(
+        let id_account: u32 = self.connection.query_row(
             "SELECT id_account FROM accounts WHERE ivk = ?1",
             params![ivk],
             |row| row.get(0),
         )?;
-        Ok(id_tx)
+        Ok((id_account, exists))
     }
 
-    pub fn next_account_id(&self, seed: &str) -> anyhow::Result<i32> {
+    pub fn next_account_id(&self, seed: &str) -> anyhow::Result<u32> {
         let index = self.connection.query_row(
             "SELECT MAX(aindex) FROM accounts WHERE seed = ?1",
             [seed],
@@ -140,7 +138,7 @@ impl DbAdapter {
                 Ok(aindex.unwrap_or(-1))
             },
         )? + 1;
-        Ok(index)
+        Ok(index as u32)
     }
 
     pub fn get_fvks(&self) -> anyhow::Result<HashMap<u32, AccountViewKey>> {
@@ -504,6 +502,15 @@ impl DbAdapter {
         Ok(spendable_notes)
     }
 
+    pub fn tx_mark_spend(&mut self, selected_notes: &[u32]) -> anyhow::Result<()> {
+        let db_tx = self.begin_transaction()?;
+        for id_note in selected_notes.iter() {
+            DbAdapter::mark_spent(*id_note, 0, &db_tx)?;
+        }
+        db_tx.commit()?;
+        Ok(())
+    }
+
     pub fn mark_spent(id: u32, height: u32, tx: &Transaction) -> anyhow::Result<()> {
         log::debug!("+mark_spent");
         tx.execute(
@@ -663,7 +670,7 @@ impl DbAdapter {
                 },
             )
             .optional()?
-            .unwrap_or_else(|| [0u8; 11]);
+            .unwrap_or([0u8; 11]);
         Ok(DiversifierIndex(diversifier_index))
     }
 

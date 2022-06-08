@@ -5,7 +5,7 @@ use crate::key::KeyHelpers;
 use crate::pay::Tx;
 use crate::pay::TxBuilder;
 use crate::prices::fetch_historical_prices;
-use crate::scan::ProgressCallback;
+use crate::scan::AM_ProgressCallback;
 use crate::taddr::{get_taddr_balance, get_utxos, scan_transparent_accounts};
 use crate::{
     broadcast_tx, connect_lightwalletd, get_latest_height, BlockId, CTree, CompactTxStreamerClient,
@@ -92,7 +92,7 @@ pub struct RecipientMemo {
 }
 
 impl RecipientMemo {
-    fn from_recipient(from: &str, r: &Recipient) -> Self {
+    pub fn from_recipient(from: &str, r: &Recipient) -> Self {
         let memo = if !r.reply_to && r.subject.is_empty() {
             r.memo.clone()
         } else {
@@ -224,7 +224,7 @@ impl Wallet {
         db_path: &str,
         chunk_size: u32,
         target_height_offset: u32,
-        progress_callback: ProgressCallback,
+        progress_callback: AM_ProgressCallback,
         ld_url: &str,
     ) -> anyhow::Result<()> {
         crate::scan::sync_async(

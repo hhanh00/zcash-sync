@@ -10,7 +10,7 @@ use zcash_primitives::sapling::Node;
 #[inline(always)]
 fn batch_node_combine1(depth: usize, left: &Node, right: &Node) -> ExtendedPoint {
     // Node::new(pedersen_hash(depth as u8, &left.repr, &right.repr))
-    ExtendedPoint::from(pedersen_hash_inner(depth as u8, &left.repr, &right.repr))
+    pedersen_hash_inner(depth as u8, &left.repr, &right.repr)
 }
 
 #[inline(always)]
@@ -63,15 +63,13 @@ impl Builder<CTree, ()> for CTreeBuilder {
                     self.next_tree.right = None;
                     m - 1
                 }
+            } else if m % 2 == 0 {
+                self.next_tree.parents.push(None);
+                m
             } else {
-                if m % 2 == 0 {
-                    self.next_tree.parents.push(None);
-                    m
-                } else {
-                    let last_node = Self::get(commitments, m - 1, &offset);
-                    self.next_tree.parents.push(Some(*last_node));
-                    m - 1
-                }
+                let last_node = Self::get(commitments, m - 1, &offset);
+                self.next_tree.parents.push(Some(*last_node));
+                m - 1
             }
         } else {
             0
@@ -240,13 +238,11 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
                     tree.left = Some(*CTreeBuilder::get(commitments, rp, &offset));
                     tree.right = None;
                 }
-            } else {
-                if self.p % 2 == 1 {
-                    tree.parents
-                        .push(Some(*CTreeBuilder::get(commitments, rp - 1, &offset)));
-                } else if self.p != 0 {
-                    tree.parents.push(None);
-                }
+            } else if self.p % 2 == 1 {
+                tree.parents
+                    .push(Some(*CTreeBuilder::get(commitments, rp - 1, &offset)));
+            } else if self.p != 0 {
+                tree.parents.push(None);
             }
         }
 
@@ -270,10 +266,8 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
                 if tree.right.is_none() {
                     self.witness.filled.push(*p1);
                 }
-            } else {
-                if depth - 1 >= tree.parents.len() || tree.parents[depth - 1].is_none() {
-                    self.witness.filled.push(*p1);
-                }
+            } else if depth > tree.parents.len() || tree.parents[depth - 1].is_none() {
+                self.witness.filled.push(*p1);
             }
         }
         0
@@ -294,7 +288,7 @@ impl Builder<Witness, CTreeBuilder> for WitnessBuilder {
             let mut final_position = context.prev_tree.get_position() as u32;
             let mut witness_position = self.witness.tree.get_position() as u32;
             assert_ne!(witness_position, 0);
-            witness_position = witness_position - 1;
+            witness_position -= 1;
 
             // look for first not equal bit in MSB order
             final_position = final_position.reverse_bits();
@@ -434,11 +428,11 @@ mod tests {
         nodes: &[Node],
     ) {
         for n in nodes.iter() {
-            tree.append(n.clone()).unwrap();
+            tree.append(*n).unwrap();
             for w in ws.iter_mut() {
-                w.append(n.clone()).unwrap();
+                w.append(*n).unwrap();
             }
-            let w = IncrementalWitness::<Node>::from_tree(&tree);
+            let w = IncrementalWitness::<Node>::from_tree(tree);
             ws.push(w);
         }
     }
@@ -450,8 +444,8 @@ mod tests {
         w2.write(&mut bb2).unwrap();
 
         if bb1 != bb2 {
-            print_witness(&w1);
-            print_witness2(&w2);
+            print_witness(w1);
+            print_witness2(w2);
 
             assert!(false);
         }
@@ -656,7 +650,7 @@ mod tests {
                 failed_index = Some(i);
                 println!("FAILED AT {}", i);
                 println!("GOOD");
-                print_witness(&w1);
+                print_witness(w1);
                 if let Some(ref c) = w1.cursor {
                     print_tree(c);
                 } else {
@@ -664,7 +658,7 @@ mod tests {
                 }
 
                 println!("BAD");
-                print_witness2(&w2);
+                print_witness2(w2);
             }
             assert!(equal && failed_index.is_none());
         }

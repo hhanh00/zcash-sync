@@ -28,7 +28,7 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     connection.execute("DROP TABLE sapling_witnesses", [])?;
     connection.execute("DROP TABLE diversifiers", [])?;
     connection.execute("DROP TABLE historical_prices", [])?;
-    update_schema_version(&connection, 0)?;
+    update_schema_version(connection, 0)?;
     Ok(())
 }
 
@@ -40,7 +40,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         [],
     )?;
 
-    let version = get_schema_version(&connection)?;
+    let version = get_schema_version(connection)?;
 
     if version < 1 {
         connection.execute(
@@ -174,7 +174,7 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
     }
 
     if version != 3 {
-        update_schema_version(&connection, 3)?;
+        update_schema_version(connection, 3)?;
         log::info!("Database migrated");
     }
 

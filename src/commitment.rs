@@ -101,7 +101,7 @@ impl Witness {
     pub fn read<R: Read>(id_note: u32, mut reader: R) -> std::io::Result<Self> {
         let tree = CTree::read(&mut reader)?;
         let filled = Vector::read(&mut reader, |r| Node::read(r))?;
-        let cursor = Optional::read(&mut reader, |r| CTree::read(r))?;
+        let cursor = Optional::read(&mut reader, CTree::read)?;
 
         let mut witness = Witness {
             position: 0,
@@ -147,9 +147,9 @@ impl CTree {
     }
 
     pub fn read<R: Read>(mut reader: R) -> std::io::Result<Self> {
-        let left = Optional::read(&mut reader, |r| Node::read(r))?;
-        let right = Optional::read(&mut reader, |r| Node::read(r))?;
-        let parents = Vector::read(&mut reader, |r| Optional::read(r, |r| Node::read(r)))?;
+        let left = Optional::read(&mut reader, Node::read)?;
+        let right = Optional::read(&mut reader, Node::read)?;
+        let parents = Vector::read(&mut reader, |r| Optional::read(r, Node::read))?;
 
         Ok(CTree {
             left,

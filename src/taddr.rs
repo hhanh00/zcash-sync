@@ -1,3 +1,4 @@
+use crate::coinconfig::CoinConfig;
 use crate::{
     AddressList, CompactTxStreamerClient, DbAdapter, GetAddressUtxosArg, GetAddressUtxosReply,
 };
@@ -28,35 +29,30 @@ pub async fn get_taddr_balance(
 
 pub async fn get_utxos(
     client: &mut CompactTxStreamerClient<Channel>,
-    db: &DbAdapter,
-    account: u32,
+    t_address: &str,
+    _account: u32,
 ) -> anyhow::Result<Vec<GetAddressUtxosReply>> {
-    let t_address = db.get_taddr(account)?;
-    if let Some(t_address) = t_address {
-        let req = GetAddressUtxosArg {
-            addresses: vec![t_address.to_string()],
-            start_height: 0,
-            max_entries: 0,
-        };
-        let utxo_rep = client
-            .get_address_utxos(Request::new(req))
-            .await?
-            .into_inner();
-        Ok(utxo_rep.address_utxos)
-    } else {
-        Ok(vec![])
-    }
+    let req = GetAddressUtxosArg {
+        addresses: vec![t_address.to_string()],
+        start_height: 0,
+        max_entries: 0,
+    };
+    let utxo_rep = client
+        .get_address_utxos(Request::new(req))
+        .await?
+        .into_inner();
+    Ok(utxo_rep.address_utxos)
 }
 
 pub async fn scan_transparent_accounts(
     network: &Network,
     client: &mut CompactTxStreamerClient<Channel>,
-    db: &DbAdapter,
-    account: u32,
     gap_limit: usize,
 ) -> anyhow::Result<()> {
+    let c = CoinConfig::get_active();
     let mut addresses = vec![];
-    let (seed, mut index) = db.get_seed(account)?;
+    let db = c.db()?;
+    let (seed, mut index) = db.get_seed(c.id_account)?;
     if let Some(seed) = seed {
         let mut gap = 0;
         while gap < gap_limit {
@@ -86,10 +82,10 @@ pub fn derive_tkeys(
     phrase: &str,
     path: &str,
 ) -> anyhow::Result<(String, String)> {
-    let mnemonic = Mnemonic::from_phrase(&phrase, Language::English)?;
+    let mnemonic = Mnemonic::from_phrase(phrase, Language::English)?;
     let seed = Seed::new(&mnemonic, "");
     let secp = Secp256k1::<All>::new();
-    let ext = ExtendedPrivKey::derive(&seed.as_bytes(), path).unwrap();
+    let ext = ExtendedPrivKey::derive(seed.as_bytes(), path).unwrap();
     let secret_key = SecretKey::from_slice(&ext.secret()).unwrap();
     let pub_key = PublicKey::from_secret_key(&secp, &secret_key);
     let pub_key = pub_key.serialize();

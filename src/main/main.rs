@@ -68,8 +68,8 @@ fn test_increasing_notes() {
 fn mk_node(pos: usize) -> Node {
     let mut bb = [0u8; 32];
     bb[0..8].copy_from_slice(&pos.to_be_bytes());
-    let node = Node::new(bb);
-    node
+
+    Node::new(bb)
 }
 
 fn test_increasing_gap(run_normal: bool, run_warp: bool) {

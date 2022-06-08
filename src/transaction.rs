@@ -1,5 +1,6 @@
 use crate::contact::{Contact, ContactDecoder};
-use crate::wallet::decode_memo;
+// use crate::wallet::decode_memo;
+use crate::api::payment::decode_memo;
 use crate::{CompactTxStreamerClient, DbAdapter, TxFilter};
 use anyhow::anyhow;
 use futures::StreamExt;
@@ -54,7 +55,7 @@ pub async fn decode_transaction(
     timestamp: u32,
     index: u32,
 ) -> anyhow::Result<TransactionInfo> {
-    let consensus_branch_id = get_branch(network, u32::from(height));
+    let consensus_branch_id = get_branch(network, height);
     let ivk = fvk.fvk.vk.ivk();
     let ovk = fvk.fvk.ovk;
 
@@ -112,7 +113,7 @@ pub async fn decode_transaction(
                 tx_memo = memo;
             }
         } else if let Some((_note, pa, memo)) =
-            try_sapling_output_recovery(network, height, &ovk, &output)
+            try_sapling_output_recovery(network, height, &ovk, output)
         {
             zaddress = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
             let memo = Memo::try_from(memo)?;
@@ -176,7 +177,7 @@ pub async fn retrieve_tx_info(
 ) -> anyhow::Result<()> {
     let network = {
         let chain = get_coin_chain(coin_type);
-        chain.network().clone()
+        *chain.network()
     };
     let db = DbAdapter::new(coin_type, db_path)?;
 
