@@ -37,7 +37,7 @@ mod taddr;
 mod transaction;
 mod ua;
 // mod wallet;
-mod api;
+pub mod api;
 
 #[cfg(feature = "ledger")]
 mod ledger;
@@ -59,6 +59,7 @@ pub fn hex_to_hash(hex: &str) -> anyhow::Result<[u8; 32]> {
     Ok(hash)
 }
 
+pub use crate::coinconfig::{CoinConfig, init_coin, set_active, set_active_account, set_coin_lwd_url};
 pub use crate::builder::advance_tree;
 pub use crate::chain::{
     calculate_tree_state_v2, connect_lightwalletd, download_chain, get_latest_height, sync,

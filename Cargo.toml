@@ -10,9 +10,10 @@ edition = "2018"
 name = "scan_all"
 harness = false
 
-#[[bin]]
-#name = "warp-cli"
-#path = "src/main/warp_cli.rs"
+[[bin]]
+name = "warp-rpc"
+path = "src/main/rpc.rs"
+required-features = ["rpc"]
 
 #[[bin]]
 #name = "ledger"
@@ -77,11 +78,13 @@ ledger-transport-hid = { version = "0.9", optional = true }
 allo-isolate = { version = "0.1", optional = true }
 once_cell = { version = "1.8.0", optional = true }
 android_logger = { version = "0.10.0", optional = true }
+rocket = { version = "0.5.0-rc.2", features = ["json"], optional = true }
 
 [features]
 ledger = ["ledger-apdu", "hmac", "ed25519-bip32", "ledger-transport-hid"]
 ledger_sapling = ["ledger"]
 dart_ffi = ["allo-isolate", "once_cell", "android_logger"]
+rpc = ["rocket"]
 
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 

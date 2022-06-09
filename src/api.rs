@@ -8,4 +8,5 @@ pub mod payment;
 pub mod payment_uri;
 pub mod sync;
 
+#[cfg(feature = "dart_ffi")]
 pub mod dart_ffi;
