@@ -74,14 +74,14 @@ hmac = { version = "0.12.1", optional = true }
 ed25519-bip32 = { version = "0.4.1", optional = true }
 ledger-transport-hid = { version = "0.9", optional = true }
 
-allo-isolate = { version = "0.1" }
-once_cell = { version = "1.8.0" }
-android_logger = { version = "0.10.0" }
+allo-isolate = { version = "0.1", optional = true }
+once_cell = { version = "1.8.0", optional = true }
+android_logger = { version = "0.10.0", optional = true }
 
 [features]
 ledger = ["ledger-apdu", "hmac", "ed25519-bip32", "ledger-transport-hid"]
 ledger_sapling = ["ledger"]
-# dart_ffi = ["allo-isolate", "once_cell", "android_logger"]
+dart_ffi = ["allo-isolate", "once_cell", "android_logger"]
 
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 

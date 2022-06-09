@@ -14,6 +14,9 @@ use zcash_primitives::transaction::builder::Progress;
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
 #[no_mangle]
+pub unsafe extern "C" fn dummy_export() {}
+
+#[no_mangle]
 pub unsafe extern "C" fn dart_post_cobject(ptr: ffi::DartPostCObjectFnType) {
     POST_COBJ = Some(ptr);
 }
