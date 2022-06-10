@@ -590,8 +590,8 @@ impl DbAdapter {
             params![account],
             |row| {
                 let seed: Option<String> = row.get(0)?;
-                let sk: Option<String> = row.get(0)?;
-                let ivk: String = row.get(0)?;
+                let sk: Option<String> = row.get(1)?;
+                let ivk: String = row.get(2)?;
                 Ok((seed, sk, ivk))
             },
         )?;
@@ -938,6 +938,28 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn get_txs(&self, account: u32) -> anyhow::Result<Vec<TxRec>> {
+        let mut s = self.connection.prepare("SELECT txid, height, timestamp, value, address, memo FROM transactions WHERE account = ?1")?;
+        let tx_rec = s.query_map(params![account], |row| {
+            let mut txid: Vec<u8> = row.get(0)?;
+            txid.reverse();
+            let txid = hex::encode(txid);
+            let height: u32 = row.get(1)?;
+            let timestamp: u32 = row.get(2)?;
+            let value: i64 = row.get(3)?;
+            let address: String = row.get(4)?;
+            let memo: String = row.get(5)?;
+            Ok(TxRec {
+                txid, height, timestamp, value, address, memo
+            })
+        })?;
+        let mut txs = vec![];
+        for row in tx_rec {
+            txs.push(row?);
+        }
+        Ok(txs)
+    }
+
     fn network(&self) -> &'static Network {
         let chain = get_coin_chain(self.coin_type);
         chain.network()
@@ -965,6 +987,16 @@ impl ZMessage {
     pub fn is_empty(&self) -> bool {
         self.sender.is_none() && self.subject.is_empty() && self.body.is_empty()
     }
+}
+
+#[derive(Serialize)]
+pub struct TxRec {
+    txid: String,
+    height: u32,
+    timestamp: u32,
+    value: i64,
+    address: String,
+    memo: String,
 }
 
 #[cfg(test)]

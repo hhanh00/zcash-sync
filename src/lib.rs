@@ -66,7 +66,7 @@ pub use crate::chain::{
     ChainError, DecryptNode,
 };
 pub use crate::commitment::{CTree, Witness};
-pub use crate::db::DbAdapter;
+pub use crate::db::{DbAdapter, TxRec};
 pub use crate::hash::pedersen_hash;
 pub use crate::key::{generate_random_enc_key, KeyHelpers};
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;

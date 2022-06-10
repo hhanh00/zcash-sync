@@ -1,0 +1,3 @@
+[default]
+allow_backup = true
+allow_send = true

@@ -34,10 +34,10 @@ async fn coin_sync_impl(
         c.coin_type,
         chunk_size,
         get_tx,
-        &c.db_path,
+        &c.db_path.as_ref().unwrap(),
         target_height_offset,
         progress_callback,
-        &c.lwd_url,
+        &c.lwd_url.as_ref().unwrap(),
     )
     .await?;
     Ok(())
@@ -48,6 +48,12 @@ pub async fn get_latest_height() -> anyhow::Result<u32> {
     let mut client = c.connect_lwd().await?;
     let last_height = crate::chain::get_latest_height(&mut client).await?;
     Ok(last_height)
+}
+
+pub fn get_synced_height() -> anyhow::Result<u32> {
+    let c = CoinConfig::get_active();
+    let db = c.db()?;
+    db.get_last_sync_height().map(|h| h.unwrap_or(0))
 }
 
 pub async fn skip_to_last_height(coin: u8) -> anyhow::Result<()> {

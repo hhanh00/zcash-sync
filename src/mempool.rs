@@ -5,7 +5,6 @@ use tonic::transport::Channel;
 use tonic::Request;
 
 use crate::coinconfig::CoinConfig;
-use zcash_params::coin::CoinChain;
 use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decryption;
 use zcash_primitives::sapling::SaplingIvk;

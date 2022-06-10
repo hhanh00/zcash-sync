@@ -1,6 +1,6 @@
 use crate::coinconfig::CoinConfig;
 use crate::{
-    AddressList, CompactTxStreamerClient, DbAdapter, GetAddressUtxosArg, GetAddressUtxosReply,
+    AddressList, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply,
 };
 use bip39::{Language, Mnemonic, Seed};
 use ripemd::{Digest, Ripemd160};

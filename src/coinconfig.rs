@@ -3,6 +3,7 @@ use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use anyhow::anyhow;
 use tonic::transport::Channel;
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
@@ -34,7 +35,7 @@ pub fn set_active_account(coin: u8, id: u32) {
 
 pub fn set_coin_lwd_url(coin: u8, lwd_url: &str) {
     let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
-    c.lwd_url = lwd_url.to_string();
+    c.lwd_url = Some(lwd_url.to_string());
 }
 
 pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
@@ -49,8 +50,8 @@ pub struct CoinConfig {
     pub coin_type: CoinType,
     pub id_account: u32,
     pub height: u32,
-    pub lwd_url: String,
-    pub db_path: String,
+    pub lwd_url: Option<String>,
+    pub db_path: Option<String>,
     pub mempool: Arc<Mutex<MemPool>>,
     pub db: Option<Arc<Mutex<DbAdapter>>>,
     pub chain: &'static (dyn CoinChain + Send),
@@ -64,8 +65,8 @@ impl CoinConfig {
             coin_type,
             id_account: 0,
             height: 0,
-            lwd_url: String::new(),
-            db_path: String::new(),
+            lwd_url: None,
+            db_path: None,
             db: None,
             mempool: Arc::new(Mutex::new(MemPool::new(coin))),
             chain,
@@ -73,8 +74,8 @@ impl CoinConfig {
     }
 
     pub fn set_db_path(&mut self, db_path: &str) -> anyhow::Result<()> {
-        self.db_path = db_path.to_string();
-        let db = DbAdapter::new(self.coin_type, &self.db_path)?;
+        self.db_path = Some(db_path.to_string());
+        let db = DbAdapter::new(self.coin_type, &db_path)?;
         db.init_db()?;
         self.db = Some(Arc::new(Mutex::new(db)));
         Ok(())
@@ -108,7 +109,12 @@ impl CoinConfig {
     }
 
     pub async fn connect_lwd(&self) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
-        connect_lightwalletd(&self.lwd_url).await
+        if let Some(lwd_url) = &self.lwd_url {
+            connect_lightwalletd(lwd_url).await
+        }
+        else {
+            Err(anyhow!("LWD URL Not set"))
+        }
     }
 }
 

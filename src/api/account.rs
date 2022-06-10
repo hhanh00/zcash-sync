@@ -1,6 +1,6 @@
 // Account creation
 
-use crate::coinconfig::{CoinConfig, ACTIVE_COIN};
+use crate::coinconfig::CoinConfig;
 use crate::key2::decode_key;
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
