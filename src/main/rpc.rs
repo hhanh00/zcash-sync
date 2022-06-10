@@ -2,16 +2,22 @@
 extern crate rocket;
 
 use rocket::fairing::AdHoc;
-use rocket::serde::{Serialize, Deserialize, json::Json};
+use rocket::serde::{json::Json, Deserialize, Serialize};
 use rocket::State;
-use warp_api_ffi::{CoinConfig, TxRec};
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
+use warp_api_ffi::{CoinConfig, TxRec};
 
 #[rocket::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv()?;
-    warp_api_ffi::init_coin(0, &dotenv::var("ZEC_DB_PATH").unwrap_or("/tmp/zec.db".to_string()))?;
-    warp_api_ffi::set_coin_lwd_url(0, &dotenv::var("ZEC_LWD_URL").unwrap_or("https://mainnet.lightwalletd.com:9067".to_string()));
+    warp_api_ffi::init_coin(
+        0,
+        &dotenv::var("ZEC_DB_PATH").unwrap_or("/tmp/zec.db".to_string()),
+    )?;
+    warp_api_ffi::set_coin_lwd_url(
+        0,
+        &dotenv::var("ZEC_LWD_URL").unwrap_or("https://mainnet.lightwalletd.com:9067".to_string()),
+    );
 
     let _ = rocket::build()
         .mount(
@@ -47,9 +53,15 @@ pub fn set_active(coin: u8, id_account: u32) {
     warp_api_ffi::set_active_account(coin, id_account);
 }
 
-#[post("/new_account", format = "application/json", data="<seed>")]
+#[post("/new_account", format = "application/json", data = "<seed>")]
 pub fn new_account(seed: Json<AccountSeed>) -> String {
-    let id_account = warp_api_ffi::api::account::new_account(seed.coin, &seed.name, seed.key.clone(), seed.index).unwrap();
+    let id_account = warp_api_ffi::api::account::new_account(
+        seed.coin,
+        &seed.name,
+        seed.key.clone(),
+        seed.index,
+    )
+    .unwrap();
     warp_api_ffi::set_active_account(seed.coin, id_account);
     id_account.to_string()
 }
@@ -83,16 +95,11 @@ pub fn get_address() -> String {
 pub fn get_backup(config: &State<Config>) -> Result<Json<Backup>, String> {
     if !config.allow_backup {
         Err("Backup API not enabled".to_string())
-    }
-    else {
+    } else {
         let c = CoinConfig::get_active();
         let db = c.db().unwrap();
         let (seed, sk, fvk) = db.get_backup(c.id_account).unwrap();
-        Ok(Json(Backup {
-            seed,
-            sk,
-            fvk
-        }))
+        Ok(Json(Backup { seed, sk, fvk }))
     }
 }
 
@@ -112,26 +119,31 @@ pub fn get_balance() -> String {
     balance.to_string()
 }
 
-#[post("/pay", data="<payment>")]
+#[post("/pay", data = "<payment>")]
 pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<String, String> {
     if !config.allow_send {
         Err("Backup API not enabled".to_string())
-    }
-    else {
+    } else {
         let c = CoinConfig::get_active();
         let latest = warp_api_ffi::api::sync::get_latest_height().await.unwrap();
         let from = {
             let db = c.db().unwrap();
             db.get_address(c.id_account).unwrap()
         };
-        let recipients: Vec<_> = payment.recipients.iter().map(|p| RecipientMemo::from_recipient(&from, p)).collect();
+        let recipients: Vec<_> = payment
+            .recipients
+            .iter()
+            .map(|p| RecipientMemo::from_recipient(&from, p))
+            .collect();
         let txid = warp_api_ffi::api::payment::build_sign_send_multi_payment(
             latest,
             &recipients,
             false,
             payment.confirmations,
-            Box::new(|_| {})
-        ).await.unwrap();
+            Box::new(|_| {}),
+        )
+        .await
+        .unwrap();
         Ok(txid)
     }
 }

@@ -7,7 +7,6 @@ use log::Level;
 use std::ffi::{CStr, CString};
 use std::io::Read;
 use std::os::raw::c_char;
-use std::path::Path;
 use std::sync::Mutex;
 use zcash_primitives::transaction::builder::Progress;
 

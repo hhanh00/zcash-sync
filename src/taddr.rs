@@ -1,7 +1,5 @@
 use crate::coinconfig::CoinConfig;
-use crate::{
-    AddressList, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply,
-};
+use crate::{AddressList, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply};
 use bip39::{Language, Mnemonic, Seed};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};

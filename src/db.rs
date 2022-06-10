@@ -950,7 +950,12 @@ impl DbAdapter {
             let address: String = row.get(4)?;
             let memo: String = row.get(5)?;
             Ok(TxRec {
-                txid, height, timestamp, value, address, memo
+                txid,
+                height,
+                timestamp,
+                value,
+                address,
+                memo,
             })
         })?;
         let mut txs = vec![];

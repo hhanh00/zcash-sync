@@ -1,9 +1,9 @@
 use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter, MemPool};
+use anyhow::anyhow;
 use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use anyhow::anyhow;
 use tonic::transport::Channel;
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
@@ -111,8 +111,7 @@ impl CoinConfig {
     pub async fn connect_lwd(&self) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
         if let Some(lwd_url) = &self.lwd_url {
             connect_lightwalletd(lwd_url).await
-        }
-        else {
+        } else {
             Err(anyhow!("LWD URL Not set"))
         }
     }
