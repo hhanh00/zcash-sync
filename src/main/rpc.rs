@@ -1,18 +1,37 @@
 #[macro_use]
 extern crate rocket;
 
+use anyhow::anyhow;
 use rocket::fairing::AdHoc;
+use rocket::response::Responder;
 use rocket::serde::{json::Json, Deserialize, Serialize};
-use rocket::State;
+use rocket::{Request, response, Response, State};
+use rocket::http::Status;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
-use warp_api_ffi::{CoinConfig, TxRec};
+use warp_api_ffi::{AccountRec, CoinConfig, TxRec};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+impl<'r> Responder<'r, 'static> for Error {
+    fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
+        let error = self.to_string();
+        Response::build_from(error.respond_to(req)?)
+            .status(Status::InternalServerError)
+            .ok()
+    }
+}
 
 #[rocket::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv::dotenv()?;
+    let _ = dotenv::dotenv();
     warp_api_ffi::init_coin(
         0,
-        &dotenv::var("ZEC_DB_PATH").unwrap_or("/tmp/zec.db".to_string()),
+        &dotenv::var("ZEC_DB_PATH").unwrap_or("./zec.db".to_string()),
     )?;
     warp_api_ffi::set_coin_lwd_url(
         0,
@@ -26,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
                 set_lwd,
                 set_active,
                 new_account,
+                list_accounts,
                 sync,
                 rewind,
                 get_latest_height,
@@ -54,81 +74,91 @@ pub fn set_active(coin: u8, id_account: u32) {
 }
 
 #[post("/new_account", format = "application/json", data = "<seed>")]
-pub fn new_account(seed: Json<AccountSeed>) -> String {
+pub fn new_account(seed: Json<AccountSeed>) -> Result<String, Error> {
     let id_account = warp_api_ffi::api::account::new_account(
         seed.coin,
         &seed.name,
         seed.key.clone(),
         seed.index,
-    )
-    .unwrap();
+    )?;
     warp_api_ffi::set_active_account(seed.coin, id_account);
-    id_account.to_string()
+    Ok(id_account.to_string())
+}
+
+#[get("/accounts")]
+pub fn list_accounts() -> Result<Json<Vec<AccountRec>>, Error> {
+    let c = CoinConfig::get_active();
+    let db = c.db()?;
+    let accounts = db.get_accounts()?;
+    Ok(Json(accounts))
 }
 
 #[post("/sync?<offset>")]
-pub async fn sync(offset: Option<u32>) {
-    let coin = CoinConfig::get_active();
-    let _ = warp_api_ffi::api::sync::coin_sync(coin.coin, true, offset.unwrap_or(0), |_| {}).await;
+pub async fn sync(offset: Option<u32>) -> Result<(), Error> {
+    let c = CoinConfig::get_active();
+    warp_api_ffi::api::sync::coin_sync(c.coin, true, offset.unwrap_or(0), |_| {}).await?;
+    Ok(())
 }
 
 #[post("/rewind?<height>")]
-pub async fn rewind(height: u32) {
-    let _ = warp_api_ffi::api::sync::rewind_to_height(height).await;
+pub async fn rewind(height: u32) -> Result<(), Error> {
+    warp_api_ffi::api::sync::rewind_to_height(height).await?;
+    Ok(())
 }
 
 #[get("/latest_height")]
-pub async fn get_latest_height() -> Json<Heights> {
-    let latest = warp_api_ffi::api::sync::get_latest_height().await.unwrap();
-    let synced = warp_api_ffi::api::sync::get_synced_height().unwrap();
-    Json(Heights { latest, synced })
+pub async fn get_latest_height() -> Result<Json<Heights>, Error> {
+    let latest = warp_api_ffi::api::sync::get_latest_height().await?;
+    let synced = warp_api_ffi::api::sync::get_synced_height()?;
+    Ok(Json(Heights { latest, synced }))
 }
 
 #[get("/address")]
-pub fn get_address() -> String {
+pub fn get_address() -> Result<String, Error> {
     let c = CoinConfig::get_active();
-    let db = c.db().unwrap();
-    db.get_address(c.id_account).unwrap()
+    let db = c.db()?;
+    let address = db.get_address(c.id_account)?;
+    Ok(address)
 }
 
 #[get("/backup")]
-pub fn get_backup(config: &State<Config>) -> Result<Json<Backup>, String> {
+pub fn get_backup(config: &State<Config>) -> Result<Json<Backup>, Error> {
     if !config.allow_backup {
-        Err("Backup API not enabled".to_string())
+        Err(anyhow!("Backup API not enabled").into())
     } else {
         let c = CoinConfig::get_active();
-        let db = c.db().unwrap();
-        let (seed, sk, fvk) = db.get_backup(c.id_account).unwrap();
+        let db = c.db()?;
+        let (seed, sk, fvk) = db.get_backup(c.id_account)?;
         Ok(Json(Backup { seed, sk, fvk }))
     }
 }
 
 #[get("/tx_history")]
-pub fn get_tx_history() -> Json<Vec<TxRec>> {
+pub fn get_tx_history() -> Result<Json<Vec<TxRec>>, Error> {
     let c = CoinConfig::get_active();
-    let db = c.db().unwrap();
-    let txs = db.get_txs(c.id_account).unwrap();
-    Json(txs)
+    let db = c.db()?;
+    let txs = db.get_txs(c.id_account)?;
+    Ok(Json(txs))
 }
 
 #[get("/balance")]
-pub fn get_balance() -> String {
+pub fn get_balance() -> Result<String, Error> {
     let c = CoinConfig::get_active();
-    let db = c.db().unwrap();
-    let balance = db.get_balance(c.id_account).unwrap();
-    balance.to_string()
+    let db = c.db()?;
+    let balance = db.get_balance(c.id_account)?;
+    Ok(balance.to_string())
 }
 
 #[post("/pay", data = "<payment>")]
-pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<String, String> {
+pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<String, Error> {
     if !config.allow_send {
-        Err("Backup API not enabled".to_string())
+        Err(anyhow!("Payment API not enabled").into())
     } else {
         let c = CoinConfig::get_active();
-        let latest = warp_api_ffi::api::sync::get_latest_height().await.unwrap();
+        let latest = warp_api_ffi::api::sync::get_latest_height().await?;
         let from = {
-            let db = c.db().unwrap();
-            db.get_address(c.id_account).unwrap()
+            let db = c.db()?;
+            db.get_address(c.id_account)?
         };
         let recipients: Vec<_> = payment
             .recipients
@@ -142,8 +172,7 @@ pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<Strin
             payment.confirmations,
             Box::new(|_| {}),
         )
-        .await
-        .unwrap();
+        .await?;
         Ok(txid)
     }
 }

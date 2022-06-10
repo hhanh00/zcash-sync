@@ -938,6 +938,23 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn get_accounts(&self) -> anyhow::Result<Vec<AccountRec>> {
+        let mut s = self.connection.prepare("SELECT id_account, name, address FROM accounts")?;
+        let accounts = s.query_map([], |row| {
+            let id_account: u32 = row.get(0)?;
+            let name: String = row.get(1)?;
+            let address: String = row.get(2)?;
+            Ok(AccountRec {
+                id_account, name, address
+            })
+        })?;
+        let mut account_recs = vec![];
+        for row in accounts {
+            account_recs.push(row?);
+        }
+        Ok(account_recs)
+    }
+
     pub fn get_txs(&self, account: u32) -> anyhow::Result<Vec<TxRec>> {
         let mut s = self.connection.prepare("SELECT txid, height, timestamp, value, address, memo FROM transactions WHERE account = ?1")?;
         let tx_rec = s.query_map(params![account], |row| {
@@ -1002,6 +1019,13 @@ pub struct TxRec {
     value: i64,
     address: String,
     memo: String,
+}
+
+#[derive(Serialize)]
+pub struct AccountRec {
+    id_account: u32,
+    name: String,
+    address: String,
 }
 
 #[cfg(test)]

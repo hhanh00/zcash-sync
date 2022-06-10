@@ -68,7 +68,7 @@ pub use crate::coinconfig::{
     init_coin, set_active, set_active_account, set_coin_lwd_url, CoinConfig,
 };
 pub use crate::commitment::{CTree, Witness};
-pub use crate::db::{DbAdapter, TxRec};
+pub use crate::db::{DbAdapter, AccountRec, TxRec};
 pub use crate::hash::pedersen_hash;
 pub use crate::key::{generate_random_enc_key, KeyHelpers};
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
