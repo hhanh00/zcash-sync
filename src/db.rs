@@ -939,13 +939,17 @@ impl DbAdapter {
     }
 
     pub fn get_accounts(&self) -> anyhow::Result<Vec<AccountRec>> {
-        let mut s = self.connection.prepare("SELECT id_account, name, address FROM accounts")?;
+        let mut s = self
+            .connection
+            .prepare("SELECT id_account, name, address FROM accounts")?;
         let accounts = s.query_map([], |row| {
             let id_account: u32 = row.get(0)?;
             let name: String = row.get(1)?;
             let address: String = row.get(2)?;
             Ok(AccountRec {
-                id_account, name, address
+                id_account,
+                name,
+                address,
             })
         })?;
         let mut account_recs = vec![];

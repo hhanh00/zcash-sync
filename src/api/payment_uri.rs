@@ -1,5 +1,5 @@
 use crate::coinconfig::CoinConfig;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::str::FromStr;
 use zcash_client_backend::address::RecipientAddress;
@@ -29,7 +29,7 @@ pub fn make_payment_uri(address: &str, amount: u64, memo: &str) -> anyhow::Resul
     Ok(uri)
 }
 
-pub fn parse_payment_uri(uri: &str) -> anyhow::Result<String> {
+pub fn parse_payment_uri(uri: &str) -> anyhow::Result<PaymentURI> {
     let c = CoinConfig::get_active();
     if uri[..5].ne(c.chain.ticker()) {
         anyhow::bail!("Invalid Payment URI");
@@ -52,20 +52,20 @@ pub fn parse_payment_uri(uri: &str) -> anyhow::Result<String> {
         }
         None => Ok(String::new()),
     }?;
-    let payment = MyPayment {
+    let payment = PaymentURI {
         address: payment.recipient_address.encode(c.chain.network()),
         amount: u64::from(payment.amount),
         memo,
     };
 
-    let payment_json = serde_json::to_string(&payment)?;
-
-    Ok(payment_json)
+    // let payment_json = serde_json::to_string(&payment)?;
+    //
+    Ok(payment)
 }
 
-#[derive(Serialize)]
-struct MyPayment {
-    address: String,
-    amount: u64,
-    memo: String,
+#[derive(Serialize, Deserialize)]
+pub struct PaymentURI {
+    pub address: String,
+    pub amount: u64,
+    pub memo: String,
 }

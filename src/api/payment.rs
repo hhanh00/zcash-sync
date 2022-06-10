@@ -5,7 +5,7 @@ use secp256k1::SecretKey;
 use crate::api::sync::get_latest_height;
 use crate::coinconfig::{get_prover, CoinConfig};
 use crate::pay::TxBuilder;
-use crate::{broadcast_tx, Tx};
+pub use crate::{broadcast_tx, Tx};
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key,
 };

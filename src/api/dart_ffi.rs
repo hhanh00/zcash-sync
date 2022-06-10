@@ -469,8 +469,12 @@ pub unsafe extern "C" fn make_payment_uri(
 #[no_mangle]
 pub unsafe extern "C" fn parse_payment_uri(uri: *mut c_char) -> *mut c_char {
     from_c_str!(uri);
-    let payment_json = crate::api::payment_uri::parse_payment_uri(&uri);
-    to_c_str(log_string(payment_json))
+    let payment_json = || {
+        let payment = crate::api::payment_uri::parse_payment_uri(&uri)?;
+        let payment_json = serde_json::to_string(&payment)?;
+        Ok(payment_json)
+    };
+    to_c_str(log_string(payment_json()))
 }
 
 #[no_mangle]

@@ -1,16 +1,17 @@
 #[macro_use]
 extern crate rocket;
 
-use std::collections::HashMap;
 use anyhow::anyhow;
 use rocket::fairing::AdHoc;
+use rocket::http::Status;
 use rocket::response::Responder;
 use rocket::serde::{json::Json, Deserialize, Serialize};
-use rocket::{Request, response, Response, State};
-use rocket::http::Status;
-use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
-use warp_api_ffi::{AccountRec, CoinConfig, TxRec};
+use rocket::{response, Request, Response, State};
+use std::collections::HashMap;
 use thiserror::Error;
+use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
+use warp_api_ffi::api::payment_uri::PaymentURI;
+use warp_api_ffi::{AccountRec, CoinConfig, TxRec};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -30,11 +31,15 @@ impl<'r> Responder<'r, 'static> for Error {
 fn init(coin: u8, config: HashMap<String, String>) -> anyhow::Result<()> {
     warp_api_ffi::init_coin(
         coin,
-        config.get("db_path").ok_or(anyhow!("Missing configuration value"))?
+        config
+            .get("db_path")
+            .ok_or(anyhow!("Missing configuration value"))?,
     )?;
     warp_api_ffi::set_coin_lwd_url(
         coin,
-        config.get("lwd_url").ok_or(anyhow!("Missing configuration value"))?
+        config
+            .get("lwd_url")
+            .ok_or(anyhow!("Missing configuration value"))?,
     );
     Ok(())
 }
@@ -51,7 +56,8 @@ async fn main() -> anyhow::Result<()> {
     let yec: HashMap<String, String> = figment.extract_inner("yec")?;
     init(1, yec)?;
 
-    let _ = rocket.mount(
+    let _ = rocket
+        .mount(
             "/",
             routes![
                 set_lwd,
@@ -66,6 +72,11 @@ async fn main() -> anyhow::Result<()> {
                 get_address,
                 get_tx_history,
                 pay,
+                mark_synced,
+                broadcast_tx,
+                new_diversified_address,
+                make_payment_uri,
+                parse_payment_uri,
             ],
         )
         .attach(AdHoc::config::<Config>())
@@ -115,6 +126,13 @@ pub async fn sync(offset: Option<u32>) -> Result<(), Error> {
 #[post("/rewind?<height>")]
 pub async fn rewind(height: u32) -> Result<(), Error> {
     warp_api_ffi::api::sync::rewind_to_height(height).await?;
+    Ok(())
+}
+
+#[post("/mark_synced")]
+pub async fn mark_synced() -> Result<(), Error> {
+    let c = CoinConfig::get_active();
+    warp_api_ffi::api::sync::skip_to_last_height(c.coin).await?;
     Ok(())
 }
 
@@ -187,6 +205,35 @@ pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<Strin
         .await?;
         Ok(txid)
     }
+}
+
+#[post("/broadcast_tx?<tx_hex>")]
+pub async fn broadcast_tx(tx_hex: String) -> Result<String, Error> {
+    let tx = hex::decode(tx_hex.trim_end()).map_err(|e| anyhow!(e.to_string()))?;
+    let tx_id = warp_api_ffi::api::payment::broadcast_tx(&tx).await?;
+    Ok(tx_id)
+}
+
+#[get("/new_diversified_address")]
+pub fn new_diversified_address() -> Result<String, Error> {
+    let address = warp_api_ffi::api::account::new_diversified_address()?;
+    Ok(address)
+}
+
+#[get("/make_payment_uri", data = "<payment>")]
+pub fn make_payment_uri(payment: Json<PaymentURI>) -> Result<String, Error> {
+    let uri = warp_api_ffi::api::payment_uri::make_payment_uri(
+        &payment.address,
+        payment.amount,
+        &payment.memo,
+    )?;
+    Ok(uri)
+}
+
+#[get("/parse_payment_uri?<uri>")]
+pub fn parse_payment_uri(uri: String) -> Result<Json<PaymentURI>, Error> {
+    let payment = warp_api_ffi::api::payment_uri::parse_payment_uri(&uri)?;
+    Ok(Json(payment))
 }
 
 #[derive(Deserialize)]
