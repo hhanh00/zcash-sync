@@ -41,6 +41,7 @@ fn init(coin: u8, config: HashMap<String, String>) -> anyhow::Result<()> {
 
 #[rocket::main]
 async fn main() -> anyhow::Result<()> {
+    env_logger::init();
     let _ = dotenv::dotenv();
 
     let rocket = rocket::build();
