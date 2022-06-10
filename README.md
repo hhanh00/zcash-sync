@@ -13,16 +13,11 @@ Edit `Rocket.toml`
 [default]
 allow_backup = true
 allow_send = true
+
+yec = { db_path = "./yec.db", lwd_url = "https://lite.ycash.xyz:9067" }
+zec = { db_path = "./zec.db", lwd_url = "https://mainnet.lightwalletd.com:9067" }
 ```
 
-Edit `.env`
-
-```
-ZEC_DB_PATH
-ZEC_LWD_URL
-YEC_DB_PATH
-YEC_LWD_URL
-```
 
 # RPC
 

@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
+use std::collections::HashMap;
 use anyhow::anyhow;
 use rocket::fairing::AdHoc;
 use rocket::response::Responder;
@@ -26,20 +27,30 @@ impl<'r> Responder<'r, 'static> for Error {
     }
 }
 
+fn init(coin: u8, config: HashMap<String, String>) -> anyhow::Result<()> {
+    warp_api_ffi::init_coin(
+        coin,
+        config.get("db_path").ok_or(anyhow!("Missing configuration value"))?
+    )?;
+    warp_api_ffi::set_coin_lwd_url(
+        coin,
+        config.get("lwd_url").ok_or(anyhow!("Missing configuration value"))?
+    );
+    Ok(())
+}
+
 #[rocket::main]
 async fn main() -> anyhow::Result<()> {
     let _ = dotenv::dotenv();
-    warp_api_ffi::init_coin(
-        0,
-        &dotenv::var("ZEC_DB_PATH").unwrap_or("./zec.db".to_string()),
-    )?;
-    warp_api_ffi::set_coin_lwd_url(
-        0,
-        &dotenv::var("ZEC_LWD_URL").unwrap_or("https://mainnet.lightwalletd.com:9067".to_string()),
-    );
 
-    let _ = rocket::build()
-        .mount(
+    let rocket = rocket::build();
+    let figment = rocket.figment();
+    let zec: HashMap<String, String> = figment.extract_inner("zec")?;
+    init(0, zec)?;
+    let yec: HashMap<String, String> = figment.extract_inner("yec")?;
+    init(1, yec)?;
+
+    let _ = rocket.mount(
             "/",
             routes![
                 set_lwd,
