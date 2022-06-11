@@ -46,15 +46,17 @@ pub struct CompactTx {
     pub fee: u32,
     /// inputs
     #[prost(message, repeated, tag="4")]
-    pub spends: ::prost::alloc::vec::Vec<CompactSpend>,
+    pub spends: ::prost::alloc::vec::Vec<CompactSaplingSpend>,
     /// outputs
     #[prost(message, repeated, tag="5")]
-    pub outputs: ::prost::alloc::vec::Vec<CompactOutput>,
+    pub outputs: ::prost::alloc::vec::Vec<CompactSaplingOutput>,
+    #[prost(message, repeated, tag="6")]
+    pub actions: ::prost::alloc::vec::Vec<CompactOrchardAction>,
 }
-/// CompactSpend is a Sapling Spend Description as described in 7.3 of the Zcash
+/// CompactSaplingSpend is a Sapling Spend Description as described in 7.3 of the Zcash
 /// protocol specification.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CompactSpend {
+pub struct CompactSaplingSpend {
     /// nullifier (see the Zcash protocol specification)
     #[prost(bytes="vec", tag="1")]
     pub nf: ::prost::alloc::vec::Vec<u8>,
@@ -62,15 +64,32 @@ pub struct CompactSpend {
 /// output is a Sapling Output Description as described in section 7.4 of the
 /// Zcash protocol spec. Total size is 948.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CompactOutput {
+pub struct CompactSaplingOutput {
     /// note commitment u-coordinate
     #[prost(bytes="vec", tag="1")]
     pub cmu: ::prost::alloc::vec::Vec<u8>,
     /// ephemeral public key
     #[prost(bytes="vec", tag="2")]
     pub epk: ::prost::alloc::vec::Vec<u8>,
-    /// ciphertext and zkproof
+    /// first 52 bytes of ciphertext
     #[prost(bytes="vec", tag="3")]
+    pub ciphertext: ::prost::alloc::vec::Vec<u8>,
+}
+/// <https://github.com/zcash/zips/blob/main/zip-0225.rst#orchard-action-description-orchardaction>
+/// (but not all fields are needed)
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CompactOrchardAction {
+    /// \[32\] The nullifier of the input note
+    #[prost(bytes="vec", tag="1")]
+    pub nullifier: ::prost::alloc::vec::Vec<u8>,
+    /// \[32\] The x-coordinate of the note commitment for the output note
+    #[prost(bytes="vec", tag="2")]
+    pub cmx: ::prost::alloc::vec::Vec<u8>,
+    /// \[32\] An encoding of an ephemeral Pallas public key
+    #[prost(bytes="vec", tag="3")]
+    pub ephemeral_key: ::prost::alloc::vec::Vec<u8>,
+    /// \[52\] The note plaintext component of the encCiphertext field
+    #[prost(bytes="vec", tag="4")]
     pub ciphertext: ::prost::alloc::vec::Vec<u8>,
 }
 /// A BlockID message contains identifiers to select a block: a height or a
@@ -107,7 +126,8 @@ pub struct TxFilter {
     pub hash: ::prost::alloc::vec::Vec<u8>,
 }
 /// RawTransaction contains the complete transaction data. It also optionally includes 
-/// the block height in which the transaction was included.
+/// the block height in which the transaction was included, or, when returned
+/// by GetMempoolStream(), the latest block height.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RawTransaction {
     /// exact data returned by Zcash 'getrawtransaction'
@@ -231,6 +251,7 @@ pub struct TreeState {
     /// "main" or "test"
     #[prost(string, tag="1")]
     pub network: ::prost::alloc::string::String,
+    /// block height
     #[prost(uint64, tag="2")]
     pub height: u64,
     /// block id
@@ -241,7 +262,10 @@ pub struct TreeState {
     pub time: u32,
     /// sapling commitment tree state
     #[prost(string, tag="5")]
-    pub tree: ::prost::alloc::string::String,
+    pub sapling_tree: ::prost::alloc::string::String,
+    /// orchard commitment tree state
+    #[prost(string, tag="6")]
+    pub orchard_tree: ::prost::alloc::string::String,
 }
 /// Results are sorted by height, which makes it easy to issue another
 /// request that picks up from where the previous left off.
@@ -274,28 +298,6 @@ pub struct GetAddressUtxosReply {
 pub struct GetAddressUtxosReplyList {
     #[prost(message, repeated, tag="1")]
     pub address_utxos: ::prost::alloc::vec::Vec<GetAddressUtxosReply>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PriceRequest {
-    /// List of timestamps(in sec) at which the price is being requested
-    #[prost(uint64, tag="1")]
-    pub timestamp: u64,
-    /// 3 letter currency-code
-    #[prost(string, tag="2")]
-    pub currency: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PriceResponse {
-    /// Timestamp at which this price quote was fetched. Note, this may not be the same
-    /// as the request timestamp, but the server will respond with the closest timestamp that it has/can fetch    
-    #[prost(int64, tag="1")]
-    pub timestamp: i64,
-    /// 3-letter currency code, matching the request
-    #[prost(string, tag="2")]
-    pub currency: ::prost::alloc::string::String,
-    /// price of ZEC
-    #[prost(double, tag="3")]
-    pub price: f64,
 }
 /// Generated client implementations.
 pub mod compact_tx_streamer_client {
@@ -406,9 +408,9 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::BlockRange>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::CompactBlock>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::CompactBlock>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -423,45 +425,6 @@ pub mod compact_tx_streamer_client {
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetBlockRange",
             );
             self.inner.server_streaming(request.into_request(), path, codec).await
-        }
-        /// Get the historical and current prices
-        pub async fn get_zec_price(
-            &mut self,
-            request: impl tonic::IntoRequest<super::PriceRequest>,
-        ) -> Result<tonic::Response<super::PriceResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetZECPrice",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        pub async fn get_current_zec_price(
-            &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
-        ) -> Result<tonic::Response<super::PriceResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetCurrentZECPrice",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
         }
         /// Return the requested full (not compact) transaction (as from zcashd)
         pub async fn get_transaction(
@@ -508,9 +471,9 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::TransparentAddressBlockFilter>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -523,29 +486,6 @@ pub mod compact_tx_streamer_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTaddressTxids",
-            );
-            self.inner.server_streaming(request.into_request(), path, codec).await
-        }
-        /// Legacy API that is used as a fallback for t-Address support, if the server is running the old version (lwdv2)
-        pub async fn get_address_txids(
-            &mut self,
-            request: impl tonic::IntoRequest<super::TransparentAddressBlockFilter>,
-        ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
-                tonic::Status,
-            > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetAddressTxids",
             );
             self.inner.server_streaming(request.into_request(), path, codec).await
         }
@@ -602,9 +542,9 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::Exclude>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::CompactTx>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::CompactTx>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -617,6 +557,30 @@ pub mod compact_tx_streamer_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolTx",
+            );
+            self.inner.server_streaming(request.into_request(), path, codec).await
+        }
+        /// Return a stream of current Mempool transactions. This will keep the output stream open while
+        /// there are mempool transactions. It will close the returned stream when a new block is mined.
+        pub async fn get_mempool_stream(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> Result<
+            tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolStream",
             );
             self.inner.server_streaming(request.into_request(), path, codec).await
         }
@@ -666,9 +630,9 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetAddressUtxosArg>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::GetAddressUtxosReply>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::GetAddressUtxosReply>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -754,15 +718,6 @@ pub mod compact_tx_streamer_server {
             &self,
             request: tonic::Request<super::BlockRange>,
         ) -> Result<tonic::Response<Self::GetBlockRangeStream>, tonic::Status>;
-        /// Get the historical and current prices
-        async fn get_zec_price(
-            &self,
-            request: tonic::Request<super::PriceRequest>,
-        ) -> Result<tonic::Response<super::PriceResponse>, tonic::Status>;
-        async fn get_current_zec_price(
-            &self,
-            request: tonic::Request<super::Empty>,
-        ) -> Result<tonic::Response<super::PriceResponse>, tonic::Status>;
         /// Return the requested full (not compact) transaction (as from zcashd)
         async fn get_transaction(
             &self,
@@ -784,17 +739,6 @@ pub mod compact_tx_streamer_server {
             &self,
             request: tonic::Request<super::TransparentAddressBlockFilter>,
         ) -> Result<tonic::Response<Self::GetTaddressTxidsStream>, tonic::Status>;
-        ///Server streaming response type for the GetAddressTxids method.
-        type GetAddressTxidsStream: futures_core::Stream<
-                Item = Result<super::RawTransaction, tonic::Status>,
-            >
-            + Send
-            + 'static;
-        /// Legacy API that is used as a fallback for t-Address support, if the server is running the old version (lwdv2)
-        async fn get_address_txids(
-            &self,
-            request: tonic::Request<super::TransparentAddressBlockFilter>,
-        ) -> Result<tonic::Response<Self::GetAddressTxidsStream>, tonic::Status>;
         async fn get_taddress_balance(
             &self,
             request: tonic::Request<super::AddressList>,
@@ -822,6 +766,18 @@ pub mod compact_tx_streamer_server {
             &self,
             request: tonic::Request<super::Exclude>,
         ) -> Result<tonic::Response<Self::GetMempoolTxStream>, tonic::Status>;
+        ///Server streaming response type for the GetMempoolStream method.
+        type GetMempoolStreamStream: futures_core::Stream<
+                Item = Result<super::RawTransaction, tonic::Status>,
+            >
+            + Send
+            + 'static;
+        /// Return a stream of current Mempool transactions. This will keep the output stream open while
+        /// there are mempool transactions. It will close the returned stream when a new block is mined.
+        async fn get_mempool_stream(
+            &self,
+            request: tonic::Request<super::Empty>,
+        ) -> Result<tonic::Response<Self::GetMempoolStreamStream>, tonic::Status>;
         /// GetTreeState returns the note commitment tree state corresponding to the given block.
         /// See section 3.7 of the Zcash protocol specification. It returns several other useful
         /// values also (even though they can be obtained using GetBlock).
@@ -1020,84 +976,6 @@ pub mod compact_tx_streamer_server {
                     };
                     Box::pin(fut)
                 }
-                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetZECPrice" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetZECPriceSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::UnaryService<super::PriceRequest>
-                    for GetZECPriceSvc<T> {
-                        type Response = super::PriceResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::PriceRequest>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move {
-                                (*inner).get_zec_price(request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = GetZECPriceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetCurrentZECPrice" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetCurrentZECPriceSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<T: CompactTxStreamer> tonic::server::UnaryService<super::Empty>
-                    for GetCurrentZECPriceSvc<T> {
-                        type Response = super::PriceResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::Empty>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move {
-                                (*inner).get_current_zec_price(request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = GetCurrentZECPriceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTransaction" => {
                     #[allow(non_camel_case_types)]
                     struct GetTransactionSvc<T: CompactTxStreamer>(pub Arc<T>);
@@ -1220,48 +1098,6 @@ pub mod compact_tx_streamer_server {
                     };
                     Box::pin(fut)
                 }
-                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetAddressTxids" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetAddressTxidsSvc<T: CompactTxStreamer>(pub Arc<T>);
-                    impl<
-                        T: CompactTxStreamer,
-                    > tonic::server::ServerStreamingService<
-                        super::TransparentAddressBlockFilter,
-                    > for GetAddressTxidsSvc<T> {
-                        type Response = super::RawTransaction;
-                        type ResponseStream = T::GetAddressTxidsStream;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::ResponseStream>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::TransparentAddressBlockFilter>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move {
-                                (*inner).get_address_txids(request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = GetAddressTxidsSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.server_streaming(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
                 "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetTaddressBalance" => {
                     #[allow(non_camel_case_types)]
                     struct GetTaddressBalanceSvc<T: CompactTxStreamer>(pub Arc<T>);
@@ -1372,6 +1208,47 @@ pub mod compact_tx_streamer_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMempoolTxSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.server_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolStream" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetMempoolStreamSvc<T: CompactTxStreamer>(pub Arc<T>);
+                    impl<
+                        T: CompactTxStreamer,
+                    > tonic::server::ServerStreamingService<super::Empty>
+                    for GetMempoolStreamSvc<T> {
+                        type Response = super::RawTransaction;
+                        type ResponseStream = T::GetMempoolStreamStream;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::ResponseStream>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Empty>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).get_mempool_stream(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetMempoolStreamSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -243,7 +243,7 @@ pub fn new_diversified_address() -> Result<String, Error> {
     Ok(address)
 }
 
-#[get("/make_payment_uri", data = "<payment>")]
+#[post("/make_payment_uri", data = "<payment>")]
 pub fn make_payment_uri(payment: Json<PaymentURI>) -> Result<String, Error> {
     let uri = warp_api_ffi::api::payment_uri::make_payment_uri(
         &payment.address,

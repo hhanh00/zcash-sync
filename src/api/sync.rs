@@ -90,7 +90,7 @@ async fn fetch_and_store_tree_state(
         .get_tree_state(Request::new(block_id))
         .await?
         .into_inner();
-    let tree = CTree::read(&*hex::decode(&tree_state.tree)?)?;
+    let tree = CTree::read(&*hex::decode(&tree_state.sapling_tree)?)?;
     c.db()?
         .store_block(height, &block.hash, block.time, &tree)?;
     Ok(())

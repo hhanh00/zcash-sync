@@ -167,7 +167,7 @@ pub struct DecryptedNote {
     pub output_index: usize,
 }
 
-pub fn to_output_description(co: &CompactOutput) -> CompactOutputDescription {
+pub fn to_output_description(co: &CompactSaplingOutput) -> CompactOutputDescription {
     let mut cmu = [0u8; 32];
     cmu.copy_from_slice(&co.cmu);
     let cmu = bls12_381::Scalar::from_repr(cmu).unwrap();
@@ -201,7 +201,7 @@ impl<'a, N: Parameters> AccountOutput<'a, N> {
         output_index: usize,
         block_output_index: usize,
         vtx: &'a CompactTx,
-        co: &CompactOutput,
+        co: &CompactSaplingOutput,
     ) -> Self {
         let mut epk_bytes = [0u8; 32];
         epk_bytes.copy_from_slice(&co.epk);
@@ -355,7 +355,7 @@ async fn get_tree_state(client: &mut CompactTxStreamerClient<Channel>, height: u
         .await
         .unwrap()
         .into_inner();
-    rep.tree
+    rep.sapling_tree
 }
 
 /* Using the IncrementalWitness */

@@ -4,3 +4,4 @@
 docs/_site/
 *.db
 Cargo.lock
+node_modules/
