@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
-use warp_api_ffi::{AccountRec, CoinConfig, TxRec};
+use warp_api_ffi::{AccountRec, CoinConfig, Tx, TxRec};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -60,7 +60,6 @@ async fn main() -> anyhow::Result<()> {
         .mount(
             "/",
             routes![
-                set_lwd,
                 set_active,
                 new_account,
                 list_accounts,
@@ -73,6 +72,8 @@ async fn main() -> anyhow::Result<()> {
                 get_tx_history,
                 pay,
                 mark_synced,
+                create_offline_tx,
+                sign_offline_tx,
                 broadcast_tx,
                 new_diversified_address,
                 make_payment_uri,
@@ -84,11 +85,6 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     Ok(())
-}
-
-#[post("/set_lwd?<coin>&<lwd_url>")]
-pub fn set_lwd(coin: u8, lwd_url: String) {
-    warp_api_ffi::set_coin_lwd_url(coin, &lwd_url);
 }
 
 #[post("/set_active?<coin>&<id_account>")]
@@ -177,6 +173,33 @@ pub fn get_balance() -> Result<String, Error> {
     let db = c.db()?;
     let balance = db.get_balance(c.id_account)?;
     Ok(balance.to_string())
+}
+
+#[post("/create_offline_tx", data = "<payment>")]
+pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<Tx>, Error> {
+    let c = CoinConfig::get_active();
+    let latest = warp_api_ffi::api::sync::get_latest_height().await?;
+    let from = {
+        let db = c.db()?;
+        db.get_address(c.id_account)?
+    };
+    let recipients: Vec<_> = payment
+        .recipients
+        .iter()
+        .map(|p| RecipientMemo::from_recipient(&from, p))
+        .collect();
+    let tx = warp_api_ffi::api::payment::build_only_multi_payment(latest, &recipients, false, payment.confirmations).await?;
+    Ok(Json(tx))
+}
+
+#[post("/sign_offline_tx", data = "<tx>")]
+pub async fn sign_offline_tx(tx: Json<Tx>, config: &State<Config>) -> Result<String, Error> {
+    if !config.allow_send {
+        Err(anyhow!("Payment API not enabled").into())
+    } else {
+        let tx_hex = warp_api_ffi::api::payment::sign_only_multi_payment(&tx, Box::new(|_| {})).await?;
+        Ok(hex::encode(tx_hex))
+    }
 }
 
 #[post("/pay", data = "<payment>")]

@@ -80,18 +80,18 @@ pub async fn build_only_multi_payment(
     recipients: &[RecipientMemo],
     use_transparent: bool,
     anchor_offset: u32,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<Tx> {
     let (tx, _) =
         prepare_multi_payment(last_height, recipients, use_transparent, anchor_offset).await?;
-    let tx_str = serde_json::to_string(&tx)?;
-    Ok(tx_str)
+    // let tx_str = serde_json::to_string(&tx)?;
+    Ok(tx)
 }
 
 pub async fn sign_only_multi_payment(
-    tx_string: &str,
+    tx: &Tx,
     progress_callback: PaymentProgressCallback,
 ) -> anyhow::Result<Vec<u8>> {
-    let tx = serde_json::from_str::<Tx>(tx_string)?;
+    // let tx = serde_json::from_str::<Tx>(tx_string)?;
     let raw_tx = sign(&tx, progress_callback)?;
     Ok(raw_tx)
 }

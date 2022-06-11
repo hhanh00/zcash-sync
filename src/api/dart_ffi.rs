@@ -1,5 +1,5 @@
 use crate::coinconfig::{init_coin, CoinConfig};
-use crate::{broadcast_tx, ChainError};
+use crate::{broadcast_tx, ChainError, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use lazy_static::lazy_static;
@@ -331,9 +331,9 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             &recipients,
             use_transparent,
             anchor_offset,
-        )
-        .await?;
-        Ok(tx)
+        ).await?;
+        let tx_str = serde_json::to_string(&tx)?;
+        Ok(tx_str)
     };
     to_c_str(log_string(res.await))
 }
@@ -346,8 +346,9 @@ pub async unsafe extern "C" fn sign(tx_filename: *mut c_char, port: i64) -> *mut
         let mut file = std::fs::File::open(&tx_filename.to_string())?;
         let mut s = String::new();
         file.read_to_string(&mut s)?;
+        let tx: Tx = serde_json::from_str(&s)?;
         let raw_tx = crate::api::payment::sign_only_multi_payment(
-            &s,
+            &tx,
             Box::new(move |progress| {
                 report_progress(progress, port);
             }),
