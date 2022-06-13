@@ -90,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
 #[post("/set_active?<coin>&<id_account>")]
 pub fn set_active(coin: u8, id_account: u32) {
     warp_api_ffi::set_active_account(coin, id_account);
+    warp_api_ffi::set_active(coin);
 }
 
 #[post("/new_account", format = "application/json", data = "<seed>")]
