@@ -189,7 +189,13 @@ pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<Tx>, Error
         .iter()
         .map(|p| RecipientMemo::from_recipient(&from, p))
         .collect();
-    let tx = warp_api_ffi::api::payment::build_only_multi_payment(latest, &recipients, false, payment.confirmations).await?;
+    let tx = warp_api_ffi::api::payment::build_only_multi_payment(
+        latest,
+        &recipients,
+        false,
+        payment.confirmations,
+    )
+    .await?;
     Ok(Json(tx))
 }
 
@@ -198,7 +204,8 @@ pub async fn sign_offline_tx(tx: Json<Tx>, config: &State<Config>) -> Result<Str
     if !config.allow_send {
         Err(anyhow!("Payment API not enabled").into())
     } else {
-        let tx_hex = warp_api_ffi::api::payment::sign_only_multi_payment(&tx, Box::new(|_| {})).await?;
+        let tx_hex =
+            warp_api_ffi::api::payment::sign_only_multi_payment(&tx, Box::new(|_| {})).await?;
         Ok(hex::encode(tx_hex))
     }
 }

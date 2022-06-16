@@ -15,6 +15,8 @@ void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
 
+bool get_error(void);
+
 void init_wallet(char *db_path);
 
 void set_active(uint8_t active);

@@ -7,10 +7,12 @@ use log::Level;
 use std::ffi::{CStr, CString};
 use std::io::Read;
 use std::os::raw::c_char;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use zcash_primitives::transaction::builder::Progress;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
+static IS_ERROR: AtomicBool = AtomicBool::new(false);
 
 #[no_mangle]
 pub unsafe extern "C" fn dummy_export() {}
@@ -60,9 +62,13 @@ fn log_string(result: anyhow::Result<String>) -> String {
     match result {
         Err(err) => {
             log::error!("{}", err);
+            IS_ERROR.store(true, Ordering::Release);
             format!("{}", err)
         }
-        Ok(v) => v,
+        Ok(v) => {
+            IS_ERROR.store(false, Ordering::Release);
+            v
+        }
     }
 }
 
@@ -79,6 +85,11 @@ fn encode_tx_result(res: anyhow::Result<Vec<u8>>) -> Vec<u8> {
         }
     }
     v
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_error() -> bool {
+    IS_ERROR.load(Ordering::Acquire)
 }
 
 #[no_mangle]
@@ -331,7 +342,8 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             &recipients,
             use_transparent,
             anchor_offset,
-        ).await?;
+        )
+        .await?;
         let tx_str = serde_json::to_string(&tx)?;
         Ok(tx_str)
     };
