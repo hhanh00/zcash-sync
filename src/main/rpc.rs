@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
-use warp_api_ffi::{AccountRec, CoinConfig, Tx, TxRec};
+use warp_api_ffi::{AccountRec, CoinConfig, RaptorQDrops, Tx, TxRec};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -78,6 +78,8 @@ async fn main() -> anyhow::Result<()> {
                 new_diversified_address,
                 make_payment_uri,
                 parse_payment_uri,
+                split_data,
+                merge_data,
             ],
         )
         .attach(AdHoc::config::<Config>())
@@ -265,6 +267,20 @@ pub fn make_payment_uri(payment: Json<PaymentURI>) -> Result<String, Error> {
 pub fn parse_payment_uri(uri: String) -> Result<Json<PaymentURI>, Error> {
     let payment = warp_api_ffi::api::payment_uri::parse_payment_uri(&uri)?;
     Ok(Json(payment))
+}
+
+#[get("/split?<id>&<data>")]
+pub fn split_data(id: u32, data: String) -> Result<Json<RaptorQDrops>, Error> {
+    let result = warp_api_ffi::FountainCodes::encode_into_drops(id, &hex::decode(data).unwrap())?;
+    Ok(Json(result))
+}
+
+#[post("/merge?<data>")]
+pub fn merge_data(data: String) -> Result<String, Error> {
+    let result = warp_api_ffi::put_drop(&data)?
+        .map(|data| hex::encode(&data))
+        .unwrap_or(String::new());
+    Ok(result)
 }
 
 #[derive(Deserialize)]

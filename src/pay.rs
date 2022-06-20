@@ -305,6 +305,7 @@ impl Tx {
         let chain = get_coin_chain(self.coin_type);
         let last_height = BlockHeight::from_u32(self.height as u32);
         let mut builder = Builder::new(*chain.network(), last_height);
+        let efvk = ExtendedFullViewingKey::from(zsk);
 
         let ovk = hex_to_hash(&self.ovk)?;
         builder.send_change_to(
@@ -340,6 +341,9 @@ impl Tx {
                 &txin.fvk,
             )?
             .unwrap();
+            if fvk != efvk {
+                anyhow::bail!("Incorrect account - Secret key mismatch")
+            }
             let pa = fvk.fvk.vk.to_payment_address(diversifier).unwrap();
             let mut rseed_bytes = [0u8; 32];
             hex::decode_to_slice(&txin.rseed, &mut rseed_bytes)?;

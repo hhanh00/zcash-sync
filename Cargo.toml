@@ -68,6 +68,7 @@ rand_chacha = "0.3.1"
 blake2b_simd = "1.0.0"
 chacha20poly1305 = "0.9.0"
 base64 = "^0.13"
+raptorq = "1.7.0"
 
 ledger-apdu = { version = "0.9.0", optional = true }
 hmac = { version = "0.12.1", optional = true }

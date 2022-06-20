@@ -64,11 +64,9 @@ void scan_transparent_accounts(uint32_t gap_limit);
 
 char *prepare_multi_payment(char *recipients_json, bool use_transparent, uint32_t anchor_offset);
 
-char *sign(char *tx_filename, int64_t port);
+char *sign(char *tx, int64_t port);
 
-char *broadcast(char *tx_filename);
-
-char *broadcast_txhex(char *txhex);
+char *broadcast_tx(char *tx_str);
 
 uint32_t get_activation_date(void);
 
@@ -97,3 +95,7 @@ char *generate_random_enc_key(void);
 char *get_full_backup(char *key);
 
 char *restore_full_backup(char *key, char *backup);
+
+char *split_data(uint32_t id, char *data);
+
+char *merge_data(char *drop);

@@ -1,4 +1,4 @@
-use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter, MemPool};
+use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter, FountainCodes, MemPool};
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;
@@ -15,6 +15,7 @@ lazy_static! {
         Mutex::new(CoinConfig::new(1, CoinType::Ycash)),
     ];
     pub static ref PROVER: AtomicLazyCell<LocalTxProver> = AtomicLazyCell::new();
+    pub static ref RAPTORQ: Mutex<FountainCodes> = Mutex::new(FountainCodes::new());
 }
 
 pub static ACTIVE_COIN: AtomicU8 = AtomicU8::new(0);

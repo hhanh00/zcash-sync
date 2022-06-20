@@ -1,5 +1,6 @@
 use crate::coinconfig::{init_coin, CoinConfig};
-use crate::{broadcast_tx, ChainError, Tx};
+use crate::FountainCodes;
+use crate::{ChainError, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use lazy_static::lazy_static;
@@ -70,21 +71,6 @@ fn log_string(result: anyhow::Result<String>) -> String {
             v
         }
     }
-}
-
-fn encode_tx_result(res: anyhow::Result<Vec<u8>>) -> Vec<u8> {
-    let mut v = vec![];
-    match res {
-        Ok(raw_tx) => {
-            v.push(0x00);
-            v.extend(raw_tx);
-        }
-        Err(e) => {
-            v.push(0x01);
-            v.extend(e.to_string().as_bytes());
-        }
-    }
-    v
 }
 
 #[no_mangle]
@@ -352,13 +338,10 @@ pub async unsafe extern "C" fn prepare_multi_payment(
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn sign(tx_filename: *mut c_char, port: i64) -> *mut c_char {
-    from_c_str!(tx_filename);
+pub async unsafe extern "C" fn sign(tx: *mut c_char, port: i64) -> *mut c_char {
+    from_c_str!(tx);
     let res = async {
-        let mut file = std::fs::File::open(&tx_filename.to_string())?;
-        let mut s = String::new();
-        file.read_to_string(&mut s)?;
-        let tx: Tx = serde_json::from_str(&s)?;
+        let tx: Tx = serde_json::from_str(&tx)?;
         let raw_tx = crate::api::payment::sign_only_multi_payment(
             &tx,
             Box::new(move |progress| {
@@ -366,33 +349,19 @@ pub async unsafe extern "C" fn sign(tx_filename: *mut c_char, port: i64) -> *mut
             }),
         )
         .await?;
-        Ok(raw_tx)
-    };
-    let tx_hex = hex::encode(encode_tx_result(res.await));
-    to_c_str(tx_hex)
-}
-
-#[tokio::main]
-#[no_mangle]
-pub async unsafe extern "C" fn broadcast(tx_filename: *mut c_char) -> *mut c_char {
-    from_c_str!(tx_filename);
-    let res = async {
-        let mut file = std::fs::File::open(&tx_filename.to_string())?;
-        let mut s = String::new();
-        file.read_to_string(&mut s)?;
-        let tx = hex::decode(s.trim_end())?;
-        broadcast_tx(&tx).await
+        let tx_str = base64::encode(&raw_tx);
+        Ok(tx_str)
     };
     to_c_str(log_string(res.await))
 }
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn broadcast_txhex(txhex: *mut c_char) -> *mut c_char {
-    from_c_str!(txhex);
+pub async unsafe extern "C" fn broadcast_tx(tx_str: *mut c_char) -> *mut c_char {
+    from_c_str!(tx_str);
     let res = async {
-        let tx = hex::decode(&txhex.to_string())?;
-        broadcast_tx(&tx).await
+        let tx = base64::decode(&*tx_str)?;
+        crate::broadcast_tx(&tx).await
     };
     to_c_str(log_string(res.await))
 }
@@ -522,4 +491,33 @@ pub unsafe extern "C" fn restore_full_backup(key: *mut c_char, backup: *mut c_ch
         Ok(String::new())
     };
     to_c_str(log_string(res()))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn split_data(id: u32, data: *mut c_char) -> *mut c_char {
+    from_c_str!(data);
+    let res = || {
+        let res = crate::FountainCodes::encode_into_drops(id, &base64::decode(&*data)?)?;
+        let output = serde_json::to_string(&res)?;
+        Ok(output)
+    };
+    to_c_str(log_string(res()))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn merge_data(drop: *mut c_char) -> *mut c_char {
+    from_c_str!(drop);
+    let res = || {
+        let res = crate::put_drop(&*drop)?
+            .map(|d| base64::encode(&d))
+            .unwrap_or(String::new());
+        Ok::<_, anyhow::Error>(res)
+    };
+    match res() {
+        Ok(str) => to_c_str(str),
+        Err(e) => {
+            log::error!("{}", e);
+            to_c_str(String::new()) // do not return error msg
+        }
+    }
 }
