@@ -521,3 +521,15 @@ pub unsafe extern "C" fn merge_data(drop: *mut c_char) -> *mut c_char {
         }
     }
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn get_tx_summary(tx: *mut c_char) -> *mut c_char {
+    from_c_str!(tx);
+    let res = || {
+        let tx: Tx = serde_json::from_str(&tx)?;
+        let summary = crate::get_tx_summary(&tx)?;
+        let summary = serde_json::to_string(&summary)?;
+        Ok::<_, anyhow::Error>(summary)
+    };
+    to_c_str(log_string(res()))
+}

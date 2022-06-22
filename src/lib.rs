@@ -76,7 +76,7 @@ pub use crate::key::{generate_random_enc_key, KeyHelpers};
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;
 pub use crate::mempool::MemPool;
-pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
+pub use crate::pay::{broadcast_tx, get_tx_summary, Tx, TxIn, TxOut};
 pub use crate::print::*;
 pub use crate::scan::{latest_height, scan_all, sync_async};
 pub use crate::ua::{get_sapling, get_ua};

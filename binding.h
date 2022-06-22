@@ -99,3 +99,5 @@ char *restore_full_backup(char *key, char *backup);
 char *split_data(uint32_t id, char *data);
 
 char *merge_data(char *drop);
+
+char *get_tx_summary(char *drop);

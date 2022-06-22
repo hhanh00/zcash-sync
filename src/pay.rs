@@ -79,6 +79,17 @@ pub struct TxOut {
     pub memo: String,
 }
 
+#[derive(Serialize, Debug)]
+pub struct TxSummary {
+    pub recipients: Vec<RecipientSummary>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct RecipientSummary {
+    pub address: String,
+    pub amount: u64,
+}
+
 pub struct TxBuilder {
     pub tx: Tx,
     coin_type: CoinType,
@@ -413,4 +424,25 @@ pub async fn broadcast_tx(tx: &[u8]) -> anyhow::Result<String> {
     } else {
         Err(anyhow::anyhow!(rep.error_message))
     }
+}
+
+pub fn get_tx_summary(tx: &Tx) -> anyhow::Result<TxSummary> {
+    let mut amount = 0;
+    for tx_in in tx.t_inputs.iter() {
+        // transparent inputs
+        amount += tx_in.amount;
+    }
+    for tx_in in tx.inputs.iter() {
+        // shielded inputs
+        amount += tx_in.amount;
+    }
+    let mut recipients = vec![];
+    for tx_out in tx.outputs.iter() {
+        amount -= tx_out.amount;
+        recipients.push(RecipientSummary {
+            address: tx_out.addr.clone(),
+            amount: tx_out.amount,
+        });
+    }
+    Ok(TxSummary { recipients })
 }
