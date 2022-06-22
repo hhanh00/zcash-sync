@@ -1,12 +1,11 @@
 use crate::coinconfig::{init_coin, CoinConfig};
-use crate::FountainCodes;
 use crate::{ChainError, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use lazy_static::lazy_static;
 use log::Level;
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
-use std::io::Read;
 use std::os::raw::c_char;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -14,6 +13,10 @@ use zcash_primitives::transaction::builder::Progress;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 static IS_ERROR: AtomicBool = AtomicBool::new(false);
+
+lazy_static! {
+    static ref LAST_ERROR: Mutex<RefCell<String>> = Mutex::new(RefCell::new(String::new()));
+}
 
 #[no_mangle]
 pub unsafe extern "C" fn dummy_export() {}
@@ -31,6 +34,11 @@ macro_rules! from_c_str {
 
 fn to_c_str(s: String) -> *mut c_char {
     CString::new(s).unwrap().into_raw()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn deallocate_str(s: *mut c_char) {
+    let _ = CString::from_raw(s);
 }
 
 fn try_init_logger() {
@@ -53,9 +61,15 @@ fn log_result<T: Default>(result: anyhow::Result<T>) -> T {
     match result {
         Err(err) => {
             log::error!("{}", err);
+            let last_error = LAST_ERROR.lock().unwrap();
+            last_error.replace(err.to_string());
+            IS_ERROR.store(true, Ordering::Release);
             T::default()
         }
-        Ok(v) => v,
+        Ok(v) => {
+            IS_ERROR.store(false, Ordering::Release);
+            v
+        }
     }
 }
 
@@ -63,6 +77,8 @@ fn log_string(result: anyhow::Result<String>) -> String {
     match result {
         Err(err) => {
             log::error!("{}", err);
+            let last_error = LAST_ERROR.lock().unwrap();
+            last_error.replace(err.to_string());
             IS_ERROR.store(true, Ordering::Release);
             format!("{}", err)
         }
@@ -76,6 +92,13 @@ fn log_string(result: anyhow::Result<String>) -> String {
 #[no_mangle]
 pub unsafe extern "C" fn get_error() -> bool {
     IS_ERROR.load(Ordering::Acquire)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_error_msg() -> *mut c_char {
+    let error = LAST_ERROR.lock().unwrap();
+    let e = error.take();
+    to_c_str(e)
 }
 
 #[no_mangle]
@@ -480,7 +503,7 @@ pub unsafe extern "C" fn get_full_backup(key: *mut c_char) -> *mut c_char {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn restore_full_backup(key: *mut c_char, backup: *mut c_char) -> *mut c_char {
+pub unsafe extern "C" fn restore_full_backup(key: *mut c_char, backup: *mut c_char) {
     from_c_str!(key);
     from_c_str!(backup);
     let res = || {
@@ -488,9 +511,9 @@ pub unsafe extern "C" fn restore_full_backup(key: *mut c_char, backup: *mut c_ch
         for coin in [0, 1] {
             crate::api::fullbackup::restore_full_backup(coin, &accounts)?;
         }
-        Ok(String::new())
+        Ok(())
     };
-    to_c_str(log_string(res()))
+    log_result(res())
 }
 
 #[no_mangle]

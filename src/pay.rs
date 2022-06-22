@@ -427,18 +427,8 @@ pub async fn broadcast_tx(tx: &[u8]) -> anyhow::Result<String> {
 }
 
 pub fn get_tx_summary(tx: &Tx) -> anyhow::Result<TxSummary> {
-    let mut amount = 0;
-    for tx_in in tx.t_inputs.iter() {
-        // transparent inputs
-        amount += tx_in.amount;
-    }
-    for tx_in in tx.inputs.iter() {
-        // shielded inputs
-        amount += tx_in.amount;
-    }
     let mut recipients = vec![];
     for tx_out in tx.outputs.iter() {
-        amount -= tx_out.amount;
         recipients.push(RecipientSummary {
             address: tx_out.addr.clone(),
             amount: tx_out.amount,

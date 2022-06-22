@@ -13,9 +13,13 @@ typedef void *DartPostCObjectFnType;
 
 void dummy_export(void);
 
+void deallocate_str(char *s);
+
 void dart_post_cobject(DartPostCObjectFnType ptr);
 
 bool get_error(void);
+
+char *get_error_msg(void);
 
 void init_wallet(char *db_path);
 
@@ -94,7 +98,7 @@ char *generate_random_enc_key(void);
 
 char *get_full_backup(char *key);
 
-char *restore_full_backup(char *key, char *backup);
+void restore_full_backup(char *key, char *backup);
 
 char *split_data(uint32_t id, char *data);
 

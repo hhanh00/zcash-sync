@@ -3,7 +3,6 @@ use blake2b_simd::Params;
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use raptorq::{Decoder, Encoder, EncodingPacket, ObjectTransmissionInformation};
 use serde::Serialize;
-use std::borrow::BorrowMut;
 use std::convert::TryInto;
 use std::io::{Cursor, Write};
 
