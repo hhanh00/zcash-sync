@@ -57,14 +57,10 @@ pub fn get_synced_height() -> anyhow::Result<u32> {
 }
 
 pub async fn skip_to_last_height(coin: u8) -> anyhow::Result<()> {
-    let c = if coin == 0xFF {
-        CoinConfig::get_active()
-    } else {
-        CoinConfig::get(coin)
-    };
+    let c = CoinConfig::get(coin);
     let mut client = c.connect_lwd().await?;
     let last_height = crate::chain::get_latest_height(&mut client).await?;
-    fetch_and_store_tree_state(&mut client, last_height).await?;
+    fetch_and_store_tree_state(coin, &mut client, last_height).await?;
     Ok(())
 }
 
@@ -72,15 +68,16 @@ pub async fn rewind_to_height(height: u32) -> anyhow::Result<()> {
     let c = CoinConfig::get_active();
     let mut client = c.connect_lwd().await?;
     c.db()?.trim_to_height(height)?;
-    fetch_and_store_tree_state(&mut client, height).await?;
+    fetch_and_store_tree_state(c.coin, &mut client, height).await?;
     Ok(())
 }
 
 async fn fetch_and_store_tree_state(
+    coin: u8,
     client: &mut CompactTxStreamerClient<Channel>,
     height: u32,
 ) -> anyhow::Result<()> {
-    let c = CoinConfig::get_active();
+    let c = CoinConfig::get(coin);
     let block_id = BlockId {
         height: height as u64,
         hash: vec![],
