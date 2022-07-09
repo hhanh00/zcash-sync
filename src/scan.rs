@@ -61,11 +61,6 @@ pub async fn scan_all(network: &Network, fvks: &[ExtendedFullViewingKey]) -> any
 }
 
 struct Blocks(Vec<CompactBlock>);
-struct BlockMetadata {
-    height: u32,
-    hash: [u8; 32],
-    timestamp: u32,
-}
 
 #[derive(Debug)]
 struct TxIdSet(Vec<u32>);
@@ -85,6 +80,8 @@ pub struct TxIdHeight {
     height: u32,
     index: u32,
 }
+
+const MAX_OUTPUTS_PER_CHUNK: usize = 200_000;
 
 pub async fn sync_async(
     coin_type: CoinType,
@@ -125,15 +122,36 @@ pub async fn sync_async(
         let mut client = connect_lightwalletd(&ld_url2).await?;
         while let Some(range) = download_rx.recv().await {
             log::info!("+ {:?}", range);
-            let blocks = download_chain(&mut client, range.start, range.end, prev_hash).await?;
+            let mut blocks = download_chain(&mut client, range.start, range.end, prev_hash).await?;
             log::debug!("- {:?}", range);
             blocks.last().map(|cb| {
                 let mut ph = [0u8; 32];
                 ph.copy_from_slice(&cb.hash);
                 prev_hash = Some(ph);
             });
-            let b = Blocks(blocks);
-            processor_tx.send(b).await?;
+            loop {
+                let mut total_count_outputs = 0;
+                let mut split_index = None;
+                for (i, cb) in blocks.iter().enumerate() {
+                    let count_outputs: usize = cb.vtx.iter().map(|tx| tx.outputs.len()).sum();
+                    total_count_outputs += count_outputs;
+                    if total_count_outputs > MAX_OUTPUTS_PER_CHUNK {
+                        split_index = Some(i);
+                        break;
+                    }
+                }
+                log::info!("split_index {:?}", split_index);
+                if let Some(split_index) = split_index {
+                    let remaining = blocks.split_off(split_index);
+                    let b = Blocks(blocks);
+                    blocks = remaining;
+                    processor_tx.send(b).await?;
+                } else {
+                    let b = Blocks(blocks);
+                    processor_tx.send(b).await?;
+                    break;
+                }
+            }
         }
         log::info!("download completed");
         drop(processor_tx);
@@ -147,14 +165,14 @@ pub async fn sync_async(
         let mut db = DbAdapter::new(coin_type, &db_path2)?;
         let mut nfs = db.get_nullifiers()?;
 
-        let (mut tree, mut witnesses) = db.get_tree()?;
-        let mut bp = BlockProcessor::new(&tree, &witnesses);
-        let mut absolute_position_at_block_start = tree.get_position();
-        let mut last_block: Option<BlockMetadata> = None;
         while let Some(blocks) = processor_rx.recv().await {
             if blocks.0.is_empty() {
                 continue;
             }
+            let (mut tree, witnesses) = db.get_tree()?;
+            let mut bp = BlockProcessor::new(&tree, &witnesses);
+            let mut absolute_position_at_block_start = tree.get_position();
+
             log::info!("start processing - {}", blocks.0[0].height);
             log::info!("Time {:?}", chrono::offset::Local::now());
             let start = Instant::now();
@@ -290,15 +308,6 @@ pub async fn sync_async(
             }
             // println!("NOTES = {}", nodes.len());
 
-            if let Some(block) = blocks.0.last() {
-                let mut hash = [0u8; 32];
-                hash.copy_from_slice(&block.hash);
-                last_block = Some(BlockMetadata {
-                    height: block.height as u32,
-                    hash,
-                    timestamp: block.time,
-                });
-            }
             log::info!("Witness : {}", start.elapsed().as_millis());
 
             let start = Instant::now();
@@ -321,24 +330,22 @@ pub async fn sync_async(
             log::info!("progress: {}", blocks.0[0].height);
             let callback = proc_callback.lock().await;
             callback(blocks.0[0].height as u32);
-        }
 
-        // Finalize scan
-        let (new_tree, new_witnesses) = bp.finalize();
-        tree = new_tree;
-        witnesses = new_witnesses;
+            let (new_tree, new_witnesses) = bp.finalize();
+            tree = new_tree;
+            witnesses = new_witnesses;
 
-        if let Some(last_block) = last_block {
-            let last_height = last_block.height;
-            db.store_block(last_height, &last_block.hash, last_block.timestamp, &tree)?;
-            for w in witnesses.iter() {
-                db.store_witnesses(w, last_height, w.id_note)?;
+            if let Some(block) = blocks.0.last() {
+                let height = block.height as u32;
+                for w in witnesses.iter() {
+                    db.store_witnesses(w, height, w.id_note)?;
+                }
+                db.store_block(height, &block.hash, block.time, &tree)?;
             }
         }
 
         let callback = progress_callback.lock().await;
         callback(end_height);
-        log::debug!("Witnesses {}", witnesses.len());
 
         db.purge_old_witnesses(end_height - 100)?;
 
