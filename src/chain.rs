@@ -3,6 +3,7 @@ use crate::commitment::{CTree, Witness};
 use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
+use crate::scan::{Blocks, MAX_OUTPUTS_PER_CHUNK};
 use ff::PrimeField;
 use log::info;
 use rayon::prelude::*;
@@ -10,6 +11,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::time::Instant;
 use thiserror::Error;
+use tokio::sync::mpsc::Sender;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Request;
 use zcash_note_encryption::batch::try_compact_note_decryption;
@@ -20,8 +22,6 @@ use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-
-const MAX_CHUNK: u32 = 50000;
 
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
@@ -96,12 +96,15 @@ pub async fn download_chain(
     client: &mut CompactTxStreamerClient<Channel>,
     start_height: u32,
     end_height: u32,
+    chunk_size: u32,
     mut prev_hash: Option<[u8; 32]>,
-) -> anyhow::Result<Vec<CompactBlock>> {
+    blocks_tx: Sender<Blocks>,
+) -> anyhow::Result<()> {
+    let mut output_count = 0;
     let mut cbs: Vec<CompactBlock> = Vec::new();
     let mut s = start_height + 1;
     while s <= end_height {
-        let e = (s + MAX_CHUNK - 1).min(end_height);
+        let e = (s + chunk_size - 1).min(end_height);
         let range = BlockRange {
             start: Some(BlockId {
                 height: s as u64,
@@ -116,18 +119,33 @@ pub async fn download_chain(
             .get_block_range(Request::new(range))
             .await?
             .into_inner();
-        while let Some(block) = block_stream.message().await? {
+        while let Some(mut block) = block_stream.message().await? {
             if prev_hash.is_some() && block.prev_hash.as_slice() != prev_hash.unwrap() {
                 anyhow::bail!(ChainError::Reorg);
             }
             let mut ph = [0u8; 32];
             ph.copy_from_slice(&block.hash);
             prev_hash = Some(ph);
+            for b in block.vtx.iter_mut() {
+                b.actions.clear(); // don't need Orchard actions
+            }
+
+            let block_output_count: usize = block.vtx.iter().map(|tx| tx.outputs.len()).sum();
+            if output_count + block_output_count > MAX_OUTPUTS_PER_CHUNK {
+                // output
+                let out = cbs;
+                cbs = Vec::new();
+                blocks_tx.send(Blocks(out)).await.unwrap();
+                output_count = 0;
+            }
+
             cbs.push(block);
+            output_count += block_output_count;
         }
         s = e + 1;
     }
-    Ok(cbs)
+    let _ = blocks_tx.send(Blocks(cbs)).await;
+    Ok(())
 }
 
 pub struct DecryptNode {
@@ -288,6 +306,10 @@ fn decrypt_notes<'a, N: Parameters>(
 
             count_outputs += 1;
         }
+    }
+
+    if outputs.len() >= MAX_OUTPUTS_PER_CHUNK {
+        log::warn!("outputs overflow {}", outputs.len());
     }
 
     let start = Instant::now();
@@ -461,42 +483,42 @@ pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamer
     Ok(client)
 }
 
-pub async fn sync(
-    network: &Network,
-    vks: HashMap<u32, AccountViewKey>,
-    ld_url: &str,
-) -> anyhow::Result<()> {
-    let decrypter = DecryptNode::new(vks);
-    let mut client = connect_lightwalletd(ld_url).await?;
-    let start_height: u32 = network
-        .activation_height(NetworkUpgrade::Sapling)
-        .unwrap()
-        .into();
-    let end_height = get_latest_height(&mut client).await?;
-
-    let start = Instant::now();
-    let cbs = download_chain(&mut client, start_height, end_height, None).await?;
-    eprintln!("Download chain: {} ms", start.elapsed().as_millis());
-
-    let start = Instant::now();
-    let blocks = decrypter.decrypt_blocks(network, &cbs);
-    eprintln!("Decrypt Notes: {} ms", start.elapsed().as_millis());
-    let batch_decrypt_elapsed: usize = blocks.iter().map(|b| b.elapsed).sum();
-    eprintln!("  Batch Decrypt: {} ms", batch_decrypt_elapsed);
-
-    let start = Instant::now();
-    let witnesses = calculate_tree_state_v2(&cbs, &blocks);
-    eprintln!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
-
-    eprintln!("# Witnesses {}", witnesses.len());
-    for w in witnesses.iter() {
-        let mut bb: Vec<u8> = vec![];
-        w.write(&mut bb).unwrap();
-        log::info!("{}", hex::encode(&bb));
-    }
-
-    Ok(())
-}
+// pub async fn sync(
+//     network: &Network,
+//     vks: HashMap<u32, AccountViewKey>,
+//     ld_url: &str,
+// ) -> anyhow::Result<()> {
+//     let decrypter = DecryptNode::new(vks);
+//     let mut client = connect_lightwalletd(ld_url).await?;
+//     let start_height: u32 = network
+//         .activation_height(NetworkUpgrade::Sapling)
+//         .unwrap()
+//         .into();
+//     let end_height = get_latest_height(&mut client).await?;
+//
+//     let start = Instant::now();
+//     let cbs = download_chain(&mut client, start_height, end_height, None).await?;
+//     eprintln!("Download chain: {} ms", start.elapsed().as_millis());
+//
+//     let start = Instant::now();
+//     let blocks = decrypter.decrypt_blocks(network, &cbs);
+//     eprintln!("Decrypt Notes: {} ms", start.elapsed().as_millis());
+//     let batch_decrypt_elapsed: usize = blocks.iter().map(|b| b.elapsed).sum();
+//     eprintln!("  Batch Decrypt: {} ms", batch_decrypt_elapsed);
+//
+//     let start = Instant::now();
+//     let witnesses = calculate_tree_state_v2(&cbs, &blocks);
+//     eprintln!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
+//
+//     eprintln!("# Witnesses {}", witnesses.len());
+//     for w in witnesses.iter() {
+//         let mut bb: Vec<u8> = vec![];
+//         w.write(&mut bb).unwrap();
+//         log::info!("{}", hex::encode(&bb));
+//     }
+//
+//     Ok(())
+// }
 
 #[cfg(test)]
 mod tests {

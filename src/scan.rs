@@ -11,7 +11,6 @@ use ff::PrimeField;
 use log::{debug, info};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::ops::Range;
 use std::panic;
 use std::sync::Arc;
 use std::time::Instant;
@@ -38,29 +37,45 @@ pub async fn scan_all(network: &Network, fvks: &[ExtendedFullViewingKey]) -> any
         .into();
     let end_height = get_latest_height(&mut client).await?;
 
+    let (blocks_tx, mut blocks_rx) = mpsc::channel::<Blocks>(1);
+
+    let network = network.clone();
+    tokio::spawn(async move {
+        while let Some(Blocks(cbs)) = blocks_rx.recv().await {
+            let start = Instant::now();
+            let blocks = decrypter.decrypt_blocks(&network, &cbs);
+            info!("Decrypt Notes: {} ms", start.elapsed().as_millis());
+
+            let witnesses = calculate_tree_state_v2(&cbs, &blocks);
+
+            debug!("# Witnesses {}", witnesses.len());
+            for w in witnesses.iter() {
+                let mut bb: Vec<u8> = vec![];
+                w.write(&mut bb)?;
+                log::debug!("{}", hex::encode(&bb));
+            }
+        }
+        Ok::<_, anyhow::Error>(())
+    });
+
     let start = Instant::now();
-    let cbs = download_chain(&mut client, start_height, end_height, None).await?;
+    download_chain(
+        &mut client,
+        start_height,
+        end_height,
+        100_000,
+        None,
+        blocks_tx,
+    )
+    .await?;
     info!("Download chain: {} ms", start.elapsed().as_millis());
-
-    let start = Instant::now();
-    let blocks = decrypter.decrypt_blocks(network, &cbs);
-    info!("Decrypt Notes: {} ms", start.elapsed().as_millis());
-
-    let witnesses = calculate_tree_state_v2(&cbs, &blocks);
-
-    debug!("# Witnesses {}", witnesses.len());
-    for w in witnesses.iter() {
-        let mut bb: Vec<u8> = vec![];
-        w.write(&mut bb)?;
-        log::debug!("{}", hex::encode(&bb));
-    }
 
     info!("Total: {} ms", total_start.elapsed().as_millis());
 
     Ok(())
 }
 
-struct Blocks(Vec<CompactBlock>);
+pub struct Blocks(pub Vec<CompactBlock>);
 
 #[derive(Debug)]
 struct TxIdSet(Vec<u32>);
@@ -81,7 +96,7 @@ pub struct TxIdHeight {
     index: u32,
 }
 
-const MAX_OUTPUTS_PER_CHUNK: usize = 200_000;
+pub const MAX_OUTPUTS_PER_CHUNK: usize = 200_000;
 
 pub async fn sync_async(
     coin_type: CoinType,
@@ -100,7 +115,7 @@ pub async fn sync_async(
     };
 
     let mut client = connect_lightwalletd(&ld_url).await?;
-    let (start_height, mut prev_hash, vks) = {
+    let (start_height, prev_hash, vks) = {
         let db = DbAdapter::new(coin_type, &db_path)?;
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
@@ -112,50 +127,21 @@ pub async fn sync_async(
 
     let decrypter = DecryptNode::new(vks);
 
-    let (downloader_tx, mut download_rx) = mpsc::channel::<Range<u32>>(1);
     let (processor_tx, mut processor_rx) = mpsc::channel::<Blocks>(1);
 
-    let ld_url2 = ld_url.clone();
     let db_path2 = db_path.clone();
 
     let downloader = tokio::spawn(async move {
-        let mut client = connect_lightwalletd(&ld_url2).await?;
-        while let Some(range) = download_rx.recv().await {
-            log::info!("+ {:?}", range);
-            let mut blocks = download_chain(&mut client, range.start, range.end, prev_hash).await?;
-            log::debug!("- {:?}", range);
-            blocks.last().map(|cb| {
-                let mut ph = [0u8; 32];
-                ph.copy_from_slice(&cb.hash);
-                prev_hash = Some(ph);
-            });
-            loop {
-                let mut total_count_outputs = 0;
-                let mut split_index = None;
-                for (i, cb) in blocks.iter().enumerate() {
-                    let count_outputs: usize = cb.vtx.iter().map(|tx| tx.outputs.len()).sum();
-                    total_count_outputs += count_outputs;
-                    if total_count_outputs > MAX_OUTPUTS_PER_CHUNK {
-                        split_index = Some(i);
-                        break;
-                    }
-                }
-                log::info!("split_index {:?}", split_index);
-                if let Some(split_index) = split_index {
-                    let remaining = blocks.split_off(split_index);
-                    let b = Blocks(blocks);
-                    blocks = remaining;
-                    processor_tx.send(b).await?;
-                } else {
-                    let b = Blocks(blocks);
-                    processor_tx.send(b).await?;
-                    break;
-                }
-            }
-        }
-        log::info!("download completed");
-        drop(processor_tx);
-
+        log::info!("download_scheduler");
+        download_chain(
+            &mut client,
+            start_height,
+            end_height,
+            chunk_size,
+            prev_hash,
+            processor_tx,
+        )
+        .await?;
         Ok::<_, anyhow::Error>(())
     });
 
@@ -321,6 +307,7 @@ pub async fn sync_async(
                     c
                 });
                 let ids: Vec<_> = ids.into_iter().map(|e| e.id_tx).collect();
+                let mut client = connect_lightwalletd(&ld_url).await?;
                 retrieve_tx_info(coin_type, &mut client, &db_path2, &ids)
                     .await
                     .unwrap();
@@ -351,19 +338,6 @@ pub async fn sync_async(
 
         Ok::<_, anyhow::Error>(())
     });
-
-    let mut height = start_height;
-    while height < end_height {
-        let s = height;
-        let e = (height + chunk_size).min(end_height);
-        let range = s..e;
-
-        let _ = downloader_tx.send(range).await;
-
-        height = e;
-    }
-    drop(downloader_tx);
-    log::info!("req downloading completed");
 
     let res = tokio::try_join!(downloader, processor);
     match res {
