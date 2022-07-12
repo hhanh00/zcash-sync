@@ -96,53 +96,47 @@ pub async fn download_chain(
     client: &mut CompactTxStreamerClient<Channel>,
     start_height: u32,
     end_height: u32,
-    chunk_size: u32,
     mut prev_hash: Option<[u8; 32]>,
     blocks_tx: Sender<Blocks>,
 ) -> anyhow::Result<()> {
     let mut output_count = 0;
     let mut cbs: Vec<CompactBlock> = Vec::new();
-    let mut s = start_height + 1;
-    while s <= end_height {
-        let e = (s + chunk_size - 1).min(end_height);
-        let range = BlockRange {
-            start: Some(BlockId {
-                height: s as u64,
-                hash: vec![],
-            }),
-            end: Some(BlockId {
-                height: e as u64,
-                hash: vec![],
-            }),
-        };
-        let mut block_stream = client
-            .get_block_range(Request::new(range))
-            .await?
-            .into_inner();
-        while let Some(mut block) = block_stream.message().await? {
-            if prev_hash.is_some() && block.prev_hash.as_slice() != prev_hash.unwrap() {
-                anyhow::bail!(ChainError::Reorg);
-            }
-            let mut ph = [0u8; 32];
-            ph.copy_from_slice(&block.hash);
-            prev_hash = Some(ph);
-            for b in block.vtx.iter_mut() {
-                b.actions.clear(); // don't need Orchard actions
-            }
-
-            let block_output_count: usize = block.vtx.iter().map(|tx| tx.outputs.len()).sum();
-            if output_count + block_output_count > MAX_OUTPUTS_PER_CHUNK {
-                // output
-                let out = cbs;
-                cbs = Vec::new();
-                blocks_tx.send(Blocks(out)).await.unwrap();
-                output_count = 0;
-            }
-
-            cbs.push(block);
-            output_count += block_output_count;
+    let range = BlockRange {
+        start: Some(BlockId {
+            height: (start_height + 1) as u64,
+            hash: vec![],
+        }),
+        end: Some(BlockId {
+            height: end_height as u64,
+            hash: vec![],
+        }),
+    };
+    let mut block_stream = client
+        .get_block_range(Request::new(range))
+        .await?
+        .into_inner();
+    while let Some(mut block) = block_stream.message().await? {
+        if prev_hash.is_some() && block.prev_hash.as_slice() != prev_hash.unwrap() {
+            anyhow::bail!(ChainError::Reorg);
         }
-        s = e + 1;
+        let mut ph = [0u8; 32];
+        ph.copy_from_slice(&block.hash);
+        prev_hash = Some(ph);
+        for b in block.vtx.iter_mut() {
+            b.actions.clear(); // don't need Orchard actions
+        }
+
+        let block_output_count: usize = block.vtx.iter().map(|tx| tx.outputs.len()).sum();
+        if output_count + block_output_count > MAX_OUTPUTS_PER_CHUNK {
+            // output
+            let out = cbs;
+            cbs = Vec::new();
+            blocks_tx.send(Blocks(out)).await.unwrap();
+            output_count = 0;
+        }
+
+        cbs.push(block);
+        output_count += block_output_count;
     }
     let _ = blocks_tx.send(Blocks(cbs)).await;
     Ok(())

@@ -215,7 +215,7 @@ impl DbAdapter {
     }
 
     pub fn store_block(
-        &self,
+        connection: &Connection,
         height: u32,
         hash: &[u8],
         timestamp: u32,
@@ -224,7 +224,7 @@ impl DbAdapter {
         log::debug!("+block");
         let mut bb: Vec<u8> = vec![];
         tree.write(&mut bb)?;
-        self.connection.execute(
+        connection.execute(
             "INSERT INTO blocks(height, hash, timestamp, sapling_tree)
         VALUES (?1, ?2, ?3, ?4)
         ON CONFLICT DO NOTHING",
@@ -278,7 +278,7 @@ impl DbAdapter {
     }
 
     pub fn store_witnesses(
-        &self,
+        connection: &Connection,
         witness: &Witness,
         height: u32,
         id_note: u32,
@@ -286,7 +286,7 @@ impl DbAdapter {
         log::debug!("+witnesses");
         let mut bb: Vec<u8> = vec![];
         witness.write(&mut bb)?;
-        self.connection.execute(
+        connection.execute(
             "INSERT INTO sapling_witnesses(note, height, witness) VALUES (?1, ?2, ?3)
         ON CONFLICT DO NOTHING",
             params![id_note, height, bb],
@@ -1072,7 +1072,7 @@ mod tests {
             cursor: CTree::new(),
         };
         db_tx.commit().unwrap();
-        db.store_witnesses(&witness, 1000, 1).unwrap();
+        Db::store_witnesses(&witness, 1000, 1).unwrap();
     }
 
     #[test]

@@ -63,7 +63,6 @@ pub async fn scan_all(network: &Network, fvks: &[ExtendedFullViewingKey]) -> any
         &mut client,
         start_height,
         end_height,
-        100_000,
         None,
         blocks_tx,
     )
@@ -137,7 +136,6 @@ pub async fn sync_async(
             &mut client,
             start_height,
             end_height,
-            chunk_size,
             prev_hash,
             processor_tx,
         )
@@ -323,11 +321,13 @@ pub async fn sync_async(
             witnesses = new_witnesses;
 
             if let Some(block) = blocks.0.last() {
+                let mut db_transaction = db.begin_transaction()?;
                 let height = block.height as u32;
                 for w in witnesses.iter() {
-                    db.store_witnesses(w, height, w.id_note)?;
+                    DbAdapter::store_witnesses(&db_transaction, w, height, w.id_note)?;
                 }
-                db.store_block(height, &block.hash, block.time, &tree)?;
+                DbAdapter::store_block(&mut db_transaction, height, &block.hash, block.time, &tree)?;
+                db_transaction.commit()?;
             }
         }
 

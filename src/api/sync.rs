@@ -2,7 +2,7 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::scan::AMProgressCallback;
-use crate::{BlockId, CTree, CompactTxStreamerClient};
+use crate::{BlockId, CTree, CompactTxStreamerClient, DbAdapter};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
@@ -88,8 +88,8 @@ async fn fetch_and_store_tree_state(
         .await?
         .into_inner();
     let tree = CTree::read(&*hex::decode(&tree_state.sapling_tree)?)?;
-    c.db()?
-        .store_block(height, &block.hash, block.time, &tree)?;
+    let db = c.db()?;
+    DbAdapter::store_block(&db.connection, height, &block.hash, block.time, &tree)?;
     Ok(())
 }
 
