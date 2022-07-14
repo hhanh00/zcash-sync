@@ -11,11 +11,15 @@ typedef char bool;
 #endif
 typedef void *DartPostCObjectFnType;
 
+#define QR_DATA_SIZE 256
+
+#define MAX_OUTPUTS_PER_CHUNK 200000
+
 void dummy_export(void);
 
-void deallocate_str(char *s);
-
 void dart_post_cobject(DartPostCObjectFnType ptr);
+
+void deallocate_str(char *s);
 
 bool get_error(void);
 
@@ -104,4 +108,6 @@ char *split_data(uint32_t id, char *data);
 
 char *merge_data(char *drop);
 
-char *get_tx_summary(char *drop);
+char *get_tx_summary(char *tx);
+
+char *get_best_server(char **servers, uint32_t count);

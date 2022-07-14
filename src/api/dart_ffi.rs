@@ -553,3 +553,21 @@ pub unsafe extern "C" fn get_tx_summary(tx: *mut c_char) -> *mut c_char {
     };
     to_c_str(log_string(res()))
 }
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn get_best_server(
+    servers: *mut *mut c_char,
+    count: u32,
+) -> *mut c_char {
+    let mut cservers = vec![];
+    for i in 0..count {
+        let ptr = *servers.offset(i as isize);
+        let s = CStr::from_ptr(ptr).to_string_lossy();
+        cservers.push(s.to_string());
+    }
+    let best_server = crate::get_best_server(&cservers)
+        .await
+        .unwrap_or(String::new());
+    to_c_str(best_server)
+}

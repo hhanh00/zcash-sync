@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
-use warp_api_ffi::{AccountRec, CoinConfig, RaptorQDrops, Tx, TxRec};
+use warp_api_ffi::{get_best_server, AccountRec, CoinConfig, RaptorQDrops, Tx, TxRec};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -48,6 +48,15 @@ fn init(coin: u8, config: HashMap<String, String>) -> anyhow::Result<()> {
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
     let _ = dotenv::dotenv();
+
+    let server = get_best_server(&[
+        "https://lwdv3.zecwallet.co:443".to_string(),
+        "https://zuul.free2z.cash:9067".to_string(),
+        "https://mainnet.lightwalletd.com:9067".to_string(),
+    ])
+    .await
+    .unwrap();
+    log::info!("Best server = {}", server);
 
     let rocket = rocket::build();
     let figment = rocket.figment();

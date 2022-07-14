@@ -59,14 +59,7 @@ pub async fn scan_all(network: &Network, fvks: &[ExtendedFullViewingKey]) -> any
     });
 
     let start = Instant::now();
-    download_chain(
-        &mut client,
-        start_height,
-        end_height,
-        None,
-        blocks_tx,
-    )
-    .await?;
+    download_chain(&mut client, start_height, end_height, None, blocks_tx).await?;
     info!("Download chain: {} ms", start.elapsed().as_millis());
 
     info!("Total: {} ms", total_start.elapsed().as_millis());
@@ -326,7 +319,13 @@ pub async fn sync_async(
                 for w in witnesses.iter() {
                     DbAdapter::store_witnesses(&db_transaction, w, height, w.id_note)?;
                 }
-                DbAdapter::store_block(&mut db_transaction, height, &block.hash, block.time, &tree)?;
+                DbAdapter::store_block(
+                    &mut db_transaction,
+                    height,
+                    &block.hash,
+                    block.time,
+                    &tree,
+                )?;
                 db_transaction.commit()?;
             }
         }

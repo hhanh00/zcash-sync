@@ -5,13 +5,17 @@ use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
 use crate::scan::{Blocks, MAX_OUTPUTS_PER_CHUNK};
 use ff::PrimeField;
+use futures::{future, FutureExt};
 use log::info;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::time::Duration;
 use std::time::Instant;
 use thiserror::Error;
 use tokio::sync::mpsc::Sender;
+use tokio::time::timeout;
+use tokio_stream::StreamExt;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Request;
 use zcash_note_encryption::batch::try_compact_note_decryption;
@@ -475,6 +479,29 @@ pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamer
     }
     let client = CompactTxStreamerClient::connect(channel).await?;
     Ok(client)
+}
+
+async fn get_height(server: String) -> Option<(String, u32)> {
+    let mut client = connect_lightwalletd(&server).await.ok()?;
+    let height = get_latest_height(&mut client).await.ok()?;
+    log::info!("{} {}", server, height);
+    Some((server, height))
+}
+
+pub async fn get_best_server(servers: &[String]) -> Option<String> {
+    let mut server_heights = vec![];
+    for s in servers.iter() {
+        let server_height =
+            tokio::spawn(timeout(Duration::from_secs(1), get_height(s.to_string()))).boxed();
+        server_heights.push(server_height);
+    }
+    let server_heights = future::try_join_all(server_heights).await.ok()?;
+    let best_server = server_heights
+        .into_iter()
+        .filter_map(|h| h.unwrap_or(None))
+        .max_by_key(|(_, h)| *h)
+        .map(|x| x.0);
+    best_server
 }
 
 // pub async fn sync(

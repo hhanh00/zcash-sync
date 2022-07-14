@@ -62,8 +62,8 @@ pub fn hex_to_hash(hex: &str) -> anyhow::Result<[u8; 32]> {
 
 pub use crate::builder::advance_tree;
 pub use crate::chain::{
-    calculate_tree_state_v2, connect_lightwalletd, download_chain, get_latest_height, ChainError,
-    DecryptNode,
+    calculate_tree_state_v2, connect_lightwalletd, download_chain, get_best_server,
+    get_latest_height, ChainError, DecryptNode,
 };
 pub use crate::coinconfig::{
     init_coin, set_active, set_active_account, set_coin_lwd_url, CoinConfig,
