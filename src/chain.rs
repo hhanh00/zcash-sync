@@ -121,6 +121,11 @@ pub async fn download_chain(
         .into_inner();
     while let Some(mut block) = block_stream.message().await? {
         if prev_hash.is_some() && block.prev_hash.as_slice() != prev_hash.unwrap() {
+            log::warn!(
+                "Reorg: {} != {}",
+                hex::encode(block.prev_hash.as_slice()),
+                hex::encode(prev_hash.unwrap())
+            );
             anyhow::bail!(ChainError::Reorg);
         }
         let mut ph = [0u8; 32];

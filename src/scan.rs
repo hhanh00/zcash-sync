@@ -116,6 +116,9 @@ pub async fn sync_async(
     };
     let end_height = get_latest_height(&mut client).await?;
     let end_height = (end_height - target_height_offset).max(start_height);
+    if start_height >= end_height {
+        return Ok(());
+    }
 
     let decrypter = DecryptNode::new(vks);
 
