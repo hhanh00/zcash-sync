@@ -39,6 +39,11 @@ pub fn set_coin_lwd_url(coin: u8, lwd_url: &str) {
     c.lwd_url = Some(lwd_url.to_string());
 }
 
+pub fn get_coin_lwd_url(coin: u8) -> String {
+    let c = COIN_CONFIG[coin as usize].lock().unwrap();
+    c.lwd_url.clone().unwrap_or(String::new())
+}
+
 pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
     let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
     c.set_db_path(db_path)?;

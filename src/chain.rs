@@ -15,7 +15,6 @@ use std::time::Instant;
 use thiserror::Error;
 use tokio::sync::mpsc::Sender;
 use tokio::time::timeout;
-use tokio_stream::StreamExt;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Request;
 use zcash_note_encryption::batch::try_compact_note_decryption;

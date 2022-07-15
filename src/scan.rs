@@ -92,7 +92,7 @@ pub const MAX_OUTPUTS_PER_CHUNK: usize = 200_000;
 
 pub async fn sync_async(
     coin_type: CoinType,
-    chunk_size: u32,
+    _chunk_size: u32,
     get_tx: bool,
     db_path: &str,
     target_height_offset: u32,

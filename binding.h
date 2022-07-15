@@ -33,11 +33,13 @@ void set_active_account(uint8_t coin, uint32_t id);
 
 void set_coin_lwd_url(uint8_t coin, char *lwd_url);
 
+char *get_lwd_url(uint8_t coin);
+
 void reset_app(void);
 
 uint32_t new_account(uint8_t coin, char *name, char *data, int32_t index);
 
-uint32_t new_sub_account(char *name, int32_t index);
+uint32_t new_sub_account(char *name, int32_t index, uint32_t count);
 
 uint8_t warp(uint8_t coin, bool get_tx, uint32_t anchor_offset, int64_t port);
 

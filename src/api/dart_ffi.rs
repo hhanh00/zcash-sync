@@ -127,6 +127,12 @@ pub unsafe extern "C" fn set_coin_lwd_url(coin: u8, lwd_url: *mut c_char) {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn get_lwd_url(coin: u8) -> *mut c_char {
+    let server = crate::coinconfig::get_coin_lwd_url(coin);
+    to_c_str(server)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn reset_app() {
     let res = || {
         crate::api::account::reset_db(0)?;
@@ -156,10 +162,10 @@ pub unsafe extern "C" fn new_account(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32) -> u32 {
+pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32, count: u32) {
     from_c_str!(name);
     let index = if index >= 0 { Some(index as u32) } else { None };
-    let res = crate::api::account::new_sub_account(&name, index);
+    let res = crate::api::account::new_sub_account(&name, index, count);
     log_result(res)
 }
 
