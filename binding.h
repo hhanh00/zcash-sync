@@ -39,7 +39,9 @@ void reset_app(void);
 
 uint32_t new_account(uint8_t coin, char *name, char *data, int32_t index);
 
-uint32_t new_sub_account(char *name, int32_t index, uint32_t count);
+void new_sub_account(char *name, int32_t index, uint32_t count);
+
+void import_transparent_key(uint8_t coin, uint32_t id_account, char *path);
 
 uint8_t warp(uint8_t coin, bool get_tx, uint32_t anchor_offset, int64_t port);
 

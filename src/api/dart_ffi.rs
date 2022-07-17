@@ -169,6 +169,13 @@ pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32, count: u
     log_result(res)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn import_transparent_key(coin: u8, id_account: u32, path: *mut c_char) {
+    from_c_str!(path);
+    let res = crate::api::account::import_transparent_key(coin, id_account, &path);
+    log_result(res)
+}
+
 lazy_static! {
     static ref SYNC_LOCK: Semaphore = Semaphore::new(1);
 }

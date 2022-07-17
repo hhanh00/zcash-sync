@@ -2,6 +2,7 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::key2::decode_key;
+use crate::taddr::derive_tkeys;
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
@@ -51,6 +52,16 @@ fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::
         db.create_taddr(account)?;
     }
     Ok(account)
+}
+
+pub fn import_transparent_key(coin: u8, id_account: u32, path: &str) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let (seed, _) = db.get_seed(c.id_account)?;
+    let seed = seed.ok_or_else(|| anyhow!("Account has no seed"))?;
+    let (sk, addr) = derive_tkeys(c.chain.network(), &seed, path)?;
+    db.store_transparent_key(id_account, &sk, &addr)?;
+    Ok(())
 }
 
 pub fn new_diversified_address() -> anyhow::Result<String> {

@@ -308,28 +308,30 @@ pub async fn sync_async(
             }
             log::info!("Transaction Details : {}", start.elapsed().as_millis());
 
-            log::info!("progress: {}", blocks.0[0].height);
-            let callback = proc_callback.lock().await;
-            callback(blocks.0[0].height as u32);
-
             let (new_tree, new_witnesses) = bp.finalize();
             tree = new_tree;
             witnesses = new_witnesses;
 
             if let Some(block) = blocks.0.last() {
-                let mut db_transaction = db.begin_transaction()?;
-                let height = block.height as u32;
-                for w in witnesses.iter() {
-                    DbAdapter::store_witnesses(&db_transaction, w, height, w.id_note)?;
+                {
+                    let mut db_transaction = db.begin_transaction()?;
+                    let height = block.height as u32;
+                    for w in witnesses.iter() {
+                        DbAdapter::store_witnesses(&db_transaction, w, height, w.id_note)?;
+                    }
+                    DbAdapter::store_block(
+                        &mut db_transaction,
+                        height,
+                        &block.hash,
+                        block.time,
+                        &tree,
+                    )?;
+                    db_transaction.commit()?;
+                    // db_transaction is dropped here
                 }
-                DbAdapter::store_block(
-                    &mut db_transaction,
-                    height,
-                    &block.hash,
-                    block.time,
-                    &tree,
-                )?;
-                db_transaction.commit()?;
+                log::info!("progress: {}", block.height);
+                let callback = proc_callback.lock().await;
+                callback(block.height as u32);
             }
         }
 

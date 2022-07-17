@@ -141,6 +141,19 @@ impl DbAdapter {
         Ok(index as u32)
     }
 
+    pub fn store_transparent_key(
+        &self,
+        id_account: u32,
+        sk: &str,
+        addr: &str,
+    ) -> anyhow::Result<()> {
+        self.connection.execute(
+            "UPDATE taddrs SET sk = ?1, address = ?2 WHERE account = ?3",
+            params![sk, addr, id_account],
+        )?;
+        Ok(())
+    }
+
     pub fn get_fvks(&self) -> anyhow::Result<HashMap<u32, AccountViewKey>> {
         let mut statement = self
             .connection

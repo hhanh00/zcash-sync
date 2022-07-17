@@ -1,5 +1,6 @@
 use crate::coinconfig::CoinConfig;
 use crate::{AddressList, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply};
+use anyhow::anyhow;
 use bip39::{Language, Mnemonic, Seed};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
@@ -83,8 +84,9 @@ pub fn derive_tkeys(
     let mnemonic = Mnemonic::from_phrase(phrase, Language::English)?;
     let seed = Seed::new(&mnemonic, "");
     let secp = Secp256k1::<All>::new();
-    let ext = ExtendedPrivKey::derive(seed.as_bytes(), path).unwrap();
-    let secret_key = SecretKey::from_slice(&ext.secret()).unwrap();
+    let ext = ExtendedPrivKey::derive(seed.as_bytes(), path)
+        .map_err(|_| anyhow!("Invalid derivation path"))?;
+    let secret_key = SecretKey::from_slice(&ext.secret())?;
     let pub_key = PublicKey::from_secret_key(&secp, &secret_key);
     let pub_key = pub_key.serialize();
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
