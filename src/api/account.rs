@@ -144,3 +144,15 @@ pub fn delete_account(coin: u8, account: u32) -> anyhow::Result<()> {
     db.delete_account(account)?;
     Ok(())
 }
+
+pub fn import_from_zwl(coin: u8, name: &str, data: &str) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    let sks = crate::read_zwl(data)?;
+    let db = c.db()?;
+    for (i, key) in sks.iter().enumerate() {
+        let name = format!("{}-{}", name, i + 1);
+        let (seed, sk, ivk, pa) = decode_key(coin, key, 0)?;
+        db.store_account(&name, seed.as_deref(), 0, sk.as_deref(), &ivk, &pa)?;
+    }
+    Ok(())
+}

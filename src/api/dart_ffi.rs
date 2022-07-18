@@ -584,3 +584,11 @@ pub async unsafe extern "C" fn get_best_server(
         .unwrap_or(String::new());
     to_c_str(best_server)
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn import_from_zwl(coin: u8, name: *mut c_char, data: *mut c_char) {
+    from_c_str!(name);
+    from_c_str!(data);
+    let res = crate::api::account::import_from_zwl(coin, &name, &data);
+    log_result(res)
+}
