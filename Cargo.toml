@@ -81,11 +81,14 @@ android_logger = { version = "0.10.0", optional = true }
 rocket = { version = "0.5.0-rc.2", features = ["json"], optional = true }
 dotenv = { version = "0.15.0", optional = true }
 
+node-bindgen = { version = "4.0", optional = true }
+
 [features]
 ledger = ["ledger-apdu", "hmac", "ed25519-bip32", "ledger-transport-hid"]
 ledger_sapling = ["ledger"]
 dart_ffi = ["allo-isolate", "once_cell", "android_logger"]
 rpc = ["rocket", "dotenv"]
+nodejs = ["node-bindgen"]
 
 # librustzcash synced to 35023ed8ca2fb1061e78fd740b640d4eefcc5edd
 

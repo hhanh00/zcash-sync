@@ -89,3 +89,6 @@ pub use crate::ledger::sapling::build_tx_ledger;
 
 #[cfg(feature = "ledger")]
 pub use crate::ledger::sweep_ledger;
+
+#[cfg(feature = "nodejs")]
+pub mod nodejs;

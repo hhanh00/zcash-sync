@@ -36,3 +36,25 @@ get_address,
 get_tx_history,
 pay,
 ```
+
+## NodeJS
+
+NodeJS bindings are incomplete/unsupported and maybe dropped at any time.
+
+- Install `nj-cli` (one time)
+- Edit `Cargo.toml`
+- Build
+- Use
+
+Ex:
+```
+$ cargo install nj-cli
+$ vim Cargo.toml
+...
+[lib]
+#name = "warp_api_ffi"
+crate-type = ["cdylib"]
+...
+$ nj-cli build --release -- --features=nodejs
+$ node warp.js
+```
