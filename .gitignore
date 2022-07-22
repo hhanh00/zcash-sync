@@ -2,6 +2,9 @@
 .env
 .idea/
 docs/_site/
-*.db
+*.db*
 Cargo.lock
 node_modules/
+dist/
+
+
