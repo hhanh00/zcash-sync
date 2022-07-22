@@ -408,9 +408,9 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::BlockRange>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::CompactBlock>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::CompactBlock>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -471,9 +471,9 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::TransparentAddressBlockFilter>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -542,9 +542,9 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::Exclude>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::CompactTx>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::CompactTx>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -566,9 +566,9 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::Empty>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -630,9 +630,9 @@ pub mod compact_tx_streamer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetAddressUtxosArg>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::GetAddressUtxosReply>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::GetAddressUtxosReply>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
