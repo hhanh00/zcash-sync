@@ -10,6 +10,7 @@ use log::info;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::time::Instant;
 use thiserror::Error;
@@ -101,6 +102,7 @@ pub async fn download_chain(
     end_height: u32,
     mut prev_hash: Option<[u8; 32]>,
     blocks_tx: Sender<Blocks>,
+    cancel: &'static AtomicBool,
 ) -> anyhow::Result<()> {
     let mut output_count = 0;
     let mut cbs: Vec<CompactBlock> = Vec::new();
@@ -119,6 +121,10 @@ pub async fn download_chain(
         .await?
         .into_inner();
     while let Some(mut block) = block_stream.message().await? {
+        if cancel.load(Ordering::Acquire) {
+            log::info!("Canceling download");
+            break;
+        }
         if prev_hash.is_some() && block.prev_hash.as_slice() != prev_hash.unwrap() {
             log::warn!(
                 "Reorg: {} != {}",
@@ -500,12 +506,12 @@ pub async fn get_best_server(servers: &[String]) -> Option<String> {
         server_heights.push(server_height);
     }
     let server_heights = future::try_join_all(server_heights).await.ok()?;
-    let best_server = server_heights
+
+    server_heights
         .into_iter()
         .filter_map(|h| h.unwrap_or(None))
         .max_by_key(|(_, h)| *h)
-        .map(|x| x.0);
-    best_server
+        .map(|x| x.0)
 }
 
 // pub async fn sync(

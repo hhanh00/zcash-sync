@@ -3,6 +3,7 @@
 use crate::coinconfig::CoinConfig;
 use crate::scan::AMProgressCallback;
 use crate::{BlockId, CTree, CompactTxStreamerClient, DbAdapter};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
@@ -15,10 +16,19 @@ pub async fn coin_sync(
     get_tx: bool,
     anchor_offset: u32,
     progress_callback: impl Fn(u32) + Send + 'static,
+    cancel: &'static AtomicBool,
 ) -> anyhow::Result<()> {
     let cb = Arc::new(Mutex::new(progress_callback));
-    coin_sync_impl(coin, get_tx, DEFAULT_CHUNK_SIZE, anchor_offset, cb.clone()).await?;
-    coin_sync_impl(coin, get_tx, DEFAULT_CHUNK_SIZE, 0, cb.clone()).await?;
+    coin_sync_impl(
+        coin,
+        get_tx,
+        DEFAULT_CHUNK_SIZE,
+        anchor_offset,
+        cb.clone(),
+        cancel,
+    )
+    .await?;
+    coin_sync_impl(coin, get_tx, DEFAULT_CHUNK_SIZE, 0, cb.clone(), cancel).await?;
     Ok(())
 }
 
@@ -28,16 +38,18 @@ async fn coin_sync_impl(
     chunk_size: u32,
     target_height_offset: u32,
     progress_callback: AMProgressCallback,
+    cancel: &'static AtomicBool,
 ) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     crate::scan::sync_async(
         c.coin_type,
         chunk_size,
         get_tx,
-        &c.db_path.as_ref().unwrap(),
+        c.db_path.as_ref().unwrap(),
         target_height_offset,
         progress_callback,
-        &c.lwd_url.as_ref().unwrap(),
+        cancel,
+        c.lwd_url.as_ref().unwrap(),
     )
     .await?;
     Ok(())

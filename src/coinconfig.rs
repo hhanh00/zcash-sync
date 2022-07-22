@@ -41,7 +41,7 @@ pub fn set_coin_lwd_url(coin: u8, lwd_url: &str) {
 
 pub fn get_coin_lwd_url(coin: u8) -> String {
     let c = COIN_CONFIG[coin as usize].lock().unwrap();
-    c.lwd_url.clone().unwrap_or(String::new())
+    c.lwd_url.clone().unwrap_or_default()
 }
 
 pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
@@ -81,7 +81,7 @@ impl CoinConfig {
 
     pub fn set_db_path(&mut self, db_path: &str) -> anyhow::Result<()> {
         self.db_path = Some(db_path.to_string());
-        let db = DbAdapter::new(self.coin_type, &db_path)?;
+        let db = DbAdapter::new(self.coin_type, db_path)?;
         db.init_db()?;
         self.db = Some(Arc::new(Mutex::new(db)));
         Ok(())

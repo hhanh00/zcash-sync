@@ -178,6 +178,13 @@ pub unsafe extern "C" fn import_transparent_key(coin: u8, id_account: u32, path:
 
 lazy_static! {
     static ref SYNC_LOCK: Semaphore = Semaphore::new(1);
+    static ref SYNC_CANCELED: AtomicBool = AtomicBool::new(false);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cancel_warp() {
+    log::info!("Sync canceled");
+    SYNC_CANCELED.store(true, Ordering::Release);
 }
 
 #[tokio::main]
@@ -186,14 +193,20 @@ pub async unsafe extern "C" fn warp(coin: u8, get_tx: bool, anchor_offset: u32, 
     let res = async {
         let _permit = SYNC_LOCK.acquire().await?;
         log::info!("Sync started");
-        let result = crate::api::sync::coin_sync(coin, get_tx, anchor_offset, move |height| {
-            let mut height = height.into_dart();
-            if port != 0 {
-                if let Some(p) = POST_COBJ {
-                    p(port, &mut height);
+        let result = crate::api::sync::coin_sync(
+            coin,
+            get_tx,
+            anchor_offset,
+            move |height| {
+                let mut height = height.into_dart();
+                if port != 0 {
+                    if let Some(p) = POST_COBJ {
+                        p(port, &mut height);
+                    }
                 }
-            }
-        })
+            },
+            &SYNC_CANCELED,
+        )
         .await;
         log::info!("Sync finished");
 
@@ -215,6 +228,7 @@ pub async unsafe extern "C" fn warp(coin: u8, get_tx: bool, anchor_offset: u32, 
         }
     };
     let r = res.await;
+    SYNC_CANCELED.store(false, Ordering::Release);
     log_result(r)
 }
 

@@ -92,7 +92,7 @@ pub async fn sign_only_multi_payment(
     progress_callback: PaymentProgressCallback,
 ) -> anyhow::Result<Vec<u8>> {
     // let tx = serde_json::from_str::<Tx>(tx_string)?;
-    let raw_tx = sign(&tx, progress_callback)?;
+    let raw_tx = sign(tx, progress_callback)?;
     Ok(raw_tx)
 }
 

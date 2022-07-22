@@ -2,16 +2,22 @@
 extern crate rocket;
 
 use anyhow::anyhow;
+use lazy_static::lazy_static;
 use rocket::fairing::AdHoc;
 use rocket::http::Status;
 use rocket::response::Responder;
 use rocket::serde::{json::Json, Deserialize, Serialize};
 use rocket::{response, Request, Response, State};
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
 use warp_api_ffi::{get_best_server, AccountRec, CoinConfig, RaptorQDrops, Tx, TxRec};
+
+lazy_static! {
+    static ref SYNC_CANCELED: AtomicBool = AtomicBool::new(false);
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -127,7 +133,8 @@ pub fn list_accounts() -> Result<Json<Vec<AccountRec>>, Error> {
 #[post("/sync?<offset>")]
 pub async fn sync(offset: Option<u32>) -> Result<(), Error> {
     let c = CoinConfig::get_active();
-    warp_api_ffi::api::sync::coin_sync(c.coin, true, offset.unwrap_or(0), |_| {}).await?;
+    warp_api_ffi::api::sync::coin_sync(c.coin, true, offset.unwrap_or(0), |_| {}, &SYNC_CANCELED)
+        .await?;
     Ok(())
 }
 

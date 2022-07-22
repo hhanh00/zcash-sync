@@ -43,6 +43,8 @@ void new_sub_account(char *name, int32_t index, uint32_t count);
 
 void import_transparent_key(uint8_t coin, uint32_t id_account, char *path);
 
+void cancel_warp(void);
+
 uint8_t warp(uint8_t coin, bool get_tx, uint32_t anchor_offset, int64_t port);
 
 int8_t is_valid_key(uint8_t coin, char *key);
@@ -116,4 +118,4 @@ char *get_tx_summary(char *tx);
 
 char *get_best_server(char **servers, uint32_t count);
 
-void import_from_zwl(uint8_t coin, char *name, char *path);
+void import_from_zwl(uint8_t coin, char *name, char *data);

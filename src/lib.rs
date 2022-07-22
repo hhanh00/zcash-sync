@@ -80,7 +80,7 @@ pub use crate::mempool::MemPool;
 pub use crate::misc::read_zwl;
 pub use crate::pay::{broadcast_tx, get_tx_summary, Tx, TxIn, TxOut};
 pub use crate::print::*;
-pub use crate::scan::{latest_height, scan_all, sync_async};
+pub use crate::scan::{latest_height, sync_async};
 pub use crate::ua::{get_sapling, get_ua};
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
 

@@ -1,71 +1,24 @@
 use crate::builder::BlockProcessor;
 use crate::chain::{Nf, NfRef};
-use crate::db::{AccountViewKey, DbAdapter, ReceivedNote};
-use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
+use crate::db::{DbAdapter, ReceivedNote};
+
 use crate::transaction::retrieve_tx_info;
 use crate::{
-    calculate_tree_state_v2, connect_lightwalletd, download_chain, get_latest_height, CompactBlock,
-    DecryptNode, Witness, LWD_URL,
+    connect_lightwalletd, download_chain, get_latest_height, CompactBlock, DecryptNode, Witness,
 };
 use ff::PrimeField;
-use log::{debug, info};
+
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::panic;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use zcash_params::coin::{get_coin_chain, CoinType};
-use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
+
 use zcash_primitives::sapling::Node;
-use zcash_primitives::zip32::ExtendedFullViewingKey;
-
-pub async fn scan_all(network: &Network, fvks: &[ExtendedFullViewingKey]) -> anyhow::Result<()> {
-    let fvks: HashMap<_, _> = fvks
-        .iter()
-        .enumerate()
-        .map(|(i, fvk)| (i as u32, AccountViewKey::from_fvk(fvk)))
-        .collect();
-    let decrypter = DecryptNode::new(fvks);
-
-    let total_start = Instant::now();
-    let mut client = CompactTxStreamerClient::connect(LWD_URL).await?;
-    let start_height: u32 = network
-        .activation_height(NetworkUpgrade::Sapling)
-        .unwrap()
-        .into();
-    let end_height = get_latest_height(&mut client).await?;
-
-    let (blocks_tx, mut blocks_rx) = mpsc::channel::<Blocks>(1);
-
-    let network = network.clone();
-    tokio::spawn(async move {
-        while let Some(Blocks(cbs)) = blocks_rx.recv().await {
-            let start = Instant::now();
-            let blocks = decrypter.decrypt_blocks(&network, &cbs);
-            info!("Decrypt Notes: {} ms", start.elapsed().as_millis());
-
-            let witnesses = calculate_tree_state_v2(&cbs, &blocks);
-
-            debug!("# Witnesses {}", witnesses.len());
-            for w in witnesses.iter() {
-                let mut bb: Vec<u8> = vec![];
-                w.write(&mut bb)?;
-                log::debug!("{}", hex::encode(&bb));
-            }
-        }
-        Ok::<_, anyhow::Error>(())
-    });
-
-    let start = Instant::now();
-    download_chain(&mut client, start_height, end_height, None, blocks_tx).await?;
-    info!("Download chain: {} ms", start.elapsed().as_millis());
-
-    info!("Total: {} ms", total_start.elapsed().as_millis());
-
-    Ok(())
-}
 
 pub struct Blocks(pub Vec<CompactBlock>);
 
@@ -97,6 +50,7 @@ pub async fn sync_async(
     db_path: &str,
     target_height_offset: u32,
     progress_callback: AMProgressCallback,
+    cancel: &'static AtomicBool,
     ld_url: &str,
 ) -> anyhow::Result<()> {
     let ld_url = ld_url.to_owned();
@@ -134,6 +88,7 @@ pub async fn sync_async(
             end_height,
             prev_hash,
             processor_tx,
+            cancel,
         )
         .await?;
         Ok::<_, anyhow::Error>(())
