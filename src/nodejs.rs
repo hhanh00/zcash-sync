@@ -23,3 +23,9 @@ fn newAccount(
 async fn warp(coin: u32) {
     crate::api::sync::coin_sync(coin as u8, true, 0, move |height| {}).await.unwrap();
 }
+
+#[node_bindgen]
+fn getLWDURL(coin: u32) -> std::string::String {
+    let coin = coin as u8;
+    return crate::coinconfig::get_coin_lwd_url(coin);
+}
