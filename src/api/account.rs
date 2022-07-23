@@ -2,7 +2,7 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::key2::decode_key;
-use crate::taddr::derive_tkeys;
+use crate::taddr::{derive_taddr, derive_tkeys};
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
@@ -60,6 +60,14 @@ pub fn import_transparent_key(coin: u8, id_account: u32, path: &str) -> anyhow::
     let (seed, _) = db.get_seed(c.id_account)?;
     let seed = seed.ok_or_else(|| anyhow!("Account has no seed"))?;
     let (sk, addr) = derive_tkeys(c.chain.network(), &seed, path)?;
+    db.store_transparent_key(id_account, &sk, &addr)?;
+    Ok(())
+}
+
+pub fn import_transparent_secret_key(coin: u8, id_account: u32, sk: &str) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let (sk, addr) = derive_taddr(c.chain.network(), sk)?;
     db.store_transparent_key(id_account, &sk, &addr)?;
     Ok(())
 }

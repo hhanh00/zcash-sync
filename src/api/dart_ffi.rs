@@ -176,6 +176,17 @@ pub unsafe extern "C" fn import_transparent_key(coin: u8, id_account: u32, path:
     log_result(res)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn import_transparent_secret_key(
+    coin: u8,
+    id_account: u32,
+    secret_key: *mut c_char,
+) {
+    from_c_str!(secret_key);
+    let res = crate::api::account::import_transparent_secret_key(coin, id_account, &secret_key);
+    log_result(res)
+}
+
 lazy_static! {
     static ref SYNC_LOCK: Semaphore = Semaphore::new(1);
     static ref SYNC_CANCELED: AtomicBool = AtomicBool::new(false);

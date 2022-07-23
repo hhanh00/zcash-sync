@@ -1,6 +1,7 @@
 use crate::coinconfig::CoinConfig;
 use crate::{AddressList, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply};
 use anyhow::anyhow;
+use base58check::FromBase58Check;
 use bip39::{Language, Mnemonic, Seed};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
@@ -83,11 +84,23 @@ pub fn derive_tkeys(
 ) -> anyhow::Result<(String, String)> {
     let mnemonic = Mnemonic::from_phrase(phrase, Language::English)?;
     let seed = Seed::new(&mnemonic, "");
-    let secp = Secp256k1::<All>::new();
     let ext = ExtendedPrivKey::derive(seed.as_bytes(), path)
         .map_err(|_| anyhow!("Invalid derivation path"))?;
     let secret_key = SecretKey::from_slice(&ext.secret())?;
-    let pub_key = PublicKey::from_secret_key(&secp, &secret_key);
+    derive_from_secretkey(network, &secret_key)
+}
+
+pub fn derive_taddr(network: &Network, key: &str) -> anyhow::Result<(String, String)> {
+    let (_, sk) = key.from_base58check().map_err(|_| anyhow!("Invalid key"))?;
+    let sk = &sk[0..sk.len() - 1]; // remove compressed pub key marker
+    log::info!("sk {}", hex::encode(&sk));
+    let secret_key = SecretKey::from_slice(&sk)?;
+    derive_from_secretkey(network, &secret_key)
+}
+
+fn derive_from_secretkey(network: &Network, sk: &SecretKey) -> anyhow::Result<(String, String)> {
+    let secp = Secp256k1::<All>::new();
+    let pub_key = PublicKey::from_secret_key(&secp, &sk);
     let pub_key = pub_key.serialize();
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
     let address = TransparentAddress::PublicKey(pub_key.into());
@@ -96,7 +109,7 @@ pub fn derive_tkeys(
         &network.b58_script_address_prefix(),
         &address,
     );
-    let sk = secret_key.display_secret().to_string();
+    let sk = sk.display_secret().to_string();
     Ok((sk, address))
 }
 
