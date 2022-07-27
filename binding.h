@@ -121,3 +121,10 @@ char *get_tx_summary(char *tx);
 char *get_best_server(char **servers, uint32_t count);
 
 void import_from_zwl(uint8_t coin, char *name, char *data);
+
+char *derive_zip32(uint8_t coin,
+                   uint32_t id_account,
+                   uint32_t account,
+                   uint32_t external,
+                   bool has_address,
+                   uint32_t address);

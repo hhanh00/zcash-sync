@@ -13,7 +13,9 @@ use std::sync::atomic::AtomicBool;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
-use warp_api_ffi::{get_best_server, AccountRec, CoinConfig, RaptorQDrops, Tx, TxRec};
+use warp_api_ffi::{
+    derive_zip32, get_best_server, AccountRec, CoinConfig, KeyPack, RaptorQDrops, Tx, TxRec,
+};
 
 lazy_static! {
     static ref SYNC_CANCELED: AtomicBool = AtomicBool::new(false);
@@ -95,6 +97,7 @@ async fn main() -> anyhow::Result<()> {
                 parse_payment_uri,
                 split_data,
                 merge_data,
+                derive_keys,
             ],
         )
         .attach(AdHoc::config::<Config>())
@@ -297,6 +300,18 @@ pub fn merge_data(data: String) -> Result<String, Error> {
         .map(|data| hex::encode(&data))
         .unwrap_or(String::new());
     Ok(result)
+}
+
+#[post("/zip32?<seed>&<account>&<external>&<address>")]
+pub fn derive_keys(
+    seed: String,
+    account: u32,
+    external: u32,
+    address: Option<u32>,
+) -> Result<Json<KeyPack>, Error> {
+    let active = CoinConfig::get_active();
+    let result = warp_api_ffi::api::account::derive_keys(active.coin, active.id, account, external, address)?;
+    Ok(Json(result))
 }
 
 #[derive(Deserialize)]

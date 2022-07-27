@@ -3,6 +3,7 @@
 use crate::coinconfig::CoinConfig;
 use crate::key2::decode_key;
 use crate::taddr::{derive_taddr, derive_tkeys};
+use crate::{derive_zip32, KeyPack};
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
@@ -163,4 +164,18 @@ pub fn import_from_zwl(coin: u8, name: &str, data: &str) -> anyhow::Result<()> {
         db.store_account(&name, seed.as_deref(), 0, sk.as_deref(), &ivk, &pa)?;
     }
     Ok(())
+}
+
+pub fn derive_keys(
+    coin: u8,
+    id_account: u32,
+    account: u32,
+    external: u32,
+    address: Option<u32>,
+) -> anyhow::Result<KeyPack> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let (seed, _) = db.get_seed(id_account)?;
+    let seed = seed.unwrap();
+    derive_zip32(c.chain.network(), &seed, account, external, address)
 }

@@ -38,6 +38,7 @@ mod scan;
 mod taddr;
 mod transaction;
 mod ua;
+mod zip32;
 // mod wallet;
 pub mod api;
 
@@ -82,6 +83,7 @@ pub use crate::pay::{broadcast_tx, get_tx_summary, Tx, TxIn, TxOut};
 pub use crate::print::*;
 pub use crate::scan::{latest_height, sync_async};
 pub use crate::ua::{get_sapling, get_ua};
+pub use zip32::{derive_zip32, KeyPack};
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
 
 #[cfg(feature = "ledger_sapling")]

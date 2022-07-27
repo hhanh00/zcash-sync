@@ -617,3 +617,21 @@ pub unsafe extern "C" fn import_from_zwl(coin: u8, name: *mut c_char, data: *mut
     let res = crate::api::account::import_from_zwl(coin, &name, &data);
     log_result(res)
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn derive_zip32(
+    coin: u8,
+    id_account: u32,
+    account: u32,
+    external: u32,
+    has_address: bool,
+    address: u32,
+) -> *mut c_char {
+    let res = || {
+        let address = if has_address { Some(address) } else { None };
+        let kp = crate::api::account::derive_keys(coin, id_account, account, external, address)?;
+        let result = serde_json::to_string(&kp)?;
+        Ok(result)
+    };
+    to_c_str(log_string(res()))
+}

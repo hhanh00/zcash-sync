@@ -98,7 +98,10 @@ pub fn derive_taddr(network: &Network, key: &str) -> anyhow::Result<(String, Str
     derive_from_secretkey(network, &secret_key)
 }
 
-fn derive_from_secretkey(network: &Network, sk: &SecretKey) -> anyhow::Result<(String, String)> {
+pub fn derive_from_secretkey(
+    network: &Network,
+    sk: &SecretKey,
+) -> anyhow::Result<(String, String)> {
     let secp = Secp256k1::<All>::new();
     let pub_key = PublicKey::from_secret_key(&secp, &sk);
     let pub_key = pub_key.serialize();
