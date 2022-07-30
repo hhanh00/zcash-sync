@@ -47,7 +47,7 @@ void import_transparent_secret_key(uint8_t coin, uint32_t id_account, char *secr
 
 void cancel_warp(void);
 
-uint8_t warp(uint8_t coin, bool get_tx, uint32_t anchor_offset, int64_t port);
+uint8_t warp(uint8_t coin, bool get_tx, uint32_t anchor_offset, uint32_t max_cost, int64_t port);
 
 int8_t is_valid_key(uint8_t coin, char *key);
 

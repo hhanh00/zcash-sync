@@ -15,6 +15,7 @@ pub async fn coin_sync(
     coin: u8,
     get_tx: bool,
     anchor_offset: u32,
+    max_cost: u32,
     progress_callback: impl Fn(u32) + Send + 'static,
     cancel: &'static AtomicBool,
 ) -> anyhow::Result<()> {
@@ -24,11 +25,21 @@ pub async fn coin_sync(
         get_tx,
         DEFAULT_CHUNK_SIZE,
         anchor_offset,
+        max_cost,
         cb.clone(),
         cancel,
     )
     .await?;
-    coin_sync_impl(coin, get_tx, DEFAULT_CHUNK_SIZE, 0, cb.clone(), cancel).await?;
+    coin_sync_impl(
+        coin,
+        get_tx,
+        DEFAULT_CHUNK_SIZE,
+        0,
+        u32::MAX,
+        cb.clone(),
+        cancel,
+    )
+    .await?;
     Ok(())
 }
 
@@ -37,6 +48,7 @@ async fn coin_sync_impl(
     get_tx: bool,
     chunk_size: u32,
     target_height_offset: u32,
+    max_cost: u32,
     progress_callback: AMProgressCallback,
     cancel: &'static AtomicBool,
 ) -> anyhow::Result<()> {
@@ -47,6 +59,7 @@ async fn coin_sync_impl(
         get_tx,
         c.db_path.as_ref().unwrap(),
         target_height_offset,
+        max_cost,
         progress_callback,
         cancel,
         c.lwd_url.as_ref().unwrap(),

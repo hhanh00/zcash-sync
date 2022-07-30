@@ -158,6 +158,7 @@ pub async fn download_chain(
 
 pub struct DecryptNode {
     vks: HashMap<u32, AccountViewKey>,
+    max_cost: u32,
 }
 
 #[derive(Eq, Hash, PartialEq, Copy, Clone)]
@@ -271,6 +272,7 @@ fn decrypt_notes<'a, N: Parameters>(
     network: &N,
     block: &'a CompactBlock,
     vks: &[(&u32, &AccountViewKey)],
+    max_cost: u32,
 ) -> DecryptedBlock<'a> {
     let height = BlockHeight::from_u32(block.height as u32);
     let mut count_outputs = 0u32;
@@ -285,34 +287,45 @@ fn decrypt_notes<'a, N: Parameters>(
             spends.push(Nf(nf));
         }
 
-        for (output_index, co) in vtx.outputs.iter().enumerate() {
-            let domain = SaplingDomain::<N>::for_height(network.clone(), height);
-            let output =
-                AccountOutput::<N>::new(tx_index, output_index, count_outputs as usize, vtx, co);
-            outputs.push((domain, output));
+        let cost = vtx.outputs.len() as u32; // Use simple formul for now
+        if cost < max_cost {
+            for (output_index, co) in vtx.outputs.iter().enumerate() {
+                let domain = SaplingDomain::<N>::for_height(network.clone(), height);
+                let output = AccountOutput::<N>::new(
+                    tx_index,
+                    output_index,
+                    count_outputs as usize,
+                    vtx,
+                    co,
+                );
+                outputs.push((domain, output));
 
-            // let od = to_output_description(co);
-            //
-            // for (&account, vk) in vks.iter() {
-            //     if let Some((note, pa)) =
-            //         try_sapling_compact_note_decryption(network, height, &vk.ivk, &od)
-            //     {
-            //         notes.push(DecryptedNote {
-            //             account,
-            //             ivk: vk.fvk.clone(),
-            //             note,
-            //             pa,
-            //             viewonly: vk.viewonly,
-            //             position_in_block: count_outputs as usize,
-            //             height: block.height as u32,
-            //             tx_index,
-            //             txid: vtx.hash.clone(),
-            //             output_index,
-            //         });
-            //     }
-            // }
+                // let od = to_output_description(co);
+                //
+                // for (&account, vk) in vks.iter() {
+                //     if let Some((note, pa)) =
+                //         try_sapling_compact_note_decryption(network, height, &vk.ivk, &od)
+                //     {
+                //         notes.push(DecryptedNote {
+                //             account,
+                //             ivk: vk.fvk.clone(),
+                //             note,
+                //             pa,
+                //             viewonly: vk.viewonly,
+                //             position_in_block: count_outputs as usize,
+                //             height: block.height as u32,
+                //             tx_index,
+                //             txid: vtx.hash.clone(),
+                //             output_index,
+                //         });
+                //     }
+                // }
 
-            count_outputs += 1;
+                count_outputs += 1;
+            }
+        } else {
+            log::info!("Spam Filter tx {}", hex::encode(&vtx.hash));
+            count_outputs += vtx.outputs.len() as u32;
         }
     }
 
@@ -355,8 +368,8 @@ fn decrypt_notes<'a, N: Parameters>(
 }
 
 impl DecryptNode {
-    pub fn new(vks: HashMap<u32, AccountViewKey>) -> DecryptNode {
-        DecryptNode { vks }
+    pub fn new(vks: HashMap<u32, AccountViewKey>, max_cost: u32) -> DecryptNode {
+        DecryptNode { vks, max_cost }
     }
 
     pub fn decrypt_blocks<'a>(
@@ -367,7 +380,7 @@ impl DecryptNode {
         let vks: Vec<_> = self.vks.iter().collect();
         let mut decrypted_blocks: Vec<DecryptedBlock> = blocks
             .par_iter()
-            .map(|b| decrypt_notes(network, b, &vks))
+            .map(|b| decrypt_notes(network, b, &vks, self.max_cost))
             .collect();
         decrypted_blocks.sort_by(|a, b| a.height.cmp(&b.height));
         decrypted_blocks

@@ -200,7 +200,13 @@ pub unsafe extern "C" fn cancel_warp() {
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn warp(coin: u8, get_tx: bool, anchor_offset: u32, port: i64) -> u8 {
+pub async unsafe extern "C" fn warp(
+    coin: u8,
+    get_tx: bool,
+    anchor_offset: u32,
+    max_cost: u32,
+    port: i64,
+) -> u8 {
     let res = async {
         let _permit = SYNC_LOCK.acquire().await?;
         log::info!("Sync started");
@@ -208,6 +214,7 @@ pub async unsafe extern "C" fn warp(coin: u8, get_tx: bool, anchor_offset: u32, 
             coin,
             get_tx,
             anchor_offset,
+            max_cost,
             move |height| {
                 let mut height = height.into_dart();
                 if port != 0 {

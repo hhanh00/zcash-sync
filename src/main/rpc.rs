@@ -136,7 +136,7 @@ pub fn list_accounts() -> Result<Json<Vec<AccountRec>>, Error> {
 #[post("/sync?<offset>")]
 pub async fn sync(offset: Option<u32>) -> Result<(), Error> {
     let c = CoinConfig::get_active();
-    warp_api_ffi::api::sync::coin_sync(c.coin, true, offset.unwrap_or(0), |_| {}, &SYNC_CANCELED)
+    warp_api_ffi::api::sync::coin_sync(c.coin, true, offset.unwrap_or(0), u32::MAX, |_| {}, &SYNC_CANCELED)
         .await?;
     Ok(())
 }
@@ -302,15 +302,20 @@ pub fn merge_data(data: String) -> Result<String, Error> {
     Ok(result)
 }
 
-#[post("/zip32?<seed>&<account>&<external>&<address>")]
+#[post("/zip32?<account>&<external>&<address>")]
 pub fn derive_keys(
-    seed: String,
     account: u32,
     external: u32,
     address: Option<u32>,
 ) -> Result<Json<KeyPack>, Error> {
     let active = CoinConfig::get_active();
-    let result = warp_api_ffi::api::account::derive_keys(active.coin, active.id, account, external, address)?;
+    let result = warp_api_ffi::api::account::derive_keys(
+        active.coin,
+        active.id_account,
+        account,
+        external,
+        address,
+    )?;
     Ok(Json(result))
 }
 

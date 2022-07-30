@@ -49,6 +49,7 @@ pub async fn sync_async(
     get_tx: bool,
     db_path: &str,
     target_height_offset: u32,
+    max_cost: u32,
     progress_callback: AMProgressCallback,
     cancel: &'static AtomicBool,
     ld_url: &str,
@@ -74,7 +75,7 @@ pub async fn sync_async(
         return Ok(());
     }
 
-    let decrypter = DecryptNode::new(vks);
+    let decrypter = DecryptNode::new(vks, max_cost);
 
     let (processor_tx, mut processor_rx) = mpsc::channel::<Blocks>(1);
 
