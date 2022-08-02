@@ -32,6 +32,14 @@ unsafe impl Send for CudaProcessor {}
 
 impl CudaProcessor {
     pub fn new() -> Result<Self> {
+        let r = Self::new_inner();
+        if let Err(ref err) = r {
+            log::info!("CUDA Initialization Error {:?}", err);
+        }
+        r
+    }
+
+    fn new_inner() -> Result<Self> {
         rustacuda::init(rustacuda::CudaFlags::empty())?;
 
         let device = Device::get_device(0)?;
