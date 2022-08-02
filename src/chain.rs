@@ -26,6 +26,8 @@ use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+#[cfg(feature = "cuda")]
+use crate::cuda::CUDA_PROCESSOR;
 
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
@@ -324,7 +326,7 @@ fn decrypt_notes<'a, N: Parameters>(
                 count_outputs += 1;
             }
         } else {
-            log::info!("Spam Filter tx {}", hex::encode(&vtx.hash));
+            // log::info!("Spam Filter tx {}", hex::encode(&vtx.hash));
             count_outputs += vtx.outputs.len() as u32;
         }
     }
@@ -377,6 +379,18 @@ impl DecryptNode {
         network: &Network,
         blocks: &'a [CompactBlock],
     ) -> Vec<DecryptedBlock<'a>> {
+        #[cfg(feature = "cuda")]
+        return self.cuda_decrypt_blocks(network, blocks);
+
+        #[allow(unreachable_code)]
+        self.decrypt_blocks_soft(network, blocks)
+    }
+
+    pub fn decrypt_blocks_soft<'a>(
+        &self,
+        network: &Network,
+        blocks: &'a [CompactBlock],
+    ) -> Vec<DecryptedBlock<'a>> {
         let vks: Vec<_> = self.vks.iter().collect();
         let mut decrypted_blocks: Vec<DecryptedBlock> = blocks
             .par_iter()
@@ -384,6 +398,23 @@ impl DecryptNode {
             .collect();
         decrypted_blocks.sort_by(|a, b| a.height.cmp(&b.height));
         decrypted_blocks
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn cuda_decrypt_blocks<'a>(
+        &self,
+        network: &Network,
+        blocks: &'a [CompactBlock],
+    ) -> Vec<DecryptedBlock<'a>> {
+        let mut cuda_processor = CUDA_PROCESSOR.lock().unwrap();
+        if let Some(cuda_processor) = cuda_processor.as_mut() {
+            let mut decrypted_blocks = vec![];
+            for (account, vk) in self.vks.iter() {
+                decrypted_blocks.extend(cuda_processor.trial_decrypt(network, *account, &vk.fvk, blocks).unwrap());
+            }
+            return decrypted_blocks;
+        }
+        self.decrypt_blocks_soft(network, blocks)
     }
 }
 

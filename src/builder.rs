@@ -6,6 +6,8 @@ use jubjub::{AffinePoint, ExtendedPoint};
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::*;
 use zcash_primitives::sapling::Node;
+#[cfg(feature = "cuda")]
+use crate::cuda::CUDA_PROCESSOR;
 
 #[inline(always)]
 fn batch_node_combine1(depth: usize, left: &Node, right: &Node) -> ExtendedPoint {
@@ -165,7 +167,7 @@ impl CTreeBuilder {
     }
 }
 
-fn combine_level(commitments: &mut [Node], offset: Option<Node>, n: usize, depth: usize) -> usize {
+fn combine_level_soft(commitments: &mut [Node], offset: Option<Node>, n: usize, depth: usize) -> usize {
     assert_eq!(n % 2, 0);
 
     let nn = n / 2;
@@ -201,6 +203,36 @@ fn combine_level(commitments: &mut [Node], offset: Option<Node>, n: usize, depth
 
     commitments[0..nn].copy_from_slice(&next_level);
     nn
+}
+
+#[cfg(feature = "cuda")]
+fn combine_level_cuda(commitments: &mut [Node], offset: Option<Node>, n: usize, depth: usize) -> usize {
+    assert_eq!(n % 2, 0);
+    if n == 0 { return 0; }
+
+    let mut hasher = CUDA_PROCESSOR.lock().unwrap();
+    if let Some(hasher) = hasher.as_mut() {
+        let nn = n / 2;
+        let hashes: Vec<_> = (0..n)
+            .map(|i| CTreeBuilder::get(commitments, i, &offset).repr)
+            .collect();
+        let new_hashes = hasher.batch_hash_cuda(depth as u8, &hashes).unwrap();
+        for i in 0..nn {
+            commitments[i] = Node::new(new_hashes[i]);
+        }
+        nn
+    }
+    else {
+        combine_level_soft(commitments, offset, n, depth)
+    }
+}
+
+fn combine_level(commitments: &mut [Node], offset: Option<Node>, n: usize, depth: usize) -> usize {
+    #[cfg(feature = "cuda")]
+    return combine_level_cuda(commitments, offset, n, depth);
+
+    #[allow(unreachable_code)]
+    combine_level_soft(commitments, offset, n, depth)
 }
 
 struct WitnessBuilder {

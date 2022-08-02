@@ -136,7 +136,7 @@ pub fn list_accounts() -> Result<Json<Vec<AccountRec>>, Error> {
 #[post("/sync?<offset>")]
 pub async fn sync(offset: Option<u32>) -> Result<(), Error> {
     let c = CoinConfig::get_active();
-    warp_api_ffi::api::sync::coin_sync(c.coin, true, offset.unwrap_or(0), u32::MAX, |_| {}, &SYNC_CANCELED)
+    warp_api_ffi::api::sync::coin_sync(c.coin, true, offset.unwrap_or(0), 50, |_| {}, &SYNC_CANCELED)
         .await?;
     Ok(())
 }
