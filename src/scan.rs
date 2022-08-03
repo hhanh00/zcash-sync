@@ -41,8 +41,6 @@ pub struct TxIdHeight {
     index: u32,
 }
 
-pub const MAX_OUTPUTS_PER_CHUNK: usize = 200_000;
-
 pub async fn sync_async(
     coin_type: CoinType,
     _chunk_size: u32,
@@ -74,6 +72,7 @@ pub async fn sync_async(
     if start_height >= end_height {
         return Ok(());
     }
+    let n_ivks = vks.len();
 
     let decrypter = DecryptNode::new(vks, max_cost);
 
@@ -85,6 +84,7 @@ pub async fn sync_async(
         log::info!("download_scheduler");
         download_chain(
             &mut client,
+            n_ivks,
             start_height,
             end_height,
             prev_hash,

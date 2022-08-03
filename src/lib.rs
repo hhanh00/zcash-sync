@@ -73,7 +73,7 @@ pub use crate::coinconfig::{
 pub use crate::commitment::{CTree, Witness};
 pub use crate::db::{AccountRec, DbAdapter, TxRec};
 pub use crate::fountain::{put_drop, FountainCodes, RaptorQDrops};
-pub use crate::hash::{Hash, pedersen_hash, GENERATORS_EXP};
+pub use crate::hash::{pedersen_hash, Hash, GENERATORS_EXP};
 pub use crate::key::{generate_random_enc_key, KeyHelpers};
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;

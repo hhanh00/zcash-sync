@@ -1,18 +1,22 @@
 use crate::advance_tree;
 use crate::commitment::{CTree, Witness};
+#[cfg(feature = "cuda")]
+use crate::cuda::CUDA_PROCESSOR;
 use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
-use crate::scan::{Blocks, MAX_OUTPUTS_PER_CHUNK};
+use crate::scan::Blocks;
 use ff::PrimeField;
 use futures::{future, FutureExt};
 use log::info;
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::time::Instant;
+use sysinfo::{System, SystemExt};
 use thiserror::Error;
 use tokio::sync::mpsc::Sender;
 use tokio::time::timeout;
@@ -26,8 +30,6 @@ use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-#[cfg(feature = "cuda")]
-use crate::cuda::CUDA_PROCESSOR;
 
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
@@ -97,15 +99,53 @@ pub enum ChainError {
     Busy,
 }
 
+fn get_mem_per_output() -> usize {
+    if cfg!(feature = "cuda") {
+        1000
+    } else {
+        5
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn get_available_memory() -> anyhow::Result<usize> {
+    let cuda = CUDA_PROCESSOR.lock().unwrap();
+    if let Some(cuda) = cuda.as_ref() {
+        cuda.total_memory()
+    } else {
+        get_system_available_memory()
+    }
+}
+
+#[cfg(not(feature = "cuda"))]
+fn get_available_memory() -> anyhow::Result<usize> {
+    get_system_available_memory()
+}
+
+fn get_system_available_memory() -> anyhow::Result<usize> {
+    let mut sys = System::new();
+    sys.refresh_memory();
+    let mem_available = sys.available_memory() as usize;
+    Ok(mem_available)
+}
+
+const MAX_OUTPUTS_PER_CHUNKS: usize = 200_000;
+
 /* download [start_height+1, end_height] inclusive */
+#[allow(unused_variables)]
 pub async fn download_chain(
     client: &mut CompactTxStreamerClient<Channel>,
+    n_ivks: usize,
     start_height: u32,
     end_height: u32,
     mut prev_hash: Option<[u8; 32]>,
     blocks_tx: Sender<Blocks>,
     cancel: &'static AtomicBool,
 ) -> anyhow::Result<()> {
+    let outputs_per_chunk = get_available_memory()? / get_mem_per_output();
+    let outputs_per_chunk = outputs_per_chunk.min(MAX_OUTPUTS_PER_CHUNKS);
+    log::info!("Outputs per chunk = {}", outputs_per_chunk);
+
     let mut output_count = 0;
     let mut cbs: Vec<CompactBlock> = Vec::new();
     let range = BlockRange {
@@ -143,7 +183,7 @@ pub async fn download_chain(
         }
 
         let block_output_count: usize = block.vtx.iter().map(|tx| tx.outputs.len()).sum();
-        if output_count + block_output_count > MAX_OUTPUTS_PER_CHUNK {
+        if output_count + block_output_count > outputs_per_chunk {
             // output
             let out = cbs;
             cbs = Vec::new();
@@ -197,14 +237,10 @@ pub struct DecryptedNote {
 }
 
 pub fn to_output_description(co: &CompactSaplingOutput) -> CompactOutputDescription {
-    let mut cmu = [0u8; 32];
-    cmu.copy_from_slice(&co.cmu);
+    let cmu: [u8; 32] = co.cmu.clone().try_into().unwrap();
     let cmu = bls12_381::Scalar::from_repr(cmu).unwrap();
-    let mut epk = [0u8; 32];
-    epk.copy_from_slice(&co.epk);
-    // let epk = jubjub::ExtendedPoint::from_bytes(&epk).unwrap();
-    let mut enc_ciphertext = [0u8; 52];
-    enc_ciphertext.copy_from_slice(&co.ciphertext);
+    let epk: [u8; 32] = co.epk.clone().try_into().unwrap();
+    let enc_ciphertext: [u8; 52] = co.ciphertext.clone().try_into().unwrap();
 
     CompactOutputDescription {
         ephemeral_key: EphemeralKeyBytes::from(epk),
@@ -260,11 +296,9 @@ impl<'a, N: Parameters> ShieldedOutput<SaplingDomain<N>, COMPACT_NOTE_SIZE>
     fn ephemeral_key(&self) -> EphemeralKeyBytes {
         self.epk.clone()
     }
-
     fn cmstar_bytes(&self) -> <SaplingDomain<N> as Domain>::ExtractedCommitmentBytes {
         self.cmu
     }
-
     fn enc_ciphertext(&self) -> &[u8; COMPACT_NOTE_SIZE] {
         &self.ciphertext
     }
@@ -302,37 +336,12 @@ fn decrypt_notes<'a, N: Parameters>(
                 );
                 outputs.push((domain, output));
 
-                // let od = to_output_description(co);
-                //
-                // for (&account, vk) in vks.iter() {
-                //     if let Some((note, pa)) =
-                //         try_sapling_compact_note_decryption(network, height, &vk.ivk, &od)
-                //     {
-                //         notes.push(DecryptedNote {
-                //             account,
-                //             ivk: vk.fvk.clone(),
-                //             note,
-                //             pa,
-                //             viewonly: vk.viewonly,
-                //             position_in_block: count_outputs as usize,
-                //             height: block.height as u32,
-                //             tx_index,
-                //             txid: vtx.hash.clone(),
-                //             output_index,
-                //         });
-                //     }
-                // }
-
                 count_outputs += 1;
             }
         } else {
             // log::info!("Spam Filter tx {}", hex::encode(&vtx.hash));
             count_outputs += vtx.outputs.len() as u32;
         }
-    }
-
-    if outputs.len() >= MAX_OUTPUTS_PER_CHUNK {
-        log::warn!("outputs overflow {}", outputs.len());
     }
 
     let start = Instant::now();
@@ -406,13 +415,12 @@ impl DecryptNode {
         network: &Network,
         blocks: &'a [CompactBlock],
     ) -> Vec<DecryptedBlock<'a>> {
+        if blocks.is_empty() { return vec![]; }
         let mut cuda_processor = CUDA_PROCESSOR.lock().unwrap();
         if let Some(cuda_processor) = cuda_processor.as_mut() {
-            let mut decrypted_blocks = vec![];
-            for (account, vk) in self.vks.iter() {
-                decrypted_blocks.extend(cuda_processor.trial_decrypt(network, *account, &vk.fvk, blocks).unwrap());
-            }
-            return decrypted_blocks;
+            return cuda_processor
+                    .trial_decrypt(network, self.vks.iter(), blocks)
+                    .unwrap();
         }
         self.decrypt_blocks_soft(network, blocks)
     }
@@ -469,9 +477,6 @@ fn calculate_tree_state_v1(
             }
         }
     }
-    // let mut bb: Vec<u8> = vec![];
-    // tree_state.write(&mut bb).unwrap();
-    // hex::encode(bb)
 
     witnesses
 }
@@ -524,6 +529,7 @@ pub fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) 
 }
 
 pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
+    log::info!("LWD URL: {}", url);
     let mut channel = tonic::transport::Channel::from_shared(url.to_owned())?;
     if url.starts_with("https") {
         let pem = include_bytes!("ca.pem");
@@ -556,121 +562,4 @@ pub async fn get_best_server(servers: &[String]) -> Option<String> {
         .filter_map(|h| h.unwrap_or(None))
         .max_by_key(|(_, h)| *h)
         .map(|x| x.0)
-}
-
-// pub async fn sync(
-//     network: &Network,
-//     vks: HashMap<u32, AccountViewKey>,
-//     ld_url: &str,
-// ) -> anyhow::Result<()> {
-//     let decrypter = DecryptNode::new(vks);
-//     let mut client = connect_lightwalletd(ld_url).await?;
-//     let start_height: u32 = network
-//         .activation_height(NetworkUpgrade::Sapling)
-//         .unwrap()
-//         .into();
-//     let end_height = get_latest_height(&mut client).await?;
-//
-//     let start = Instant::now();
-//     let cbs = download_chain(&mut client, start_height, end_height, None).await?;
-//     eprintln!("Download chain: {} ms", start.elapsed().as_millis());
-//
-//     let start = Instant::now();
-//     let blocks = decrypter.decrypt_blocks(network, &cbs);
-//     eprintln!("Decrypt Notes: {} ms", start.elapsed().as_millis());
-//     let batch_decrypt_elapsed: usize = blocks.iter().map(|b| b.elapsed).sum();
-//     eprintln!("  Batch Decrypt: {} ms", batch_decrypt_elapsed);
-//
-//     let start = Instant::now();
-//     let witnesses = calculate_tree_state_v2(&cbs, &blocks);
-//     eprintln!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
-//
-//     eprintln!("# Witnesses {}", witnesses.len());
-//     for w in witnesses.iter() {
-//         let mut bb: Vec<u8> = vec![];
-//         w.write(&mut bb).unwrap();
-//         log::info!("{}", hex::encode(&bb));
-//     }
-//
-//     Ok(())
-// }
-
-#[cfg(test)]
-mod tests {
-    #[allow(unused_imports)]
-    use crate::chain::{
-        calculate_tree_state_v1, calculate_tree_state_v2, download_chain, get_latest_height,
-        get_tree_state, DecryptNode,
-    };
-    use crate::db::AccountViewKey;
-    use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
-    use crate::LWD_URL;
-
-    use std::collections::HashMap;
-    use std::time::Instant;
-    use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-    use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
-
-    const NETWORK: &Network = &Network::MainNetwork;
-
-    #[tokio::test]
-    async fn test_get_latest_height() -> anyhow::Result<()> {
-        let mut client = CompactTxStreamerClient::connect(LWD_URL).await?;
-        let height = get_latest_height(&mut client).await?;
-        assert!(height > 1288000);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_download_chain() -> anyhow::Result<()> {
-        dotenv::dotenv().unwrap();
-        let fvk = dotenv::var("FVK").unwrap();
-
-        let mut fvks: HashMap<u32, AccountViewKey> = HashMap::new();
-        let fvk =
-            decode_extended_full_viewing_key(NETWORK.hrp_sapling_extended_full_viewing_key(), &fvk)
-                .unwrap()
-                .unwrap();
-        fvks.insert(1, AccountViewKey::from_fvk(&fvk));
-        let decrypter = DecryptNode::new(fvks);
-        let mut client = CompactTxStreamerClient::connect(LWD_URL).await?;
-        let start_height: u32 = NETWORK
-            .activation_height(NetworkUpgrade::Sapling)
-            .unwrap()
-            .into();
-        let end_height = get_latest_height(&mut client).await?;
-
-        let start = Instant::now();
-        let cbs = download_chain(&mut client, start_height, end_height, None).await?;
-        eprintln!("Download chain: {} ms", start.elapsed().as_millis());
-
-        let start = Instant::now();
-        let blocks = decrypter.decrypt_blocks(&Network::MainNetwork, &cbs);
-        eprintln!("Decrypt Notes: {} ms", start.elapsed().as_millis());
-
-        // no need to calculate tree before the first note if we can
-        // get it from the server
-        // disabled because I want to see the performance of a complete scan
-
-        // let first_block = blocks.iter().find(|b| !b.notes.is_empty()).unwrap();
-        // let height = first_block.height - 1;
-        // let tree_state = get_tree_state(&mut client, height).await;
-        // let tree_state = hex::decode(tree_state).unwrap();
-        // let tree_state = CommitmentTree::<Node>::read(&*tree_state).unwrap();
-
-        // let witnesses = calculate_tree_state(&cbs, &blocks, 0, tree_state);
-
-        let start = Instant::now();
-        let witnesses = calculate_tree_state_v2(&cbs, &blocks);
-        eprintln!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
-
-        eprintln!("# Witnesses {}", witnesses.len());
-        for w in witnesses.iter() {
-            let mut bb: Vec<u8> = vec![];
-            w.write(&mut bb).unwrap();
-            log::info!("{}", hex::encode(&bb));
-        }
-
-        Ok(())
-    }
 }

@@ -1,4 +1,6 @@
 use crate::commitment::{CTree, Witness};
+#[cfg(feature = "cuda")]
+use crate::cuda::CUDA_PROCESSOR;
 use crate::hash::{pedersen_hash, pedersen_hash_inner};
 use ff::PrimeField;
 use group::Curve;
@@ -6,8 +8,6 @@ use jubjub::{AffinePoint, ExtendedPoint};
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::*;
 use zcash_primitives::sapling::Node;
-#[cfg(feature = "cuda")]
-use crate::cuda::CUDA_PROCESSOR;
 
 #[inline(always)]
 fn batch_node_combine1(depth: usize, left: &Node, right: &Node) -> ExtendedPoint {
@@ -167,7 +167,12 @@ impl CTreeBuilder {
     }
 }
 
-fn combine_level_soft(commitments: &mut [Node], offset: Option<Node>, n: usize, depth: usize) -> usize {
+fn combine_level_soft(
+    commitments: &mut [Node],
+    offset: Option<Node>,
+    n: usize,
+    depth: usize,
+) -> usize {
     assert_eq!(n % 2, 0);
 
     let nn = n / 2;
@@ -206,9 +211,16 @@ fn combine_level_soft(commitments: &mut [Node], offset: Option<Node>, n: usize, 
 }
 
 #[cfg(feature = "cuda")]
-fn combine_level_cuda(commitments: &mut [Node], offset: Option<Node>, n: usize, depth: usize) -> usize {
+fn combine_level_cuda(
+    commitments: &mut [Node],
+    offset: Option<Node>,
+    n: usize,
+    depth: usize,
+) -> usize {
     assert_eq!(n % 2, 0);
-    if n == 0 { return 0; }
+    if n == 0 {
+        return 0;
+    }
 
     let mut hasher = CUDA_PROCESSOR.lock().unwrap();
     if let Some(hasher) = hasher.as_mut() {
@@ -221,8 +233,7 @@ fn combine_level_cuda(commitments: &mut [Node], offset: Option<Node>, n: usize, 
             commitments[i] = Node::new(new_hashes[i]);
         }
         nn
-    }
-    else {
+    } else {
         combine_level_soft(commitments, offset, n, depth)
     }
 }
