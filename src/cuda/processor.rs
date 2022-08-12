@@ -222,21 +222,24 @@ impl CudaProcessor {
                 for (tx_index, tx) in b.vtx.iter().enumerate() {
                     for (output_index, co) in tx.outputs.iter().enumerate() {
                         let plaintext = &data_buffer[i * BUFFER_SIZE + 64..i * BUFFER_SIZE + 116];
-                        if let Some((note, pa)) = domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext) {
-                            let cmu = note.cmu().to_bytes();
-                            if &cmu == co.cmu.as_slice() {
-                                decrypted_notes.push(DecryptedNote {
-                                    account: *account,
-                                    ivk: fvk.clone(),
-                                    note,
-                                    pa,
-                                    position_in_block,
-                                    viewonly: false,
-                                    height: b.height as u32,
-                                    txid: tx.hash.clone(),
-                                    tx_index,
-                                    output_index,
-                                });
+                        // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
+                        if plaintext[0] <= 2 || plaintext[18] <= 0x07 || plaintext[19] != 0 {                           
+                            if let Some((note, pa)) = domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext) {
+                                let cmu = note.cmu().to_bytes();
+                                if &cmu == co.cmu.as_slice() {
+                                    decrypted_notes.push(DecryptedNote {
+                                        account: *account,
+                                        ivk: fvk.clone(),
+                                        note,
+                                        pa,
+                                        position_in_block,
+                                        viewonly: false,
+                                        height: b.height as u32,
+                                        txid: tx.hash.clone(),
+                                        tx_index,
+                                        output_index,
+                                    });
+                                }
                             }
                         }
                         i += 1;
