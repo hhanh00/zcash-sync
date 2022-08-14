@@ -13,8 +13,6 @@ typedef void *DartPostCObjectFnType;
 
 #define QR_DATA_SIZE 256
 
-#define MAX_OUTPUTS_PER_CHUNK 200000
-
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -128,3 +126,5 @@ char *derive_zip32(uint8_t coin,
                    uint32_t external,
                    bool has_address,
                    uint32_t address);
+
+bool has_cuda(void);

@@ -97,3 +97,14 @@ pub mod nodejs;
 
 #[cfg(feature = "cuda")]
 mod cuda;
+
+#[cfg(feature = "cuda")]
+pub fn has_cuda() -> bool {
+    let cuda = cuda::CUDA_PROCESSOR.lock().unwrap();
+    return cuda.is_some();
+}
+
+#[cfg(not(feature = "cuda"))]
+pub fn has_cuda() -> bool {
+    false
+}

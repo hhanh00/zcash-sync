@@ -12,7 +12,6 @@ use std::ffi::CString;
 use zcash_note_encryption::Domain;
 use zcash_primitives::consensus::{BlockHeight, Network};
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
-use zcash_primitives::zip32::ExtendedFullViewingKey;
 use crate::db::AccountViewKey;
 
 const THREADS_PER_BLOCK: usize = 256usize;

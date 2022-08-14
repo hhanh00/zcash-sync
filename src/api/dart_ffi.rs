@@ -43,6 +43,7 @@ pub unsafe extern "C" fn deallocate_str(s: *mut c_char) {
 }
 
 fn try_init_logger() {
+    let _ = env_logger::try_init();
     android_logger::init_once(
         Config::default()
             // .format(|buf, record| {
@@ -61,7 +62,7 @@ fn try_init_logger() {
 fn log_result<T: Default>(result: anyhow::Result<T>) -> T {
     match result {
         Err(err) => {
-            log::error!("{}", err);
+            log::error!("ERROR: {}", err);
             let last_error = LAST_ERROR.lock().unwrap();
             last_error.replace(err.to_string());
             IS_ERROR.store(true, Ordering::Release);
@@ -641,4 +642,9 @@ pub unsafe extern "C" fn derive_zip32(
         Ok(result)
     };
     to_c_str(log_string(res()))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn has_cuda() -> bool {
+    crate::has_cuda()
 }

@@ -101,7 +101,7 @@ pub enum ChainError {
 
 fn get_mem_per_output() -> usize {
     if cfg!(feature = "cuda") {
-        1000
+        250
     } else {
         5
     }
