@@ -1,5 +1,6 @@
+use crate::chain::TRIAL_DECRYPTIONS;
 use crate::coinconfig::{init_coin, CoinConfig};
-use crate::{ChainError, Tx};
+use crate::{ChainError, Tx, DOWNLOADED_BYTES};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use lazy_static::lazy_static;
@@ -642,6 +643,16 @@ pub unsafe extern "C" fn derive_zip32(
         Ok(result)
     };
     to_c_str(log_string(res()))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_downloaded_size() -> usize {
+    DOWNLOADED_BYTES.load(Ordering::SeqCst)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_trial_decryptions_count() -> usize {
+    TRIAL_DECRYPTIONS.load(Ordering::SeqCst)
 }
 
 #[no_mangle]

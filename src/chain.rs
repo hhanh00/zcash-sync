@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use std::time::Instant;
 use sysinfo::{System, SystemExt};
@@ -30,6 +30,9 @@ use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+
+pub static DOWNLOADED_BYTES: AtomicUsize = AtomicUsize::new(0);
+pub static TRIAL_DECRYPTIONS: AtomicUsize = AtomicUsize::new(0);
 
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
@@ -158,11 +161,15 @@ pub async fn download_chain(
             hash: vec![],
         }),
     };
+    DOWNLOADED_BYTES.store(0, Ordering::SeqCst);
+    TRIAL_DECRYPTIONS.store(0, Ordering::SeqCst);
     let mut block_stream = client
         .get_block_range(Request::new(range))
         .await?
         .into_inner();
     while let Some(mut block) = block_stream.message().await? {
+        let block_size = get_block_size(&block);
+        DOWNLOADED_BYTES.fetch_add(block_size, Ordering::SeqCst);
         if cancel.load(Ordering::Acquire) {
             log::info!("Canceling download");
             break;
@@ -196,6 +203,23 @@ pub async fn download_chain(
     }
     let _ = blocks_tx.send(Blocks(cbs)).await;
     Ok(())
+}
+
+fn get_block_size(block: &CompactBlock) -> usize {
+    block
+        .vtx
+        .iter()
+        .map(|tx| {
+            tx.spends.len() * 32
+                + tx.outputs.len() * (32 * 2 + 52)
+                + tx.actions.len() * (32 * 3 + 52)
+                + 8
+                + 32
+                + 4
+        })
+        .sum::<usize>()
+        + 16
+        + 32 * 2
 }
 
 pub struct DecryptNode {

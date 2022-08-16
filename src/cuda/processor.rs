@@ -179,7 +179,7 @@ impl CudaProcessor {
             }
         }
 
-        let mut data_device_buffer = DeviceBuffer::from_slice(&data_buffer).unwrap();
+        let mut data_device_buffer = unsafe { DeviceBuffer::uninitialized(data_buffer.len())? };
 
         for (account, avk) in fvks {
             let fvk = &avk.fvk;
@@ -190,6 +190,7 @@ impl CudaProcessor {
             ivk_fr = ivk_fr.double();
             ivk_fr = ivk_fr.double();
             let mut ivk_device_buffer = DeviceBuffer::from_slice(&ivk_fr.to_bytes()).unwrap();
+            data_device_buffer.copy_from(&data_buffer)?;
 
             // decrypt all the blocks for the current account
             unsafe {
@@ -210,7 +211,8 @@ impl CudaProcessor {
             }
             self.stream.synchronize().unwrap();
 
-            data_device_buffer.copy_to(&mut data_buffer).unwrap();
+            let mut output_buffer = vec![0u8; n * BUFFER_SIZE];
+            data_device_buffer.copy_to(&mut output_buffer).unwrap();
 
             // merge the decrypted blocks
             let mut i = 0;
@@ -222,7 +224,7 @@ impl CudaProcessor {
                     SaplingDomain::for_height(*network, BlockHeight::from_u32(b.height as u32));
                 for (tx_index, tx) in b.vtx.iter().enumerate() {
                     for (output_index, co) in tx.outputs.iter().enumerate() {
-                        let plaintext = &data_buffer[i * BUFFER_SIZE + 64..i * BUFFER_SIZE + 116];
+                        let plaintext = &output_buffer[i * BUFFER_SIZE + 64..i * BUFFER_SIZE + 116];
                         // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
                         if plaintext[0] <= 2 || plaintext[18] <= 0x07 || plaintext[19] != 0 {
                             if let Some((note, pa)) =
@@ -230,6 +232,7 @@ impl CudaProcessor {
                             {
                                 let cmu = note.cmu().to_bytes();
                                 if &cmu == co.cmu.as_slice() {
+                                    log::info!("Note {} {}", account, u64::from(note.value));
                                     decrypted_notes.push(DecryptedNote {
                                         account: *account,
                                         ivk: fvk.clone(),

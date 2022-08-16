@@ -1,6 +1,7 @@
 use crate::builder::BlockProcessor;
-use crate::chain::{Nf, NfRef};
+use crate::chain::{Nf, NfRef, TRIAL_DECRYPTIONS};
 use crate::db::{DbAdapter, ReceivedNote};
+use std::cmp::Ordering;
 
 use crate::transaction::retrieve_tx_info;
 use crate::{
@@ -8,10 +9,9 @@ use crate::{
 };
 use ff::PrimeField;
 
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::panic;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
@@ -122,6 +122,11 @@ pub async fn sync_async(
                 let dec_blocks = decrypter.decrypt_blocks(&network, &blocks.0);
                 let batch_decrypt_elapsed: usize = dec_blocks.iter().map(|b| b.elapsed).sum();
                 log::info!("  Batch Decrypt: {} ms", batch_decrypt_elapsed);
+                let outputs = dec_blocks
+                    .iter()
+                    .map(|db| db.count_outputs as usize)
+                    .sum::<usize>();
+                TRIAL_DECRYPTIONS.fetch_add(n_ivks * outputs, AtomicOrdering::SeqCst);
                 for b in dec_blocks.iter() {
                     let mut my_nfs: Vec<Nf> = vec![];
                     for nf in b.spends.iter() {
