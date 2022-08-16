@@ -1,4 +1,5 @@
 use crate::chain::{DecryptedBlock, DecryptedNote, Nf};
+use crate::db::AccountViewKey;
 use crate::lw_rpc::CompactBlock;
 use crate::{Hash, GENERATORS_EXP};
 use anyhow::Result;
@@ -12,7 +13,6 @@ use std::ffi::CString;
 use zcash_note_encryption::Domain;
 use zcash_primitives::consensus::{BlockHeight, Network};
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
-use crate::db::AccountViewKey;
 
 const THREADS_PER_BLOCK: usize = 256usize;
 const BUFFER_SIZE: usize = 128usize;
@@ -139,7 +139,9 @@ impl CudaProcessor {
             .map(|b| b.vtx.iter().map(|tx| tx.outputs.len()).sum::<usize>())
             .sum::<usize>();
         let block_count = (n + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-        if n == 0 { return Ok(vec![]); }
+        if n == 0 {
+            return Ok(vec![]);
+        }
 
         let mut decrypted_blocks = vec![];
         // collect nullifiers
@@ -200,10 +202,10 @@ impl CudaProcessor {
 
                 let stream = &self.stream;
                 let result = launch!(trial_decrypt_full<<<(block_count as u32, 1, 1), (THREADS_PER_BLOCK as u32, 1, 1), 0, stream>>>(
-                n,
-                ivk_device_buffer.as_device_ptr(),
-                data_device_buffer.as_device_ptr()
-            ));
+                    n,
+                    ivk_device_buffer.as_device_ptr(),
+                    data_device_buffer.as_device_ptr()
+                ));
                 result.unwrap();
             }
             self.stream.synchronize().unwrap();
@@ -222,8 +224,10 @@ impl CudaProcessor {
                     for (output_index, co) in tx.outputs.iter().enumerate() {
                         let plaintext = &data_buffer[i * BUFFER_SIZE + 64..i * BUFFER_SIZE + 116];
                         // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
-                        if plaintext[0] <= 2 || plaintext[18] <= 0x07 || plaintext[19] != 0 {                           
-                            if let Some((note, pa)) = domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext) {
+                        if plaintext[0] <= 2 || plaintext[18] <= 0x07 || plaintext[19] != 0 {
+                            if let Some((note, pa)) =
+                                domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext)
+                            {
                                 let cmu = note.cmu().to_bytes();
                                 if &cmu == co.cmu.as_slice() {
                                     decrypted_notes.push(DecryptedNote {

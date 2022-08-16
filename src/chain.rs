@@ -415,12 +415,14 @@ impl DecryptNode {
         network: &Network,
         blocks: &'a [CompactBlock],
     ) -> Vec<DecryptedBlock<'a>> {
-        if blocks.is_empty() { return vec![]; }
+        if blocks.is_empty() {
+            return vec![];
+        }
         let mut cuda_processor = CUDA_PROCESSOR.lock().unwrap();
         if let Some(cuda_processor) = cuda_processor.as_mut() {
             return cuda_processor
-                    .trial_decrypt(network, self.vks.iter(), blocks)
-                    .unwrap();
+                .trial_decrypt(network, self.vks.iter(), blocks)
+                .unwrap();
         }
         self.decrypt_blocks_soft(network, blocks)
     }
