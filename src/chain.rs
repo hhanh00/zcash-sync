@@ -1,7 +1,5 @@
-use crate::advance_tree;
+use crate::{advance_tree, has_cuda};
 use crate::commitment::{CTree, Witness};
-#[cfg(feature = "cuda")]
-use crate::cuda::CUDA_PROCESSOR;
 use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
@@ -30,6 +28,10 @@ use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+
+use crate::gpu::trial_decrypt;
+#[cfg(feature = "cuda")]
+use crate::gpu::cuda::{CUDA_CONTEXT, CudaProcessor};
 
 pub static DOWNLOADED_BYTES: AtomicUsize = AtomicUsize::new(0);
 pub static TRIAL_DECRYPTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -112,7 +114,7 @@ fn get_mem_per_output() -> usize {
 
 #[cfg(feature = "cuda")]
 fn get_available_memory() -> anyhow::Result<usize> {
-    let cuda = CUDA_PROCESSOR.lock().unwrap();
+    let cuda = CUDA_CONTEXT.lock().unwrap();
     if let Some(cuda) = cuda.as_ref() {
         cuda.total_memory()
     } else {
@@ -442,11 +444,9 @@ impl DecryptNode {
         if blocks.is_empty() {
             return vec![];
         }
-        let mut cuda_processor = CUDA_PROCESSOR.lock().unwrap();
-        if let Some(cuda_processor) = cuda_processor.as_mut() {
-            return cuda_processor
-                .trial_decrypt(network, self.vks.iter(), blocks)
-                .unwrap();
+        if has_cuda() {
+            let processor = CudaProcessor::setup_decrypt(network, blocks).unwrap();
+            return trial_decrypt(processor, self.vks.iter()).unwrap()
         }
         self.decrypt_blocks_soft(network, blocks)
     }

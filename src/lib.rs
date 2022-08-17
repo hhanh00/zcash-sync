@@ -96,12 +96,11 @@ pub use crate::ledger::sweep_ledger;
 #[cfg(feature = "nodejs")]
 pub mod nodejs;
 
-#[cfg(feature = "cuda")]
-mod cuda;
+mod gpu;
 
 #[cfg(feature = "cuda")]
 pub fn has_cuda() -> bool {
-    let cuda = cuda::CUDA_PROCESSOR.lock().unwrap();
+    let cuda = gpu::cuda::CUDA_CONTEXT.lock().unwrap();
     return cuda.is_some();
 }
 

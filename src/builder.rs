@@ -1,6 +1,6 @@
 use crate::commitment::{CTree, Witness};
 #[cfg(feature = "cuda")]
-use crate::cuda::CUDA_PROCESSOR;
+use crate::gpu::cuda::CUDA_CONTEXT;
 use crate::hash::{pedersen_hash, pedersen_hash_inner};
 use ff::PrimeField;
 use group::Curve;
@@ -222,13 +222,13 @@ fn combine_level_cuda(
         return 0;
     }
 
-    let mut hasher = CUDA_PROCESSOR.lock().unwrap();
+    let mut hasher = CUDA_CONTEXT.lock().unwrap();
     if let Some(hasher) = hasher.as_mut() {
         let nn = n / 2;
         let hashes: Vec<_> = (0..n)
             .map(|i| CTreeBuilder::get(commitments, i, &offset).repr)
             .collect();
-        let new_hashes = hasher.batch_hash_cuda(depth as u8, &hashes).unwrap();
+        let new_hashes = hasher.batch_hash(depth as u8, &hashes).unwrap();
         for i in 0..nn {
             commitments[i] = Node::new(new_hashes[i]);
         }
