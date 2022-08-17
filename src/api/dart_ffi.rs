@@ -44,7 +44,6 @@ pub unsafe extern "C" fn deallocate_str(s: *mut c_char) {
 }
 
 fn try_init_logger() {
-    let _ = env_logger::try_init();
     android_logger::init_once(
         Config::default()
             // .format(|buf, record| {
@@ -58,6 +57,7 @@ fn try_init_logger() {
             // })
             .with_min_level(Level::Info),
     );
+    let _ = env_logger::try_init();
 }
 
 fn log_result<T: Default>(result: anyhow::Result<T>) -> T {
