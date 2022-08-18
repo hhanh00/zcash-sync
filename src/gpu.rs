@@ -14,18 +14,18 @@ pub mod cuda;
 #[cfg(feature = "vulkan")]
 pub mod vulkan;
 
-pub trait GPUProcessor<'a> {
+pub trait GPUProcessor {
     fn decrypt_account(&mut self, ivk: &SaplingIvk) -> Result<()>;
-    fn get_decrypted_blocks(self) -> Result<Vec<DecryptedBlock<'a>>>;
+    fn get_decrypted_blocks(self) -> Result<Vec<DecryptedBlock>>;
     fn network(&self) -> Network;
-    fn borrow_buffers(&mut self) -> (&[u8], &mut [DecryptedBlock<'a>]);
+    fn borrow_buffers(&mut self) -> (&[u8], &mut [DecryptedBlock]);
     fn buffer_stride() -> usize;
 }
 
-pub fn trial_decrypt<'a, 'b, FVKIter: Iterator<Item=(&'b u32, &'b AccountViewKey)>, P: GPUProcessor<'a>>(
+pub fn trial_decrypt<'a, FVKIter: Iterator<Item=(&'a u32, &'a AccountViewKey)>, P: GPUProcessor>(
     mut processor: P,
     fvks: FVKIter,
-) -> Result<Vec<DecryptedBlock<'a>>> {
+) -> Result<Vec<DecryptedBlock>> {
     let network = processor.network();
     for (account, avk) in fvks {
         let fvk = &avk.fvk;
@@ -39,10 +39,10 @@ pub fn trial_decrypt<'a, 'b, FVKIter: Iterator<Item=(&'b u32, &'b AccountViewKey
     Ok(processor.get_decrypted_blocks()?)
 }
 
-fn collect_nf(blocks: &[CompactBlock]) -> Result<Vec<DecryptedBlock>> {
+fn collect_nf(blocks: Vec<CompactBlock>) -> Result<Vec<DecryptedBlock>> {
     let mut decrypted_blocks = vec![];
     // collect nullifiers
-    for b in blocks.iter() {
+    for b in blocks.into_iter() {
         let mut spends = vec![];
         let mut count_outputs = 0;
         for tx in b.vtx.iter() {
@@ -69,7 +69,7 @@ fn collect_decrypted_notes(network: &Network, account: u32, fvk: &ExtendedFullVi
     // merge the decrypted blocks
     let mut i = 0;
     for db in decrypted_blocks {
-        let b = db.compact_block;
+        let b = &db.compact_block;
         let mut decrypted_notes = vec![];
         let mut position_in_block = 0;
         let domain =

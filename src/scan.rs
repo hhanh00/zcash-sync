@@ -1,5 +1,5 @@
 use crate::builder::BlockProcessor;
-use crate::chain::{Nf, NfRef, TRIAL_DECRYPTIONS};
+use crate::chain::{DecryptedBlock, Nf, NfRef, TRIAL_DECRYPTIONS};
 use crate::db::{DbAdapter, ReceivedNote};
 use std::cmp::Ordering;
 
@@ -14,6 +14,8 @@ use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Instant;
+use lazy_static::lazy_static;
+use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use zcash_params::coin::{get_coin_chain, CoinType};
@@ -21,6 +23,11 @@ use zcash_params::coin::{get_coin_chain, CoinType};
 use zcash_primitives::sapling::Node;
 
 pub struct Blocks(pub Vec<CompactBlock>);
+
+lazy_static! {
+    static ref DECRYPTER_RUNTIME: Runtime = Builder::new_multi_thread().build().unwrap();
+}
+
 
 #[derive(Debug)]
 struct TxIdSet(Vec<u32>);
@@ -76,7 +83,8 @@ pub async fn sync_async(
 
     let decrypter = DecryptNode::new(vks, max_cost);
 
-    let (processor_tx, mut processor_rx) = mpsc::channel::<Blocks>(1);
+    let (decryptor_tx, mut decryptor_rx) = mpsc::channel::<Blocks>(1);
+    let (processor_tx, mut processor_rx) = mpsc::channel::<Vec<DecryptedBlock>>(1);
 
     let db_path2 = db_path.clone();
 
@@ -88,7 +96,7 @@ pub async fn sync_async(
             start_height,
             end_height,
             prev_hash,
-            processor_tx,
+            decryptor_tx,
             cancel,
         )
         .await?;
@@ -97,19 +105,29 @@ pub async fn sync_async(
 
     let proc_callback = progress_callback.clone();
 
+    let decryptor = DECRYPTER_RUNTIME.spawn(async move {
+        while let Some(blocks) = decryptor_rx.recv().await {
+            let dec_blocks = decrypter.decrypt_blocks(&network, blocks.0); // this function may block
+            let batch_decrypt_elapsed: usize = dec_blocks.iter().map(|b| b.elapsed).sum();
+            log::info!("  Batch Decrypt: {} ms", batch_decrypt_elapsed);
+            let _ = processor_tx.send(dec_blocks).await;
+        }
+        Ok::<_, anyhow::Error>(())
+    });
+
     let processor = tokio::spawn(async move {
         let mut db = DbAdapter::new(coin_type, &db_path2)?;
         let mut nfs = db.get_nullifiers()?;
 
-        while let Some(blocks) = processor_rx.recv().await {
-            if blocks.0.is_empty() {
+        while let Some(dec_blocks) = processor_rx.recv().await {
+            if dec_blocks.is_empty() {
                 continue;
             }
             let (mut tree, witnesses) = db.get_tree()?;
             let mut bp = BlockProcessor::new(&tree, &witnesses);
             let mut absolute_position_at_block_start = tree.get_position();
 
-            log::info!("start processing - {}", blocks.0[0].height);
+            log::info!("start processing - {}", dec_blocks[0].height);
             log::info!("Time {:?}", chrono::offset::Local::now());
             let start = Instant::now();
 
@@ -119,9 +137,6 @@ pub async fn sync_async(
             {
                 // db tx scope
                 let db_tx = db.begin_transaction()?;
-                let dec_blocks = decrypter.decrypt_blocks(&network, &blocks.0);
-                let batch_decrypt_elapsed: usize = dec_blocks.iter().map(|b| b.elapsed).sum();
-                log::info!("  Batch Decrypt: {} ms", batch_decrypt_elapsed);
                 let outputs = dec_blocks
                     .iter()
                     .map(|db| db.count_outputs as usize)
@@ -233,7 +248,8 @@ pub async fn sync_async(
 
             let start = Instant::now();
             let mut nodes: Vec<Node> = vec![];
-            for cb in blocks.0.iter() {
+            for block in dec_blocks.iter() {
+                let cb = &block.compact_block;
                 for tx in cb.vtx.iter() {
                     for co in tx.outputs.iter() {
                         let mut cmu = [0u8; 32];
@@ -273,8 +289,9 @@ pub async fn sync_async(
             tree = new_tree;
             witnesses = new_witnesses;
 
-            if let Some(block) = blocks.0.last() {
+            if let Some(dec_block) = dec_blocks.last() {
                 {
+                    let block = &dec_block.compact_block;
                     let mut db_transaction = db.begin_transaction()?;
                     let height = block.height as u32;
                     for w in witnesses.iter() {
@@ -290,9 +307,9 @@ pub async fn sync_async(
                     db_transaction.commit()?;
                     // db_transaction is dropped here
                 }
-                log::info!("progress: {}", block.height);
+                log::info!("progress: {}", dec_block.height);
                 let callback = proc_callback.lock().await;
-                callback(block.height as u32);
+                callback(dec_block.height as u32);
             }
         }
 

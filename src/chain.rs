@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use std::time::Instant;
@@ -32,6 +33,7 @@ use crate::{advance_tree, has_cuda};
 use crate::gpu::trial_decrypt;
 #[cfg(feature = "cuda")]
 use crate::gpu::cuda::{CUDA_CONTEXT, CudaProcessor};
+use crate::gpu::vulkan::VulkanProcessor;
 
 pub static DOWNLOADED_BYTES: AtomicUsize = AtomicUsize::new(0);
 pub static TRIAL_DECRYPTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -238,12 +240,12 @@ pub struct NfRef {
     pub account: u32,
 }
 
-pub struct DecryptedBlock<'a> {
+pub struct DecryptedBlock {
     pub height: u32,
     pub notes: Vec<DecryptedNote>,
     pub count_outputs: u32,
     pub spends: Vec<Nf>,
-    pub compact_block: &'a CompactBlock,
+    pub compact_block: CompactBlock,
     pub elapsed: usize,
 }
 
@@ -332,10 +334,10 @@ impl<'a, N: Parameters> ShieldedOutput<SaplingDomain<N>, COMPACT_NOTE_SIZE>
 
 fn decrypt_notes<'a, N: Parameters>(
     network: &N,
-    block: &'a CompactBlock,
+    block: CompactBlock,
     vks: &[(&u32, &AccountViewKey)],
     max_cost: u32,
-) -> DecryptedBlock<'a> {
+) -> DecryptedBlock {
     let height = BlockHeight::from_u32(block.height as u32);
     let mut count_outputs = 0u32;
     let mut spends: Vec<Nf> = vec![];
@@ -409,26 +411,29 @@ impl DecryptNode {
         DecryptNode { vks, max_cost }
     }
 
-    pub fn decrypt_blocks<'a>(
+    pub fn decrypt_blocks(
         &self,
         network: &Network,
-        blocks: &'a [CompactBlock],
-    ) -> Vec<DecryptedBlock<'a>> {
+        blocks: Vec<CompactBlock>,
+    ) -> Vec<DecryptedBlock> {
         #[cfg(feature = "cuda")]
         return self.cuda_decrypt_blocks(network, blocks);
+
+        #[cfg(feature = "vulkan")]
+        return self.vulkan_decrypt_blocks(network, blocks);
 
         #[allow(unreachable_code)]
         self.decrypt_blocks_soft(network, blocks)
     }
 
-    pub fn decrypt_blocks_soft<'a>(
+    pub fn decrypt_blocks_soft(
         &self,
         network: &Network,
-        blocks: &'a [CompactBlock],
-    ) -> Vec<DecryptedBlock<'a>> {
+        blocks: Vec<CompactBlock>,
+    ) -> Vec<DecryptedBlock> {
         let vks: Vec<_> = self.vks.iter().collect();
         let mut decrypted_blocks: Vec<DecryptedBlock> = blocks
-            .par_iter()
+            .into_par_iter()
             .map(|b| decrypt_notes(network, b, &vks, self.max_cost))
             .collect();
         decrypted_blocks.sort_by(|a, b| a.height.cmp(&b.height));
@@ -436,11 +441,11 @@ impl DecryptNode {
     }
 
     #[cfg(feature = "cuda")]
-    pub fn cuda_decrypt_blocks<'a>(
+    pub fn cuda_decrypt_blocks(
         &self,
         network: &Network,
-        blocks: &'a [CompactBlock],
-    ) -> Vec<DecryptedBlock<'a>> {
+        blocks: Vec<CompactBlock>,
+    ) -> Vec<DecryptedBlock> {
         if blocks.is_empty() {
             return vec![];
         }
@@ -449,6 +454,20 @@ impl DecryptNode {
             return trial_decrypt(processor, self.vks.iter()).unwrap()
         }
         self.decrypt_blocks_soft(network, blocks)
+    }
+
+    #[cfg(feature = "vulkan")]
+    pub fn vulkan_decrypt_blocks(
+        &self,
+        network: &Network,
+        blocks: Vec<CompactBlock>,
+    ) -> Vec<DecryptedBlock> {
+        if blocks.is_empty() {
+            return vec![];
+        }
+        // TODO: Detect Vulkan
+        let processor = VulkanProcessor::setup_decrypt(network, blocks, Path::new("")).unwrap();
+        trial_decrypt(processor, self.vks.iter()).unwrap()
     }
 }
 

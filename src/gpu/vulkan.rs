@@ -19,7 +19,7 @@ use crate::chain::DecryptedBlock;
 use crate::CompactBlock;
 use crate::gpu::{collect_nf, GPUProcessor};
 
-pub const N: usize = 1_024; // must be a multiple of BLOCK_SIZE
+pub const N: usize = 200_000; // must be a multiple of THREADS_PER_BLOCK
 pub const DATA_SIZE: usize = 416usize;
 pub const THREADS_PER_BLOCK: usize = 64usize;
 
@@ -300,16 +300,17 @@ impl VulkanContext {
     }
 }
 
-pub struct VulkanProcessor<'a> {
+pub struct VulkanProcessor {
     network: Network,
-    decrypted_blocks: Vec<DecryptedBlock<'a>>,
+    decrypted_blocks: Vec<DecryptedBlock>,
     encrypted_data: Vec<u8>,
     decrypted_data: Vec<u8>,
     n: usize,
 }
 
-impl <'a> VulkanProcessor<'a> {
-    pub fn setup_decrypt(network: &Network, blocks: &'a [CompactBlock], cache_dir: &Path) -> anyhow::Result<Self> {
+impl VulkanProcessor {
+    pub fn setup_decrypt(network: &Network, blocks: Vec<CompactBlock>, cache_dir: &Path) -> anyhow::Result<Self> {
+        log::info!("Vulkan::setup_decrypt");
         let n = blocks
             .iter()
             .map(|b| b.vtx.iter().map(|tx| tx.outputs.len()).sum::<usize>())
@@ -320,7 +321,8 @@ impl <'a> VulkanProcessor<'a> {
 
         let mut encrypted_data = vec![0u8; n * DATA_SIZE];
         let mut i = 0;
-        for b in blocks.iter() {
+        for db in decrypted_blocks.iter() {
+            let b = &db.compact_block;
             for tx in b.vtx.iter() {
                 for co in tx.outputs.iter() {
                     encrypted_data[i * DATA_SIZE + 32..i * DATA_SIZE + 64].copy_from_slice(&co.epk);
@@ -340,7 +342,7 @@ impl <'a> VulkanProcessor<'a> {
     }
 }
 
-impl <'a> GPUProcessor<'a> for VulkanProcessor<'a> {
+impl GPUProcessor for VulkanProcessor {
     fn decrypt_account(&mut self, ivk: &SaplingIvk) -> Result<()> {
         unsafe {
             let vc = VULKAN_CONTEXT.lock().unwrap();
@@ -384,7 +386,7 @@ impl <'a> GPUProcessor<'a> for VulkanProcessor<'a> {
         }
     }
 
-    fn get_decrypted_blocks(self) -> Result<Vec<DecryptedBlock<'a>>> {
+    fn get_decrypted_blocks(self) -> Result<Vec<DecryptedBlock>> {
         Ok(self.decrypted_blocks)
     }
 
@@ -392,7 +394,7 @@ impl <'a> GPUProcessor<'a> for VulkanProcessor<'a> {
         self.network
     }
 
-    fn borrow_buffers(&mut self) -> (&[u8], &mut [DecryptedBlock<'a>]) {
+    fn borrow_buffers(&mut self) -> (&[u8], &mut [DecryptedBlock]) {
         (&self.decrypted_data, &mut self.decrypted_blocks)
     }
 

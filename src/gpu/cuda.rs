@@ -134,9 +134,9 @@ impl CudaContext {
     }
 }
 
-pub struct CudaProcessor<'a> {
+pub struct CudaProcessor {
     network: Network,
-    decrypted_blocks: Vec<DecryptedBlock<'a>>,
+    decrypted_blocks: Vec<DecryptedBlock>,
     encrypted_data: Vec<u8>,
     encrypted_data_device: DeviceBuffer<u8>,
     ivk_device: DeviceBuffer<u8>,
@@ -145,8 +145,8 @@ pub struct CudaProcessor<'a> {
     block_count: usize,
 }
 
-impl <'a> CudaProcessor<'a> {
-    pub fn setup_decrypt(network: &Network, blocks: &'a [CompactBlock]) -> Result<Self> {
+impl CudaProcessor {
+    pub fn setup_decrypt(network: &Network, blocks: Vec<CompactBlock>) -> Result<Self> {
         let m = CUDA_CONTEXT.lock().unwrap();
         let cuda_context = m.as_ref().unwrap();
         CurrentContext::set_current(&cuda_context.context).unwrap();
@@ -161,7 +161,8 @@ impl <'a> CudaProcessor<'a> {
 
         let mut data_buffer = vec![0u8; n * BUFFER_SIZE];
         let mut i = 0;
-        for b in blocks.iter() {
+        for db in decrypted_blocks.iter() {
+            let b = &db.compact_block;
             for tx in b.vtx.iter() {
                 for co in tx.outputs.iter() {
                     data_buffer[i * BUFFER_SIZE..i * BUFFER_SIZE + 32].copy_from_slice(&co.epk);
@@ -190,7 +191,7 @@ impl <'a> CudaProcessor<'a> {
     }
 }
 
-impl <'a> GPUProcessor<'a> for CudaProcessor<'a> {
+impl GPUProcessor for CudaProcessor {
     fn decrypt_account(&mut self, ivk: &SaplingIvk) -> Result<()> {
         let mut ivk_fr = ivk.0;
         ivk_fr = ivk_fr.double(); // multiply by cofactor
@@ -226,7 +227,7 @@ impl <'a> GPUProcessor<'a> for CudaProcessor<'a> {
         Ok(())
     }
 
-    fn get_decrypted_blocks(self) -> Result<Vec<DecryptedBlock<'a>>> {
+    fn get_decrypted_blocks(self) -> Result<Vec<DecryptedBlock>> {
         Ok(self.decrypted_blocks)
     }
 
@@ -238,7 +239,7 @@ impl <'a> GPUProcessor<'a> for CudaProcessor<'a> {
         BUFFER_SIZE
     }
 
-    fn borrow_buffers(&mut self) -> (&[u8], &mut [DecryptedBlock<'a>]) {
+    fn borrow_buffers(&mut self) -> (&[u8], &mut [DecryptedBlock]) {
         (self.decrypted_data.as_slice(), self.decrypted_blocks.as_mut_slice())
     }
 }
