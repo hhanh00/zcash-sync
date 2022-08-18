@@ -14,6 +14,9 @@ pub mod cuda;
 #[cfg(feature = "vulkan")]
 pub mod vulkan;
 
+#[cfg(feature = "apple_metal")]
+pub mod metal;
+
 pub trait GPUProcessor {
     fn decrypt_account(&mut self, ivk: &SaplingIvk) -> Result<()>;
     fn get_decrypted_blocks(self) -> Result<Vec<DecryptedBlock>>;

@@ -57,15 +57,6 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
     let _ = dotenv::dotenv();
 
-    let server = get_best_server(&[
-        "https://lwdv3.zecwallet.co:443".to_string(),
-        "https://zuul.free2z.cash:9067".to_string(),
-        "https://mainnet.lightwalletd.com:9067".to_string(),
-    ])
-    .await
-    .unwrap();
-    log::info!("Best server = {}", server);
-
     let rocket = rocket::build();
     let figment = rocket.figment();
     let zec: HashMap<String, String> = figment.extract_inner("zec")?;

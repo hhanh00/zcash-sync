@@ -33,7 +33,10 @@ use crate::{advance_tree, has_cuda};
 use crate::gpu::trial_decrypt;
 #[cfg(feature = "cuda")]
 use crate::gpu::cuda::{CUDA_CONTEXT, CudaProcessor};
+#[cfg(feature = "vulkan")]
 use crate::gpu::vulkan::VulkanProcessor;
+#[cfg(feature = "apple_metal")]
+use crate::gpu::metal::MetalProcessor;
 
 pub static DOWNLOADED_BYTES: AtomicUsize = AtomicUsize::new(0);
 pub static TRIAL_DECRYPTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -422,6 +425,9 @@ impl DecryptNode {
         #[cfg(feature = "vulkan")]
         return self.vulkan_decrypt_blocks(network, blocks);
 
+        #[cfg(feature = "apple_metal")]
+        return self.metal_decrypt_blocks(network, blocks);
+
         #[allow(unreachable_code)]
         self.decrypt_blocks_soft(network, blocks)
     }
@@ -467,6 +473,19 @@ impl DecryptNode {
         }
         // TODO: Detect Vulkan
         let processor = VulkanProcessor::setup_decrypt(network, blocks, Path::new("")).unwrap();
+        trial_decrypt(processor, self.vks.iter()).unwrap()
+    }
+
+    #[cfg(feature = "apple_metal")]
+    pub fn metal_decrypt_blocks(
+        &self,
+        network: &Network,
+        blocks: Vec<CompactBlock>,
+    ) -> Vec<DecryptedBlock> {
+        if blocks.is_empty() {
+            return vec![];
+        }
+        let processor = MetalProcessor::setup_decrypt(network, blocks).unwrap();
         trial_decrypt(processor, self.vks.iter()).unwrap()
     }
 }
