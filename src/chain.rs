@@ -1,4 +1,3 @@
-use crate::{advance_tree, has_cuda};
 use crate::commitment::{CTree, Witness};
 use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
@@ -28,6 +27,7 @@ use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+use crate::{advance_tree, has_cuda};
 
 use crate::gpu::trial_decrypt;
 #[cfg(feature = "cuda")]
