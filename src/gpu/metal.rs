@@ -131,6 +131,7 @@ impl MetalProcessor {
 
 impl GPUProcessor for MetalProcessor {
     fn decrypt_account(&mut self, ivk: &SaplingIvk) -> anyhow::Result<()> {
+        if self.n == 0 { return Ok(()) }
         unsafe {
             let mc = METAL_CONTEXT.lock().unwrap();
 
@@ -141,7 +142,7 @@ impl GPUProcessor for MetalProcessor {
             let ivk = ivk_fr.to_bytes();
 
             mc.ivk_buffer.contents().copy_from(ivk.as_ptr().cast(), 32);
-            mc.data_buffer.contents().copy_from(self.encrypted_data.as_ptr().cast(), N * Self::buffer_stride());
+            mc.data_buffer.contents().copy_from(self.encrypted_data.as_ptr().cast(), self.n * Self::buffer_stride());
 
             let command_buffer = mc.command_queue.new_command_buffer();
 
@@ -194,8 +195,9 @@ impl GPUProcessor for MetalProcessor {
 
             unsafe {
                 let results = mc.data_buffer.contents() as *mut u8;
-                let res = std::slice::from_raw_parts::<u8>(results.cast(), N * Self::buffer_stride());
-                self.decrypted_data.copy_from_slice(&res);
+                let size = self.n * Self::buffer_stride();
+                let res = std::slice::from_raw_parts::<u8>(results.cast(), size);
+                self.decrypted_data[0..size].copy_from_slice(&res);
             }
             Ok(())
         }
