@@ -321,11 +321,15 @@ pub async fn sync_async(
         Ok::<_, anyhow::Error>(())
     });
 
-    let res = tokio::try_join!(downloader, processor);
+    let res = tokio::try_join!(downloader, decryptor, processor);
     match res {
-        Ok((d, p)) => {
+        Ok((d, dc, p)) => {
             if let Err(err) = d {
                 log::info!("Downloader error = {}", err);
+                return Err(err);
+            }
+            if let Err(err) = dc {
+                log::info!("Decryptor error = {}", err);
                 return Err(err);
             }
             if let Err(err) = p {

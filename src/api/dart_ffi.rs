@@ -659,3 +659,13 @@ pub unsafe extern "C" fn get_trial_decryptions_count() -> usize {
 pub unsafe extern "C" fn has_cuda() -> bool {
     crate::has_cuda()
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn has_vulkan() -> bool {
+    crate::has_vulkan()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn has_metal() -> bool {
+    crate::has_metal()
+}

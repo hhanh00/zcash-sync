@@ -193,6 +193,7 @@ impl CudaProcessor {
 
 impl GPUProcessor for CudaProcessor {
     fn decrypt_account(&mut self, ivk: &SaplingIvk) -> Result<()> {
+        if self.n == 0 { return Ok(()) }
         let mut ivk_fr = ivk.0;
         ivk_fr = ivk_fr.double(); // multiply by cofactor
         ivk_fr = ivk_fr.double();

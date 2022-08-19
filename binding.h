@@ -13,6 +13,14 @@ typedef void *DartPostCObjectFnType;
 
 #define QR_DATA_SIZE 256
 
+#define N 200000
+
+#define N 200000
+
+#define DATA_SIZE 416
+
+#define THREADS_PER_BLOCK 64
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -132,3 +140,7 @@ uintptr_t get_downloaded_size(void);
 uintptr_t get_trial_decryptions_count(void);
 
 bool has_cuda(void);
+
+bool has_vulkan(void);
+
+bool has_metal(void);
