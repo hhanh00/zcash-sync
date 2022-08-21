@@ -22,6 +22,7 @@ pub const DEFAULT_DB_PATH: &str = "zec.db";
 pub struct DbAdapter {
     pub coin_type: CoinType,
     pub connection: Connection,
+    pub db_path: String,
 }
 
 pub struct ReceivedNote {
@@ -80,7 +81,14 @@ impl DbAdapter {
         Ok(DbAdapter {
             coin_type,
             connection,
+            db_path: db_path.to_owned(),
         })
+    }
+
+    pub fn disable_wal(db_path: &str) -> anyhow::Result<()> {
+        let connection = Connection::open(db_path)?;
+        connection.query_row("PRAGMA journal_mode = OFF", [], |_| Ok(()))?;
+        Ok(())
     }
 
     pub fn begin_transaction(&mut self) -> anyhow::Result<Transaction> {

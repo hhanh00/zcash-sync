@@ -9,12 +9,12 @@ use crate::{
 };
 use ff::PrimeField;
 
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Instant;
-use lazy_static::lazy_static;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
@@ -27,7 +27,6 @@ pub struct Blocks(pub Vec<CompactBlock>);
 lazy_static! {
     static ref DECRYPTER_RUNTIME: Runtime = Builder::new_multi_thread().build().unwrap();
 }
-
 
 #[derive(Debug)]
 struct TxIdSet(Vec<u32>);

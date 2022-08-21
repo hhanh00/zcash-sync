@@ -656,6 +656,13 @@ pub unsafe extern "C" fn get_trial_decryptions_count() -> usize {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn disable_wal(db_path: *mut c_char) {
+    from_c_str!(db_path);
+    let res = crate::db::DbAdapter::disable_wal(&db_path);
+    log_result(res)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn has_cuda() -> bool {
     crate::has_cuda()
 }

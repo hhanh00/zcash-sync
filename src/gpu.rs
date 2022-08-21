@@ -1,12 +1,12 @@
-use zcash_primitives::zip32::ExtendedFullViewingKey;
 use crate::chain::{DecryptedBlock, DecryptedNote, Nf};
 use crate::db::AccountViewKey;
+use crate::CompactBlock;
 use anyhow::Result;
 use zcash_note_encryption::Domain;
 use zcash_primitives::consensus::{BlockHeight, Network};
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::SaplingIvk;
-use crate::CompactBlock;
+use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 #[cfg(feature = "cuda")]
 pub mod cuda;
@@ -25,7 +25,11 @@ pub trait GPUProcessor {
     fn buffer_stride() -> usize;
 }
 
-pub fn trial_decrypt<'a, FVKIter: Iterator<Item=(&'a u32, &'a AccountViewKey)>, P: GPUProcessor>(
+pub fn trial_decrypt<
+    'a,
+    FVKIter: Iterator<Item = (&'a u32, &'a AccountViewKey)>,
+    P: GPUProcessor,
+>(
     mut processor: P,
     fvks: FVKIter,
 ) -> Result<Vec<DecryptedBlock>> {
@@ -35,8 +39,15 @@ pub fn trial_decrypt<'a, FVKIter: Iterator<Item=(&'a u32, &'a AccountViewKey)>, 
         let ivk = fvk.fvk.vk.ivk();
         processor.decrypt_account(&ivk)?;
         let (output_buffer, decrypted_blocks) = processor.borrow_buffers();
-        collect_decrypted_notes(&network, *account, fvk, &ivk, output_buffer,
-                                P::buffer_stride(), decrypted_blocks)
+        collect_decrypted_notes(
+            &network,
+            *account,
+            fvk,
+            &ivk,
+            output_buffer,
+            P::buffer_stride(),
+            decrypted_blocks,
+        )
     }
 
     Ok(processor.get_decrypted_blocks()?)
@@ -68,22 +79,29 @@ fn collect_nf(blocks: Vec<CompactBlock>) -> Result<Vec<DecryptedBlock>> {
     Ok(decrypted_blocks)
 }
 
-fn collect_decrypted_notes(network: &Network, account: u32, fvk: &ExtendedFullViewingKey, ivk: &SaplingIvk, output_buffer: &[u8], buffer_stride: usize, decrypted_blocks: &mut [DecryptedBlock]) {
+fn collect_decrypted_notes(
+    network: &Network,
+    account: u32,
+    fvk: &ExtendedFullViewingKey,
+    ivk: &SaplingIvk,
+    output_buffer: &[u8],
+    buffer_stride: usize,
+    decrypted_blocks: &mut [DecryptedBlock],
+) {
     // merge the decrypted blocks
     let mut i = 0;
     for db in decrypted_blocks {
         let b = &db.compact_block;
         let mut decrypted_notes = vec![];
         let mut position_in_block = 0;
-        let domain =
-            SaplingDomain::for_height(*network, BlockHeight::from_u32(b.height as u32));
+        let domain = SaplingDomain::for_height(*network, BlockHeight::from_u32(b.height as u32));
         for (tx_index, tx) in b.vtx.iter().enumerate() {
             for (output_index, co) in tx.outputs.iter().enumerate() {
                 let plaintext = &output_buffer[i * buffer_stride + 64..i * buffer_stride + 116];
                 // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
                 if plaintext[0] <= 2 || plaintext[18] <= 0x07 || plaintext[19] != 0 {
                     if let Some((note, pa)) =
-                    domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext)
+                        domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext)
                     {
                         let cmu = note.cmu().to_bytes();
                         if &cmu == co.cmu.as_slice() {
@@ -110,4 +128,3 @@ fn collect_decrypted_notes(network: &Network, account: u32, fvk: &ExtendedFullVi
         db.notes.extend(decrypted_notes);
     }
 }
-

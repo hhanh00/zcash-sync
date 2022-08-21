@@ -3,6 +3,7 @@ use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
 use crate::scan::Blocks;
+use crate::{advance_tree, has_cuda};
 use ff::PrimeField;
 use futures::{future, FutureExt};
 use log::info;
@@ -28,15 +29,14 @@ use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-use crate::{advance_tree, has_cuda};
 
-use crate::gpu::trial_decrypt;
 #[cfg(feature = "cuda")]
-use crate::gpu::cuda::{CUDA_CONTEXT, CudaProcessor};
-#[cfg(feature = "vulkan")]
-use crate::gpu::vulkan::VulkanProcessor;
+use crate::gpu::cuda::{CudaProcessor, CUDA_CONTEXT};
 #[cfg(feature = "apple_metal")]
 use crate::gpu::metal::MetalProcessor;
+use crate::gpu::trial_decrypt;
+#[cfg(feature = "vulkan")]
+use crate::gpu::vulkan::VulkanProcessor;
 
 pub static DOWNLOADED_BYTES: AtomicUsize = AtomicUsize::new(0);
 pub static TRIAL_DECRYPTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -457,7 +457,7 @@ impl DecryptNode {
         }
         if has_cuda() {
             let processor = CudaProcessor::setup_decrypt(network, blocks).unwrap();
-            return trial_decrypt(processor, self.vks.iter()).unwrap()
+            return trial_decrypt(processor, self.vks.iter()).unwrap();
         }
         self.decrypt_blocks_soft(network, blocks)
     }

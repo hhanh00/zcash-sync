@@ -1,28 +1,27 @@
-use std::convert::TryInto;
-use std::sync::Mutex;
-use std::mem;
-use std::ptr::slice_from_raw_parts;
-use std::time::SystemTime;
+use crate::chain::DecryptedBlock;
+use crate::gpu::{collect_nf, GPUProcessor};
+use crate::CompactBlock;
+use ff::Field;
 use jubjub::Fq;
+use lazy_static::lazy_static;
 use metal::*;
 use objc::rc::autoreleasepool;
 use rand::rngs::OsRng;
-use ff::Field;
-use lazy_static::lazy_static;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
+use std::convert::TryInto;
+use std::mem;
+use std::ptr::slice_from_raw_parts;
+use std::sync::Mutex;
+use std::time::SystemTime;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_note_encryption::Domain;
 use zcash_primitives::consensus::{BlockHeight, MainNetwork, Network, Parameters};
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::SaplingIvk;
-use crate::chain::DecryptedBlock;
-use crate::CompactBlock;
-use crate::gpu::{collect_nf, GPUProcessor};
 
 lazy_static! {
-    pub static ref METAL_CONTEXT: Mutex<MetalContext> =
-        Mutex::new(MetalContext::new());
+    pub static ref METAL_CONTEXT: Mutex<MetalContext> = Mutex::new(MetalContext::new());
 }
 
 pub const N: usize = 200_000;
@@ -75,7 +74,10 @@ impl MetalContext {
         let kernel = library.get_function("decrypt", None).unwrap();
 
         let ivk_buffer = device.new_buffer(32, MTLResourceOptions::CPUCacheModeDefaultCache);
-        let data_buffer = device.new_buffer((N * MetalProcessor::buffer_stride()) as u64, MTLResourceOptions::CPUCacheModeDefaultCache);
+        let data_buffer = device.new_buffer(
+            (N * MetalProcessor::buffer_stride()) as u64,
+            MTLResourceOptions::CPUCacheModeDefaultCache,
+        );
 
         MetalContext {
             device,
@@ -123,7 +125,7 @@ impl MetalProcessor {
             decrypted_blocks,
             encrypted_data,
             decrypted_data: vec![0u8; N * Self::buffer_stride()],
-            n
+            n,
         };
         Ok(mp)
     }
@@ -131,7 +133,9 @@ impl MetalProcessor {
 
 impl GPUProcessor for MetalProcessor {
     fn decrypt_account(&mut self, ivk: &SaplingIvk) -> anyhow::Result<()> {
-        if self.n == 0 { return Ok(()) }
+        if self.n == 0 {
+            return Ok(());
+        }
         unsafe {
             let mc = METAL_CONTEXT.lock().unwrap();
 
@@ -142,7 +146,10 @@ impl GPUProcessor for MetalProcessor {
             let ivk = ivk_fr.to_bytes();
 
             mc.ivk_buffer.contents().copy_from(ivk.as_ptr().cast(), 32);
-            mc.data_buffer.contents().copy_from(self.encrypted_data.as_ptr().cast(), self.n * Self::buffer_stride());
+            mc.data_buffer.contents().copy_from(
+                self.encrypted_data.as_ptr().cast(),
+                self.n * Self::buffer_stride(),
+            );
 
             let command_buffer = mc.command_queue.new_command_buffer();
 
@@ -160,7 +167,8 @@ impl GPUProcessor for MetalProcessor {
             let pipeline_state_descriptor = ComputePipelineDescriptor::new();
             pipeline_state_descriptor.set_compute_function(Some(&mc.kernel));
 
-            let pipeline_state = mc.device
+            let pipeline_state = mc
+                .device
                 .new_compute_pipeline_state_with_function(
                     pipeline_state_descriptor.compute_function().unwrap(),
                 )
@@ -171,7 +179,10 @@ impl GPUProcessor for MetalProcessor {
             encoder.set_buffer(1, Some(&mc.data_buffer), 0);
 
             encoder.use_resource(&mc.ivk_buffer, MTLResourceUsage::Read);
-            encoder.use_resource(&mc.data_buffer, MTLResourceUsage::Read | MTLResourceUsage::Write);
+            encoder.use_resource(
+                &mc.data_buffer,
+                MTLResourceUsage::Read | MTLResourceUsage::Write,
+            );
 
             let width = WIDTH.into();
 

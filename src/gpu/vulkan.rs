@@ -1,23 +1,23 @@
-use std::ffi::CStr;
-use std::time::SystemTime;
+use crate::chain::DecryptedBlock;
+use crate::gpu::{collect_nf, GPUProcessor};
+use crate::CompactBlock;
+use anyhow::{anyhow, Result};
+use ash::extensions::ext::DebugUtils;
+use ash::util::read_spv;
+use ash::vk::*;
+use ash::Entry;
+use lazy_static::lazy_static;
 use std::borrow::Cow;
+use std::ffi::CStr;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Cursor, Read, Write};
 use std::mem::size_of;
 use std::os::raw::c_void;
 use std::path::Path;
 use std::sync::Mutex;
-use anyhow::{anyhow, Result};
-use ash::Entry;
-use ash::extensions::ext::DebugUtils;
-use ash::util::read_spv;
-use ash::vk::*;
-use lazy_static::lazy_static;
+use std::time::SystemTime;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::sapling::SaplingIvk;
-use crate::chain::DecryptedBlock;
-use crate::CompactBlock;
-use crate::gpu::{collect_nf, GPUProcessor};
 
 pub const N: usize = 200_000; // must be a multiple of THREADS_PER_BLOCK
 pub const DATA_SIZE: usize = 416usize;
@@ -51,9 +51,9 @@ impl VulkanContext {
             let entry = Entry::linked();
             let app_name = CStr::from_bytes_with_nul_unchecked(b"vulkan_compute\0");
 
-            let layer_names = vec![
-                CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0"),
-            ];
+            let layer_names = vec![CStr::from_bytes_with_nul_unchecked(
+                b"VK_LAYER_KHRONOS_validation\0",
+            )];
             let layer_names: Vec<_> = layer_names.iter().map(|n| n.as_ptr()).collect();
             let extension_names = [DebugUtils::name().as_ptr()];
 
@@ -67,30 +67,45 @@ impl VulkanContext {
             let create_info = InstanceCreateInfo::builder()
                 .application_info(&app_info)
                 .enabled_layer_names(&layer_names)
-                .enabled_extension_names(&extension_names)
-                ;
+                .enabled_extension_names(&extension_names);
             let instance = entry.create_instance(&create_info, None)?;
 
             let debug_info = DebugUtilsMessengerCreateInfoEXT::builder()
-                .message_severity(DebugUtilsMessageSeverityFlagsEXT::ERROR |
-                    DebugUtilsMessageSeverityFlagsEXT::WARNING |
-                    DebugUtilsMessageSeverityFlagsEXT::INFO)
-                .message_type(DebugUtilsMessageTypeFlagsEXT::GENERAL |
-                    DebugUtilsMessageTypeFlagsEXT::PERFORMANCE |
-                    DebugUtilsMessageTypeFlagsEXT::VALIDATION)
+                .message_severity(
+                    DebugUtilsMessageSeverityFlagsEXT::ERROR
+                        | DebugUtilsMessageSeverityFlagsEXT::WARNING
+                        | DebugUtilsMessageSeverityFlagsEXT::INFO,
+                )
+                .message_type(
+                    DebugUtilsMessageTypeFlagsEXT::GENERAL
+                        | DebugUtilsMessageTypeFlagsEXT::PERFORMANCE
+                        | DebugUtilsMessageTypeFlagsEXT::VALIDATION,
+                )
                 .pfn_user_callback(Some(vulkan_debug_cb));
             let debug_utils_loader = DebugUtils::new(&entry, &instance);
-            let _debug_callback = debug_utils_loader.create_debug_utils_messenger(&debug_info, None)?;
+            let _debug_callback =
+                debug_utils_loader.create_debug_utils_messenger(&debug_info, None)?;
 
             let phys_devices = instance.enumerate_physical_devices()?;
-            let (phys_device, queue_family_index) = phys_devices.iter().find_map(|d|
-                instance.get_physical_device_queue_family_properties(*d).iter().enumerate()
-                    .find_map(|(i, info)| {
-                        log::info!("{:?}", info.queue_flags);
-                        let compute = info.queue_flags.contains(QueueFlags::COMPUTE);
-                        let graphics = info.queue_flags.contains(QueueFlags::GRAPHICS);
-                        if compute && !graphics { Some((*d, i)) } else { None }
-                    })).ok_or(anyhow!("No suitable physical device"))?;
+            let (phys_device, queue_family_index) = phys_devices
+                .iter()
+                .find_map(|d| {
+                    instance
+                        .get_physical_device_queue_family_properties(*d)
+                        .iter()
+                        .enumerate()
+                        .find_map(|(i, info)| {
+                            log::info!("{:?}", info.queue_flags);
+                            let compute = info.queue_flags.contains(QueueFlags::COMPUTE);
+                            let graphics = info.queue_flags.contains(QueueFlags::GRAPHICS);
+                            if compute && !graphics {
+                                Some((*d, i))
+                            } else {
+                                None
+                            }
+                        })
+                })
+                .ok_or(anyhow!("No suitable physical device"))?;
 
             let device_mem_props = instance.get_physical_device_memory_properties(phys_device);
             let queue_family_index = queue_family_index as u32;
@@ -111,12 +126,26 @@ impl VulkanContext {
                 .sharing_mode(SharingMode::EXCLUSIVE);
             let input_buffer = device.create_buffer(&ivk_buffer_create_info, None)?;
             let input_buffer_mem_req = device.get_buffer_memory_requirements(input_buffer);
-            log::info!("input size = {} {}", size_of::<InputParams>() as u32, input_buffer_mem_req.size);
+            log::info!(
+                "input size = {} {}",
+                size_of::<InputParams>() as u32,
+                input_buffer_mem_req.size
+            );
             let flags = MemoryPropertyFlags::HOST_COHERENT | MemoryPropertyFlags::HOST_VISIBLE;
-            let input_buffer_mem_idx = device_mem_props.memory_types.iter().enumerate().find_map(|(i, mem_type)| {
-                if (1 << i) & input_buffer_mem_req.memory_type_bits != 0 && mem_type.property_flags & flags == flags
-                { Some(i as u32) } else { None }
-            }).ok_or(anyhow!("No suitable memory type"))?;
+            let input_buffer_mem_idx = device_mem_props
+                .memory_types
+                .iter()
+                .enumerate()
+                .find_map(|(i, mem_type)| {
+                    if (1 << i) & input_buffer_mem_req.memory_type_bits != 0
+                        && mem_type.property_flags & flags == flags
+                    {
+                        Some(i as u32)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or(anyhow!("No suitable memory type"))?;
             let input_buffer_allocate_info = MemoryAllocateInfo::builder()
                 .allocation_size(input_buffer_mem_req.size)
                 .memory_type_index(input_buffer_mem_idx);
@@ -131,10 +160,20 @@ impl VulkanContext {
             let data_buffer_mem_req = device.get_buffer_memory_requirements(data_buffer);
             log::info!("data size = {}", data_buffer_mem_req.size);
             let flags = MemoryPropertyFlags::HOST_COHERENT | MemoryPropertyFlags::HOST_VISIBLE;
-            let data_buffer_mem_idx = device_mem_props.memory_types.iter().enumerate().find_map(|(i, mem_type)| {
-                if (1 << i) & data_buffer_mem_req.memory_type_bits != 0 && mem_type.property_flags & flags == flags
-                { Some(i as u32) } else { None }
-            }).ok_or(anyhow!("No suitable memory type"))?;
+            let data_buffer_mem_idx = device_mem_props
+                .memory_types
+                .iter()
+                .enumerate()
+                .find_map(|(i, mem_type)| {
+                    if (1 << i) & data_buffer_mem_req.memory_type_bits != 0
+                        && mem_type.property_flags & flags == flags
+                    {
+                        Some(i as u32)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or(anyhow!("No suitable memory type"))?;
             let data_buffer_allocate_info = MemoryAllocateInfo::builder()
                 .allocation_size(data_buffer_mem_req.size)
                 .memory_type_index(data_buffer_mem_idx);
@@ -142,23 +181,34 @@ impl VulkanContext {
             device.bind_buffer_memory(data_buffer, data_buffer_mem, 0)?;
 
             let bindings = vec![
-                DescriptorSetLayoutBinding::builder().binding(0).stage_flags(ShaderStageFlags::COMPUTE).descriptor_type(DescriptorType::STORAGE_BUFFER).descriptor_count(1).build(),
-                DescriptorSetLayoutBinding::builder().binding(1).stage_flags(ShaderStageFlags::COMPUTE).descriptor_type(DescriptorType::STORAGE_BUFFER).descriptor_count(1).build(),
+                DescriptorSetLayoutBinding::builder()
+                    .binding(0)
+                    .stage_flags(ShaderStageFlags::COMPUTE)
+                    .descriptor_type(DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1)
+                    .build(),
+                DescriptorSetLayoutBinding::builder()
+                    .binding(1)
+                    .stage_flags(ShaderStageFlags::COMPUTE)
+                    .descriptor_type(DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1)
+                    .build(),
             ];
 
-            let descriptor_set_layout_create_info = DescriptorSetLayoutCreateInfo::builder()
-                .bindings(&bindings);
-            let descriptor_set_layout = device.create_descriptor_set_layout(&descriptor_set_layout_create_info, None)?;
+            let descriptor_set_layout_create_info =
+                DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
+            let descriptor_set_layout =
+                device.create_descriptor_set_layout(&descriptor_set_layout_create_info, None)?;
 
             let pipeline_layout_create_info = PipelineLayoutCreateInfo::builder()
                 .set_layouts(std::slice::from_ref(&descriptor_set_layout));
-            let pipeline_layout = device.create_pipeline_layout(&pipeline_layout_create_info, None)?;
+            let pipeline_layout =
+                device.create_pipeline_layout(&pipeline_layout_create_info, None)?;
 
             let calc_pk_stage = {
                 let mut module_file = Cursor::new(&include_bytes!("./vulkan/pk.spv"));
                 let module_code = read_spv(&mut module_file)?;
-                let module_create_info = ShaderModuleCreateInfo::builder()
-                    .code(&module_code);
+                let module_create_info = ShaderModuleCreateInfo::builder().code(&module_code);
                 log::info!("Compiling module pk");
                 let module = device.create_shader_module(&module_create_info, None)?;
 
@@ -171,8 +221,7 @@ impl VulkanContext {
             let calc_dh_secret_stage = {
                 let mut module_file = Cursor::new(&include_bytes!("./vulkan/dhs.spv"));
                 let module_code = read_spv(&mut module_file)?;
-                let module_create_info = ShaderModuleCreateInfo::builder()
-                    .code(&module_code);
+                let module_create_info = ShaderModuleCreateInfo::builder().code(&module_code);
                 log::info!("Compiling module dhs");
                 let module = device.create_shader_module(&module_create_info, None)?;
 
@@ -185,8 +234,7 @@ impl VulkanContext {
             let decrypt_stage = {
                 let mut module_file = Cursor::new(&include_bytes!("./vulkan/decrypt.spv"));
                 let module_code = read_spv(&mut module_file)?;
-                let module_create_info = ShaderModuleCreateInfo::builder()
-                    .code(&module_code);
+                let module_create_info = ShaderModuleCreateInfo::builder().code(&module_code);
                 log::info!("Compiling module decrypt");
                 let module = device.create_shader_module(&module_create_info, None)?;
 
@@ -203,8 +251,8 @@ impl VulkanContext {
                 let mut shader_reader = BufReader::new(&shader_file);
                 shader_reader.read_to_end(&mut pipeline_data)?;
             }
-            let pipeline_cache_create_info = PipelineCacheCreateInfo::builder()
-                .initial_data(&pipeline_data);
+            let pipeline_cache_create_info =
+                PipelineCacheCreateInfo::builder().initial_data(&pipeline_data);
             let pipeline_cache = device.create_pipeline_cache(&pipeline_cache_create_info, None)?;
             let pk_pipeline_create_info = ComputePipelineCreateInfo::builder()
                 .stage(calc_pk_stage)
@@ -218,16 +266,29 @@ impl VulkanContext {
                 .stage(decrypt_stage)
                 .layout(pipeline_layout)
                 .build();
-            let compute_pipelines = device.create_compute_pipelines(pipeline_cache, &[pk_pipeline_create_info, dhs_pipeline_create_info, decrypt_pipeline_create_info], None)
+            let compute_pipelines = device
+                .create_compute_pipelines(
+                    pipeline_cache,
+                    &[
+                        pk_pipeline_create_info,
+                        dhs_pipeline_create_info,
+                        decrypt_pipeline_create_info,
+                    ],
+                    None,
+                )
                 .map_err(|_| anyhow!("Cannot create pipeline"))?;
 
-            let description_pool_size1 = DescriptorPoolSize::builder().ty(DescriptorType::STORAGE_BUFFER).descriptor_count(2).build();
+            let description_pool_size1 = DescriptorPoolSize::builder()
+                .ty(DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(2)
+                .build();
             let description_pool_sizes = &[description_pool_size1];
             let descriptor_pool_create_info = DescriptorPoolCreateInfo::builder()
                 .max_sets(1)
                 .pool_sizes(description_pool_sizes)
                 .flags(DescriptorPoolCreateFlags::default());
-            let descriptor_pool = device.create_descriptor_pool(&descriptor_pool_create_info, None)?;
+            let descriptor_pool =
+                device.create_descriptor_pool(&descriptor_pool_create_info, None)?;
 
             let descriptor_set_allocate_info = DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(descriptor_pool)
@@ -255,8 +316,8 @@ impl VulkanContext {
                 .build();
             device.update_descriptor_sets(&[input_descriptor, data_descriptor], &[]);
 
-            let command_pool_create_info = CommandPoolCreateInfo::builder()
-                .queue_family_index(queue_family_index);
+            let command_pool_create_info =
+                CommandPoolCreateInfo::builder().queue_family_index(queue_family_index);
             let command_pool = device.create_command_pool(&command_pool_create_info, None)?;
 
             let command_buffer_allocate_info = CommandBufferAllocateInfo::builder()
@@ -269,10 +330,23 @@ impl VulkanContext {
                 let pipeline = compute_pipelines[i];
 
                 let command_buffer_begin_create_info = CommandBufferBeginInfo::builder();
-                device.begin_command_buffer(compute_command_buffer, &command_buffer_begin_create_info)?;
-                device.cmd_bind_descriptor_sets(compute_command_buffer, PipelineBindPoint::COMPUTE, pipeline_layout, 0,
-                                                &[descriptor_set], &[]);
-                device.cmd_bind_pipeline(compute_command_buffer, PipelineBindPoint::COMPUTE, pipeline);
+                device.begin_command_buffer(
+                    compute_command_buffer,
+                    &command_buffer_begin_create_info,
+                )?;
+                device.cmd_bind_descriptor_sets(
+                    compute_command_buffer,
+                    PipelineBindPoint::COMPUTE,
+                    pipeline_layout,
+                    0,
+                    &[descriptor_set],
+                    &[],
+                );
+                device.cmd_bind_pipeline(
+                    compute_command_buffer,
+                    PipelineBindPoint::COMPUTE,
+                    pipeline,
+                );
                 device.cmd_dispatch(compute_command_buffer, (N / THREADS_PER_BLOCK) as u32, 1, 1);
                 device.end_command_buffer(compute_command_buffer)?;
             }
@@ -309,7 +383,11 @@ pub struct VulkanProcessor {
 }
 
 impl VulkanProcessor {
-    pub fn setup_decrypt(network: &Network, blocks: Vec<CompactBlock>, cache_dir: &Path) -> anyhow::Result<Self> {
+    pub fn setup_decrypt(
+        network: &Network,
+        blocks: Vec<CompactBlock>,
+        cache_dir: &Path,
+    ) -> anyhow::Result<Self> {
         log::info!("Vulkan::setup_decrypt");
         let n = blocks
             .iter()
@@ -326,7 +404,8 @@ impl VulkanProcessor {
             for tx in b.vtx.iter() {
                 for co in tx.outputs.iter() {
                     encrypted_data[i * DATA_SIZE + 32..i * DATA_SIZE + 64].copy_from_slice(&co.epk);
-                    encrypted_data[i * DATA_SIZE + 64..i * DATA_SIZE + 116].copy_from_slice(&co.ciphertext);
+                    encrypted_data[i * DATA_SIZE + 64..i * DATA_SIZE + 116]
+                        .copy_from_slice(&co.ciphertext);
                     i += 1;
                 }
             }
@@ -353,33 +432,48 @@ impl GPUProcessor for VulkanProcessor {
             ivk_fr = ivk_fr.double();
             let ivk = ivk_fr.to_bytes();
 
-            let data_ptr = vc.device.map_memory(vc.data_buffer_mem, 0, vc.data_buffer_mem_req.size, MemoryMapFlags::default())?;
+            let data_ptr = vc.device.map_memory(
+                vc.data_buffer_mem,
+                0,
+                vc.data_buffer_mem_req.size,
+                MemoryMapFlags::default(),
+            )?;
             data_ptr.copy_from(self.encrypted_data.as_ptr().cast(), self.n * DATA_SIZE);
             vc.device.unmap_memory(vc.data_buffer_mem);
 
-            let input = InputParams {
-                n: N as u32,
-                ivk,
-            };
+            let input = InputParams { n: N as u32, ivk };
             let input = &input as *const InputParams;
-            let ivk_ptr = vc.device.map_memory(vc.input_buffer_mem, 0, vc.input_buffer_mem_req.size, MemoryMapFlags::empty())?;
+            let ivk_ptr = vc.device.map_memory(
+                vc.input_buffer_mem,
+                0,
+                vc.input_buffer_mem_req.size,
+                MemoryMapFlags::empty(),
+            )?;
             ivk_ptr.copy_from(input.cast(), size_of::<InputParams>());
             vc.device.unmap_memory(vc.input_buffer_mem);
 
-            let submit_info = SubmitInfo::builder()
-                .command_buffers(&vc.command_buffers);
+            let submit_info = SubmitInfo::builder().command_buffers(&vc.command_buffers);
             let fence_create_info = FenceCreateInfo::builder();
             let fence = vc.device.create_fence(&fence_create_info, None)?;
             // log::info!("Submit task");
-            vc.device.queue_submit(vc.queue, std::slice::from_ref(&submit_info), fence)?;
+            vc.device
+                .queue_submit(vc.queue, std::slice::from_ref(&submit_info), fence)?;
 
             // log::info!("9 - Wait for result");
             vc.device.wait_for_fences(&[fence], true, u64::MAX)?;
             vc.device.destroy_fence(fence, None);
             vc.device.queue_wait_idle(vc.queue)?;
 
-            let out_ptr = vc.device.map_memory(vc.data_buffer_mem, 0, vc.data_buffer_mem_req.size, MemoryMapFlags::default())?;
-            out_ptr.copy_to(self.decrypted_data.as_mut_ptr().cast(), self.n * DATA_SIZE as usize);
+            let out_ptr = vc.device.map_memory(
+                vc.data_buffer_mem,
+                0,
+                vc.data_buffer_mem_req.size,
+                MemoryMapFlags::default(),
+            )?;
+            out_ptr.copy_to(
+                self.decrypted_data.as_mut_ptr().cast(),
+                self.n * DATA_SIZE as usize,
+            );
             vc.device.unmap_memory(vc.data_buffer_mem);
 
             Ok(())
@@ -407,13 +501,20 @@ unsafe extern "system" fn vulkan_debug_cb(
     severity: DebugUtilsMessageSeverityFlagsEXT,
     tpe: DebugUtilsMessageTypeFlagsEXT,
     data: *const DebugUtilsMessengerCallbackDataEXT,
-    _client_data: *mut c_void) -> Bool32 {
+    _client_data: *mut c_void,
+) -> Bool32 {
     let data = *data;
     let id = data.message_id_number as i32;
-    let name = if data.p_message_id_name.is_null() { Cow::default() }
-    else { CStr::from_ptr(data.p_message_id_name).to_string_lossy() };
-    let message = if data.p_message.is_null() { Cow::default() }
-    else { CStr::from_ptr(data.p_message).to_string_lossy() };
+    let name = if data.p_message_id_name.is_null() {
+        Cow::default()
+    } else {
+        CStr::from_ptr(data.p_message_id_name).to_string_lossy()
+    };
+    let message = if data.p_message.is_null() {
+        Cow::default()
+    } else {
+        CStr::from_ptr(data.p_message).to_string_lossy()
+    };
 
     log::info!("{:?} {:?} {} {} {}", severity, tpe, id, name, message);
     FALSE

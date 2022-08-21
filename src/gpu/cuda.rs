@@ -1,26 +1,25 @@
 use crate::chain::DecryptedBlock;
+use crate::gpu::{collect_nf, GPUProcessor};
 use crate::lw_rpc::CompactBlock;
 use crate::{Hash, GENERATORS_EXP};
 use anyhow::Result;
 use ff::BatchInverter;
 use jubjub::Fq;
+use lazy_static::lazy_static;
 use rustacuda::context::CurrentContext;
 use rustacuda::launch;
 use rustacuda::prelude::*;
 use std::convert::TryInto;
 use std::ffi::CString;
 use std::sync::Mutex;
-use lazy_static::lazy_static;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::sapling::SaplingIvk;
-use crate::gpu::{collect_nf, GPUProcessor};
 
 const THREADS_PER_BLOCK: usize = 256usize;
 const BUFFER_SIZE: usize = 128usize;
 
 lazy_static! {
-    pub static ref CUDA_CONTEXT: Mutex<Option<CudaContext>> =
-        Mutex::new(CudaContext::new().ok());
+    pub static ref CUDA_CONTEXT: Mutex<Option<CudaContext>> = Mutex::new(CudaContext::new().ok());
 }
 
 pub struct CudaContext {
@@ -193,7 +192,9 @@ impl CudaProcessor {
 
 impl GPUProcessor for CudaProcessor {
     fn decrypt_account(&mut self, ivk: &SaplingIvk) -> Result<()> {
-        if self.n == 0 { return Ok(()) }
+        if self.n == 0 {
+            return Ok(());
+        }
         let mut ivk_fr = ivk.0;
         ivk_fr = ivk_fr.double(); // multiply by cofactor
         ivk_fr = ivk_fr.double();
@@ -215,15 +216,17 @@ impl GPUProcessor for CudaProcessor {
 
             let stream = &cuda_context.stream;
             let result = launch!(trial_decrypt_full<<<(self.block_count as u32, 1, 1), (THREADS_PER_BLOCK as u32, 1, 1), 0, stream>>>(
-                    self.n,
-                    self.ivk_device.as_device_ptr(),
-                    self.encrypted_data_device.as_device_ptr()
-                ));
+                self.n,
+                self.ivk_device.as_device_ptr(),
+                self.encrypted_data_device.as_device_ptr()
+            ));
             result.unwrap();
         }
         cuda_context.stream.synchronize().unwrap();
 
-        self.encrypted_data_device.copy_to(&mut self.decrypted_data).unwrap();
+        self.encrypted_data_device
+            .copy_to(&mut self.decrypted_data)
+            .unwrap();
 
         Ok(())
     }
@@ -241,7 +244,10 @@ impl GPUProcessor for CudaProcessor {
     }
 
     fn borrow_buffers(&mut self) -> (&[u8], &mut [DecryptedBlock]) {
-        (self.decrypted_data.as_slice(), self.decrypted_blocks.as_mut_slice())
+        (
+            self.decrypted_data.as_slice(),
+            self.decrypted_blocks.as_mut_slice(),
+        )
     }
 }
 
