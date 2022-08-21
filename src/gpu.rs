@@ -11,9 +11,6 @@ use zcash_primitives::zip32::ExtendedFullViewingKey;
 #[cfg(feature = "cuda")]
 pub mod cuda;
 
-#[cfg(feature = "vulkan")]
-pub mod vulkan;
-
 #[cfg(feature = "apple_metal")]
 pub mod metal;
 

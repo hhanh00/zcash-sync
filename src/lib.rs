@@ -109,10 +109,6 @@ pub fn has_cuda() -> bool {
     false
 }
 
-pub fn has_vulkan() -> bool {
-    cfg!(feature = "vulkan")
-}
-
 pub fn has_metal() -> bool {
     cfg!(feature = "apple_metal")
 }

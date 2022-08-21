@@ -668,11 +668,6 @@ pub unsafe extern "C" fn has_cuda() -> bool {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn has_vulkan() -> bool {
-    crate::has_vulkan()
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn has_metal() -> bool {
     crate::has_metal()
 }

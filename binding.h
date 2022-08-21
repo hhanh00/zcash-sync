@@ -143,6 +143,4 @@ void disable_wal(char *db_path);
 
 bool has_cuda(void);
 
-bool has_vulkan(void);
-
 bool has_metal(void);
