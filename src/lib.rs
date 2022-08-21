@@ -3,6 +3,7 @@
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
+use std::sync::atomic::Ordering;
 pub use zcash_params::coin::{get_branch, get_coin_type, CoinType};
 
 // Mainnet
@@ -98,17 +99,4 @@ pub mod nodejs;
 
 mod gpu;
 
-#[cfg(feature = "cuda")]
-pub fn has_cuda() -> bool {
-    let cuda = gpu::cuda::CUDA_CONTEXT.lock().unwrap();
-    return cuda.is_some();
-}
-
-#[cfg(not(feature = "cuda"))]
-pub fn has_cuda() -> bool {
-    false
-}
-
-pub fn has_metal() -> bool {
-    cfg!(feature = "apple_metal")
-}
+pub use gpu::{has_cuda, has_gpu, has_metal, use_gpu};

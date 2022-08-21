@@ -671,3 +671,13 @@ pub unsafe extern "C" fn has_cuda() -> bool {
 pub unsafe extern "C" fn has_metal() -> bool {
     crate::has_metal()
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn has_gpu() -> bool {
+    crate::has_gpu()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn use_gpu(v: bool) {
+    crate::use_gpu(v)
+}

@@ -144,3 +144,7 @@ void disable_wal(char *db_path);
 bool has_cuda(void);
 
 bool has_metal(void);
+
+bool has_gpu(void);
+
+void use_gpu(bool v);

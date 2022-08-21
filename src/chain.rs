@@ -34,7 +34,7 @@ use zcash_primitives::zip32::ExtendedFullViewingKey;
 use crate::gpu::cuda::{CudaProcessor, CUDA_CONTEXT};
 #[cfg(feature = "apple_metal")]
 use crate::gpu::metal::MetalProcessor;
-use crate::gpu::trial_decrypt;
+use crate::gpu::{trial_decrypt, USE_GPU};
 
 pub static DOWNLOADED_BYTES: AtomicUsize = AtomicUsize::new(0);
 pub static TRIAL_DECRYPTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -417,14 +417,20 @@ impl DecryptNode {
         network: &Network,
         blocks: Vec<CompactBlock>,
     ) -> Vec<DecryptedBlock> {
-        #[cfg(feature = "cuda")]
-        return self.cuda_decrypt_blocks(network, blocks);
+        let use_gpu = USE_GPU.load(Ordering::Acquire);
+        log::info!("use gpu = {}", use_gpu);
+        if use_gpu {
+            #[cfg(feature = "cuda")]
+            return self.cuda_decrypt_blocks(network, blocks);
 
-        #[cfg(feature = "apple_metal")]
-        return self.metal_decrypt_blocks(network, blocks);
+            #[cfg(feature = "apple_metal")]
+            return self.metal_decrypt_blocks(network, blocks);
 
-        #[allow(unreachable_code)]
-        self.decrypt_blocks_soft(network, blocks)
+            #[allow(unreachable_code)]
+            self.decrypt_blocks_soft(network, blocks)
+        } else {
+            self.decrypt_blocks_soft(network, blocks)
+        }
     }
 
     pub fn decrypt_blocks_soft(

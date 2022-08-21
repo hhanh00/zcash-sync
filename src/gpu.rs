@@ -2,11 +2,40 @@ use crate::chain::{DecryptedBlock, DecryptedNote, Nf};
 use crate::db::AccountViewKey;
 use crate::CompactBlock;
 use anyhow::Result;
+use lazy_static::lazy_static;
+use std::sync::atomic::{AtomicBool, Ordering};
 use zcash_note_encryption::Domain;
 use zcash_primitives::consensus::{BlockHeight, Network};
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::SaplingIvk;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
+
+lazy_static! {
+    pub static ref USE_GPU: AtomicBool = AtomicBool::new(true);
+}
+
+#[cfg(feature = "cuda")]
+pub fn has_cuda() -> bool {
+    let cuda = cuda::CUDA_CONTEXT.lock().unwrap();
+    return cuda.is_some();
+}
+
+#[cfg(not(feature = "cuda"))]
+pub fn has_cuda() -> bool {
+    false
+}
+
+pub fn has_metal() -> bool {
+    cfg!(feature = "apple_metal")
+}
+
+pub fn has_gpu() -> bool {
+    cfg!(any(feature = "cuda", feature = "apple_metal"))
+}
+
+pub fn use_gpu(v: bool) {
+    USE_GPU.store(v, Ordering::Release);
+}
 
 #[cfg(feature = "cuda")]
 pub mod cuda;
