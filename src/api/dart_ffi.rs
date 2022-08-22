@@ -647,12 +647,12 @@ pub unsafe extern "C" fn derive_zip32(
 
 #[no_mangle]
 pub unsafe extern "C" fn get_downloaded_size() -> usize {
-    DOWNLOADED_BYTES.load(Ordering::SeqCst)
+    DOWNLOADED_BYTES.load(Ordering::Acquire)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn get_trial_decryptions_count() -> usize {
-    TRIAL_DECRYPTIONS.load(Ordering::SeqCst)
+    TRIAL_DECRYPTIONS.load(Ordering::Acquire)
 }
 
 #[no_mangle]

@@ -140,7 +140,7 @@ pub async fn sync_async(
                     .iter()
                     .map(|db| db.count_outputs as usize)
                     .sum::<usize>();
-                TRIAL_DECRYPTIONS.fetch_add(n_ivks * outputs, AtomicOrdering::SeqCst);
+                TRIAL_DECRYPTIONS.fetch_add(n_ivks * outputs, AtomicOrdering::Release);
                 for b in dec_blocks.iter() {
                     let mut my_nfs: Vec<Nf> = vec![];
                     for nf in b.spends.iter() {

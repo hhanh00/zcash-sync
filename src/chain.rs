@@ -7,6 +7,8 @@ use crate::{advance_tree, has_cuda};
 use ff::PrimeField;
 use futures::{future, FutureExt};
 use log::info;
+use rand::prelude::SliceRandom;
+use rand::rngs::OsRng;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -166,15 +168,15 @@ pub async fn download_chain(
             hash: vec![],
         }),
     };
-    DOWNLOADED_BYTES.store(0, Ordering::SeqCst);
-    TRIAL_DECRYPTIONS.store(0, Ordering::SeqCst);
+    DOWNLOADED_BYTES.store(0, Ordering::Release);
+    TRIAL_DECRYPTIONS.store(0, Ordering::Release);
     let mut block_stream = client
         .get_block_range(Request::new(range))
         .await?
         .into_inner();
     while let Some(mut block) = block_stream.message().await? {
         let block_size = get_block_size(&block);
-        DOWNLOADED_BYTES.fetch_add(block_size, Ordering::SeqCst);
+        DOWNLOADED_BYTES.fetch_add(block_size, Ordering::Release);
         if cancel.load(Ordering::Acquire) {
             log::info!("Canceling download");
             break;
@@ -606,7 +608,8 @@ pub async fn get_best_server(servers: &[String]) -> Option<String> {
             tokio::spawn(timeout(Duration::from_secs(1), get_height(s.to_string()))).boxed();
         server_heights.push(server_height);
     }
-    let server_heights = future::try_join_all(server_heights).await.ok()?;
+    let mut server_heights = future::try_join_all(server_heights).await.ok()?;
+    server_heights.shuffle(&mut OsRng);
 
     server_heights
         .into_iter()

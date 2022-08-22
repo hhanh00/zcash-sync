@@ -125,7 +125,7 @@ fn collect_decrypted_notes(
             for (output_index, co) in tx.outputs.iter().enumerate() {
                 let plaintext = &output_buffer[i * buffer_stride + 64..i * buffer_stride + 116];
                 // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
-                if plaintext[0] <= 2 || plaintext[18] <= 0x07 || plaintext[19] != 0 {
+                if plaintext[0] <= 2 && plaintext[18] < 0x08 && plaintext[19] == 0 {
                     if let Some((note, pa)) =
                         domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext)
                     {
