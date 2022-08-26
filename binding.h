@@ -15,12 +15,6 @@ typedef void *DartPostCObjectFnType;
 
 #define N 200000
 
-#define N 200000
-
-#define DATA_SIZE 416
-
-#define THREADS_PER_BLOCK 64
-
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -148,3 +142,5 @@ bool has_metal(void);
 bool has_gpu(void);
 
 void use_gpu(bool v);
+
+void import_sync_file(uint8_t coin, char *path);

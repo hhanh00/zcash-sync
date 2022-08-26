@@ -6,6 +6,7 @@ use crate::transaction::TransactionInfo;
 use crate::{CTree, Witness};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::HashMap;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_params::coin::{get_coin_chain, get_coin_id, CoinType};
@@ -542,7 +543,7 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn purge_old_witnesses(&self, height: u32) -> anyhow::Result<()> {
+    pub fn purge_old_witnesses(&mut self, height: u32) -> anyhow::Result<()> {
         log::debug!("+purge_old_witnesses");
         let min_height: Option<u32> = self.connection.query_row(
             "SELECT MAX(height) FROM sapling_witnesses WHERE height <= ?1",
@@ -553,12 +554,13 @@ impl DbAdapter {
         // Leave at least one sapling witness
         if let Some(min_height) = min_height {
             log::debug!("Purging witnesses older than {}", min_height);
-            self.connection.execute(
+            let transaction = self.connection.transaction()?;
+            transaction.execute(
                 "DELETE FROM sapling_witnesses WHERE height < ?1",
                 params![min_height],
             )?;
-            self.connection
-                .execute("DELETE FROM blocks WHERE height < ?1", params![min_height])?;
+            transaction.execute("DELETE FROM blocks WHERE height < ?1", params![min_height])?;
+            transaction.commit()?;
         }
         log::debug!("-purge_old_witnesses");
         Ok(())
@@ -1007,6 +1009,54 @@ impl DbAdapter {
         Ok(txs)
     }
 
+    pub fn import_from_syncdata(&mut self, account_info: &AccountInfo) -> anyhow::Result<()> {
+        // get id_account from fvk
+        // truncate received_notes, sapling_witnesses for account
+        // add new received_notes, sapling_witnesses
+        // add block
+        let id_account = self.connection.query_row(
+            "SELECT id_account FROM accounts WHERE ivk = ?1",
+            params![&account_info.fvk],
+            |row| {
+                let id_account: u32 = row.get(0)?;
+                Ok(id_account)
+            },
+        )?;
+        self.connection.execute(
+            "DELETE FROM received_notes WHERE account = ?1",
+            params![id_account],
+        )?;
+        self.connection.execute(
+            "DELETE FROM transactions WHERE account = ?1",
+            params![id_account],
+        )?;
+        for tx in account_info.txs.iter() {
+            self.connection.execute("INSERT INTO transactions(account,txid,height,timestamp,value,address,memo,tx_index) VALUES (?1,?2,?3,?4,?5,'','',?6)",
+                                    params![id_account, hex::decode(&tx.hash)?, tx.height, tx.timestamp, tx.value, tx.index])?;
+            let id_tx = self.connection.last_insert_rowid() as u32;
+            for n in tx.notes.iter() {
+                let spent = if n.spent == 0 { None } else { Some(n.spent) };
+                self.connection.execute("INSERT INTO received_notes(account,position,tx,height,output_index,diversifier,value,rcm,nf,spent,excluded) \
+                VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+                                        params![id_account, n.position as i64, id_tx, n.height, n.output_index, hex::decode(&n.diversifier)?, n.value as i64,
+                                            hex::decode(&n.rcm)?, &n.nf, spent, false])?;
+                let id_note = self.connection.last_insert_rowid() as u32;
+                self.connection.execute(
+                    "INSERT INTO sapling_witnesses(note,height,witness) VALUES (?1,?2,?3) ON CONFLICT DO NOTHING",
+                    params![
+                        id_note,
+                        account_info.height,
+                        hex::decode(&n.witness).unwrap()
+                    ],
+                )?;
+            }
+        }
+        self.connection.execute("INSERT INTO blocks(height,hash,timestamp,sapling_tree) VALUES (?1,?2,?3,?4) ON CONFLICT(height) DO NOTHING",
+                                params![account_info.height, hex::decode(&account_info.hash)?, account_info.timestamp, hex::decode(&account_info.sapling_tree)?])?;
+        self.trim_to_height(account_info.height + 1)?;
+        Ok(())
+    }
+
     fn network(&self) -> &'static Network {
         let chain = get_coin_chain(self.coin_type);
         chain.network()
@@ -1051,6 +1101,49 @@ pub struct AccountRec {
     id_account: u32,
     name: String,
     address: String,
+}
+
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PlainNote {
+    pub height: u32,
+    pub value: u64,
+    #[serde_as(as = "serde_with::hex::Hex")]
+    pub nf: Vec<u8>,
+    pub position: u64,
+    pub tx_index: u32,
+    pub output_index: u32,
+    pub spent: u32,
+    pub witness: String,
+    pub rcm: String,
+    pub diversifier: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct TxInfo {
+    pub height: u32,
+    pub timestamp: u32,
+    pub index: i64,
+    pub hash: String,
+    pub value: i64,
+    pub notes: Vec<PlainNote>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OutputInfo {
+    pub tx_index: u32,
+    pub index: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountInfo {
+    pub fvk: String,
+    pub height: u32,
+    pub balance: u64,
+    pub txs: Vec<TxInfo>,
+    pub hash: String,
+    pub timestamp: u32,
+    pub sapling_tree: String,
 }
 
 #[cfg(test)]

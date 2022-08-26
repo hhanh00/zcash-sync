@@ -681,3 +681,10 @@ pub unsafe extern "C" fn has_gpu() -> bool {
 pub unsafe extern "C" fn use_gpu(v: bool) {
     crate::use_gpu(v)
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn import_sync_file(coin: u8, path: *mut c_char) {
+    from_c_str!(path);
+    let res = crate::api::account::import_sync_data(coin, &path);
+    log_result(res)
+}

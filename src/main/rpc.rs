@@ -9,20 +9,25 @@ use rocket::response::Responder;
 use rocket::serde::{json::Json, Deserialize, Serialize};
 use rocket::{response, Request, Response, State};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufReader, Read};
 use std::sync::atomic::AtomicBool;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
 use warp_api_ffi::{
-    derive_zip32, get_best_server, AccountRec, CoinConfig, KeyPack, RaptorQDrops, Tx, TxRec,
+    derive_zip32, get_best_server, AccountInfo, AccountRec, CoinConfig, KeyPack, RaptorQDrops, Tx,
+    TxRec,
 };
 
 lazy_static! {
     static ref SYNC_CANCELED: AtomicBool = AtomicBool::new(false);
 }
 
-#[derive(Debug, Error)]
+#[derive(Error, Debug)]
 pub enum Error {
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
@@ -89,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
                 split_data,
                 merge_data,
                 derive_keys,
+                instant_sync,
             ],
         )
         .attach(AdHoc::config::<Config>())
@@ -315,6 +321,23 @@ pub fn derive_keys(
         address,
     )?;
     Ok(Json(result))
+}
+
+#[post("/instant_sync")]
+pub async fn instant_sync() -> Result<(), Error> {
+    let c = CoinConfig::get_active();
+    let fvk = {
+        let db = c.db()?;
+        let (_, _, fvk) = db.get_backup(c.id_account)?;
+        fvk
+    };
+    let response = reqwest::get(format!("https://zec.hanh00.fun/api/scan_fvk?fvk={}", fvk)).await?;
+    // let r = response.text().await?;
+    // println!("{}", r);
+    let account_info: AccountInfo = response.json().await?;
+    let mut db = c.db().unwrap();
+    db.import_from_syncdata(&account_info)?;
+    Ok(())
 }
 
 #[derive(Deserialize)]

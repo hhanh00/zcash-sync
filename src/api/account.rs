@@ -3,11 +3,13 @@
 use crate::coinconfig::CoinConfig;
 use crate::key2::decode_key;
 use crate::taddr::{derive_taddr, derive_tkeys};
-use crate::{derive_zip32, KeyPack};
+use crate::{derive_zip32, AccountInfo, KeyPack};
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
 use rand::RngCore;
+use std::fs::File;
+use std::io::BufReader;
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
 use zcash_primitives::consensus::Parameters;
 
@@ -178,4 +180,14 @@ pub fn derive_keys(
     let (seed, _) = db.get_seed(id_account)?;
     let seed = seed.unwrap();
     derive_zip32(c.chain.network(), &seed, account, external, address)
+}
+
+pub fn import_sync_data(coin: u8, file: &str) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    let mut db = c.db()?;
+    let file = File::open(file)?;
+    let file = BufReader::new(file);
+    let account_info: AccountInfo = serde_json::from_reader(file)?;
+    db.import_from_syncdata(&account_info)?;
+    Ok(())
 }
