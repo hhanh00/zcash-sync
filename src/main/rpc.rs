@@ -331,7 +331,11 @@ pub async fn instant_sync() -> Result<(), Error> {
         let (_, _, fvk) = db.get_backup(c.id_account)?;
         fvk
     };
-    let response = reqwest::get(format!("https://zec.hanh00.fun/api/scan_fvk?fvk={}", fvk)).await?;
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("https://zec.hanh00.fun/api/scan_fvk?fvk={}", fvk))
+        .send()
+        .await?;
     // let r = response.text().await?;
     // println!("{}", r);
     let account_info: AccountInfo = response.json().await?;

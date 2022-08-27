@@ -3,7 +3,8 @@
 use crate::coinconfig::CoinConfig;
 use crate::key2::decode_key;
 use crate::taddr::{derive_taddr, derive_tkeys};
-use crate::{derive_zip32, AccountInfo, KeyPack};
+use crate::transaction::retrieve_tx_info;
+use crate::{connect_lightwalletd, derive_zip32, AccountInfo, KeyPack};
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
 use rand::rngs::OsRng;
@@ -182,12 +183,14 @@ pub fn derive_keys(
     derive_zip32(c.chain.network(), &seed, account, external, address)
 }
 
-pub fn import_sync_data(coin: u8, file: &str) -> anyhow::Result<()> {
+pub async fn import_sync_data(coin: u8, file: &str) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let mut db = c.db()?;
     let file = File::open(file)?;
     let file = BufReader::new(file);
     let account_info: AccountInfo = serde_json::from_reader(file)?;
-    db.import_from_syncdata(&account_info)?;
+    let ids = db.import_from_syncdata(&account_info)?;
+    let mut client = connect_lightwalletd(c.lwd_url.as_ref().unwrap()).await?;
+    retrieve_tx_info(c.coin_type, &mut client, c.db_path.as_ref().unwrap(), &ids).await?;
     Ok(())
 }

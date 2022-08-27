@@ -1009,7 +1009,7 @@ impl DbAdapter {
         Ok(txs)
     }
 
-    pub fn import_from_syncdata(&mut self, account_info: &AccountInfo) -> anyhow::Result<()> {
+    pub fn import_from_syncdata(&mut self, account_info: &AccountInfo) -> anyhow::Result<Vec<u32>> {
         // get id_account from fvk
         // truncate received_notes, sapling_witnesses for account
         // add new received_notes, sapling_witnesses
@@ -1030,10 +1030,16 @@ impl DbAdapter {
             "DELETE FROM transactions WHERE account = ?1",
             params![id_account],
         )?;
+        self.connection.execute(
+            "DELETE FROM messages WHERE account = ?1",
+            params![id_account],
+        )?;
+        let mut ids = vec![];
         for tx in account_info.txs.iter() {
             self.connection.execute("INSERT INTO transactions(account,txid,height,timestamp,value,address,memo,tx_index) VALUES (?1,?2,?3,?4,?5,'','',?6)",
                                     params![id_account, hex::decode(&tx.hash)?, tx.height, tx.timestamp, tx.value, tx.index])?;
             let id_tx = self.connection.last_insert_rowid() as u32;
+            ids.push(id_tx);
             for n in tx.notes.iter() {
                 let spent = if n.spent == 0 { None } else { Some(n.spent) };
                 self.connection.execute("INSERT INTO received_notes(account,position,tx,height,output_index,diversifier,value,rcm,nf,spent,excluded) \
@@ -1054,7 +1060,7 @@ impl DbAdapter {
         self.connection.execute("INSERT INTO blocks(height,hash,timestamp,sapling_tree) VALUES (?1,?2,?3,?4) ON CONFLICT(height) DO NOTHING",
                                 params![account_info.height, hex::decode(&account_info.hash)?, account_info.timestamp, hex::decode(&account_info.sapling_tree)?])?;
         self.trim_to_height(account_info.height + 1)?;
-        Ok(())
+        Ok(ids)
     }
 
     fn network(&self) -> &'static Network {

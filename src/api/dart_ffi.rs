@@ -682,9 +682,10 @@ pub unsafe extern "C" fn use_gpu(v: bool) {
     crate::use_gpu(v)
 }
 
+#[tokio::main]
 #[no_mangle]
-pub unsafe extern "C" fn import_sync_file(coin: u8, path: *mut c_char) {
+pub async unsafe extern "C" fn import_sync_file(coin: u8, path: *mut c_char) {
     from_c_str!(path);
-    let res = crate::api::account::import_sync_data(coin, &path);
+    let res = crate::api::account::import_sync_data(coin, &path).await;
     log_result(res)
 }
