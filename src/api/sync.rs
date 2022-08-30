@@ -3,7 +3,6 @@
 use crate::coinconfig::CoinConfig;
 use crate::scan::AMProgressCallback;
 use crate::{BlockId, CTree, CompactTxStreamerClient, DbAdapter};
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
@@ -17,7 +16,7 @@ pub async fn coin_sync(
     anchor_offset: u32,
     max_cost: u32,
     progress_callback: impl Fn(u32) + Send + 'static,
-    cancel: &'static AtomicBool,
+    cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
     let cb = Arc::new(Mutex::new(progress_callback));
     coin_sync_impl(
@@ -50,7 +49,7 @@ async fn coin_sync_impl(
     target_height_offset: u32,
     max_cost: u32,
     progress_callback: AMProgressCallback,
-    cancel: &'static AtomicBool,
+    cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     crate::scan::sync_async(

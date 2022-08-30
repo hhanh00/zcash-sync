@@ -6,6 +6,7 @@ use crate::scan::Blocks;
 use crate::{advance_tree, has_cuda};
 use ff::PrimeField;
 use futures::{future, FutureExt};
+use lazy_static::lazy_static;
 use log::info;
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
@@ -14,7 +15,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 use sysinfo::{System, SystemExt};
@@ -38,8 +39,10 @@ use crate::gpu::cuda::{CudaProcessor, CUDA_CONTEXT};
 use crate::gpu::metal::MetalProcessor;
 use crate::gpu::{trial_decrypt, USE_GPU};
 
-pub static DOWNLOADED_BYTES: AtomicUsize = AtomicUsize::new(0);
-pub static TRIAL_DECRYPTIONS: AtomicUsize = AtomicUsize::new(0);
+lazy_static! {
+    pub static ref DOWNLOADED_BYTES: Mutex<usize> = Mutex::new(0);
+    pub static ref TRIAL_DECRYPTIONS: Mutex<usize> = Mutex::new(0);
+}
 
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
@@ -150,7 +153,7 @@ pub async fn download_chain(
     end_height: u32,
     mut prev_hash: Option<[u8; 32]>,
     blocks_tx: Sender<Blocks>,
-    cancel: &'static AtomicBool,
+    cancel: &'static Mutex<bool>,
 ) -> anyhow::Result<()> {
     let outputs_per_chunk = get_available_memory()? / get_mem_per_output();
     let outputs_per_chunk = outputs_per_chunk.min(MAX_OUTPUTS_PER_CHUNKS);
@@ -168,16 +171,20 @@ pub async fn download_chain(
             hash: vec![],
         }),
     };
-    DOWNLOADED_BYTES.store(0, Ordering::Release);
-    TRIAL_DECRYPTIONS.store(0, Ordering::Release);
+    *DOWNLOADED_BYTES.lock().unwrap() = 0;
+    *TRIAL_DECRYPTIONS.lock().unwrap() = 0;
     let mut block_stream = client
         .get_block_range(Request::new(range))
         .await?
         .into_inner();
     while let Some(mut block) = block_stream.message().await? {
         let block_size = get_block_size(&block);
-        DOWNLOADED_BYTES.fetch_add(block_size, Ordering::Release);
-        if cancel.load(Ordering::Acquire) {
+        {
+            let mut downloaded = DOWNLOADED_BYTES.lock().unwrap();
+            *downloaded += block_size;
+        }
+        let c = *cancel.lock().unwrap();
+        if c {
             log::info!("Canceling download");
             break;
         }
@@ -194,6 +201,14 @@ pub async fn download_chain(
         prev_hash = Some(ph);
         for b in block.vtx.iter_mut() {
             b.actions.clear(); // don't need Orchard actions
+            for co in b.outputs.iter_mut() {
+                if co.epk.is_empty() {
+                    co.epk = vec![0; 32];
+                }
+                if co.ciphertext.is_empty() {
+                    co.ciphertext = vec![0; 52];
+                }
+            }
         }
 
         let block_output_count: usize = block.vtx.iter().map(|tx| tx.outputs.len()).sum();
@@ -419,7 +434,7 @@ impl DecryptNode {
         network: &Network,
         blocks: Vec<CompactBlock>,
     ) -> Vec<DecryptedBlock> {
-        let use_gpu = USE_GPU.load(Ordering::Acquire);
+        let use_gpu = { *USE_GPU.lock().unwrap() };
         log::info!("use gpu = {}", use_gpu);
         if use_gpu {
             #[cfg(feature = "cuda")]

@@ -3,7 +3,6 @@
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-use std::sync::atomic::Ordering;
 pub use zcash_params::coin::{get_branch, get_coin_type, CoinType};
 
 // Mainnet

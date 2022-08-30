@@ -12,7 +12,6 @@ use ff::PrimeField;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::panic;
-use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::runtime::{Builder, Runtime};
@@ -55,7 +54,7 @@ pub async fn sync_async(
     target_height_offset: u32,
     max_cost: u32,
     progress_callback: AMProgressCallback,
-    cancel: &'static AtomicBool,
+    cancel: &'static std::sync::Mutex<bool>,
     ld_url: &str,
 ) -> anyhow::Result<()> {
     let ld_url = ld_url.to_owned();
@@ -140,7 +139,10 @@ pub async fn sync_async(
                     .iter()
                     .map(|db| db.count_outputs as usize)
                     .sum::<usize>();
-                TRIAL_DECRYPTIONS.fetch_add(n_ivks * outputs, AtomicOrdering::Release);
+                {
+                    let mut dc = TRIAL_DECRYPTIONS.lock().unwrap();
+                    *dc += n_ivks * outputs;
+                }
                 for b in dec_blocks.iter() {
                     let mut my_nfs: Vec<Nf> = vec![];
                     for nf in b.spends.iter() {

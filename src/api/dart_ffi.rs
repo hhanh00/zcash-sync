@@ -191,13 +191,13 @@ pub unsafe extern "C" fn import_transparent_secret_key(
 
 lazy_static! {
     static ref SYNC_LOCK: Semaphore = Semaphore::new(1);
-    static ref SYNC_CANCELED: AtomicBool = AtomicBool::new(false);
+    static ref SYNC_CANCELED: Mutex<bool> = Mutex::new(false);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cancel_warp() {
     log::info!("Sync canceled");
-    SYNC_CANCELED.store(true, Ordering::Release);
+    *SYNC_CANCELED.lock().unwrap() = true;
 }
 
 #[tokio::main]
@@ -248,7 +248,7 @@ pub async unsafe extern "C" fn warp(
         }
     };
     let r = res.await;
-    SYNC_CANCELED.store(false, Ordering::Release);
+    *SYNC_CANCELED.lock().unwrap() = false;
     log_result(r)
 }
 
@@ -647,12 +647,12 @@ pub unsafe extern "C" fn derive_zip32(
 
 #[no_mangle]
 pub unsafe extern "C" fn get_downloaded_size() -> usize {
-    DOWNLOADED_BYTES.load(Ordering::Acquire)
+    *DOWNLOADED_BYTES.lock().unwrap()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn get_trial_decryptions_count() -> usize {
-    TRIAL_DECRYPTIONS.load(Ordering::Acquire)
+    *TRIAL_DECRYPTIONS.lock().unwrap()
 }
 
 #[no_mangle]
