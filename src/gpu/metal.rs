@@ -204,12 +204,11 @@ impl GPUProcessor for MetalProcessor {
             command_buffer.commit();
             command_buffer.wait_until_completed();
 
-            unsafe {
-                let results = mc.data_buffer.contents() as *mut u8;
-                let size = self.n * Self::buffer_stride();
-                let res = std::slice::from_raw_parts::<u8>(results.cast(), size);
-                self.decrypted_data[0..size].copy_from_slice(&res);
-            }
+            let results = mc.data_buffer.contents() as *mut u8;
+            let size = self.n * Self::buffer_stride();
+            let res = std::slice::from_raw_parts::<u8>(results.cast(), size);
+            self.decrypted_data[0..size].copy_from_slice(&res);
+
             Ok(())
         }
     }
