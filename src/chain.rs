@@ -159,6 +159,7 @@ pub async fn download_chain(
     let outputs_per_chunk = get_available_memory()? / get_mem_per_output();
     let outputs_per_chunk = outputs_per_chunk.min(MAX_OUTPUTS_PER_CHUNKS);
     log::info!("Outputs per chunk = {}", outputs_per_chunk);
+    log::info!("max_cost = {}", max_cost);
 
     let mut output_count = 0;
     let mut cbs: Vec<CompactBlock> = Vec::new();
@@ -214,7 +215,7 @@ pub async fn download_chain(
                 }
             }
             if skipped {
-                log::info!("Output skipped {}", b.outputs.len());
+                log::debug!("Output skipped {}", b.outputs.len());
             }
         }
 
