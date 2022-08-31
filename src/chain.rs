@@ -152,6 +152,7 @@ pub async fn download_chain(
     start_height: u32,
     end_height: u32,
     mut prev_hash: Option<[u8; 32]>,
+    max_cost: u32,
     blocks_tx: Sender<Blocks>,
     cancel: &'static Mutex<bool>,
 ) -> anyhow::Result<()> {
@@ -170,6 +171,7 @@ pub async fn download_chain(
             height: end_height as u64,
             hash: vec![],
         }),
+        spam_filter_threshold: max_cost as u64,
     };
     *DOWNLOADED_BYTES.lock().unwrap() = 0;
     *TRIAL_DECRYPTIONS.lock().unwrap() = 0;
@@ -201,13 +203,18 @@ pub async fn download_chain(
         prev_hash = Some(ph);
         for b in block.vtx.iter_mut() {
             b.actions.clear(); // don't need Orchard actions
+            let mut skipped = false;
             for co in b.outputs.iter_mut() {
                 if co.epk.is_empty() {
+                    skipped = true;
                     co.epk = vec![0; 32];
                 }
                 if co.ciphertext.is_empty() {
                     co.ciphertext = vec![0; 52];
                 }
+            }
+            if skipped {
+                log::info!("Output skipped {}", b.outputs.len());
             }
         }
 

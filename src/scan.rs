@@ -94,6 +94,7 @@ pub async fn sync_async(
             start_height,
             end_height,
             prev_hash,
+            max_cost,
             decryptor_tx,
             cancel,
         )

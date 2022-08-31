@@ -11,7 +11,7 @@ use rocket::{response, Request, Response, State};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
-use std::sync::atomic::AtomicBool;
+use std::sync::Mutex;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
@@ -21,7 +21,7 @@ use warp_api_ffi::{
 };
 
 lazy_static! {
-    static ref SYNC_CANCELED: AtomicBool = AtomicBool::new(false);
+    static ref SYNC_CANCELED: Mutex<bool> = Mutex::new(false);
 }
 
 #[derive(Error, Debug)]

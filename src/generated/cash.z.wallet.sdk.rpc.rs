@@ -109,6 +109,8 @@ pub struct BlockRange {
     pub start: ::core::option::Option<BlockId>,
     #[prost(message, optional, tag="2")]
     pub end: ::core::option::Option<BlockId>,
+    #[prost(uint64, tag="3")]
+    pub spam_filter_threshold: u64,
 }
 /// A TxFilter contains the information needed to identify a particular
 /// transaction: either a block and an index, or a direct transaction hash.
