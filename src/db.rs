@@ -1036,8 +1036,10 @@ impl DbAdapter {
         )?;
         let mut ids = vec![];
         for tx in account_info.txs.iter() {
+            let mut tx_hash = hex::decode(&tx.hash)?;
+            tx_hash.reverse();
             self.connection.execute("INSERT INTO transactions(account,txid,height,timestamp,value,address,memo,tx_index) VALUES (?1,?2,?3,?4,?5,'','',?6)",
-                                    params![id_account, hex::decode(&tx.hash)?, tx.height, tx.timestamp, tx.value, tx.index])?;
+                                    params![id_account, &tx_hash, tx.height, tx.timestamp, tx.value, tx.index])?;
             let id_tx = self.connection.last_insert_rowid() as u32;
             ids.push(id_tx);
             for n in tx.notes.iter() {

@@ -202,20 +202,18 @@ pub async fn download_chain(
         let mut ph = [0u8; 32];
         ph.copy_from_slice(&block.hash);
         prev_hash = Some(ph);
-        for b in block.vtx.iter_mut() {
-            b.actions.clear(); // don't need Orchard actions
+        for tx in block.vtx.iter_mut() {
+            tx.actions.clear(); // don't need Orchard actions
             let mut skipped = false;
-            for co in b.outputs.iter_mut() {
-                if co.epk.is_empty() {
+            if tx.outputs.len() > max_cost as usize {
+                for co in tx.outputs.iter_mut() {
+                    co.epk.clear();
+                    co.ciphertext.clear();
                     skipped = true;
-                    co.epk = vec![0; 32];
-                }
-                if co.ciphertext.is_empty() {
-                    co.ciphertext = vec![0; 52];
                 }
             }
             if skipped {
-                log::debug!("Output skipped {}", b.outputs.len());
+                log::debug!("Output skipped {}", tx.outputs.len());
             }
         }
 
@@ -254,7 +252,6 @@ fn get_block_size(block: &CompactBlock) -> usize {
 
 pub struct DecryptNode {
     vks: HashMap<u32, AccountViewKey>,
-    max_cost: u32,
 }
 
 #[derive(Eq, Hash, PartialEq, Copy, Clone)]
@@ -362,7 +359,6 @@ fn decrypt_notes<'a, N: Parameters>(
     network: &N,
     block: CompactBlock,
     vks: &[(&u32, &AccountViewKey)],
-    max_cost: u32,
 ) -> DecryptedBlock {
     let height = BlockHeight::from_u32(block.height as u32);
     let mut count_outputs = 0u32;
@@ -377,24 +373,26 @@ fn decrypt_notes<'a, N: Parameters>(
             spends.push(Nf(nf));
         }
 
-        let cost = vtx.outputs.len() as u32; // Use simple formul for now
-        if cost < max_cost {
-            for (output_index, co) in vtx.outputs.iter().enumerate() {
-                let domain = SaplingDomain::<N>::for_height(network.clone(), height);
-                let output = AccountOutput::<N>::new(
-                    tx_index,
-                    output_index,
-                    count_outputs as usize,
-                    vtx,
-                    co,
-                );
-                outputs.push((domain, output));
+        if let Some(fco) = vtx.outputs.first() {
+            if !fco.epk.is_empty() {
+                for (output_index, co) in vtx.outputs.iter().enumerate() {
+                    let domain = SaplingDomain::<N>::for_height(network.clone(), height);
+                    let output = AccountOutput::<N>::new(
+                        tx_index,
+                        output_index,
+                        count_outputs as usize,
+                        vtx,
+                        co,
+                    );
+                    outputs.push((domain, output));
 
-                count_outputs += 1;
+                    count_outputs += 1;
+                }
+            } else {
+                // we filter by transaction, therefore if one epk is empty, every epk is empty
+                // log::info!("Spam Filter tx {}", hex::encode(&vtx.hash));
+                count_outputs += vtx.outputs.len() as u32;
             }
-        } else {
-            // log::info!("Spam Filter tx {}", hex::encode(&vtx.hash));
-            count_outputs += vtx.outputs.len() as u32;
         }
     }
 
@@ -433,8 +431,8 @@ fn decrypt_notes<'a, N: Parameters>(
 }
 
 impl DecryptNode {
-    pub fn new(vks: HashMap<u32, AccountViewKey>, max_cost: u32) -> DecryptNode {
-        DecryptNode { vks, max_cost }
+    pub fn new(vks: HashMap<u32, AccountViewKey>) -> DecryptNode {
+        DecryptNode { vks }
     }
 
     pub fn decrypt_blocks(
@@ -466,7 +464,7 @@ impl DecryptNode {
         let vks: Vec<_> = self.vks.iter().collect();
         let mut decrypted_blocks: Vec<DecryptedBlock> = blocks
             .into_par_iter()
-            .map(|b| decrypt_notes(network, b, &vks, self.max_cost))
+            .map(|b| decrypt_notes(network, b, &vks))
             .collect();
         decrypted_blocks.sort_by(|a, b| a.height.cmp(&b.height));
         decrypted_blocks

@@ -79,7 +79,7 @@ pub async fn sync_async(
     }
     let n_ivks = vks.len();
 
-    let decrypter = DecryptNode::new(vks, max_cost);
+    let decrypter = DecryptNode::new(vks);
 
     let (decryptor_tx, mut decryptor_rx) = mpsc::channel::<Blocks>(1);
     let (processor_tx, mut processor_rx) = mpsc::channel::<Vec<DecryptedBlock>>(1);
@@ -281,9 +281,7 @@ pub async fn sync_async(
                 });
                 let ids: Vec<_> = ids.into_iter().map(|e| e.id_tx).collect();
                 let mut client = connect_lightwalletd(&ld_url).await?;
-                retrieve_tx_info(coin_type, &mut client, &db_path2, &ids)
-                    .await
-                    .unwrap();
+                retrieve_tx_info(coin_type, &mut client, &db_path2, &ids).await?;
             }
             log::info!("Transaction Details : {}", start.elapsed().as_millis());
 
