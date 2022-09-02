@@ -146,9 +146,7 @@ impl DbAdapter {
                 params![ivk],
                 |row| row.get(0),
             )
-            .map_err(wrap_query_no_rows(
-                "store_account/id_account",
-            ))?;
+            .map_err(wrap_query_no_rows("store_account/id_account"))?;
         Ok((id_account, exists))
     }
 
@@ -209,7 +207,7 @@ impl DbAdapter {
         Ok(fvks)
     }
 
-    pub fn trim_to_height(&mut self, height: u32, exact: bool) -> anyhow::Result<()> {
+    pub fn trim_to_height(&mut self, height: u32, exact: bool) -> anyhow::Result<u32> {
         // snap height to an existing checkpoint
         let height = if exact {
             self.connection
@@ -253,7 +251,7 @@ impl DbAdapter {
         tx.execute("DELETE FROM messages WHERE height > ?1", params![height])?;
         tx.commit()?;
 
-        Ok(())
+        Ok(height)
     }
 
     pub fn get_txhash(&self, id_tx: u32) -> anyhow::Result<(u32, u32, u32, Vec<u8>, String)> {
