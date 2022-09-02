@@ -498,6 +498,12 @@ pub unsafe extern "C" fn truncate_data() {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn truncate_sync_data() {
+    let res = crate::api::account::truncate_sync_data();
+    log_result(res)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn delete_account(coin: u8, account: u32) {
     let res = crate::api::account::delete_account(coin, account);
     log_result(res)

@@ -81,7 +81,7 @@ impl CoinConfig {
 
     pub fn set_db_path(&mut self, db_path: &str) -> anyhow::Result<()> {
         self.db_path = Some(db_path.to_string());
-        let db = DbAdapter::new(self.coin_type, db_path)?;
+        let mut db = DbAdapter::new(self.coin_type, db_path)?;
         db.init_db()?;
         self.db = Some(Arc::new(Mutex::new(db)));
         Ok(())

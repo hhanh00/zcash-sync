@@ -100,6 +100,8 @@ void mark_all_messages_read(bool read);
 
 void truncate_data(void);
 
+void truncate_sync_data(void);
+
 void delete_account(uint8_t coin, uint32_t account);
 
 char *make_payment_uri(char *address, uint64_t amount, char *memo);

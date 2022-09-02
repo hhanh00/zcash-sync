@@ -150,6 +150,12 @@ pub fn truncate_data() -> anyhow::Result<()> {
     db.truncate_data()
 }
 
+pub fn truncate_sync_data() -> anyhow::Result<()> {
+    let c = CoinConfig::get_active();
+    let db = c.db()?;
+    db.truncate_sync_data()
+}
+
 pub fn delete_account(coin: u8, account: u32) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;

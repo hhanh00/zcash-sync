@@ -91,7 +91,7 @@ pub async fn skip_to_last_height(coin: u8) -> anyhow::Result<()> {
 pub async fn rewind_to_height(height: u32) -> anyhow::Result<()> {
     let c = CoinConfig::get_active();
     let mut client = c.connect_lwd().await?;
-    c.db()?.trim_to_height(height)?;
+    c.db()?.trim_to_height(height, false)?;
     fetch_and_store_tree_state(c.coin, &mut client, height).await?;
     Ok(())
 }

@@ -66,12 +66,13 @@ pub async fn sync_async(
 
     let mut client = connect_lightwalletd(&ld_url).await?;
     let (start_height, prev_hash, vks) = {
-        let db = DbAdapter::new(coin_type, &db_path)?;
+        let mut db = DbAdapter::new(coin_type, &db_path)?;
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
         let vks = db.get_fvks()?;
         (height, hash, vks)
     };
+
     let end_height = get_latest_height(&mut client).await?;
     let end_height = (end_height - target_height_offset).max(start_height);
     if start_height >= end_height {

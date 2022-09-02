@@ -4,6 +4,7 @@ use crate::prices::Quote;
 use crate::taddr::{derive_tkeys, TBalance};
 use crate::transaction::TransactionInfo;
 use crate::{CTree, Witness};
+use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -74,6 +75,13 @@ pub struct AccountBackup {
     pub t_addr: Option<String>,
 }
 
+pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> anyhow::Error {
+    move |err: rusqlite::Error| match err {
+        QueryReturnedNoRows => anyhow::anyhow!("Query {} returned no rows", name),
+        other => anyhow::anyhow!(other.to_string()),
+    }
+}
+
 impl DbAdapter {
     pub fn new(coin_type: CoinType, db_path: &str) -> anyhow::Result<DbAdapter> {
         let connection = Connection::open(db_path)?;
@@ -102,8 +110,9 @@ impl DbAdapter {
     //     Ok(())
     // }
     //
-    pub fn init_db(&self) -> anyhow::Result<()> {
+    pub fn init_db(&mut self) -> anyhow::Result<()> {
         migration::init_db(&self.connection)?;
+        self.delete_incomplete_scan()?;
         Ok(())
     }
 
@@ -130,11 +139,16 @@ impl DbAdapter {
             ON CONFLICT DO NOTHING",
             params![name, seed, index, sk, ivk, address],
         )?;
-        let id_account: u32 = self.connection.query_row(
-            "SELECT id_account FROM accounts WHERE ivk = ?1",
-            params![ivk],
-            |row| row.get(0),
-        )?;
+        let id_account: u32 = self
+            .connection
+            .query_row(
+                "SELECT id_account FROM accounts WHERE ivk = ?1",
+                params![ivk],
+                |row| row.get(0),
+            )
+            .map_err(wrap_query_no_rows(
+                "store_account/id_account",
+            ))?;
         Ok((id_account, exists))
     }
 
@@ -195,26 +209,48 @@ impl DbAdapter {
         Ok(fvks)
     }
 
-    pub fn trim_to_height(&mut self, height: u32) -> anyhow::Result<()> {
+    pub fn trim_to_height(&mut self, height: u32, exact: bool) -> anyhow::Result<()> {
+        // snap height to an existing checkpoint
+        let height = if exact {
+            self.connection
+                .query_row(
+                    "SELECT 1 from blocks WHERE height = ?1",
+                    params![height],
+                    |row| Ok(()),
+                )
+                .map_err(wrap_query_no_rows("trim_to_height: height not found"))?;
+            height
+        } else {
+            let height = self.connection.query_row(
+                "SELECT MAX(height) from blocks WHERE height <= ?1",
+                params![height],
+                |row| {
+                    let height: Option<u32> = row.get(0)?;
+                    Ok(height)
+                },
+            )?;
+            height.unwrap_or(0)
+        };
+
         let tx = self.connection.transaction()?;
-        tx.execute("DELETE FROM blocks WHERE height >= ?1", params![height])?;
+        tx.execute("DELETE FROM blocks WHERE height > ?1", params![height])?;
         tx.execute(
-            "DELETE FROM sapling_witnesses WHERE height >= ?1",
+            "DELETE FROM sapling_witnesses WHERE height > ?1",
             params![height],
         )?;
         tx.execute(
-            "DELETE FROM received_notes WHERE height >= ?1",
+            "DELETE FROM received_notes WHERE height > ?1",
             params![height],
         )?;
         tx.execute(
-            "UPDATE received_notes SET spent = NULL WHERE spent >= ?1",
+            "UPDATE received_notes SET spent = NULL WHERE spent > ?1",
             params![height],
         )?;
         tx.execute(
-            "DELETE FROM transactions WHERE height >= ?1",
+            "DELETE FROM transactions WHERE height > ?1",
             params![height],
         )?;
-        tx.execute("DELETE FROM messages WHERE height >= ?1", params![height])?;
+        tx.execute("DELETE FROM messages WHERE height > ?1", params![height])?;
         tx.commit()?;
 
         Ok(())
@@ -232,7 +268,7 @@ impl DbAdapter {
                 let ivk: String = row.get(4)?;
                 Ok((account, height, timestamp, tx_hash, ivk))
             },
-        )?;
+        ).map_err(wrap_query_no_rows("get_txhash"))?;
         Ok((account, height, timestamp, tx_hash, ivk))
     }
 
@@ -271,11 +307,13 @@ impl DbAdapter {
         ON CONFLICT DO NOTHING",
             params![account, txid, height, timestamp, tx_index],
         )?;
-        let id_tx: u32 = db_tx.query_row(
-            "SELECT id_tx FROM transactions WHERE account = ?1 AND txid = ?2",
-            params![account, txid],
-            |row| row.get(0),
-        )?;
+        let id_tx: u32 = db_tx
+            .query_row(
+                "SELECT id_tx FROM transactions WHERE account = ?1 AND txid = ?2",
+                params![account, txid],
+                |row| row.get(0),
+            )
+            .map_err(wrap_query_no_rows("store_transaction/id_tx"))?;
         log::debug!("-transaction {}", id_tx);
         Ok(id_tx)
     }
@@ -290,11 +328,13 @@ impl DbAdapter {
         db_tx.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, nf, spent)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
         ON CONFLICT DO NOTHING", params![note.account, id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.nf, note.spent])?;
-        let id_note: u32 = db_tx.query_row(
-            "SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2",
-            params![id_tx, note.output_index],
-            |row| row.get(0),
-        )?;
+        let id_note: u32 = db_tx
+            .query_row(
+                "SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2",
+                params![id_tx, note.output_index],
+                |row| row.get(0),
+            )
+            .map_err(wrap_query_no_rows("store_received_note/id_note"))?;
         log::debug!("-received_note");
         Ok(id_note)
     }
@@ -334,15 +374,17 @@ impl DbAdapter {
     }
 
     pub fn get_received_note_value(nf: &Nf, db_tx: &Transaction) -> anyhow::Result<(u32, i64)> {
-        let (account, value) = db_tx.query_row(
-            "SELECT account, value FROM received_notes WHERE nf = ?1",
-            params![nf.0.to_vec()],
-            |row| {
-                let account: u32 = row.get(0)?;
-                let value: i64 = row.get(1)?;
-                Ok((account, value))
-            },
-        )?;
+        let (account, value) = db_tx
+            .query_row(
+                "SELECT account, value FROM received_notes WHERE nf = ?1",
+                params![nf.0.to_vec()],
+                |row| {
+                    let account: u32 = row.get(0)?;
+                    let value: i64 = row.get(1)?;
+                    Ok((account, value))
+                },
+            )
+            .map_err(wrap_query_no_rows("get_received_note_value"))?;
         Ok((account, value))
     }
 
@@ -356,9 +398,10 @@ impl DbAdapter {
     }
 
     pub fn get_last_sync_height(&self) -> anyhow::Result<Option<u32>> {
-        let height: Option<u32> =
-            self.connection
-                .query_row("SELECT MAX(height) FROM blocks", [], |row| row.get(0))?;
+        let height: Option<u32> = self
+            .connection
+            .query_row("SELECT MAX(height) FROM blocks", [], |row| row.get(0))
+            .map_err(wrap_query_no_rows(""))?;
         Ok(height)
     }
 
@@ -546,7 +589,7 @@ impl DbAdapter {
     pub fn purge_old_witnesses(&mut self, height: u32) -> anyhow::Result<()> {
         log::debug!("+purge_old_witnesses");
         let min_height: Option<u32> = self.connection.query_row(
-            "SELECT MAX(height) FROM sapling_witnesses WHERE height <= ?1",
+            "SELECT MAX(height) FROM blocks WHERE height <= ?1",
             params![height],
             |row| row.get(0),
         )?;
@@ -608,73 +651,88 @@ impl DbAdapter {
         account: u32,
     ) -> anyhow::Result<(Option<String>, Option<String>, String)> {
         log::debug!("+get_backup");
-        let (seed, sk, ivk) = self.connection.query_row(
-            "SELECT seed, sk, ivk FROM accounts WHERE id_account = ?1",
-            params![account],
-            |row| {
-                let seed: Option<String> = row.get(0)?;
-                let sk: Option<String> = row.get(1)?;
-                let ivk: String = row.get(2)?;
-                Ok((seed, sk, ivk))
-            },
-        )?;
+        let (seed, sk, ivk) = self
+            .connection
+            .query_row(
+                "SELECT seed, sk, ivk FROM accounts WHERE id_account = ?1",
+                params![account],
+                |row| {
+                    let seed: Option<String> = row.get(0)?;
+                    let sk: Option<String> = row.get(1)?;
+                    let ivk: String = row.get(2)?;
+                    Ok((seed, sk, ivk))
+                },
+            )
+            .map_err(wrap_query_no_rows("get_backup"))?;
         log::debug!("-get_backup");
         Ok((seed, sk, ivk))
     }
 
     pub fn get_seed(&self, account: u32) -> anyhow::Result<(Option<String>, u32)> {
         log::info!("+get_seed");
-        let (seed, index) = self.connection.query_row(
-            "SELECT seed, aindex FROM accounts WHERE id_account = ?1",
-            params![account],
-            |row| {
-                let sk: Option<String> = row.get(0)?;
-                let index: u32 = row.get(1)?;
-                Ok((sk, index))
-            },
-        )?;
+        let (seed, index) = self
+            .connection
+            .query_row(
+                "SELECT seed, aindex FROM accounts WHERE id_account = ?1",
+                params![account],
+                |row| {
+                    let sk: Option<String> = row.get(0)?;
+                    let index: u32 = row.get(1)?;
+                    Ok((sk, index))
+                },
+            )
+            .map_err(wrap_query_no_rows("get_seed"))?;
         log::info!("-get_seed");
         Ok((seed, index))
     }
 
     pub fn get_sk(&self, account: u32) -> anyhow::Result<String> {
         log::info!("+get_sk");
-        let sk = self.connection.query_row(
-            "SELECT sk FROM accounts WHERE id_account = ?1",
-            params![account],
-            |row| {
-                let sk: String = row.get(0)?;
-                Ok(sk)
-            },
-        )?;
+        let sk = self
+            .connection
+            .query_row(
+                "SELECT sk FROM accounts WHERE id_account = ?1",
+                params![account],
+                |row| {
+                    let sk: String = row.get(0)?;
+                    Ok(sk)
+                },
+            )
+            .map_err(wrap_query_no_rows("get_sk"))?;
         log::info!("-get_sk");
         Ok(sk)
     }
 
     pub fn get_ivk(&self, account: u32) -> anyhow::Result<String> {
         log::debug!("+get_ivk");
-        let ivk = self.connection.query_row(
-            "SELECT ivk FROM accounts WHERE id_account = ?1",
-            params![account],
-            |row| {
-                let ivk: String = row.get(0)?;
-                Ok(ivk)
-            },
-        )?;
+        let ivk = self
+            .connection
+            .query_row(
+                "SELECT ivk FROM accounts WHERE id_account = ?1",
+                params![account],
+                |row| {
+                    let ivk: String = row.get(0)?;
+                    Ok(ivk)
+                },
+            )
+            .map_err(wrap_query_no_rows("get_ivk"))?;
         log::debug!("-get_ivk");
         Ok(ivk)
     }
 
     pub fn get_address(&self, account: u32) -> anyhow::Result<String> {
         log::debug!("+get_address");
-        let address = self.connection.query_row(
-            "SELECT address FROM accounts WHERE id_account = ?1",
-            params![account],
-            |row| {
-                let address: String = row.get(0)?;
-                Ok(address)
-            },
-        )?;
+        let address = self
+            .connection
+            .query_row(
+                "SELECT address FROM accounts WHERE id_account = ?1",
+                params![account],
+                |row| {
+                    let address: String = row.get(0)?;
+                    Ok(address)
+                },
+            )
+            .map_err(wrap_query_no_rows("get_address"))?;
         log::debug!("-get_address");
         Ok(address)
     }
@@ -817,6 +875,12 @@ impl DbAdapter {
     }
 
     pub fn truncate_data(&self) -> anyhow::Result<()> {
+        self.truncate_sync_data()?;
+        self.connection.execute("DELETE FROM diversifiers", [])?;
+        Ok(())
+    }
+
+    pub fn truncate_sync_data(&self) -> anyhow::Result<()> {
         self.connection.execute("DELETE FROM blocks", [])?;
         self.connection.execute("DELETE FROM contacts", [])?;
         self.connection.execute("DELETE FROM diversifiers", [])?;
@@ -827,6 +891,14 @@ impl DbAdapter {
             .execute("DELETE FROM sapling_witnesses", [])?;
         self.connection.execute("DELETE FROM transactions", [])?;
         self.connection.execute("DELETE FROM messages", [])?;
+        Ok(())
+    }
+
+    pub fn delete_incomplete_scan(&mut self) -> anyhow::Result<()> {
+        let synced_height = self.get_last_sync_height()?;
+        if let Some(synced_height) = synced_height {
+            self.trim_to_height(synced_height, true)?;
+        }
         Ok(())
     }
 
@@ -851,10 +923,6 @@ impl DbAdapter {
             .execute("DELETE FROM taddrs WHERE account = ?1", params![account])?;
         self.connection
             .execute("DELETE FROM messages WHERE account = ?1", params![account])?;
-        self.connection.execute(
-            "DELETE FROM secret_shares WHERE account = ?1",
-            params![account],
-        )?;
         Ok(())
     }
 
@@ -1014,14 +1082,17 @@ impl DbAdapter {
         // truncate received_notes, sapling_witnesses for account
         // add new received_notes, sapling_witnesses
         // add block
-        let id_account = self.connection.query_row(
-            "SELECT id_account FROM accounts WHERE ivk = ?1",
-            params![&account_info.fvk],
-            |row| {
-                let id_account: u32 = row.get(0)?;
-                Ok(id_account)
-            },
-        )?;
+        let id_account = self
+            .connection
+            .query_row(
+                "SELECT id_account FROM accounts WHERE ivk = ?1",
+                params![&account_info.fvk],
+                |row| {
+                    let id_account: u32 = row.get(0)?;
+                    Ok(id_account)
+                },
+            )
+            .map_err(wrap_query_no_rows("import_from_syncdata/id_account"))?;
         self.connection.execute(
             "DELETE FROM received_notes WHERE account = ?1",
             params![id_account],
@@ -1061,7 +1132,7 @@ impl DbAdapter {
         }
         self.connection.execute("INSERT INTO blocks(height,hash,timestamp,sapling_tree) VALUES (?1,?2,?3,?4) ON CONFLICT(height) DO NOTHING",
                                 params![account_info.height, hex::decode(&account_info.hash)?, account_info.timestamp, hex::decode(&account_info.sapling_tree)?])?;
-        self.trim_to_height(account_info.height + 1)?;
+        self.trim_to_height(account_info.height, true)?;
         Ok(ids)
     }
 
