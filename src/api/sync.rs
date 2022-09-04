@@ -2,11 +2,13 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::scan::AMProgressCallback;
-use crate::{BlockId, CTree, CompactTxStreamerClient, DbAdapter};
+use crate::{BlockId, CTree, CompactTxStreamerClient, DbAdapter, AccountData};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
 use tonic::Request;
+use zcash_primitives::sapling::Note;
+use crate::db::PlainNote;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -90,7 +92,6 @@ pub async fn skip_to_last_height(coin: u8) -> anyhow::Result<()> {
 
 pub async fn rewind_to_height(height: u32) -> anyhow::Result<u32> {
     let c = CoinConfig::get_active();
-    let mut client = c.connect_lwd().await?;
     let height = c.db()?.trim_to_height(height, false)?;
     Ok(height)
 }
@@ -128,4 +129,11 @@ pub async fn get_block_by_time(time: u32) -> anyhow::Result<u32> {
     let mut client = c.connect_lwd().await?;
     let date_time = crate::chain::get_block_by_time(c.chain.network(), &mut client, time).await?;
     Ok(date_time)
+}
+
+pub fn trial_decrypt(height: u32, cmu: &[u8], epk: &[u8], ciphertext: &[u8]) -> anyhow::Result<Option<Note>> {
+    let c = CoinConfig::get_active();
+    let AccountData { fvk, .. } = c.db().unwrap().get_account_info(c.id_account)?;
+    let note = crate::scan::trial_decrypt_one(c.chain.network(), height, &fvk, cmu, epk, ciphertext)?;
+    Ok(note)
 }

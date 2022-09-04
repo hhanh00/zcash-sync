@@ -1,6 +1,7 @@
 // Account creation
 
 use crate::coinconfig::CoinConfig;
+use crate::db::AccountData;
 use crate::key2::decode_key;
 use crate::taddr::{derive_taddr, derive_tkeys};
 use crate::transaction::retrieve_tx_info;
@@ -36,7 +37,7 @@ pub fn new_account(
 pub fn new_sub_account(name: &str, index: Option<u32>, count: u32) -> anyhow::Result<()> {
     let c = CoinConfig::get_active();
     let db = c.db()?;
-    let (seed, _) = db.get_seed(c.id_account)?;
+    let AccountData { seed, .. } = db.get_account_info(c.id_account)?;
     let seed = seed.ok_or_else(|| anyhow!("Account has no seed"))?;
     let index = index.unwrap_or_else(|| db.next_account_id(&seed).unwrap());
     drop(db);
@@ -61,7 +62,7 @@ fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::
 pub fn import_transparent_key(coin: u8, id_account: u32, path: &str) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
-    let (seed, _) = db.get_seed(c.id_account)?;
+    let AccountData { seed, .. } = db.get_account_info(c.id_account)?;
     let seed = seed.ok_or_else(|| anyhow!("Account has no seed"))?;
     let (sk, addr) = derive_tkeys(c.chain.network(), &seed, path)?;
     db.store_transparent_key(id_account, &sk, &addr)?;
@@ -79,10 +80,10 @@ pub fn import_transparent_secret_key(coin: u8, id_account: u32, sk: &str) -> any
 pub fn new_diversified_address() -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
     let db = c.db()?;
-    let ivk = db.get_ivk(c.id_account)?;
+    let AccountData { fvk, .. } = db.get_account_info(c.id_account)?;
     let fvk = decode_extended_full_viewing_key(
         c.chain.network().hrp_sapling_extended_full_viewing_key(),
-        &ivk,
+        &fvk,
     )?
     .unwrap();
     let mut diversifier_index = db.get_diversifier(c.id_account)?;
@@ -122,20 +123,20 @@ pub async fn scan_transparent_accounts(gap_limit: usize) -> anyhow::Result<()> {
 
 pub fn get_backup(account: u32) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
-    let (seed, sk, ivk) = c.db()?.get_backup(account)?;
+    let AccountData { seed, sk, fvk, .. } = c.db()?.get_account_info(account)?;
     if let Some(seed) = seed {
         return Ok(seed);
     }
     if let Some(sk) = sk {
         return Ok(sk);
     }
-    Ok(ivk)
+    Ok(fvk)
 }
 
 pub fn get_sk(account: u32) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
-    let sk = c.db()?.get_sk(account)?;
-    Ok(sk)
+    let AccountData { sk, .. } = c.db()?.get_account_info(account)?;
+    Ok(sk.unwrap_or(String::new()))
 }
 
 pub fn reset_db(coin: u8) -> anyhow::Result<()> {
@@ -184,7 +185,7 @@ pub fn derive_keys(
 ) -> anyhow::Result<KeyPack> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
-    let (seed, _) = db.get_seed(id_account)?;
+    let AccountData { seed, .. } = db.get_account_info(id_account)?;
     let seed = seed.unwrap();
     derive_zip32(c.chain.network(), &seed, account, external, address)
 }

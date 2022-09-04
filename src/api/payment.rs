@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use std::str::FromStr;
 
 use secp256k1::SecretKey;
@@ -12,7 +13,7 @@ use zcash_client_backend::encoding::{
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::transaction::builder::Progress;
 
-use crate::db::ZMessage;
+use crate::db::{AccountData, ZMessage};
 use crate::taddr::get_utxos;
 use serde::Deserialize;
 use zcash_primitives::memo::Memo;
@@ -29,7 +30,7 @@ async fn prepare_multi_payment(
     let c = CoinConfig::get_active();
     let mut tx_builder = TxBuilder::new(c.coin_type, last_height);
 
-    let fvk = c.db()?.get_ivk(c.id_account)?;
+    let AccountData { fvk, .. } = c.db()?.get_account_info(c.id_account)?;
     let fvk = decode_extended_full_viewing_key(
         c.chain.network().hrp_sapling_extended_full_viewing_key(),
         &fvk,
@@ -62,7 +63,8 @@ fn sign(tx: &Tx, progress_callback: PaymentProgressCallback) -> anyhow::Result<V
     let c = CoinConfig::get_active();
     let prover = get_prover();
     let db = c.db()?;
-    let zsk = db.get_sk(c.id_account)?;
+    let AccountData { sk: zsk, .. } = db.get_account_info(c.id_account)?;
+    let zsk = zsk.ok_or(anyhow!("Cannot sign without secret key"))?;
     let tsk = db
         .get_tsk(c.id_account)?
         .map(|tsk| SecretKey::from_str(&tsk).unwrap());
@@ -122,7 +124,7 @@ pub async fn shield_taddr() -> anyhow::Result<String> {
 
 pub fn parse_recipients(recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> {
     let c = CoinConfig::get_active();
-    let address = c.db()?.get_address(c.id_account)?;
+    let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
     let recipients: Vec<Recipient> = serde_json::from_str(recipients)?;
     let recipient_memos: Vec<_> = recipients
         .iter()

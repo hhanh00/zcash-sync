@@ -214,7 +214,7 @@ impl DbAdapter {
                 .query_row(
                     "SELECT 1 from blocks WHERE height = ?1",
                     params![height],
-                    |row| Ok(()),
+                    |_| Ok(()),
                 )
                 .map_err(wrap_query_no_rows("trim_to_height: height not found"))?;
             height
@@ -644,97 +644,6 @@ impl DbAdapter {
         Ok(contacts)
     }
 
-    pub fn get_backup(
-        &self,
-        account: u32,
-    ) -> anyhow::Result<(Option<String>, Option<String>, String)> {
-        log::debug!("+get_backup");
-        let (seed, sk, ivk) = self
-            .connection
-            .query_row(
-                "SELECT seed, sk, ivk FROM accounts WHERE id_account = ?1",
-                params![account],
-                |row| {
-                    let seed: Option<String> = row.get(0)?;
-                    let sk: Option<String> = row.get(1)?;
-                    let ivk: String = row.get(2)?;
-                    Ok((seed, sk, ivk))
-                },
-            )
-            .map_err(wrap_query_no_rows("get_backup"))?;
-        log::debug!("-get_backup");
-        Ok((seed, sk, ivk))
-    }
-
-    pub fn get_seed(&self, account: u32) -> anyhow::Result<(Option<String>, u32)> {
-        log::info!("+get_seed");
-        let (seed, index) = self
-            .connection
-            .query_row(
-                "SELECT seed, aindex FROM accounts WHERE id_account = ?1",
-                params![account],
-                |row| {
-                    let sk: Option<String> = row.get(0)?;
-                    let index: u32 = row.get(1)?;
-                    Ok((sk, index))
-                },
-            )
-            .map_err(wrap_query_no_rows("get_seed"))?;
-        log::info!("-get_seed");
-        Ok((seed, index))
-    }
-
-    pub fn get_sk(&self, account: u32) -> anyhow::Result<String> {
-        log::info!("+get_sk");
-        let sk = self
-            .connection
-            .query_row(
-                "SELECT sk FROM accounts WHERE id_account = ?1",
-                params![account],
-                |row| {
-                    let sk: String = row.get(0)?;
-                    Ok(sk)
-                },
-            )
-            .map_err(wrap_query_no_rows("get_sk"))?;
-        log::info!("-get_sk");
-        Ok(sk)
-    }
-
-    pub fn get_ivk(&self, account: u32) -> anyhow::Result<String> {
-        log::debug!("+get_ivk");
-        let ivk = self
-            .connection
-            .query_row(
-                "SELECT ivk FROM accounts WHERE id_account = ?1",
-                params![account],
-                |row| {
-                    let ivk: String = row.get(0)?;
-                    Ok(ivk)
-                },
-            )
-            .map_err(wrap_query_no_rows("get_ivk"))?;
-        log::debug!("-get_ivk");
-        Ok(ivk)
-    }
-
-    pub fn get_address(&self, account: u32) -> anyhow::Result<String> {
-        log::debug!("+get_address");
-        let address = self
-            .connection
-            .query_row(
-                "SELECT address FROM accounts WHERE id_account = ?1",
-                params![account],
-                |row| {
-                    let address: String = row.get(0)?;
-                    Ok(address)
-                },
-            )
-            .map_err(wrap_query_no_rows("get_address"))?;
-        log::debug!("-get_address");
-        Ok(address)
-    }
-
     pub fn get_diversifier(&self, account: u32) -> anyhow::Result<DiversifierIndex> {
         let diversifier_index = self
             .connection
@@ -751,6 +660,33 @@ impl DbAdapter {
             .optional()?
             .unwrap_or([0u8; 11]);
         Ok(DiversifierIndex(diversifier_index))
+    }
+
+    pub fn get_account_info(&self, account: u32) -> anyhow::Result<AccountData> {
+        let account_data = self
+            .connection
+            .query_row(
+                "SELECT name, seed, sk, ivk, address, aindex FROM accounts WHERE id_account = ?1",
+                params![account],
+                |row| {
+                    let name: String = row.get(0)?;
+                    let seed: Option<String> = row.get(1)?;
+                    let sk: Option<String> = row.get(2)?;
+                    let fvk: String = row.get(3)?;
+                    let address: String = row.get(4)?;
+                    let aindex: u32 = row.get(5)?;
+                    Ok(AccountData {
+                        name,
+                        seed,
+                        sk,
+                        fvk,
+                        address,
+                        aindex,
+                    })
+                },
+            )
+            .map_err(wrap_query_no_rows("get_account_info"))?;
+        Ok(account_data)
     }
 
     pub fn store_diversifier(
@@ -798,9 +734,9 @@ impl DbAdapter {
     }
 
     pub fn create_taddr(&self, account: u32) -> anyhow::Result<()> {
-        let (seed, index) = self.get_seed(account)?;
+        let AccountData { seed, aindex, .. } = self.get_account_info(account)?;
         if let Some(seed) = seed {
-            let bip44_path = format!("m/44'/{}'/0'/0/{}", self.network().coin_type(), index);
+            let bip44_path = format!("m/44'/{}'/0'/0/{}", self.network().coin_type(), aindex);
             let (sk, address) = derive_tkeys(self.network(), &seed, &bip44_path)?;
             self.connection.execute(
                 "INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3) \
@@ -1181,7 +1117,7 @@ pub struct AccountRec {
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PlainNote {
     pub height: u32,
     pub value: u64,
@@ -1272,4 +1208,13 @@ mod tests {
         let balance = db.get_balance(1).unwrap();
         println!("{}", balance);
     }
+}
+
+pub struct AccountData {
+    pub name: String,
+    pub seed: Option<String>,
+    pub sk: Option<String>,
+    pub fvk: String,
+    pub address: String,
+    pub aindex: u32,
 }

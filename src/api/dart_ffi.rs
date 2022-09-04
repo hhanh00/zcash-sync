@@ -534,7 +534,7 @@ pub unsafe extern "C" fn parse_payment_uri(uri: *mut c_char) -> *mut c_char {
 
 #[no_mangle]
 pub unsafe extern "C" fn generate_random_enc_key() -> *mut c_char {
-    to_c_str(log_string(crate::key2::generate_random_enc_key()))
+    to_c_str(log_string(crate::key::generate_random_enc_key()))
 }
 
 #[no_mangle]

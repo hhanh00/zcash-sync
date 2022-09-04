@@ -1,8 +1,5 @@
 use crate::coinconfig::CoinConfig;
-use bech32::{ToBase32, Variant};
 use bip39::{Language, Mnemonic, Seed};
-use rand::rngs::OsRng;
-use rand::RngCore;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key,
@@ -97,11 +94,4 @@ fn derive_address(network: &Network, fvk: &ExtendedFullViewingKey) -> anyhow::Re
     let (_, payment_address) = fvk.default_address();
     let address = encode_payment_address(network.hrp_sapling_payment_address(), &payment_address);
     Ok(address)
-}
-
-pub fn generate_random_enc_key() -> anyhow::Result<String> {
-    let mut key = [0u8; 32];
-    OsRng.fill_bytes(&mut key);
-    let key = bech32::encode("zwk", key.to_base32(), Variant::Bech32)?;
-    Ok(key)
 }

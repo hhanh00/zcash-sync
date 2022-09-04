@@ -2,6 +2,7 @@ use crate::api::payment::{build_sign_send_multi_payment, RecipientMemo};
 use crate::api::sync::get_latest_height;
 use crate::coinconfig::CoinConfig;
 use crate::contact::{serialize_contacts, Contact};
+use crate::db::AccountData;
 use zcash_primitives::memo::Memo;
 
 pub fn store_contact(id: u32, name: &str, address: &str, dirty: bool) -> anyhow::Result<()> {
@@ -26,7 +27,7 @@ pub async fn commit_unsaved_contacts(anchor_offset: u32) -> anyhow::Result<Strin
 pub async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
     let last_height = get_latest_height().await?;
-    let address = c.db()?.get_address(c.id_account)?;
+    let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
     let recipients: Vec<_> = memos
         .iter()
         .map(|m| RecipientMemo {

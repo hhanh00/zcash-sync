@@ -16,7 +16,7 @@ use zcash_primitives::consensus::Network;
 use zcash_primitives::sapling::SaplingIvk;
 
 const THREADS_PER_BLOCK: usize = 256usize;
-const BUFFER_SIZE: usize = 128usize;
+const BUFFER_SIZE: usize = 96usize;
 
 lazy_static! {
     pub static ref CUDA_CONTEXT: Mutex<Option<CudaContext>> = Mutex::new(CudaContext::new().ok());
@@ -159,15 +159,20 @@ impl CudaProcessor {
         let decrypted_blocks = collect_nf(blocks)?;
 
         let mut data_buffer = vec![0u8; n * BUFFER_SIZE];
-        let mut i = 0;
         for db in decrypted_blocks.iter() {
+            let mut i = 0;
+            let mut position_in_block = 0;
             let b = &db.compact_block;
             for tx in b.vtx.iter() {
                 for co in tx.outputs.iter() {
+                    if co.epk.is_empty() { break } // skip decryption
                     data_buffer[i * BUFFER_SIZE..i * BUFFER_SIZE + 32].copy_from_slice(&co.epk);
-                    data_buffer[i * BUFFER_SIZE + 64..i * BUFFER_SIZE + 116]
+                    data_buffer[i * BUFFER_SIZE + 32..i * BUFFER_SIZE + 84]
                         .copy_from_slice(&co.ciphertext);
+                    data_buffer[i * BUFFER_SIZE + 84..i * BUFFER_SIZE + 92]
+                        .copy_from_slice(&usize::to_le_bytes(position_in_block));
                     i += 1;
+                    position_in_block += 1;
                 }
             }
         }

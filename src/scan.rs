@@ -1,12 +1,10 @@
 use crate::builder::BlockProcessor;
 use crate::chain::{DecryptedBlock, Nf, NfRef, TRIAL_DECRYPTIONS};
-use crate::db::{DbAdapter, ReceivedNote};
+use crate::db::{AccountViewKey, DbAdapter, PlainNote, ReceivedNote};
 use std::cmp::Ordering;
 
 use crate::transaction::retrieve_tx_info;
-use crate::{
-    connect_lightwalletd, download_chain, get_latest_height, CompactBlock, DecryptNode, Witness,
-};
+use crate::{connect_lightwalletd, download_chain, get_latest_height, CompactBlock, DecryptNode, Witness, CompactTx, CompactSaplingOutput};
 use ff::PrimeField;
 
 use lazy_static::lazy_static;
@@ -14,12 +12,15 @@ use std::collections::HashMap;
 use std::panic;
 use std::sync::Arc;
 use std::time::Instant;
+use anyhow::anyhow;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use zcash_client_backend::encoding::decode_extended_full_viewing_key;
+use zcash_primitives::consensus::{Network, Parameters};
 use zcash_params::coin::{get_coin_chain, CoinType};
 
-use zcash_primitives::sapling::Node;
+use zcash_primitives::sapling::{Node, Note};
 
 pub struct Blocks(pub Vec<CompactBlock>);
 
@@ -66,7 +67,7 @@ pub async fn sync_async(
 
     let mut client = connect_lightwalletd(&ld_url).await?;
     let (start_height, prev_hash, vks) = {
-        let mut db = DbAdapter::new(coin_type, &db_path)?;
+        let db = DbAdapter::new(coin_type, &db_path)?;
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
         let vks = db.get_fvks()?;
@@ -356,4 +357,46 @@ pub async fn latest_height(ld_url: &str) -> anyhow::Result<u32> {
     let mut client = connect_lightwalletd(ld_url).await?;
     let height = get_latest_height(&mut client).await?;
     Ok(height)
+}
+
+#[allow(dead_code)]
+// test function
+pub fn trial_decrypt_one(network: &Network, height: u32, fvk: &str, cmu: &[u8], epk: &[u8], ciphertext: &[u8]) -> anyhow::Result<Option<Note>> {
+    let mut vks = HashMap::new();
+    let fvk = decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)?.ok_or(anyhow!("Invalid FVK"))?;
+    let ivk = fvk.fvk.vk.ivk();
+    vks.insert(0, AccountViewKey {
+        fvk,
+        ivk,
+        viewonly: false
+    });
+    let dn = DecryptNode::new(vks);
+    let block = vec![CompactBlock {
+        proto_version: 0, // don't care about most of these fields
+        height: height as u64,
+        hash: vec![],
+        prev_hash: vec![],
+        time: 0,
+        header: vec![],
+        vtx: vec![
+            CompactTx {
+                index: 0,
+                hash: vec![],
+                fee: 0,
+                spends: vec![],
+                actions: vec![],
+                outputs: vec![
+                    CompactSaplingOutput {
+                        cmu: cmu.to_vec(),
+                        epk: epk.to_vec(),
+                        ciphertext: ciphertext.to_vec(),
+                    }
+                ],
+            }
+        ]
+    }];
+    let decrypted_block = dn.decrypt_blocks(network, block);
+    let decrypted_block = decrypted_block.first().unwrap();
+    let note = decrypted_block.notes.first().map(|dn| dn.note.clone());
+    Ok(note)
 }

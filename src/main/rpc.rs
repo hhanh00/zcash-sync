@@ -15,10 +15,7 @@ use std::sync::Mutex;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
-use warp_api_ffi::{
-    derive_zip32, get_best_server, AccountInfo, AccountRec, CoinConfig, KeyPack, RaptorQDrops, Tx,
-    TxRec,
-};
+use warp_api_ffi::{derive_zip32, get_best_server, AccountInfo, AccountRec, CoinConfig, KeyPack, RaptorQDrops, Tx, TxRec, AccountData};
 
 lazy_static! {
     static ref SYNC_CANCELED: Mutex<bool> = Mutex::new(false);
@@ -26,6 +23,8 @@ lazy_static! {
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error(transparent)]
+    Hex(#[from] hex::FromHexError),
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
@@ -69,6 +68,9 @@ async fn main() -> anyhow::Result<()> {
     let yec: HashMap<String, String> = figment.extract_inner("yec")?;
     init(1, yec)?;
 
+    warp_api_ffi::set_active_account(0, 1);
+    warp_api_ffi::set_active(0);
+
     let _ = rocket
         .mount(
             "/",
@@ -95,6 +97,7 @@ async fn main() -> anyhow::Result<()> {
                 merge_data,
                 derive_keys,
                 instant_sync,
+                trial_decrypt,
             ],
         )
         .attach(AdHoc::config::<Config>())
@@ -169,7 +172,7 @@ pub async fn get_latest_height() -> Result<Json<Heights>, Error> {
 pub fn get_address() -> Result<String, Error> {
     let c = CoinConfig::get_active();
     let db = c.db()?;
-    let address = db.get_address(c.id_account)?;
+    let AccountData { address, .. } = db.get_account_info(c.id_account)?;
     Ok(address)
 }
 
@@ -180,7 +183,7 @@ pub fn get_backup(config: &State<Config>) -> Result<Json<Backup>, Error> {
     } else {
         let c = CoinConfig::get_active();
         let db = c.db()?;
-        let (seed, sk, fvk) = db.get_backup(c.id_account)?;
+        let AccountData { seed, sk, fvk, .. } = db.get_account_info(c.id_account)?;
         Ok(Json(Backup { seed, sk, fvk }))
     }
 }
@@ -207,7 +210,8 @@ pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<Tx>, Error
     let latest = warp_api_ffi::api::sync::get_latest_height().await?;
     let from = {
         let db = c.db()?;
-        db.get_address(c.id_account)?
+        let AccountData { address, .. } = db.get_account_info(c.id_account)?;
+        address
     };
     let recipients: Vec<_> = payment
         .recipients
@@ -244,7 +248,8 @@ pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<Strin
         let latest = warp_api_ffi::api::sync::get_latest_height().await?;
         let from = {
             let db = c.db()?;
-            db.get_address(c.id_account)?
+            let AccountData { address, .. } = db.get_account_info(c.id_account)?;
+            address
         };
         let recipients: Vec<_> = payment
             .recipients
@@ -323,12 +328,22 @@ pub fn derive_keys(
     Ok(Json(result))
 }
 
+#[post("/trial_decrypt?<height>&<cmu>&<epk>&<ciphertext>")]
+pub async fn trial_decrypt(height: u32, cmu: String, epk: String, ciphertext: String) -> Result<String, Error> {
+    let epk = hex::decode(&epk)?;
+    let cmu = hex::decode(&cmu)?;
+    let ciphertext = hex::decode(&ciphertext)?;
+    let note = warp_api_ffi::api::sync::trial_decrypt(height, &cmu, &epk, &ciphertext)?;
+    log::info!("{:?}", note);
+    Ok(note.is_some().to_string())
+}
+
 #[post("/instant_sync")]
 pub async fn instant_sync() -> Result<(), Error> {
     let c = CoinConfig::get_active();
     let fvk = {
         let db = c.db()?;
-        let (_, _, fvk) = db.get_backup(c.id_account)?;
+        let AccountData { fvk, .. } = db.get_account_info(c.id_account)?;
         fvk
     };
     let client = reqwest::Client::new();
