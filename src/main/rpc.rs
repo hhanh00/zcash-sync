@@ -15,7 +15,10 @@ use std::sync::Mutex;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
-use warp_api_ffi::{derive_zip32, get_best_server, AccountInfo, AccountRec, CoinConfig, KeyPack, RaptorQDrops, Tx, TxRec, AccountData};
+use warp_api_ffi::{
+    derive_zip32, get_best_server, AccountData, AccountInfo, AccountRec, CoinConfig, KeyPack,
+    RaptorQDrops, Tx, TxRec,
+};
 
 lazy_static! {
     static ref SYNC_CANCELED: Mutex<bool> = Mutex::new(false);
@@ -329,7 +332,12 @@ pub fn derive_keys(
 }
 
 #[post("/trial_decrypt?<height>&<cmu>&<epk>&<ciphertext>")]
-pub async fn trial_decrypt(height: u32, cmu: String, epk: String, ciphertext: String) -> Result<String, Error> {
+pub async fn trial_decrypt(
+    height: u32,
+    cmu: String,
+    epk: String,
+    ciphertext: String,
+) -> Result<String, Error> {
     let epk = hex::decode(&epk)?;
     let cmu = hex::decode(&cmu)?;
     let ciphertext = hex::decode(&ciphertext)?;

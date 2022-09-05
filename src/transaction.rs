@@ -243,6 +243,7 @@ pub async fn retrieve_tx_info(
             }
             db.store_tx_metadata(tx_info.id_tx, &tx_info)?;
             let z_msg = decode_memo(
+                tx_info.id_tx,
                 &tx_info.memo,
                 &tx_info.address,
                 tx_info.timestamp,

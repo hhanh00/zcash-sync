@@ -173,8 +173,12 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         // )?;
     }
 
-    if version != 3 {
-        update_schema_version(connection, 3)?;
+    if version < 4 {
+        connection.execute("ALTER TABLE messages ADD id_tx INTEGER", [])?;
+    }
+
+    if version != 4 {
+        update_schema_version(connection, 4)?;
         log::info!("Database migrated");
     }
 

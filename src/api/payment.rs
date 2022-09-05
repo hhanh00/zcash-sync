@@ -139,10 +139,17 @@ pub fn encode_memo(from: &str, include_from: bool, subject: &str, body: &str) ->
     msg
 }
 
-pub fn decode_memo(memo: &str, recipient: &str, timestamp: u32, height: u32) -> ZMessage {
+pub fn decode_memo(
+    id_tx: u32,
+    memo: &str,
+    recipient: &str,
+    timestamp: u32,
+    height: u32,
+) -> ZMessage {
     let memo_lines: Vec<_> = memo.splitn(4, '\n').collect();
     let msg = if memo_lines[0] == "\u{1F6E1}MSG" {
         ZMessage {
+            id_tx,
             sender: if memo_lines[1].is_empty() {
                 None
             } else {
@@ -156,6 +163,7 @@ pub fn decode_memo(memo: &str, recipient: &str, timestamp: u32, height: u32) -> 
         }
     } else {
         ZMessage {
+            id_tx,
             sender: None,
             recipient: recipient.to_string(),
             subject: memo_lines[0].chars().take(20).collect(),

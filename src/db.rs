@@ -210,13 +210,6 @@ impl DbAdapter {
     pub fn trim_to_height(&mut self, height: u32, exact: bool) -> anyhow::Result<u32> {
         // snap height to an existing checkpoint
         let height = if exact {
-            self.connection
-                .query_row(
-                    "SELECT 1 from blocks WHERE height = ?1",
-                    params![height],
-                    |_| Ok(()),
-                )
-                .map_err(wrap_query_no_rows("trim_to_height: height not found"))?;
             height
         } else {
             let height = self.connection.query_row(
@@ -229,6 +222,7 @@ impl DbAdapter {
             )?;
             height.unwrap_or(0)
         };
+        log::info!("Rewind to height: {}", height);
 
         let tx = self.connection.transaction()?;
         tx.execute("DELETE FROM blocks WHERE height > ?1", params![height])?;
@@ -924,8 +918,8 @@ impl DbAdapter {
     }
 
     pub fn store_message(&self, account: u32, message: &ZMessage) -> anyhow::Result<()> {
-        self.connection.execute("INSERT INTO messages(account, sender, recipient, subject, body, timestamp, height, read) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
-                                params![account, message.sender, message.recipient, message.subject, message.body, message.timestamp, message.height, false])?;
+        self.connection.execute("INSERT INTO messages(account, id_tx, sender, recipient, subject, body, timestamp, height, read) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+                                params![account, message.id_tx, message.sender, message.recipient, message.subject, message.body, message.timestamp, message.height, false])?;
         Ok(())
     }
 
@@ -1085,6 +1079,7 @@ fn get_coin_id_by_address(address: &str) -> u8 {
 }
 
 pub struct ZMessage {
+    pub id_tx: u32,
     pub sender: Option<String>,
     pub recipient: String,
     pub subject: String,

@@ -1,9 +1,9 @@
-use std::convert::TryInto;
 use crate::chain::{DecryptedBlock, DecryptedNote, Nf};
 use crate::db::AccountViewKey;
 use crate::CompactBlock;
 use anyhow::Result;
 use lazy_static::lazy_static;
+use std::convert::TryInto;
 use std::sync::Mutex;
 use zcash_note_encryption::Domain;
 use zcash_primitives::consensus::{BlockHeight, Network};
@@ -129,7 +129,8 @@ fn collect_decrypted_notes(
                     if let Some((note, pa)) =
                         domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext)
                     {
-                        let position_in_block = usize::from_le_bytes(plaintext[52..60].try_into().unwrap());
+                        let position_in_block =
+                            usize::from_le_bytes(plaintext[52..60].try_into().unwrap());
                         let cmu = note.cmu().to_bytes();
                         if &cmu == co.cmu.as_slice() {
                             log::info!("Note {} {}", account, u64::from(note.value));

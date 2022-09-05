@@ -165,7 +165,9 @@ impl CudaProcessor {
             let b = &db.compact_block;
             for tx in b.vtx.iter() {
                 for co in tx.outputs.iter() {
-                    if co.epk.is_empty() { break } // skip decryption
+                    if co.epk.is_empty() {
+                        break;
+                    } // skip decryption
                     data_buffer[i * BUFFER_SIZE..i * BUFFER_SIZE + 32].copy_from_slice(&co.epk);
                     data_buffer[i * BUFFER_SIZE + 32..i * BUFFER_SIZE + 84]
                         .copy_from_slice(&co.ciphertext);

@@ -64,7 +64,7 @@ char *send_multi_payment(char *recipients_json,
 
 void skip_to_last_height(uint8_t coin);
 
-uint32_t rewind_to_height(uint32_t height);
+uint32_t rewind_to_height(uint32_t height, bool exact);
 
 int64_t mempool_sync(void);
 

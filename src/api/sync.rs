@@ -1,14 +1,14 @@
 // Sync
 
 use crate::coinconfig::CoinConfig;
+use crate::db::PlainNote;
 use crate::scan::AMProgressCallback;
-use crate::{BlockId, CTree, CompactTxStreamerClient, DbAdapter, AccountData};
+use crate::{AccountData, BlockId, CTree, CompactTxStreamerClient, DbAdapter};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_primitives::sapling::Note;
-use crate::db::PlainNote;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
@@ -90,9 +90,17 @@ pub async fn skip_to_last_height(coin: u8) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn rewind_to_height(height: u32) -> anyhow::Result<u32> {
+// if exact = true, do not snap the height to a pre existing checkpoint
+// and get the tree_state from the server
+// this option is used when we rescan from a given height
+// We ignore any transaction that occurred before
+pub async fn rewind_to_height(height: u32, exact: bool) -> anyhow::Result<u32> {
     let c = CoinConfig::get_active();
-    let height = c.db()?.trim_to_height(height, false)?;
+    let height = c.db()?.trim_to_height(height, exact)?;
+    if exact {
+        let mut client = c.connect_lwd().await?;
+        fetch_and_store_tree_state(c.coin, &mut client, height).await?;
+    }
     Ok(height)
 }
 
@@ -131,9 +139,15 @@ pub async fn get_block_by_time(time: u32) -> anyhow::Result<u32> {
     Ok(date_time)
 }
 
-pub fn trial_decrypt(height: u32, cmu: &[u8], epk: &[u8], ciphertext: &[u8]) -> anyhow::Result<Option<Note>> {
+pub fn trial_decrypt(
+    height: u32,
+    cmu: &[u8],
+    epk: &[u8],
+    ciphertext: &[u8],
+) -> anyhow::Result<Option<Note>> {
     let c = CoinConfig::get_active();
     let AccountData { fvk, .. } = c.db().unwrap().get_account_info(c.id_account)?;
-    let note = crate::scan::trial_decrypt_one(c.chain.network(), height, &fvk, cmu, epk, ciphertext)?;
+    let note =
+        crate::scan::trial_decrypt_one(c.chain.network(), height, &fvk, cmu, epk, ciphertext)?;
     Ok(note)
 }
