@@ -94,14 +94,18 @@ pub async fn skip_to_last_height(coin: u8) -> anyhow::Result<()> {
 // and get the tree_state from the server
 // this option is used when we rescan from a given height
 // We ignore any transaction that occurred before
-pub async fn rewind_to_height(height: u32, exact: bool) -> anyhow::Result<u32> {
+pub async fn rewind_to(height: u32) -> anyhow::Result<u32> {
     let c = CoinConfig::get_active();
-    let height = c.db()?.trim_to_height(height, exact)?;
-    if exact {
-        let mut client = c.connect_lwd().await?;
-        fetch_and_store_tree_state(c.coin, &mut client, height).await?;
-    }
+    let height = c.db()?.trim_to_height(height)?;
     Ok(height)
+}
+
+pub async fn rescan_from(height: u32) -> anyhow::Result<()> {
+    let c = CoinConfig::get_active();
+    c.db()?.truncate_sync_data()?;
+    let mut client = c.connect_lwd().await?;
+    fetch_and_store_tree_state(c.coin, &mut client, height).await?;
+    Ok(())
 }
 
 async fn fetch_and_store_tree_state(

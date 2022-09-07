@@ -441,7 +441,6 @@ impl DecryptNode {
         blocks: Vec<CompactBlock>,
     ) -> Vec<DecryptedBlock> {
         let use_gpu = { *USE_GPU.lock().unwrap() };
-        log::info!("use gpu = {}", use_gpu);
         if use_gpu {
             #[cfg(feature = "cuda")]
             return self.cuda_decrypt_blocks(network, blocks);

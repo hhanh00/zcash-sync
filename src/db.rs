@@ -207,21 +207,17 @@ impl DbAdapter {
         Ok(fvks)
     }
 
-    pub fn trim_to_height(&mut self, height: u32, exact: bool) -> anyhow::Result<u32> {
+    pub fn trim_to_height(&mut self, height: u32) -> anyhow::Result<u32> {
         // snap height to an existing checkpoint
-        let height = if exact {
-            height
-        } else {
-            let height = self.connection.query_row(
-                "SELECT MAX(height) from blocks WHERE height <= ?1",
-                params![height],
-                |row| {
-                    let height: Option<u32> = row.get(0)?;
-                    Ok(height)
-                },
-            )?;
-            height.unwrap_or(0)
-        };
+        let height = self.connection.query_row(
+            "SELECT MAX(height) from blocks WHERE height <= ?1",
+            params![height],
+            |row| {
+                let height: Option<u32> = row.get(0)?;
+                Ok(height)
+            },
+        )?;
+        let height = height.unwrap_or(0);
         log::info!("Rewind to height: {}", height);
 
         let tx = self.connection.transaction()?;
@@ -825,7 +821,7 @@ impl DbAdapter {
     pub fn delete_incomplete_scan(&mut self) -> anyhow::Result<()> {
         let synced_height = self.get_last_sync_height()?;
         if let Some(synced_height) = synced_height {
-            self.trim_to_height(synced_height, true)?;
+            self.trim_to_height(synced_height)?;
         }
         Ok(())
     }
@@ -1060,7 +1056,7 @@ impl DbAdapter {
         }
         self.connection.execute("INSERT INTO blocks(height,hash,timestamp,sapling_tree) VALUES (?1,?2,?3,?4) ON CONFLICT(height) DO NOTHING",
                                 params![account_info.height, hex::decode(&account_info.hash)?, account_info.timestamp, hex::decode(&account_info.sapling_tree)?])?;
-        self.trim_to_height(account_info.height, true)?;
+        self.trim_to_height(account_info.height)?;
         Ok(ids)
     }
 

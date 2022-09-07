@@ -328,8 +328,15 @@ pub async unsafe extern "C" fn skip_to_last_height(coin: u8) {
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn rewind_to_height(height: u32, exact: bool) -> u32 {
-    let res = crate::api::sync::rewind_to_height(height, exact).await;
+pub async unsafe extern "C" fn rewind_to(height: u32) -> u32 {
+    let res = crate::api::sync::rewind_to(height).await;
+    log_result(res)
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn rescan_from(height: u32) {
+    let res = crate::api::sync::rescan_from(height).await;
     log_result(res)
 }
 

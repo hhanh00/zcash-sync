@@ -153,7 +153,7 @@ pub async fn sync(offset: Option<u32>) -> Result<(), Error> {
 
 #[post("/rewind?<height>")]
 pub async fn rewind(height: u32) -> Result<(), Error> {
-    warp_api_ffi::api::sync::rewind_to_height(height).await?;
+    warp_api_ffi::api::sync::rewind_to(height).await?;
     Ok(())
 }
 
