@@ -53,7 +53,7 @@ fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::
     let db = c.db()?;
     let (account, exists) =
         db.store_account(name, seed.as_deref(), index, sk.as_deref(), &ivk, &pa)?;
-    if !exists {
+    if !exists && c.chain.has_transparent() {
         db.create_taddr(account)?;
     }
     Ok(account)

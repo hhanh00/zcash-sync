@@ -110,6 +110,7 @@ pub unsafe extern "C" fn init_wallet(db_path: *mut c_char) {
     from_c_str!(db_path);
     let _ = init_coin(0, &format!("{}/zec.db", &db_path));
     let _ = init_coin(1, &format!("{}/yec.db", &db_path));
+    let _ = init_coin(2, &format!("{}/arrr.db", &db_path));
 }
 
 #[no_mangle]

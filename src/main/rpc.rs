@@ -70,6 +70,8 @@ async fn main() -> anyhow::Result<()> {
     init(0, zec)?;
     let yec: HashMap<String, String> = figment.extract_inner("yec")?;
     init(1, yec)?;
+    let arrr: HashMap<String, String> = figment.extract_inner("arrr")?;
+    init(2, arrr)?;
 
     warp_api_ffi::set_active_account(0, 1);
     warp_api_ffi::set_active(0);

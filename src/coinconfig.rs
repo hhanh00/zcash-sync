@@ -10,9 +10,10 @@ use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_proofs::prover::LocalTxProver;
 
 lazy_static! {
-    pub static ref COIN_CONFIG: [Mutex<CoinConfig>; 2] = [
+    pub static ref COIN_CONFIG: [Mutex<CoinConfig>; 3] = [
         Mutex::new(CoinConfig::new(0, CoinType::Zcash)),
         Mutex::new(CoinConfig::new(1, CoinType::Ycash)),
+        Mutex::new(CoinConfig::new(2, CoinType::PirateChain)),
     ];
     pub static ref PROVER: AtomicLazyCell<LocalTxProver> = AtomicLazyCell::new();
     pub static ref RAPTORQ: Mutex<FountainCodes> = Mutex::new(FountainCodes::new());
