@@ -476,7 +476,7 @@ impl DbAdapter {
     ) -> anyhow::Result<HashMap<Vec<u8>, u64>> {
         let mut sql = "SELECT value, nf FROM received_notes WHERE account = ?1".to_string();
         if unspent_only {
-            sql += "AND (spent IS NULL OR spent = 0)";
+            sql += " AND (spent IS NULL OR spent = 0)";
         }
         let mut statement = self.connection.prepare(&sql)?;
         let nfs_res = statement.query_map(params![account], |row| {
