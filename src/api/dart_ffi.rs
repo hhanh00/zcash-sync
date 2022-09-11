@@ -16,6 +16,8 @@ use zcash_primitives::transaction::builder::Progress;
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 static IS_ERROR: AtomicBool = AtomicBool::new(false);
 
+const MAX_COINS: u8 = 3;
+
 lazy_static! {
     static ref LAST_ERROR: Mutex<RefCell<String>> = Mutex::new(RefCell::new(String::new()));
 }
@@ -550,7 +552,7 @@ pub unsafe extern "C" fn get_full_backup(key: *mut c_char) -> *mut c_char {
     from_c_str!(key);
     let res = || {
         let mut accounts = vec![];
-        for coin in [0, 1] {
+        for coin in 0..MAX_COINS {
             accounts.extend(crate::api::fullbackup::get_full_backup(coin)?);
         }
 
@@ -566,7 +568,7 @@ pub unsafe extern "C" fn restore_full_backup(key: *mut c_char, backup: *mut c_ch
     from_c_str!(backup);
     let res = || {
         let accounts = crate::api::fullbackup::decrypt_backup(&key, &backup)?;
-        for coin in [0, 1] {
+        for coin in 0..MAX_COINS {
             crate::api::fullbackup::restore_full_backup(coin, &accounts)?;
         }
         Ok(())

@@ -850,7 +850,7 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn get_full_backup(&self) -> anyhow::Result<Vec<AccountBackup>> {
+    pub fn get_full_backup(&self, coin: u8) -> anyhow::Result<Vec<AccountBackup>> {
         let _ = self.connection.execute(
             "ALTER TABLE accounts ADD COLUMN aindex INT NOT NULL DEFAULT 0",
             [],
@@ -867,7 +867,6 @@ impl DbAdapter {
             let z_addr: String = r.get(5)?;
             let t_sk: Option<String> = r.get(6)?;
             let t_addr: Option<String> = r.get(7)?;
-            let coin = get_coin_id_by_address(&z_addr);
             Ok(AccountBackup {
                 coin,
                 name,
@@ -1063,14 +1062,6 @@ impl DbAdapter {
     fn network(&self) -> &'static Network {
         let chain = get_coin_chain(self.coin_type);
         chain.network()
-    }
-}
-
-fn get_coin_id_by_address(address: &str) -> u8 {
-    if address.starts_with("ys") {
-        1
-    } else {
-        0
     }
 }
 
