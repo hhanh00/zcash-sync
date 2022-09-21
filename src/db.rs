@@ -851,11 +851,6 @@ impl DbAdapter {
     }
 
     pub fn get_full_backup(&self, coin: u8) -> anyhow::Result<Vec<AccountBackup>> {
-        let _ = self.connection.execute(
-            "ALTER TABLE accounts ADD COLUMN aindex INT NOT NULL DEFAULT 0",
-            [],
-        ); // ignore error
-
         let mut statement = self.connection.prepare(
             "SELECT name, seed, aindex, a.sk AS z_sk, ivk, a.address AS z_addr, t.sk as t_sk, t.address AS t_addr FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account")?;
         let rows = statement.query_map([], |r| {
@@ -1141,6 +1136,15 @@ pub struct AccountInfo {
     pub sapling_tree: String,
 }
 
+pub struct AccountData {
+    pub name: String,
+    pub seed: Option<String>,
+    pub sk: Option<String>,
+    pub fvk: String,
+    pub address: String,
+    pub aindex: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::db::{DbAdapter, ReceivedNote, DEFAULT_DB_PATH};
@@ -1190,13 +1194,4 @@ mod tests {
         let balance = db.get_balance(1).unwrap();
         println!("{}", balance);
     }
-}
-
-pub struct AccountData {
-    pub name: String,
-    pub seed: Option<String>,
-    pub sk: Option<String>,
-    pub fvk: String,
-    pub address: String,
-    pub aindex: u32,
 }

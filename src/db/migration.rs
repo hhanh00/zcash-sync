@@ -182,5 +182,23 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         log::info!("Database migrated");
     }
 
+    // We may get a database that has no valid schema version from a version of single currency Z/YWallet
+    // because we kept the same app name in Google/Apple Stores. The upgraded app fails to recognize the db tables
+    // At least we monkey patch the accounts table to let the user access the backup page and recover his seed phrase
+    let c = connection.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('accounts') WHERE name = 'aindex'",
+        params![],
+        |row| {
+            let c: u32 = row.get(0)?;
+            Ok(c)
+        },
+    )?;
+    if c == 0 {
+        connection.execute(
+            "ALTER TABLE accounts ADD aindex INTEGER NOT NULL DEFAULT (0)",
+            params![],
+        )?;
+    }
+
     Ok(())
 }
