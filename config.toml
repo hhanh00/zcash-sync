@@ -1,0 +1,17 @@
+baseURL = 'https://hhanh00.github.io/zcash-sync/'
+languageCode = 'en-us'
+title = 'Zcash Warp Sync'
+
+theme = "hugo-theme-learn"
+
+[params]
+themeVariant = "blue"
+showVisitedLinks = true
+disableLandingPageButton = true
+custom_css = ["common.css"]
+
+[outputs]
+home = [ "HTML", "RSS", "JSON"]
+
+[markup.goldmark.renderer]    
+unsafe = true
