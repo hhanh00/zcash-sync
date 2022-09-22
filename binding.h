@@ -15,15 +15,36 @@ typedef void *DartPostCObjectFnType;
 
 #define N 200000
 
+typedef struct CResult_u32 {
+  uint32_t value;
+  char *error;
+} CResult_u32;
+
+typedef struct CResult_u8 {
+  uint8_t value;
+  char *error;
+} CResult_u8;
+
+typedef struct CResult_____c_char {
+  char *value;
+  char *error;
+} CResult_____c_char;
+
+typedef struct CResult_i64 {
+  int64_t value;
+  char *error;
+} CResult_i64;
+
+typedef struct CResult_u64 {
+  uint64_t value;
+  char *error;
+} CResult_u64;
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
 
 void deallocate_str(char *s);
-
-bool get_error(void);
-
-char *get_error_msg(void);
 
 void init_wallet(char *db_path);
 
@@ -37,7 +58,7 @@ char *get_lwd_url(uint8_t coin);
 
 void reset_app(void);
 
-uint32_t new_account(uint8_t coin, char *name, char *data, int32_t index);
+struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t index);
 
 void new_sub_account(char *name, int32_t index, uint32_t count);
 
@@ -47,54 +68,60 @@ void import_transparent_secret_key(uint8_t coin, uint32_t id_account, char *secr
 
 void cancel_warp(void);
 
-uint8_t warp(uint8_t coin, bool get_tx, uint32_t anchor_offset, uint32_t max_cost, int64_t port);
+struct CResult_u8 warp(uint8_t coin,
+                       bool get_tx,
+                       uint32_t anchor_offset,
+                       uint32_t max_cost,
+                       int64_t port);
 
 int8_t is_valid_key(uint8_t coin, char *key);
 
 bool valid_address(uint8_t coin, char *address);
 
-char *new_diversified_address(void);
+struct CResult_____c_char new_diversified_address(void);
 
-uint32_t get_latest_height(void);
+struct CResult_u32 get_latest_height(void);
 
-char *send_multi_payment(char *recipients_json,
-                         bool use_transparent,
-                         uint32_t anchor_offset,
-                         int64_t port);
+struct CResult_____c_char send_multi_payment(char *recipients_json,
+                                             bool use_transparent,
+                                             uint32_t anchor_offset,
+                                             int64_t port);
 
 void skip_to_last_height(uint8_t coin);
 
-uint32_t rewind_to(uint32_t height);
+struct CResult_u32 rewind_to(uint32_t height);
 
 void rescan_from(uint32_t height);
 
-int64_t mempool_sync(void);
+struct CResult_i64 mempool_sync(void);
 
 void mempool_reset(void);
 
 int64_t get_mempool_balance(void);
 
-uint64_t get_taddr_balance(uint8_t coin, uint32_t id_account);
+struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t id_account);
 
-char *shield_taddr(void);
+struct CResult_____c_char shield_taddr(void);
 
 void scan_transparent_accounts(uint32_t gap_limit);
 
-char *prepare_multi_payment(char *recipients_json, bool use_transparent, uint32_t anchor_offset);
+struct CResult_____c_char prepare_multi_payment(char *recipients_json,
+                                                bool use_transparent,
+                                                uint32_t anchor_offset);
 
-char *sign(char *tx, int64_t port);
+struct CResult_____c_char sign(char *tx, int64_t port);
 
-char *broadcast_tx(char *tx_str);
+struct CResult_____c_char broadcast_tx(char *tx_str);
 
-uint32_t get_activation_date(void);
+struct CResult_u32 get_activation_date(void);
 
-uint32_t get_block_by_time(uint32_t time);
+struct CResult_u32 get_block_by_time(uint32_t time);
 
-uint32_t sync_historical_prices(int64_t now, uint32_t days, char *currency);
+struct CResult_u32 sync_historical_prices(int64_t now, uint32_t days, char *currency);
 
 void store_contact(uint32_t id, char *name, char *address, bool dirty);
 
-char *commit_unsaved_contacts(uint32_t anchor_offset);
+struct CResult_____c_char commit_unsaved_contacts(uint32_t anchor_offset);
 
 void mark_message_read(uint32_t message, bool read);
 
@@ -106,32 +133,32 @@ void truncate_sync_data(void);
 
 void delete_account(uint8_t coin, uint32_t account);
 
-char *make_payment_uri(char *address, uint64_t amount, char *memo);
+struct CResult_____c_char make_payment_uri(char *address, uint64_t amount, char *memo);
 
-char *parse_payment_uri(char *uri);
+struct CResult_____c_char parse_payment_uri(char *uri);
 
-char *generate_random_enc_key(void);
+struct CResult_____c_char generate_random_enc_key(void);
 
-char *get_full_backup(char *key);
+struct CResult_____c_char get_full_backup(char *key);
 
 void restore_full_backup(char *key, char *backup);
 
-char *split_data(uint32_t id, char *data);
+struct CResult_____c_char split_data(uint32_t id, char *data);
 
-char *merge_data(char *drop);
+struct CResult_____c_char merge_data(char *drop);
 
-char *get_tx_summary(char *tx);
+struct CResult_____c_char get_tx_summary(char *tx);
 
-char *get_best_server(char **servers, uint32_t count);
+struct CResult_____c_char get_best_server(char **servers, uint32_t count);
 
 void import_from_zwl(uint8_t coin, char *name, char *data);
 
-char *derive_zip32(uint8_t coin,
-                   uint32_t id_account,
-                   uint32_t account,
-                   uint32_t external,
-                   bool has_address,
-                   uint32_t address);
+struct CResult_____c_char derive_zip32(uint8_t coin,
+                                       uint32_t id_account,
+                                       uint32_t account,
+                                       uint32_t external,
+                                       bool has_address,
+                                       uint32_t address);
 
 uintptr_t get_downloaded_size(void);
 
