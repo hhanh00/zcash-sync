@@ -15,6 +15,11 @@ name = "warp-rpc"
 path = "src/main/rpc.rs"
 required-features = ["rpc"]
 
+[[bin]]
+name = "wallet"
+path = "src/main/wallet.rs"
+required-features = ["dotenv"]
+
 #[[bin]]
 #name = "ledger"
 #path = "src/main/ledger.rs"
