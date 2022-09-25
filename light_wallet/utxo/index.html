@@ -5,7 +5,7 @@
 <meta name=generator content="Hugo 0.91.2">
 <meta name=description content>
 <link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
-<title>Data Model :: Zcash Warp Sync</title>
+<title>UTXO Model :: Zcash Warp Sync</title>
 <link href=/zcash-sync/css/nucleus.css?1664097225 rel=stylesheet>
 <link href=/zcash-sync/css/fontawesome-all.min.css?1664097225 rel=stylesheet>
 <link href=/zcash-sync/css/hybrid.css?1664097225 rel=stylesheet>
@@ -22,7 +22,7 @@
 <style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
 <link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
 </head>
-<body data-url=/zcash-sync/data_model/>
+<body data-url=/zcash-sync/light_wallet/utxo/>
 <nav id=sidebar class=showVisitedLinks>
 <div id=header-wrapper>
 <div id=header>
@@ -42,7 +42,8 @@
 </div>
 <div class=highlightable>
 <ul class=topics>
-<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class=dd-item>
+<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class="dd-item
+parent">
 <a href=/zcash-sync/light_wallet/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#wallet"/></svg>
 Light Wallets
 <i class="fas fa-check read-icon"></i>
@@ -60,7 +61,7 @@ Privacy
 <i class="fas fa-check read-icon"></i>
 </a>
 </li>
-<li data-nav-id=/zcash-sync/light_wallet/utxo/ title="UTXO Model" class=dd-item>
+<li data-nav-id=/zcash-sync/light_wallet/utxo/ title="UTXO Model" class="dd-item active">
 <a href=/zcash-sync/light_wallet/utxo/>
 UTXO Model
 <i class="fas fa-check read-icon"></i>
@@ -68,9 +69,7 @@ UTXO Model
 </li>
 </ul>
 </li>
-<li data-nav-id=/zcash-sync/data_model/ title="Data Model" class="dd-item
-parent
-active">
+<li data-nav-id=/zcash-sync/data_model/ title="Data Model" class=dd-item>
 <a href=/zcash-sync/data_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#db"/></svg>
 Data Model
 <i class="fas fa-check read-icon"></i>
@@ -107,25 +106,60 @@ Tables
 <i class="fas fa-bars"></i>
 </a>
 </span>
+<span id=toc-menu><i class="fas fa-list-alt"></i></span>
 <span class=links>
-<a href=/zcash-sync/>WarpSync</a> > Data Model
+<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/light_wallet/>Light Wallets</a> > UTXO Model
 </span>
+</div>
+<div class=progress>
+<div class=wrapper>
+<nav id=TableOfContents>
+<ul>
+<li><a href=#utxo>UTXO</a></li>
+<li><a href=#notes>Notes</a></li>
+</ul>
+</nav>
+</div>
 </div>
 </div>
 </div>
 <div id=head-tags>
 </div>
-<div id=chapter>
 <div id=body-inner>
-<h1 id=data-model>Data Model</h1>
+<h1>
+UTXO Model
+</h1>
+<p>Zcash is a Blockchain that uses the UTXO model first introduced in Bitcoin.</p>
+<h2 id=utxo>UTXO</h2>
+<p>Initially, every account/address has an empty balance. The only way to get
+coins into an account is through a transaction (TX).</p>
+<p>Transactions take <em>inputs</em> and produce <em>outputs</em>. Except for the mining
+transaction called the coinbase transaction, every transaction has inputs
+that fund the outputs.</p>
+<p>We&rsquo;ll not consider mining or minting and therefore we&rsquo;ll ignore the
+coinbase transaction.</p>
+<h2 id=notes>Notes</h2>
+<p>Inputs and outputs are <em>notes</em>. They have an amount and belong to an address.
+The address is associated with a secret key that let&rsquo;s you use the note as
+an input of a transaction. If you do not have the secret key, you cannot to spend
+the output.</p>
+<p>For public coins, notes are in clear text. By analyzing the blockchain, one can
+calculate the balance of every address in use. They just need to tally every
+incoming note and deduct every spent note.</p>
+<p>However, Zcash has both public and private notes. Public notes behave exactly
+like explained above but private notes are <em>encrypted</em>.</p>
+<p>Encrypted notes also have an amount and an address but this information is
+not readable unless you have a viewing key.</p>
+<div class="notices note"><p>Without the right viewing key, an encrypted note appears as random bytes.
+Encrypted notes are also called shielded notes.</p>
+</div>
 <footer class=footline>
 </footer>
 </div>
 </div>
-</div>
 <div id=navigation>
-<a class="nav nav-prev" href=/zcash-sync/light_wallet/utxo/ title="UTXO Model"> <i class="fa fa-chevron-left"></i></a>
-<a class="nav nav-next" href=/zcash-sync/data_model/tables/ title=Tables style=margin-right:0><i class="fa fa-chevron-right"></i></a>
+<a class="nav nav-prev" href=/zcash-sync/light_wallet/privacy/ title=Privacy> <i class="fa fa-chevron-left"></i></a>
+<a class="nav nav-next" href=/zcash-sync/data_model/ title="Data Model" style=margin-right:0><i class="fa fa-chevron-right"></i></a>
 </div>
 </section>
 <div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>
