@@ -5,7 +5,7 @@
 <meta name=generator content="Hugo 0.91.2">
 <meta name=description content>
 <link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
-<title>Tables :: Zcash Warp Sync</title>
+<title>Purpose :: Zcash Warp Sync</title>
 <link href=/zcash-sync/css/nucleus.css?1664088139 rel=stylesheet>
 <link href=/zcash-sync/css/fontawesome-all.min.css?1664088139 rel=stylesheet>
 <link href=/zcash-sync/css/hybrid.css?1664088139 rel=stylesheet>
@@ -22,7 +22,7 @@
 <style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
 <link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
 </head>
-<body data-url=/zcash-sync/data_model/tables/>
+<body data-url=/zcash-sync/light_wallet/purpose/>
 <nav id=sidebar class=showVisitedLinks>
 <div id=header-wrapper>
 <div id=header>
@@ -42,13 +42,14 @@
 </div>
 <div class=highlightable>
 <ul class=topics>
-<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class=dd-item>
+<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class="dd-item
+parent">
 <a href=/zcash-sync/light_wallet/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#wallet"/></svg>
 Light Wallets
 <i class="fas fa-check read-icon"></i>
 </a>
 <ul>
-<li data-nav-id=/zcash-sync/light_wallet/purpose/ title=Purpose class=dd-item>
+<li data-nav-id=/zcash-sync/light_wallet/purpose/ title=Purpose class="dd-item active">
 <a href=/zcash-sync/light_wallet/purpose/>
 Purpose
 <i class="fas fa-check read-icon"></i>
@@ -62,14 +63,13 @@ Privacy
 </li>
 </ul>
 </li>
-<li data-nav-id=/zcash-sync/data_model/ title="Data Model" class="dd-item
-parent">
+<li data-nav-id=/zcash-sync/data_model/ title="Data Model" class=dd-item>
 <a href=/zcash-sync/data_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#db"/></svg>
 Data Model
 <i class="fas fa-check read-icon"></i>
 </a>
 <ul>
-<li data-nav-id=/zcash-sync/data_model/tables/ title=Tables class="dd-item active">
+<li data-nav-id=/zcash-sync/data_model/tables/ title=Tables class=dd-item>
 <a href=/zcash-sync/data_model/tables/>
 Tables
 <i class="fas fa-check read-icon"></i>
@@ -102,7 +102,7 @@ Tables
 </span>
 <span id=toc-menu><i class="fas fa-list-alt"></i></span>
 <span class=links>
-<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/data_model/>Data Model</a> > Tables
+<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/light_wallet/>Light Wallets</a> > Purpose
 </span>
 </div>
 <div class=progress>
@@ -116,15 +116,37 @@ Tables
 </div>
 <div id=body-inner>
 <h1>
-Tables
+Purpose
 </h1>
+<p>The main purpose of a Light Wallet or
+any wallet for that matter is to provide:</p>
+<ul>
+<li>the capability to receive funds,</li>
+<li>the capability to send funds,</li>
+<li>and display the funds available</li>
+</ul>
+<p>In addition, Light Wallet should be less resource-demanding than regular wallets. In the past, the latter term has been used to refer to full nodes.</p>
+<p>Full node wallets download the entire blockchain and keep a fairly extensive representation of the data within.</p>
+<p>As of the time of writing (Sep 2022), the Zcash blockchain takes ~150 GB of storage space. It includes the Blockchain, and the database used to store the notes and transactions.</p>
+<p>At the same time, a light wallet for Zcash &ldquo;only&rdquo; downloads 5 GB of data and keeps a few MB of storage.</p>
+<p>This represents a gain of ~100X. They fit into mobile devices.
+They are particularly useful to the casual user.</p>
+<div class="notices note"><p>The original bitcoin paper by Satoshi mentions the idea of light wallets.
+He refers to them as Simplified Payment Verification wallets (SPV).</p>
+</div>
+<p>However, light wallets have also some disadvantages.</p>
+<p>The fact that they do not download the full blockchain prevents them from validating its content and, consequently,
+from participating actively in the network. They must connect to light wallet servers that have processed the blockchain on their behalf.
+The wallets, however, need not fully trust the servers since another form of cryptographic validation is employed.
+A detailed description of the threat model for wallet apps can be found here:
+<a href=https://zcash.readthedocs.io/en/latest/rtd_pages/wallet_threat_model.html>Wallet App Threat Model</a>.</p>
 <footer class=footline>
 </footer>
 </div>
 </div>
 <div id=navigation>
-<a class="nav nav-prev" href=/zcash-sync/data_model/ title="Data Model"> <i class="fa fa-chevron-left"></i></a>
-<a class="nav nav-next" href=/zcash-sync/light_wallet/ title="Light Wallets" style=margin-right:0><i class="fa fa-chevron-right"></i></a>
+<a class="nav nav-prev" href=/zcash-sync/light_wallet/ title="Light Wallets"> <i class="fa fa-chevron-left"></i></a>
+<a class="nav nav-next" href=/zcash-sync/light_wallet/privacy/ title=Privacy style=margin-right:0><i class="fa fa-chevron-right"></i></a>
 </div>
 </section>
 <div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>
