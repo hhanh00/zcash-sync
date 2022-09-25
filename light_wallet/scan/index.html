@@ -5,7 +5,7 @@
 <meta name=generator content="Hugo 0.91.2">
 <meta name=description content>
 <link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
-<title>Tables :: Zcash Warp Sync</title>
+<title>Scan / Sync :: Zcash Warp Sync</title>
 <link href=/zcash-sync/css/nucleus.css?1664127580 rel=stylesheet>
 <link href=/zcash-sync/css/fontawesome-all.min.css?1664127580 rel=stylesheet>
 <link href=/zcash-sync/css/hybrid.css?1664127580 rel=stylesheet>
@@ -22,7 +22,7 @@
 <style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
 <link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
 </head>
-<body data-url=/zcash-sync/data_model/tables/>
+<body data-url=/zcash-sync/light_wallet/scan/>
 <nav id=sidebar class=showVisitedLinks>
 <div id=header-wrapper>
 <div id=header>
@@ -42,7 +42,8 @@
 </div>
 <div class=highlightable>
 <ul class=topics>
-<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class=dd-item>
+<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class="dd-item
+parent">
 <a href=/zcash-sync/light_wallet/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#wallet"/></svg>
 Light Wallets
 <i class="fas fa-check read-icon"></i>
@@ -66,7 +67,7 @@ UTXO Model
 <i class="fas fa-check read-icon"></i>
 </a>
 </li>
-<li data-nav-id=/zcash-sync/light_wallet/scan/ title="Scan / Sync" class=dd-item>
+<li data-nav-id=/zcash-sync/light_wallet/scan/ title="Scan / Sync" class="dd-item active">
 <a href=/zcash-sync/light_wallet/scan/>
 Scan / Sync
 <i class="fas fa-check read-icon"></i>
@@ -74,14 +75,13 @@ Scan / Sync
 </li>
 </ul>
 </li>
-<li data-nav-id=/zcash-sync/data_model/ title="Data Model" class="dd-item
-parent">
+<li data-nav-id=/zcash-sync/data_model/ title="Data Model" class=dd-item>
 <a href=/zcash-sync/data_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#db"/></svg>
 Data Model
 <i class="fas fa-check read-icon"></i>
 </a>
 <ul>
-<li data-nav-id=/zcash-sync/data_model/tables/ title=Tables class="dd-item active">
+<li data-nav-id=/zcash-sync/data_model/tables/ title=Tables class=dd-item>
 <a href=/zcash-sync/data_model/tables/>
 Tables
 <i class="fas fa-check read-icon"></i>
@@ -114,17 +114,16 @@ Tables
 </span>
 <span id=toc-menu><i class="fas fa-list-alt"></i></span>
 <span class=links>
-<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/data_model/>Data Model</a> > Tables
+<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/light_wallet/>Light Wallets</a> > Scan / Sync
 </span>
 </div>
 <div class=progress>
 <div class=wrapper>
 <nav id=TableOfContents>
 <ul>
-<li><a href=#blocks>Blocks</a></li>
-<li><a href=#transactions>Transactions</a></li>
-<li><a href=#received-notes>Received Notes</a></li>
-<li><a href=#witnesses>Witnesses</a></li>
+<li><a href=#zkp-creation-function>ZKP Creation Function</a></li>
+<li><a href=#nullifiers>Nullifiers</a></li>
+<li><a href=#scan-outputs>Scan Outputs</a></li>
 </ul>
 </nav>
 </div>
@@ -135,55 +134,75 @@ Tables
 </div>
 <div id=body-inner>
 <h1>
-Tables
+Scan / Sync
 </h1>
-<p>In the previous section, we discusses the overall goals of scanning the
-blockchain. Now we are going to look at the data obtained after the scan
-completes.</p>
-<p>From the &ldquo;largest&rdquo; data to the &ldquo;smallest&rdquo; data:</p>
-<h2 id=blocks>Blocks</h2>
-<p>First we have blocks. We keep the block:</p>
+<p>Scanning the blockchain can be done in several ways. Ultimately
+they all achieve the same goal:</p>
 <ul>
-<li>height, hash and time,</li>
-<li>sapling tree</li>
+<li>Determine which notes you received, ie adding incoming funds,</li>
+<li>Cross-out the notes you spent, ie substracting outgoing funds,</li>
+<li>And finally, allowing you to spend your UTXO.</li>
 </ul>
-<p>The sapling tree field is unique to Zcash. The wallet needs it
-to update the note witnesses.</p>
-<h2 id=transactions>Transactions</h2>
-<p>The wallet only keeps the transactions for which it has detected either
-an incoming note or a spent note. Transparent transactions are not
-kept. They are not included in the wallet history either.</p>
-<ul>
-<li>id_tx: the id of the transactions. This is an internal ID only used by
-in our database.</li>
-<li>the account id</li>
-<li>the txid: the hash of the transaction. That&rsquo;s public information</li>
-<li>the height of the block that contains this transaction. Since there can only
-be one block at a given height, it uniquely identifies the block too</li>
-<li>the <em>net</em> value of the transaction</li>
-<li>the address of the spend/destination. For transactions that involve multiple recipients
-that we know about, the address is arbitrary one of them. For example, if you make
-a transaction from your account to several of your own accounts, there will be
-one transaction row per account, but the destination address will just be one of the
-recipients.</li>
-<li>the memo of one of the notes. If you make a multi-payment transaction, only one of
-the memos will be stored.</li>
-<li>the tx_index: the position of the transaction in the block</li>
-</ul>
-<div class="notices note"><p>Multi-payment transactions are rare. That&rsquo;s why the database model does not match
-directly with the UTXO model. Technically speaking, every UTXO has its own
-address and memo.</p>
+<p>The first two bullet points are typical of any UTXO based cryptocurrency wallet,
+but the last bullet point may be unusual.</p>
+<div class="notices note"><p>Once the blockchain scan finishes, your wallet is said to be synchronized.</p>
 </div>
-<h2 id=received-notes>Received Notes</h2>
-<h2 id=witnesses>Witnesses</h2>
-<div class="notices note"></div>
+<p>In most cryptocurrencies, as long as you have the secret key and
+a reference to the UTXO, you can spend it.</p>
+<p>This is not the case of Zcash.</p>
+<p>To spend a shielded UTXO, your wallet must also keep track of a value
+called the &ldquo;witness&rdquo; specific to a given note <em>and</em> block height.
+In other words, every note has a witness which is a several hundred byte
+long that changes every time we get a new block.</p>
+<p>When the wallet wants to spend a note, it needs to compute a &ldquo;proof&rdquo;
+of validity called a zero knowledge proof (ZKP). The ZKP ensures that
+we have the secret key and the reference to the UTXO without actually
+disclosing this information.</p>
+<h2 id=zkp-creation-function>ZKP Creation Function</h2>
+<p>One of the argument of the ZKP creation function is the witness. Therefore,
+if you want to spend a note, the wallet needs to compute its witness
+at a given height.</p>
+<p>Wallets are not obligated to provide the latest witnesses. But since
+the height is public information, if a wallet does not update the witnesses
+it would be possible to gain some knowledge by looking at the witness heights
+of a transaction.</p>
+<div class="notices note"><p>If a wallet does not update the note witnesses, one can check
+the height when a note is spent and deduce when it was received.</p>
+</div>
+<h2 id=nullifiers>Nullifiers</h2>
+<p>In Bitcoin, to spend a UTXO, a wallet simply has to refer to it
+and attach a digital signature proving it knows the secret key.</p>
+<p>In Zcash, UTXO are encrypted. But that&rsquo;s not enough. Spending a
+UTXO must also be hidden. If Zcash transactions referred to UTXO
+like Bitcoin does, one could know when the UTXO was created.
+Therefore even if it would be impossible to know the values and
+addresses of the notes, it would be possible to link notes with
+transactions.</p>
+<p>To avoid this, Zcash transactions do not directly refer to UTXO
+but they refer to a nullifier instead.</p>
+<p>Nullifiers are unique values associated with a note. Only the
+receiver of the note can create the nullifier and it&rsquo;s impossible
+to make a nullifier for a note that does not exist. The exact
+mechanism used to achieve this is beyond the scope of this document.</p>
+<div class="notices note"><p>Each UTXO has a unique nullifier. Nullifiers cannot be faked: Anyone can verify
+that a nullifier is associated with a real UTXO.</p>
+</div>
+<h2 id=scan-outputs>Scan Outputs</h2>
+<p>In conclusion, let&rsquo;s review what a scan must do:</p>
+<ul>
+<li>It must scan each transaction and try to decrypt its outputs.</li>
+<li>Successful decryptions generate &ldquo;received notes&rdquo; (fresh UTXO).</li>
+<li>For each received note, the wallet can calculate its nullifier.</li>
+<li>Spent notes are detected when their nullifier is used in a later transaction.</li>
+<li>For each UTXO, the wallet maintains a witness that it should keep updating.</li>
+</ul>
 <footer class=footline>
 </footer>
 </div>
 </div>
 <div id=navigation>
-<a class="nav nav-prev" href=/zcash-sync/data_model/ title="Data Model"> <i class="fa fa-chevron-left"></i></a>
-<a class="nav nav-next" href=/zcash-sync/light_wallet/ title="Light Wallets" style=margin-right:0><i class="fa fa-chevron-right"></i></a>
+<a class="nav nav-prev" href=/zcash-sync/light_wallet/utxo/ title="UTXO Model"> <i class="fa fa-chevron-left"></i></a>
+<a class="nav nav-next" href=/zcash-sync/data_model/ title="Data Model" style=margin-right:0><i class="fa fa-chevron-right"></i></a>
 </div>
 </section>
 <div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>
