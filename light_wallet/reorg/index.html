@@ -5,7 +5,7 @@
 <meta name=generator content="Hugo 0.91.2">
 <meta name=description content>
 <link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
-<title>Categories :: Zcash Warp Sync</title>
+<title>Reorganization :: Zcash Warp Sync</title>
 <link href=/zcash-sync/css/nucleus.css?1664171696 rel=stylesheet>
 <link href=/zcash-sync/css/fontawesome-all.min.css?1664171696 rel=stylesheet>
 <link href=/zcash-sync/css/hybrid.css?1664171696 rel=stylesheet>
@@ -22,7 +22,7 @@
 <style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
 <link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
 </head>
-<body data-url=/zcash-sync/categories/>
+<body data-url=/zcash-sync/light_wallet/reorg/>
 <nav id=sidebar class=showVisitedLinks>
 <div id=header-wrapper>
 <div id=header>
@@ -42,7 +42,8 @@
 </div>
 <div class=highlightable>
 <ul class=topics>
-<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class=dd-item>
+<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class="dd-item
+parent">
 <a href=/zcash-sync/light_wallet/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#wallet"/></svg>
 Light Wallets
 <i class="fas fa-check read-icon"></i>
@@ -72,7 +73,7 @@ Scan / Sync
 <i class="fas fa-check read-icon"></i>
 </a>
 </li>
-<li data-nav-id=/zcash-sync/light_wallet/reorg/ title=Reorganization class=dd-item>
+<li data-nav-id=/zcash-sync/light_wallet/reorg/ title=Reorganization class="dd-item active">
 <a href=/zcash-sync/light_wallet/reorg/>
 Reorganization
 <i class="fas fa-check read-icon"></i>
@@ -119,11 +120,12 @@ Tables
 </span>
 <span id=toc-menu><i class="fas fa-list-alt"></i></span>
 <span class=links>
-<a href=/zcash-sync/>WarpSync</a> > Categories
+<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/light_wallet/>Light Wallets</a> > Reorganization
 </span>
 </div>
 <div class=progress>
 <div class=wrapper>
+<nav id=TableOfContents></nav>
 </div>
 </div>
 </div>
@@ -132,17 +134,36 @@ Tables
 </div>
 <div id=body-inner>
 <h1>
-category ::
-Categories
+Reorganization
 </h1>
+<p>Reorganizations happen when several miners submit different blocks
+at the same height.</p>
+<p>It is a rare occurence but it happens.</p>
+<p>For example, if you have the following situation:</p>
 <ul>
+<li>Miner A submits block 1001 after block 1000</li>
+<li>Miner B submits a different block 1001</li>
+<li>Miner C submits a block 1002 based on miner B&rsquo;s block 1001</li>
 </ul>
+<p>Now we have two chains that deviate at block 1000:</p>
+<ul>
+<li>one built from Miner A&rsquo;s block 1001</li>
+<li>the other from Miner B&rsquo;s block 1001 and Miner C&rsquo;s 1002</li>
+</ul>
+<p>Since nodes cannot determine a-priori which chains will get longer after
+seeing block 1001, some of them first follow Miner A while others
+follow Miner B.</p>
+<p>But when Miner C produces block 1002, Miner B&rsquo;s chain is now longer
+than Miner A&rsquo;s.</p>
+<div class="notices info"><p>Nodes have to follow the longest chain.</p>
+</div>
 <footer class=footline>
 </footer>
 </div>
 </div>
 <div id=navigation>
-<a class="nav nav-next" href=/zcash-sync/light_wallet/ title="Light Wallets" style=margin-right:0><i class="fa fa-chevron-right"></i></a>
+<a class="nav nav-prev" href=/zcash-sync/light_wallet/scan/ title="Scan / Sync"> <i class="fa fa-chevron-left"></i></a>
+<a class="nav nav-next" href=/zcash-sync/data_model/ title="Data Model" style=margin-right:0><i class="fa fa-chevron-right"></i></a>
 </div>
 </section>
 <div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>

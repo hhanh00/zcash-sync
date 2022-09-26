@@ -6,19 +6,19 @@
 <meta name=description content>
 <link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
 <title>Tables :: Zcash Warp Sync</title>
-<link href=/zcash-sync/css/nucleus.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/fontawesome-all.min.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/hybrid.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/featherlight.min.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/perfect-scrollbar.min.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/auto-complete.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/atom-one-dark-reasonable.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/theme.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/tabs.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/hugo-theme.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/css/theme-blue.css?1664127580 rel=stylesheet>
-<link href=/zcash-sync/common.css?1664127580 rel=stylesheet>
-<script src=/zcash-sync/js/jquery-3.3.1.min.js?1664127580></script>
+<link href=/zcash-sync/css/nucleus.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/fontawesome-all.min.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/hybrid.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/featherlight.min.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/perfect-scrollbar.min.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/auto-complete.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/atom-one-dark-reasonable.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/theme.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/tabs.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/hugo-theme.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/css/theme-blue.css?1664171696 rel=stylesheet>
+<link href=/zcash-sync/common.css?1664171696 rel=stylesheet>
+<script src=/zcash-sync/js/jquery-3.3.1.min.js?1664171696></script>
 <style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
 <link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
 </head>
@@ -35,10 +35,10 @@
 <input data-search-input id=search-by type=search placeholder=Search...>
 <span data-search-clear><i class="fas fa-times"></i></span>
 </div>
-<script type=text/javascript src=/zcash-sync/js/lunr.min.js?1664127580></script>
-<script type=text/javascript src=/zcash-sync/js/auto-complete.js?1664127580></script>
+<script type=text/javascript src=/zcash-sync/js/lunr.min.js?1664171696></script>
+<script type=text/javascript src=/zcash-sync/js/auto-complete.js?1664171696></script>
 <script type=text/javascript>var baseurl="https://hhanh00.github.io/zcash-sync/"</script>
-<script type=text/javascript src=/zcash-sync/js/search.js?1664127580></script>
+<script type=text/javascript src=/zcash-sync/js/search.js?1664171696></script>
 </div>
 <div class=highlightable>
 <ul class=topics>
@@ -69,6 +69,12 @@ UTXO Model
 <li data-nav-id=/zcash-sync/light_wallet/scan/ title="Scan / Sync" class=dd-item>
 <a href=/zcash-sync/light_wallet/scan/>
 Scan / Sync
+<i class="fas fa-check read-icon"></i>
+</a>
+</li>
+<li data-nav-id=/zcash-sync/light_wallet/reorg/ title=Reorganization class=dd-item>
+<a href=/zcash-sync/light_wallet/reorg/>
+Reorganization
 <i class="fas fa-check read-icon"></i>
 </a>
 </li>
@@ -160,21 +166,57 @@ in our database.</li>
 <li>the txid: the hash of the transaction. That&rsquo;s public information</li>
 <li>the height of the block that contains this transaction. Since there can only
 be one block at a given height, it uniquely identifies the block too</li>
-<li>the <em>net</em> value of the transaction</li>
+<li>the <em>net</em> value of the transaction in Zats</li>
 <li>the address of the spend/destination. For transactions that involve multiple recipients
 that we know about, the address is arbitrary one of them. For example, if you make
 a transaction from your account to several of your own accounts, there will be
 one transaction row per account, but the destination address will just be one of the
-recipients.</li>
+recipients</li>
 <li>the memo of one of the notes. If you make a multi-payment transaction, only one of
-the memos will be stored.</li>
+the memos will be stored</li>
 <li>the tx_index: the position of the transaction in the block</li>
 </ul>
 <div class="notices note"><p>Multi-payment transactions are rare. That&rsquo;s why the database model does not match
 directly with the UTXO model. Technically speaking, every UTXO has its own
 address and memo.</p>
 </div>
+<p>The Transaction table is only used for the Transaction History view. It is
+not used for calculating the balance or for building new transactions.
+In other words, it&rsquo;s purely informational.</p>
 <h2 id=received-notes>Received Notes</h2>
+<p>On the contrary, the Received Notes table plays a critical role in
+defining the account state.</p>
+<p>The Received Notes table has the following columns:</p>
+<ul>
+<li>id_note: The primary key of the table</li>
+<li>account: the account ID to which this note belongs</li>
+<li>position: the absolute position of the note in the overall commitment tree.
+The first shielded output has position 0 and every output (regardless of
+its owner) increments the position. The order is determined by the order in
+which the output appeared in the blockchain. Unconfirmed transactions do not
+have a position</li>
+<li>tx: the id of the transaction (not the tx hash)</li>
+<li>height: the height of the block (same as tx height),</li>
+<li>output_index: A transaction can have multiple outputs. This is the index of
+the received note inside the transaction</li>
+<li>diversifier: Once decoded, we know the diversifier value that was used to
+derive the address. In zcash, a secret key can generate millions of addresses
+though many wallets just use one of them</li>
+<li>value: the amount of the note in Zats</li>
+<li>rcm: the random value used by sender when generating the output note.</li>
+<li>nf: the note nullifier. We calculate this value from the note position and
+the full viewing key. The note nullifier is <em>not</em> known by the sender</li>
+<li>spent: the block height when the note is spent. If the note is unspent, spent
+is NULL. If the note is spent but unconfirmed, height is equal to 0</li>
+<li>excluded: a boolean flag that indicates if this note should be excluded from
+note selection when make a new payment</li>
+</ul>
+<p>The Received Notes table allows us to:</p>
+<ul>
+<li>compute the account balances by summing the value of unspent notes,</li>
+<li>find which notes can be spent in new transactions</li>
+<li>rollback the blockchain when there is a <a href=/zcash-sync/light_wallet/reorg/>reorganization</a></li>
+</ul>
 <h2 id=witnesses>Witnesses</h2>
 <div class="notices note"></div>
 <footer class=footline>
@@ -189,17 +231,17 @@ address and memo.</p>
 <div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>
 <div style=border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px></div>
 </div>
-<script src=/zcash-sync/js/clipboard.min.js?1664127580></script>
-<script src=/zcash-sync/js/perfect-scrollbar.min.js?1664127580></script>
-<script src=/zcash-sync/js/perfect-scrollbar.jquery.min.js?1664127580></script>
-<script src=/zcash-sync/js/jquery.sticky.js?1664127580></script>
-<script src=/zcash-sync/js/featherlight.min.js?1664127580></script>
-<script src=/zcash-sync/js/highlight.pack.js?1664127580></script>
+<script src=/zcash-sync/js/clipboard.min.js?1664171696></script>
+<script src=/zcash-sync/js/perfect-scrollbar.min.js?1664171696></script>
+<script src=/zcash-sync/js/perfect-scrollbar.jquery.min.js?1664171696></script>
+<script src=/zcash-sync/js/jquery.sticky.js?1664171696></script>
+<script src=/zcash-sync/js/featherlight.min.js?1664171696></script>
+<script src=/zcash-sync/js/highlight.pack.js?1664171696></script>
 <script>hljs.initHighlightingOnLoad()</script>
-<script src=/zcash-sync/js/modernizr.custom-3.6.0.js?1664127580></script>
-<script src=/zcash-sync/js/learn.js?1664127580></script>
-<script src=/zcash-sync/js/hugo-learn.js?1664127580></script>
-<script src=/zcash-sync/mermaid/mermaid.js?1664127580></script>
+<script src=/zcash-sync/js/modernizr.custom-3.6.0.js?1664171696></script>
+<script src=/zcash-sync/js/learn.js?1664171696></script>
+<script src=/zcash-sync/js/hugo-learn.js?1664171696></script>
+<script src=/zcash-sync/mermaid/mermaid.js?1664171696></script>
 <script>mermaid.initialize({startOnLoad:!0})</script>
 <script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.js integrity=sha384-ljao5I1l+8KYFXG7LNEA7DyaFvuvSCmedUf6Y6JI7LJqiu8q5dEivP2nDdFH31V4 crossorigin=anonymous></script>
 <script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/contrib/auto-render.min.js integrity=sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1}]})'></script>
