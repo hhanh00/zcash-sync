@@ -14,12 +14,17 @@ fn main() -> Result<()> {
     let reader = BufReader::new(file);
     let mut started = false;
     let mut key = String::new();
+    let mut next_line_is_key = true;
     for (i, line) in reader.lines().enumerate() {
         let ln = line?.trim_start().to_string();
-        if !started && ln != "HEADER=END" { continue; } // skip header
-        started = true;
+        if ln == "HEADER=END" {
+            started = true;
+            next_line_is_key = true;
+            continue;
+        } // skip header
+        if !started { continue; }
         if ln == "DATA=END" { break } // stop at data end
-        if i % 2 == 1 {
+        if next_line_is_key {
             let k = hex::decode(ln).unwrap();
             let len = k[0] as usize;
             key = String::from_utf8_lossy(&k[1..=len]).to_string(); // collect key name
@@ -32,6 +37,7 @@ fn main() -> Result<()> {
                 println!("{}", encode_extended_spending_key(MainNetwork.hrp_sapling_extended_spending_key(), &s));
             }
         }
+        next_line_is_key = !next_line_is_key;
     }
 
     Ok(())
