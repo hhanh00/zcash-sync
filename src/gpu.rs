@@ -123,33 +123,36 @@ fn collect_decrypted_notes(
         let domain = SaplingDomain::for_height(*network, BlockHeight::from_u32(b.height as u32));
         for (tx_index, tx) in b.vtx.iter().enumerate() {
             for (output_index, co) in tx.outputs.iter().enumerate() {
-                let plaintext = &output_buffer[i * buffer_stride + 32..i * buffer_stride + 92];
-                // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
-                if plaintext[0] <= 2 && plaintext[18] < 0x08 && plaintext[19] == 0 {
-                    if let Some((note, pa)) =
+                if !co.epk.is_empty() {
+                    let offset = i * buffer_stride + 32;
+                    let plaintext = &output_buffer[offset..offset + 60];
+                    // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
+                    if plaintext[0] <= 2 && plaintext[18] < 0x08 && plaintext[19] == 0 {
+                        if let Some((note, pa)) =
                         domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext)
-                    {
-                        let position_in_block =
-                            usize::from_le_bytes(plaintext[52..60].try_into().unwrap());
-                        let cmu = note.cmu().to_bytes();
-                        if &cmu == co.cmu.as_slice() {
-                            log::info!("Note {} {}", account, u64::from(note.value));
-                            decrypted_notes.push(DecryptedNote {
-                                account,
-                                ivk: fvk.clone(),
-                                note,
-                                pa,
-                                position_in_block,
-                                viewonly: false,
-                                height: b.height as u32,
-                                txid: tx.hash.clone(),
-                                tx_index,
-                                output_index,
-                            });
+                        {
+                            let position_in_block =
+                                usize::from_le_bytes(plaintext[52..60].try_into().unwrap());
+                            let cmu = note.cmu().to_bytes();
+                            if &cmu == co.cmu.as_slice() {
+                                log::info!("Note {} {}", account, u64::from(note.value));
+                                decrypted_notes.push(DecryptedNote {
+                                    account,
+                                    ivk: fvk.clone(),
+                                    note,
+                                    pa,
+                                    position_in_block,
+                                    viewonly: false,
+                                    height: b.height as u32,
+                                    txid: tx.hash.clone(),
+                                    tx_index,
+                                    output_index,
+                                });
+                            }
                         }
                     }
+                    i += 1;
                 }
-                i += 1;
             }
         }
         db.notes.extend(decrypted_notes);

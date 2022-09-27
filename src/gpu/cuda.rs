@@ -150,34 +150,29 @@ impl CudaProcessor {
         let cuda_context = m.as_ref().unwrap();
         CurrentContext::set_current(&cuda_context.context).unwrap();
 
-        let n = blocks
-            .iter()
-            .map(|b| b.vtx.iter().map(|tx| tx.outputs.len()).sum::<usize>())
-            .sum::<usize>();
-        let block_count = (n + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-
         let decrypted_blocks = collect_nf(blocks)?;
 
-        let mut data_buffer = vec![0u8; n * BUFFER_SIZE];
+        let mut data_buffer = vec![];
+        let mut i = 0;
         for db in decrypted_blocks.iter() {
-            let mut i = 0;
             let mut position_in_block = 0;
             let b = &db.compact_block;
             for tx in b.vtx.iter() {
                 for co in tx.outputs.iter() {
-                    if co.epk.is_empty() {
-                        break;
-                    } // skip decryption
-                    data_buffer[i * BUFFER_SIZE..i * BUFFER_SIZE + 32].copy_from_slice(&co.epk);
-                    data_buffer[i * BUFFER_SIZE + 32..i * BUFFER_SIZE + 84]
-                        .copy_from_slice(&co.ciphertext);
-                    data_buffer[i * BUFFER_SIZE + 84..i * BUFFER_SIZE + 92]
-                        .copy_from_slice(&usize::to_le_bytes(position_in_block));
-                    i += 1;
+                    if !co.epk.is_empty() {
+                        data_buffer.extend(&co.epk);
+                        data_buffer.extend(&co.ciphertext);
+                        data_buffer.extend(&u64::to_le_bytes(position_in_block as u64));
+                        data_buffer.extend(&[0u8; 4]); // padding
+                        i += 1;
+                    }
                     position_in_block += 1;
                 }
             }
         }
+
+        let n = i;
+        let block_count = (n + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
         let encrypted_data_device = unsafe { DeviceBuffer::uninitialized(data_buffer.len())? };
         let ivk_device = unsafe { DeviceBuffer::zeroed(32)? };
@@ -199,6 +194,7 @@ impl CudaProcessor {
 
 impl GPUProcessor for CudaProcessor {
     fn decrypt_account(&mut self, ivk: &SaplingIvk) -> Result<()> {
+        log::info!("n = {}", self.n);
         if self.n == 0 {
             return Ok(());
         }
