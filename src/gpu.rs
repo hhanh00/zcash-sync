@@ -123,7 +123,7 @@ fn collect_decrypted_notes(
         let domain = SaplingDomain::for_height(*network, BlockHeight::from_u32(b.height as u32));
         for (tx_index, tx) in b.vtx.iter().enumerate() {
             for (output_index, co) in tx.outputs.iter().enumerate() {
-                let plaintext = &output_buffer[i * buffer_stride + 32..i * buffer_stride + 84];
+                let plaintext = &output_buffer[i * buffer_stride + 32..i * buffer_stride + 92];
                 // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
                 if plaintext[0] <= 2 && plaintext[18] < 0x08 && plaintext[19] == 0 {
                     if let Some((note, pa)) =
