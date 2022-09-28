@@ -113,6 +113,8 @@ pub async fn build_sign_send_multi_payment(
     let tx_id = broadcast_tx(&raw_tx).await?;
 
     c.db()?.tx_mark_spend(&note_ids)?;
+    let mut mempool = c.mempool.lock().unwrap();
+    mempool.clear()?;
     Ok(tx_id)
 }
 

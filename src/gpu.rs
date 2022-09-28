@@ -129,7 +129,7 @@ fn collect_decrypted_notes(
                     // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
                     if plaintext[0] <= 2 && plaintext[18] < 0x08 && plaintext[19] == 0 {
                         if let Some((note, pa)) =
-                        domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext)
+                            domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext)
                         {
                             let position_in_block =
                                 usize::from_le_bytes(plaintext[52..60].try_into().unwrap());

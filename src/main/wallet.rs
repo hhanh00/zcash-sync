@@ -1,6 +1,6 @@
+use anyhow::Result;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use anyhow::Result;
 use zcash_client_backend::encoding::encode_extended_spending_key;
 use zcash_primitives::consensus::Network::MainNetwork;
 use zcash_primitives::consensus::Parameters;
@@ -22,19 +22,28 @@ fn main() -> Result<()> {
             next_line_is_key = true;
             continue;
         } // skip header
-        if !started { continue; }
-        if ln == "DATA=END" { break } // stop at data end
+        if !started {
+            continue;
+        }
+        if ln == "DATA=END" {
+            break;
+        } // stop at data end
         if next_line_is_key {
             let k = hex::decode(ln).unwrap();
             let len = k[0] as usize;
             key = String::from_utf8_lossy(&k[1..=len]).to_string(); // collect key name
-        }
-        else {
+        } else {
             let value = ln;
             if key == "sapzkey" {
                 let sapkey = hex::decode(value).unwrap(); // export secret key
                 let s = ExtendedSpendingKey::read(&*sapkey).unwrap();
-                println!("{}", encode_extended_spending_key(MainNetwork.hrp_sapling_extended_spending_key(), &s));
+                println!(
+                    "{}",
+                    encode_extended_spending_key(
+                        MainNetwork.hrp_sapling_extended_spending_key(),
+                        &s
+                    )
+                );
             }
         }
         next_line_is_key = !next_line_is_key;
