@@ -5,7 +5,7 @@
 <meta name=generator content="Hugo 0.91.2">
 <meta name=description content>
 <link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
-<title>Interface :: Zcash Warp Sync</title>
+<title>Decrypt :: Zcash Warp Sync</title>
 <link href=/zcash-sync/css/nucleus.css?1664445049 rel=stylesheet>
 <link href=/zcash-sync/css/fontawesome-all.min.css?1664445049 rel=stylesheet>
 <link href=/zcash-sync/css/hybrid.css?1664445049 rel=stylesheet>
@@ -22,7 +22,7 @@
 <style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
 <link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
 </head>
-<body data-url=/zcash-sync/api/>
+<body data-url=/zcash-sync/execution_model/tasks/decrypt/>
 <nav id=sidebar class=showVisitedLinks>
 <div id=header-wrapper>
 <div id=header>
@@ -106,13 +106,15 @@ Rollback
 </li>
 </ul>
 </li>
-<li data-nav-id=/zcash-sync/execution_model/ title="Execution Model" class=dd-item>
+<li data-nav-id=/zcash-sync/execution_model/ title="Execution Model" class="dd-item
+parent">
 <a href=/zcash-sync/execution_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#work"/></svg>
 Execution Model
 <i class="fas fa-check read-icon"></i>
 </a>
 <ul>
-<li data-nav-id=/zcash-sync/execution_model/tasks/ title=Tasks class=dd-item>
+<li data-nav-id=/zcash-sync/execution_model/tasks/ title=Tasks class="dd-item
+parent">
 <a href=/zcash-sync/execution_model/tasks/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#task"/></svg>
 Tasks
 <i class="fas fa-check read-icon"></i>
@@ -124,7 +126,7 @@ Download
 <i class="fas fa-check read-icon"></i>
 </a>
 </li>
-<li data-nav-id=/zcash-sync/execution_model/tasks/decrypt/ title=Decrypt class=dd-item>
+<li data-nav-id=/zcash-sync/execution_model/tasks/decrypt/ title=Decrypt class="dd-item active">
 <a href=/zcash-sync/execution_model/tasks/decrypt/>
 Decrypt
 <i class="fas fa-check read-icon"></i>
@@ -152,9 +154,7 @@ Agents
 </li>
 </ul>
 </li>
-<li data-nav-id=/zcash-sync/api/ title=Interface class="dd-item
-parent
-active">
+<li data-nav-id=/zcash-sync/api/ title=Interface class=dd-item>
 <a href=/zcash-sync/api/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#api"/></svg>
 Interface
 <i class="fas fa-check read-icon"></i>
@@ -189,25 +189,95 @@ Example
 <i class="fas fa-bars"></i>
 </a>
 </span>
+<span id=toc-menu><i class="fas fa-list-alt"></i></span>
 <span class=links>
-<a href=/zcash-sync/>WarpSync</a> > Interface
+<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/execution_model/>Execution Model</a> > <a href=/zcash-sync/execution_model/tasks/>Tasks</a> > Decrypt
 </span>
+</div>
+<div class=progress>
+<div class=wrapper>
+<nav id=TableOfContents>
+<ul>
+<li><a href=#trial-decryption-algorithm>Trial Decryption Algorithm</a></li>
+<li><a href=#batch-optimization>Batch optimization</a></li>
+<li><a href=#multi-threading>Multi Threading</a></li>
+</ul>
+</nav>
+</div>
 </div>
 </div>
 </div>
 <div id=head-tags>
 </div>
-<div id=chapter>
 <div id=body-inner>
-<h1 id=interface>Interface</h1>
+<h1>
+Decrypt
+</h1>
+<p>One of the major tasks in terms of computation is trial decryption.</p>
+<p>Every output note (EPK, CIPHERTEXT, CMU) needs to be trial decrypted
+with every account Incoming Viewing Key (IVK).</p>
+<p>There are currently more than 20 million notes (and it increases).
+If you have 2 accounts, it means having to trial decrypt 40 million times.</p>
+<p>Typically, one trial decryption takes ~1 ms (the exact time depends on your CPU).
+Therefore trial decryption can make up for a substantial portion of the synchronization.</p>
+<p>The decryption is performed by the note-encryption crate of <code>librustzcash</code>.</p>
+<p>Optionally, on some platform WarpSync can use an alternate hardware accelerated
+implementation.</p>
+<p>The CIPHERTEXT in the Compact Output <em>only</em> contains the first 52 bytes
+of the complete CIPHERTEXT.</p>
+<div class="notices info"><p>Compact Outputs exclude the COUT and MEMO parts, therefore it is not possible
+to decrypt the memo text or the <em>outgoing</em> notes.</p>
+</div>
+<p>However, we can identity outgoing transactions by the fact that they
+use one of our UTXO.</p>
+<h2 id=trial-decryption-algorithm>Trial Decryption Algorithm</h2>
+<p>For reference, here is an <em>overview</em> of the algorithm used for decrypting
+a compact output using an IVK.</p>
+<ul>
+<li>The $E$ = EPK, Ephemeral Public Key is a point on the Jubjub curve serialized
+in compressed form.</li>
+<li>The Diffie-Hellman shared secret is $ S = E^{\text{IVK}}$. Note that the
+base point $E$ differs with every note and therefore we cannot optimize
+the exponentiation by precomputing tables of powers of $E$.</li>
+<li>The decryption key $K$ is the Blake2b hash of $S$.</li>
+<li>The ciphertext is encrypted with Chacha20 using $K$.</li>
+</ul>
+<p>Once again, the CIPHERTEXT in the Compact Output <em>only</em> contains the first 52 bytes
+of the complete CIPHERTEXT.</p>
+<p>It doesn&rsquo;t have the memo or the authentication digest. We cannot directly
+check that the decrypted text is valid. However, the format of a note
+restricts the byte values at some offsets. For example, the first byte
+is the note version number. It has to be 2 since zip 212 activation.</p>
+<p>Furthermore, if by chance the plain note passed all format validation checks
+and was still invalid, it would be caught by the CMU check.</p>
+<p>We can compute the plain note commitment hash (CMU) and make sure it matches
+the CMU from the Compact Output.</p>
+<h2 id=batch-optimization>Batch optimization</h2>
+<ol>
+<li>Getting the affine coordinates (u, v) of EPK involves computing the inverse of a
+field element. We can batch multiple inversions together and only have to
+calculate one inverse, at the expense of having to do more multiplications.
+However, inversions are much more expensive than multiplications so it is still a net
+gain.</li>
+<li>The point exponentiation is carried out in Extended Coordinates because
+then we don&rsquo;t have to do field inversions, and it&rsquo;s faster, but we
+have to normalize the result and return to Affine Coordinates. This conversion
+uses a field inversion per point. Here again, we can batch these normalizations
+and use a single inversion for all the notes of a batch.</li>
+</ol>
+<h2 id=multi-threading>Multi Threading</h2>
+<p>If your CPU has several cores, trial decryption is automatically
+performed in parallel. We use <a href=https://docs.rs/rayon/1.5.3/rayon/index.html>Rayon</a>.</p>
+<p>Rayon is lightweight and convenient for introducing parallelism into existing code.
+It guarantees data-race free executions and takes advantage of parallelism when sensible,
+based on work-load at runtime.</p>
 <footer class=footline>
 </footer>
 </div>
 </div>
-</div>
 <div id=navigation>
-<a class="nav nav-prev" href=/zcash-sync/execution_model/agents/ title=Agents> <i class="fa fa-chevron-left"></i></a>
-<a class="nav nav-next" href=/zcash-sync/example/ title=Example style=margin-right:0><i class="fa fa-chevron-right"></i></a>
+<a class="nav nav-prev" href=/zcash-sync/execution_model/tasks/download/ title=Download> <i class="fa fa-chevron-left"></i></a>
+<a class="nav nav-next" href=/zcash-sync/execution_model/tasks/witnesses/ title=Witnesses style=margin-right:0><i class="fa fa-chevron-right"></i></a>
 </div>
 </section>
 <div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>

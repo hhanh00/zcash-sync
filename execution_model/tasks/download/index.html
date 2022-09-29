@@ -5,7 +5,7 @@
 <meta name=generator content="Hugo 0.91.2">
 <meta name=description content>
 <link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
-<title>Interface :: Zcash Warp Sync</title>
+<title>Download :: Zcash Warp Sync</title>
 <link href=/zcash-sync/css/nucleus.css?1664445049 rel=stylesheet>
 <link href=/zcash-sync/css/fontawesome-all.min.css?1664445049 rel=stylesheet>
 <link href=/zcash-sync/css/hybrid.css?1664445049 rel=stylesheet>
@@ -22,7 +22,7 @@
 <style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
 <link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
 </head>
-<body data-url=/zcash-sync/api/>
+<body data-url=/zcash-sync/execution_model/tasks/download/>
 <nav id=sidebar class=showVisitedLinks>
 <div id=header-wrapper>
 <div id=header>
@@ -106,19 +106,21 @@ Rollback
 </li>
 </ul>
 </li>
-<li data-nav-id=/zcash-sync/execution_model/ title="Execution Model" class=dd-item>
+<li data-nav-id=/zcash-sync/execution_model/ title="Execution Model" class="dd-item
+parent">
 <a href=/zcash-sync/execution_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#work"/></svg>
 Execution Model
 <i class="fas fa-check read-icon"></i>
 </a>
 <ul>
-<li data-nav-id=/zcash-sync/execution_model/tasks/ title=Tasks class=dd-item>
+<li data-nav-id=/zcash-sync/execution_model/tasks/ title=Tasks class="dd-item
+parent">
 <a href=/zcash-sync/execution_model/tasks/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#task"/></svg>
 Tasks
 <i class="fas fa-check read-icon"></i>
 </a>
 <ul>
-<li data-nav-id=/zcash-sync/execution_model/tasks/download/ title=Download class=dd-item>
+<li data-nav-id=/zcash-sync/execution_model/tasks/download/ title=Download class="dd-item active">
 <a href=/zcash-sync/execution_model/tasks/download/>
 Download
 <i class="fas fa-check read-icon"></i>
@@ -152,9 +154,7 @@ Agents
 </li>
 </ul>
 </li>
-<li data-nav-id=/zcash-sync/api/ title=Interface class="dd-item
-parent
-active">
+<li data-nav-id=/zcash-sync/api/ title=Interface class=dd-item>
 <a href=/zcash-sync/api/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#api"/></svg>
 Interface
 <i class="fas fa-check read-icon"></i>
@@ -189,25 +189,61 @@ Example
 <i class="fas fa-bars"></i>
 </a>
 </span>
+<span id=toc-menu><i class="fas fa-list-alt"></i></span>
 <span class=links>
-<a href=/zcash-sync/>WarpSync</a> > Interface
+<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/execution_model/>Execution Model</a> > <a href=/zcash-sync/execution_model/tasks/>Tasks</a> > Download
 </span>
+</div>
+<div class=progress>
+<div class=wrapper>
+<nav id=TableOfContents>
+<ul>
+<li><a href=#block-chunks>Block Chunks</a></li>
+</ul>
+</nav>
+</div>
 </div>
 </div>
 </div>
 <div id=head-tags>
 </div>
-<div id=chapter>
 <div id=body-inner>
-<h1 id=interface>Interface</h1>
+<h1>
+Download
+</h1>
+<p>This task consists of retrieving Compact Blocks from the server and
+sending them downstream to the other tasks.</p>
+<p>Lightwalletd offers a streaming interface that allows us to retrieve
+a range of blocks without blocking.</p>
+<p>The start height is our latest synchronization height + 1.
+The end height is the latest block. The range can potentially be
+very large, but we don&rsquo;t buffer more than a chunk of blocks
+and therefore can process large ranges.</p>
+<h2 id=block-chunks>Block Chunks</h2>
+<p>Warp Sync does not process blocks individually but as a sub ranges
+of the whole synchronization range.</p>
+<p>When we receive a block, we filter out the transactions that have
+too many outputs/actions (Spam Filter) by clearing their
+output EPK and CIPHERTEXT.</p>
+<p>We need to keep the CMU. They are needed for the Witness update.</p>
+<p>The library queries the device available memory and adjusts the
+maximum number of outputs per chunk with a cap of 200 000 outputs.</p>
+<div class="notices note"><p>The outputs are counted before the spam filter.</p>
+</div>
+<p>Otherwise, we could have an extremly high number of outputs to
+process in the &ldquo;Update Witness&rdquo; stage.</p>
+<p>Once a chunk is full, we send it down through the
+<a href=/zcash-sync/execution_model/pipeline/>pipeline</a> to the
+next processing stage.</p>
+<div class="notices info"><p>Download continues asynchronously in parallel with block chunk processing.</p>
+</div>
 <footer class=footline>
 </footer>
 </div>
 </div>
-</div>
 <div id=navigation>
-<a class="nav nav-prev" href=/zcash-sync/execution_model/agents/ title=Agents> <i class="fa fa-chevron-left"></i></a>
-<a class="nav nav-next" href=/zcash-sync/example/ title=Example style=margin-right:0><i class="fa fa-chevron-right"></i></a>
+<a class="nav nav-prev" href=/zcash-sync/execution_model/tasks/ title=Tasks> <i class="fa fa-chevron-left"></i></a>
+<a class="nav nav-next" href=/zcash-sync/execution_model/tasks/decrypt/ title=Decrypt style=margin-right:0><i class="fa fa-chevron-right"></i></a>
 </div>
 </section>
 <div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>
