@@ -6,19 +6,19 @@
 <meta name=description content>
 <link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
 <title>Witnesses :: Zcash Warp Sync</title>
-<link href=/zcash-sync/css/nucleus.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/fontawesome-all.min.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/hybrid.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/featherlight.min.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/perfect-scrollbar.min.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/auto-complete.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/atom-one-dark-reasonable.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/theme.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/tabs.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/hugo-theme.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/css/theme-blue.css?1664445049 rel=stylesheet>
-<link href=/zcash-sync/common.css?1664445049 rel=stylesheet>
-<script src=/zcash-sync/js/jquery-3.3.1.min.js?1664445049></script>
+<link href=/zcash-sync/css/nucleus.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/fontawesome-all.min.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/hybrid.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/featherlight.min.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/perfect-scrollbar.min.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/auto-complete.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/atom-one-dark-reasonable.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/theme.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/tabs.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/hugo-theme.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/css/theme-blue.css?1664892695 rel=stylesheet>
+<link href=/zcash-sync/common.css?1664892695 rel=stylesheet>
+<script src=/zcash-sync/js/jquery-3.3.1.min.js?1664892695></script>
 <style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
 <link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
 </head>
@@ -35,10 +35,10 @@
 <input data-search-input id=search-by type=search placeholder=Search...>
 <span data-search-clear><i class="fas fa-times"></i></span>
 </div>
-<script type=text/javascript src=/zcash-sync/js/lunr.min.js?1664445049></script>
-<script type=text/javascript src=/zcash-sync/js/auto-complete.js?1664445049></script>
+<script type=text/javascript src=/zcash-sync/js/lunr.min.js?1664892695></script>
+<script type=text/javascript src=/zcash-sync/js/auto-complete.js?1664892695></script>
 <script type=text/javascript>var baseurl="https://hhanh00.github.io/zcash-sync/"</script>
-<script type=text/javascript src=/zcash-sync/js/search.js?1664445049></script>
+<script type=text/javascript src=/zcash-sync/js/search.js?1664892695></script>
 </div>
 <div class=highlightable>
 <ul class=topics>
@@ -198,7 +198,9 @@ Example
 <div class=wrapper>
 <nav id=TableOfContents>
 <ul>
+<li><a href=#note-commitments>Note Commitments</a></li>
 <li><a href=#note-commitment-tree>Note Commitment Tree</a></li>
+<li><a href=#merkle-tree>Merkle Tree</a></li>
 <li><a href=#pedersen-hash>Pedersen Hash</a></li>
 <li><a href=#merkle-path>Merkle Path</a></li>
 <li><a href=#spend-statement-zkp>Spend Statement ZKP</a></li>
@@ -214,11 +216,69 @@ Example
 <h1>
 Witnesses
 </h1>
+<h2 id=note-commitments>Note Commitments</h2>
+<p>When someone makes a transactions and therefore creates output notes, they
+are encrypted. Even when they are spent, notes are not revealed because
+that would also give the transaction that created them.</p>
+<p>In fact, we could imagine a scheme where the notes are not stored
+in the blockchain but only the zk proofs. Of course, it implies that
+clients have another way to retrieve the encrypted output if they
+don&rsquo;t store it themselves.</p>
+<p>In any case, the point is that when a transaction output, or note
+is created we cannot blindly trust that it does not double spend
+or just has a value that exceeds the inputs.</p>
+<p>In a public blockchain, full nodes can verify every transaction
+and ensure that they are well-formed. But if the transaction is
+encrypted, it is impossible to check them.</p>
+<p>Thanks for zero knowledge proofs, we have now the technology to
+create cryptographic proofs that the outputs follow the protocol
+rules without knowing precisely their value.</p>
+<p>But the ZKP is not enough. When we want to spend one of our note,
+we must also show that what we spend is indeed a previously
+unspent output.</p>
+<p>The usual tool for that is the <em>cryptographic commitment</em>.</p>
+<p>Whenever you want to show that you know something but you don&rsquo;t want
+to reveal it <em>at the moment</em>, you can use a commitment.</p>
+<p>A commitment scheme works in two phases.</p>
+<ul>
+<li>You &ldquo;commit&rdquo; to your value by calculating a &ldquo;commitment value&rdquo;. You
+<em>publish</em> this value for everyone to see.</li>
+<li>When you want to show that you have the value, you reveal it
+and people can check that the commitment value matches the published commitment.</li>
+</ul>
+<p>For it to work, the commitment value must be:</p>
+<ul>
+<li>binding: You must reveal the right value. If you reveal something else, the
+commitment value will <em>not</em> match.</li>
+<li>hiding: The commitment value is public but it must not give any information
+that could reveal the source value.</li>
+</ul>
+<div class="notices note"><p>In Zcash, the note commitments ensure that when the notes are
+used, they refer to outputs of previous transactions.</p>
+</div>
+<p>Output notes are encrypted but their commitments are public.</p>
 <h2 id=note-commitment-tree>Note Commitment Tree</h2>
+<p>Note commitments are put in the Blockchain and the order
+in which they appear defines the order in which they added to a binary
+tree of height 63. This tree is called the Note Commitment Tree.
+Every zcash node agrees on the same commitment tree since it only
+contains public information.</p>
+<p>This tree has millions of leaves. They are never removed or modified.
+Therefore the tree keeps growing and is not prunable at the moment.</p>
+<p>If you receive a note from a transaction, the note is yours and
+you have the note that matches the commitment. However, only a
+small fraction of all the note commitments are yours. The rest
+belong to other users.</p>
+<p>When you want to spend a note, you must prove that it was a previous
+transaction output. The way you prove that is by showing that the note
+commitment is in the tree.</p>
+<p>Now, showing that your note is in the tree without telling which note it
+is, is difficult.</p>
+<p>It requires some cryptographic tools.</p>
+<h2 id=merkle-tree>Merkle Tree</h2>
 <h2 id=pedersen-hash>Pedersen Hash</h2>
 <h2 id=merkle-path>Merkle Path</h2>
 <h2 id=spend-statement-zkp>Spend Statement ZKP</h2>
-<div class="notices note"></div>
 <footer class=footline>
 </footer>
 </div>
@@ -231,17 +291,17 @@ Witnesses
 <div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>
 <div style=border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px></div>
 </div>
-<script src=/zcash-sync/js/clipboard.min.js?1664445049></script>
-<script src=/zcash-sync/js/perfect-scrollbar.min.js?1664445049></script>
-<script src=/zcash-sync/js/perfect-scrollbar.jquery.min.js?1664445049></script>
-<script src=/zcash-sync/js/jquery.sticky.js?1664445049></script>
-<script src=/zcash-sync/js/featherlight.min.js?1664445049></script>
-<script src=/zcash-sync/js/highlight.pack.js?1664445049></script>
+<script src=/zcash-sync/js/clipboard.min.js?1664892695></script>
+<script src=/zcash-sync/js/perfect-scrollbar.min.js?1664892695></script>
+<script src=/zcash-sync/js/perfect-scrollbar.jquery.min.js?1664892695></script>
+<script src=/zcash-sync/js/jquery.sticky.js?1664892695></script>
+<script src=/zcash-sync/js/featherlight.min.js?1664892695></script>
+<script src=/zcash-sync/js/highlight.pack.js?1664892695></script>
 <script>hljs.initHighlightingOnLoad()</script>
-<script src=/zcash-sync/js/modernizr.custom-3.6.0.js?1664445049></script>
-<script src=/zcash-sync/js/learn.js?1664445049></script>
-<script src=/zcash-sync/js/hugo-learn.js?1664445049></script>
-<script src=/zcash-sync/mermaid/mermaid.js?1664445049></script>
+<script src=/zcash-sync/js/modernizr.custom-3.6.0.js?1664892695></script>
+<script src=/zcash-sync/js/learn.js?1664892695></script>
+<script src=/zcash-sync/js/hugo-learn.js?1664892695></script>
+<script src=/zcash-sync/mermaid/mermaid.js?1664892695></script>
 <script>mermaid.initialize({startOnLoad:!0})</script>
 <script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.js integrity=sha384-ljao5I1l+8KYFXG7LNEA7DyaFvuvSCmedUf6Y6JI7LJqiu8q5dEivP2nDdFH31V4 crossorigin=anonymous></script>
 <script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/contrib/auto-render.min.js integrity=sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1}]})'></script>
