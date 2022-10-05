@@ -39,11 +39,6 @@ use crate::gpu::cuda::{CudaProcessor, CUDA_CONTEXT};
 use crate::gpu::metal::MetalProcessor;
 use crate::gpu::{trial_decrypt, USE_GPU};
 
-lazy_static! {
-    pub static ref DOWNLOADED_BYTES: Mutex<usize> = Mutex::new(0);
-    pub static ref TRIAL_DECRYPTIONS: Mutex<usize> = Mutex::new(0);
-}
-
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
 ) -> anyhow::Result<u32> {
@@ -174,18 +169,14 @@ pub async fn download_chain(
         }),
         spam_filter_threshold: max_cost as u64,
     };
-    *DOWNLOADED_BYTES.lock().unwrap() = 0;
-    *TRIAL_DECRYPTIONS.lock().unwrap() = 0;
+    let mut total_block_size = 0;
     let mut block_stream = client
         .get_block_range(Request::new(range))
         .await?
         .into_inner();
     while let Some(mut block) = block_stream.message().await? {
         let block_size = get_block_size(&block);
-        {
-            let mut downloaded = DOWNLOADED_BYTES.lock().unwrap();
-            *downloaded += block_size;
-        }
+        total_block_size += block_size;
         let c = *cancel.lock().unwrap();
         if c {
             log::info!("Canceling download");
@@ -222,14 +213,15 @@ pub async fn download_chain(
             // output
             let out = cbs;
             cbs = Vec::new();
-            blocks_tx.send(Blocks(out)).await.unwrap();
+            blocks_tx.send(Blocks(out, total_block_size)).await.unwrap();
             output_count = 0;
+            total_block_size = 0;
         }
 
         cbs.push(block);
         output_count += block_output_count;
     }
-    let _ = blocks_tx.send(Blocks(cbs)).await;
+    let _ = blocks_tx.send(Blocks(cbs, total_block_size)).await;
     Ok(())
 }
 

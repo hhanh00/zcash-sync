@@ -160,10 +160,6 @@ struct CResult_____c_char derive_zip32(uint8_t coin,
                                        bool has_address,
                                        uint32_t address);
 
-uintptr_t get_downloaded_size(void);
-
-uintptr_t get_trial_decryptions_count(void);
-
 void disable_wal(char *db_path);
 
 bool has_cuda(void);

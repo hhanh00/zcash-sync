@@ -2,7 +2,7 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::db::PlainNote;
-use crate::scan::AMProgressCallback;
+use crate::scan::{AMProgressCallback, Progress};
 use crate::{AccountData, BlockId, CTree, CompactTxStreamerClient, DbAdapter};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -17,17 +17,18 @@ pub async fn coin_sync(
     get_tx: bool,
     anchor_offset: u32,
     max_cost: u32,
-    progress_callback: impl Fn(u32) + Send + 'static,
+    downloaded_callback: impl Fn(u64) + Send + 'static,
+    progress_callback: impl Fn(Progress) + Send + 'static,
     cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
-    let cb = Arc::new(Mutex::new(progress_callback));
+    let p_cb = Arc::new(Mutex::new(progress_callback));
     coin_sync_impl(
         coin,
         get_tx,
         DEFAULT_CHUNK_SIZE,
         anchor_offset,
         max_cost,
-        cb.clone(),
+        p_cb.clone(),
         cancel,
     )
     .await?;
@@ -37,7 +38,7 @@ pub async fn coin_sync(
         DEFAULT_CHUNK_SIZE,
         0,
         u32::MAX,
-        cb.clone(),
+        p_cb.clone(),
         cancel,
     )
     .await?;

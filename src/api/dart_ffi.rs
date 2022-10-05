@@ -1,6 +1,5 @@
-use crate::chain::TRIAL_DECRYPTIONS;
 use crate::coinconfig::{init_coin, CoinConfig};
-use crate::{ChainError, Tx, DOWNLOADED_BYTES};
+use crate::{ChainError, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use anyhow::anyhow;
@@ -255,11 +254,19 @@ pub async unsafe extern "C" fn warp(
             get_tx,
             anchor_offset,
             max_cost,
-            move |height| {
-                let mut height = height.into_dart();
+            move |downloaded| {
+                let mut downloaded = downloaded.into_dart();
                 if port != 0 {
                     if let Some(p) = POST_COBJ {
-                        p(port, &mut height);
+                        p(port, &mut downloaded);
+                    }
+                }
+            },
+            move |progress| {
+                let mut progress = serde_json::to_string(&progress).unwrap().into_dart();
+                if port != 0 {
+                    if let Some(p) = POST_COBJ {
+                        p(port, &mut progress);
                     }
                 }
             },
@@ -692,16 +699,6 @@ pub unsafe extern "C" fn derive_zip32(
         Ok(result)
     };
     to_cresult_str(res())
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn get_downloaded_size() -> usize {
-    *DOWNLOADED_BYTES.lock().unwrap()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn get_trial_decryptions_count() -> usize {
-    *TRIAL_DECRYPTIONS.lock().unwrap()
 }
 
 #[no_mangle]

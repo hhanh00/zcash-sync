@@ -1,6 +1,7 @@
 use crate::builder::BlockProcessor;
-use crate::chain::{DecryptedBlock, Nf, NfRef, TRIAL_DECRYPTIONS};
+use crate::chain::{DecryptedBlock, Nf, NfRef};
 use crate::db::{AccountViewKey, DbAdapter, PlainNote, ReceivedNote};
+use serde::Serialize;
 use std::cmp::Ordering;
 
 use crate::transaction::retrieve_tx_info;
@@ -25,7 +26,7 @@ use zcash_primitives::consensus::{Network, Parameters};
 
 use zcash_primitives::sapling::{Node, Note};
 
-pub struct Blocks(pub Vec<CompactBlock>);
+pub struct Blocks(pub Vec<CompactBlock>, pub usize);
 
 lazy_static! {
     static ref DECRYPTER_RUNTIME: Runtime = Builder::new_multi_thread().build().unwrap();
@@ -40,7 +41,14 @@ impl std::fmt::Debug for Blocks {
     }
 }
 
-pub type ProgressCallback = dyn Fn(u32) + Send;
+#[derive(Clone, Serialize)]
+pub struct Progress {
+    height: u32,
+    trial_decryptions: u64,
+    downloaded: usize,
+}
+
+pub type ProgressCallback = dyn Fn(Progress) + Send;
 pub type AMProgressCallback = Arc<Mutex<ProgressCallback>>;
 
 #[derive(PartialEq, PartialOrd, Debug, Hash, Eq)]
@@ -87,7 +95,7 @@ pub async fn sync_async(
     let decrypter = DecryptNode::new(vks);
 
     let (decryptor_tx, mut decryptor_rx) = mpsc::channel::<Blocks>(1);
-    let (processor_tx, mut processor_rx) = mpsc::channel::<Vec<DecryptedBlock>>(1);
+    let (processor_tx, mut processor_rx) = mpsc::channel::<(Vec<DecryptedBlock>, usize)>(1);
 
     let db_path2 = db_path.clone();
 
@@ -114,19 +122,26 @@ pub async fn sync_async(
             let dec_blocks = decrypter.decrypt_blocks(&network, blocks.0); // this function may block
             let batch_decrypt_elapsed: usize = dec_blocks.iter().map(|b| b.elapsed).sum();
             log::info!("  Batch Decrypt: {} ms", batch_decrypt_elapsed);
-            let _ = processor_tx.send(dec_blocks).await;
+            let _ = processor_tx.send((dec_blocks, blocks.1)).await;
         }
         Ok::<_, anyhow::Error>(())
     });
+
+    let mut progress = Progress {
+        height: 0,
+        trial_decryptions: 0,
+        downloaded: 0,
+    };
 
     let processor = tokio::spawn(async move {
         let mut db = DbAdapter::new(coin_type, &db_path2)?;
         let mut nfs = db.get_nullifiers()?;
 
-        while let Some(dec_blocks) = processor_rx.recv().await {
+        while let Some((dec_blocks, blocks_size)) = processor_rx.recv().await {
             if dec_blocks.is_empty() {
                 continue;
             }
+            progress.downloaded += blocks_size;
             let (mut tree, witnesses) = db.get_tree()?;
             let mut bp = BlockProcessor::new(&tree, &witnesses);
             let mut absolute_position_at_block_start = tree.get_position();
@@ -146,8 +161,7 @@ pub async fn sync_async(
                     .map(|db| db.count_outputs as usize)
                     .sum::<usize>();
                 {
-                    let mut dc = TRIAL_DECRYPTIONS.lock().unwrap();
-                    *dc += n_ivks * outputs;
+                    progress.trial_decryptions += (n_ivks * outputs) as u64;
                 }
                 for b in dec_blocks.iter() {
                     let mut my_nfs: Vec<Nf> = vec![];
@@ -314,12 +328,12 @@ pub async fn sync_async(
                 }
                 log::info!("progress: {}", dec_block.height);
                 let callback = proc_callback.lock().await;
-                callback(dec_block.height as u32);
+                callback(progress.clone());
             }
         }
 
         let callback = progress_callback.lock().await;
-        callback(end_height);
+        callback(progress);
 
         db.purge_old_witnesses(end_height - 100)?;
 
