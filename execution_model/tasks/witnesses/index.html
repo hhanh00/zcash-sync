@@ -6,19 +6,19 @@
 <meta name=description content>
 <link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
 <title>Witnesses :: Zcash Warp Sync</title>
-<link href=/zcash-sync/css/nucleus.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/fontawesome-all.min.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/hybrid.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/featherlight.min.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/perfect-scrollbar.min.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/auto-complete.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/atom-one-dark-reasonable.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/theme.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/tabs.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/hugo-theme.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/css/theme-blue.css?1664892695 rel=stylesheet>
-<link href=/zcash-sync/common.css?1664892695 rel=stylesheet>
-<script src=/zcash-sync/js/jquery-3.3.1.min.js?1664892695></script>
+<link href=/zcash-sync/css/nucleus.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/fontawesome-all.min.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/hybrid.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/featherlight.min.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/perfect-scrollbar.min.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/auto-complete.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/atom-one-dark-reasonable.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/theme.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/tabs.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/hugo-theme.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/css/theme-blue.css?1665316482 rel=stylesheet>
+<link href=/zcash-sync/common.css?1665316482 rel=stylesheet>
+<script src=/zcash-sync/js/jquery-3.3.1.min.js?1665316482></script>
 <style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
 <link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
 </head>
@@ -35,10 +35,10 @@
 <input data-search-input id=search-by type=search placeholder=Search...>
 <span data-search-clear><i class="fas fa-times"></i></span>
 </div>
-<script type=text/javascript src=/zcash-sync/js/lunr.min.js?1664892695></script>
-<script type=text/javascript src=/zcash-sync/js/auto-complete.js?1664892695></script>
+<script type=text/javascript src=/zcash-sync/js/lunr.min.js?1665316482></script>
+<script type=text/javascript src=/zcash-sync/js/auto-complete.js?1665316482></script>
 <script type=text/javascript>var baseurl="https://hhanh00.github.io/zcash-sync/"</script>
-<script type=text/javascript src=/zcash-sync/js/search.js?1664892695></script>
+<script type=text/javascript src=/zcash-sync/js/search.js?1665316482></script>
 </div>
 <div class=highlightable>
 <ul class=topics>
@@ -202,7 +202,8 @@ Example
 <li><a href=#note-commitment-tree>Note Commitment Tree</a></li>
 <li><a href=#merkle-tree>Merkle Tree</a></li>
 <li><a href=#pedersen-hash>Pedersen Hash</a></li>
-<li><a href=#merkle-path>Merkle Path</a></li>
+<li><a href=#witnesses>Witnesses</a></li>
+<li><a href=#warp-sync-optimizations>Warp Sync Optimizations</a></li>
 <li><a href=#spend-statement-zkp>Spend Statement ZKP</a></li>
 </ul>
 </nav>
@@ -276,9 +277,112 @@ commitment is in the tree.</p>
 is, is difficult.</p>
 <p>It requires some cryptographic tools.</p>
 <h2 id=merkle-tree>Merkle Tree</h2>
+<p>We want to show that we have the note that matches a commitment that
+was transmitted earlier and is now part of the tree.</p>
+<p>This will also explain why the note commitments are stored as a tree
+and now as a plain list.</p>
+<p>The note commitment tree is organized as a binary tree. For each non-terminal
+node, i.e. internal node, there are two children. The tree has a fixed depth
+of 63, for a total of 2^63 commitments. However, at this moment, there are
+about 20-30 million notes used. The vast majority of the leaves are unused.
+Unused leaves have a commitment value of [0; 32] (32 bytes of 00).</p>
+<p>The inner nodes are hashes of the two children. Since each child is a hash
+value (the leaf is also a hash value), they all have a size of 32 bytes.</p>
+<div class="notices note"><p>To get the value of an inner node, concatenate the hash value of the left node
+and the right node to form a 64 byte sequence and hash it.</p>
+</div>
+<p>Here&rsquo;s a small general Merkle Tree:
+<img class=img src=../img/Merkle-Tree-FA.jpg></p>
+<p>It has only 3 levels and therefore can store $2^3=8$ elements</p>
+<p>In the case of the Merkle Tree for the note commitments (NCT), the layer $T_x$
+is omitted because the data are already hashes.</p>
+<p>Ex: $H_{EF} = \text{Hash}(H_E, H_F)$, where the Hash function is defined
+in the next section.</p>
+<p>$$H_{ABCD} = \text{Hash}(H_{AB}, H_{CD})$$
+$$H_{ABCDEFGH} = \text{Hash}(H_{ABCD}, H_{EFGH})$$</p>
+<p>Also, the NCT stores notes incrementally: previous entries are never removed
+or modified. We just assign an empty slot to a new commitment in the order
+they appear in the blockchain.</p>
+<p>We can see that the root of the tree, $H_{ABCDEFGH}$ depends on the value of
+every note commitment.</p>
+<p>Every time a new note gets added, the root hash will change. And because all
+the nodes are hash values, it is impossible to predict in advance the root
+value.</p>
+<p>Also, the NCT is tracked by every network participant and is part of consensus.
+We can query the current root hash from <code>zcashd</code>.</p>
+<p>If we were only interested in the security of the note commitments, we wouldn&rsquo;t
+need to build a Merkle Tree. We could simply build a list from all the note
+commitments and hash them at once, as a sequence of bytes. If any of the
+commitment is altered, the overall hash would also change.</p>
+<p>Instead of having all these intermediate hashes, we would have a single hash value
+that combines all the hashes together. The calculation would be much faster
+because only one hash would have to be computed.</p>
+<p>But a Merkle Tree has a major advantage if you want to prove that a value belongs
+to the set of hashes.</p>
+<p>If you had the hash of the list, to prove that a value is part of that list, you
+must:</p>
+<ul>
+<li>give every value of the list,</li>
+<li>have the verifier calculate the hash</li>
+<li>check it equals the &ldquo;official&rdquo; root hash</li>
+<li>check that the value you provided is in the list</li>
+</ul>
+<p>Obviously, Giving 20-30 million hash values is not practical.</p>
+<p>With a Merkle Tree, we can reduce that amount of data to only 63 hashes.</p>
+<p>Let&rsquo;s say we want to prove that $H_E$ is part of the tree.</p>
+<p>We start by giving $H_E$. In this scenario, the receiver does not have $H_x$
+but only knows the root hash.</p>
+<p>In addition to $H_E$, we also give the &ldquo;Merkle Path&rdquo;, which is the list of
+the <em>sibling hashes</em> from the leaf to the root</p>
+<p>In our case, that would be $H_F$, $H_{GH}$, $H_{ABCD}$. The direct path
+is $H_E$, $H_{EF}$ and $H_{EFGH}$, but we want the siblings.</p>
+<p>The receiver/verifier can then recompute the direct path using the Merkle Path:</p>
+<ul>
+<li>$H_{EF} = h(H_E, H_F)$,</li>
+<li>$H_{EFGH} = h(H_{EF}, H_{GH})$,</li>
+<li>$H_{ABCDEFGH} = h(H_{ABCD}, H_{EFGH})$</li>
+</ul>
+<p>The last hash is the root. If it matches, $H_E$ belongs to the tree.</p>
+<p>We cannot fool the verifier because every data we provide is a hash.
+A main property of the hash function is that it computationnally impossible
+to find <em>different</em> values $(a, b)$ than $(H_E, H_F)$ such as $H_{EF} = h(a, b)$</p>
+<p>Therefore we are forced to give the real hash values if we want to match the
+root hash.</p>
+<p>In Zcash, this Merkle Path is an input to the Spend Statement ZKP that
+we cover briefly in the last section.</p>
 <h2 id=pedersen-hash>Pedersen Hash</h2>
-<h2 id=merkle-path>Merkle Path</h2>
+<p>As you can, the NCT contains a large number of hashes and needs to be updated
+every time a new note is added. The hash function used is a Pedersen Hash.</p>
+<p>The Pedersen Hash function securely maps a sequence of bits into a point on
+an elliptical curve, (Jubjub for Sapling).</p>
+<p>It is much more expensive to compute a Pedersen Hash than to compute a SHA
+or a Blake hash, due to the finite field arithmetic involved.</p>
+<p>But it can be implemented in a ZK circuit more efficiently than a classic hash
+function.</p>
+<h2 id=witnesses>Witnesses</h2>
+<p>For every UTXO that your wallet has, the app needs to update the Merkle Path
+when we receive new outputs. Even if none of the outputs are ours. With
+the growth of transaction outputs, we have now several million notes that have
+to be processed in every wallet.</p>
+<h2 id=warp-sync-optimizations>Warp Sync Optimizations</h2>
+<p>The main goal of Warp Sync is to minimize Pedersen Hash calculations
+and especially avoid recalculating the same hash twice.</p>
+<p>When you have several notes in your wallet, there is a good chance
+that they have part of their Merkle Path in common. A non-optimized
+implementation would treat each note independently and update the
+witnesses by recomputing their Merkle Path sequentially.</p>
+<p>Warp Sync rebuilds the Merkle Tree in parallel, and distributes
+the hash values to the note. It ensures that the calculation are
+spread out across all the CPU core and that the witness updates
+are essentially data copies.</p>
+<p>Another advantage of doing hash calculations on the NCT instead
+of on the witnesses, is that WS can use a cryptographic optimization,
+that reduces the number of field divisions.</p>
 <h2 id=spend-statement-zkp>Spend Statement ZKP</h2>
+<p>In the case of Zcash, the Merkle Path is not published and stored in
+the blockchain but serves as a secret input to the ZKP spend statements.
+Essentially, we state that we know the Merkle Path for the note
+we spend but we don&rsquo;t reveal it.</p>
 <footer class=footline>
 </footer>
 </div>
@@ -291,17 +395,17 @@ is, is difficult.</p>
 <div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>
 <div style=border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px></div>
 </div>
-<script src=/zcash-sync/js/clipboard.min.js?1664892695></script>
-<script src=/zcash-sync/js/perfect-scrollbar.min.js?1664892695></script>
-<script src=/zcash-sync/js/perfect-scrollbar.jquery.min.js?1664892695></script>
-<script src=/zcash-sync/js/jquery.sticky.js?1664892695></script>
-<script src=/zcash-sync/js/featherlight.min.js?1664892695></script>
-<script src=/zcash-sync/js/highlight.pack.js?1664892695></script>
+<script src=/zcash-sync/js/clipboard.min.js?1665316482></script>
+<script src=/zcash-sync/js/perfect-scrollbar.min.js?1665316482></script>
+<script src=/zcash-sync/js/perfect-scrollbar.jquery.min.js?1665316482></script>
+<script src=/zcash-sync/js/jquery.sticky.js?1665316482></script>
+<script src=/zcash-sync/js/featherlight.min.js?1665316482></script>
+<script src=/zcash-sync/js/highlight.pack.js?1665316482></script>
 <script>hljs.initHighlightingOnLoad()</script>
-<script src=/zcash-sync/js/modernizr.custom-3.6.0.js?1664892695></script>
-<script src=/zcash-sync/js/learn.js?1664892695></script>
-<script src=/zcash-sync/js/hugo-learn.js?1664892695></script>
-<script src=/zcash-sync/mermaid/mermaid.js?1664892695></script>
+<script src=/zcash-sync/js/modernizr.custom-3.6.0.js?1665316482></script>
+<script src=/zcash-sync/js/learn.js?1665316482></script>
+<script src=/zcash-sync/js/hugo-learn.js?1665316482></script>
+<script src=/zcash-sync/mermaid/mermaid.js?1665316482></script>
 <script>mermaid.initialize({startOnLoad:!0})</script>
 <script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.js integrity=sha384-ljao5I1l+8KYFXG7LNEA7DyaFvuvSCmedUf6Y6JI7LJqiu8q5dEivP2nDdFH31V4 crossorigin=anonymous></script>
 <script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/contrib/auto-render.min.js integrity=sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1}]})'></script>
