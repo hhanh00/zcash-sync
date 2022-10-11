@@ -31,10 +31,12 @@ pub fn make_payment_uri(address: &str, amount: u64, memo: &str) -> anyhow::Resul
 
 pub fn parse_payment_uri(uri: &str) -> anyhow::Result<PaymentURI> {
     let c = CoinConfig::get_active();
-    if uri[..5].ne(c.chain.ticker()) {
+    let scheme = c.chain.ticker();
+    let scheme_len = scheme.len();
+    if uri[..scheme_len].ne(scheme) {
         anyhow::bail!("Invalid Payment URI: Invalid scheme");
     }
-    let uri = format!("zcash{}", &uri[5..]); // hack to replace the URI scheme
+    let uri = format!("zcash{}", &uri[scheme_len..]); // hack to replace the URI scheme
     let treq = TransactionRequest::from_uri(c.chain.network(), &uri)
         .map_err(|e| anyhow::anyhow!("Invalid Payment URI: {:?}", e))?;
     if treq.payments.len() != 1 {
