@@ -17,7 +17,6 @@ pub async fn coin_sync(
     get_tx: bool,
     anchor_offset: u32,
     max_cost: u32,
-    downloaded_callback: impl Fn(u64) + Send + 'static,
     progress_callback: impl Fn(Progress) + Send + 'static,
     cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
