@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["commit_unsaved_contacts","Save the new/modified contacts to the blockchain"],["store_contact","Store contact in the database"]]};

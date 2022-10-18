@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["warp_api_ffi"] = [{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.63.0/std/error/trait.Error.html\" title=\"trait std::error::Error\">Error</a> for <a class=\"enum\" href=\"warp_api_ffi/enum.ChainError.html\" title=\"enum warp_api_ffi::ChainError\">ChainError</a>","synthetic":false,"types":["warp_api_ffi::chain::ChainError"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

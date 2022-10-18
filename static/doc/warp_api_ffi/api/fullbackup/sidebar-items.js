@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["decrypt_backup","Decrypt a list of account backups"],["encrypt_backup","Encrypt a list of account backups"],["generate_random_enc_key","Generate a random encryption key"],["get_full_backup","Return backup data of every account for a given coin"],["restore_full_backup","Import backup data for a given coin"]]};
