@@ -1,3 +1,5 @@
+//! Payments
+
 use anyhow::anyhow;
 use std::str::FromStr;
 
@@ -77,6 +79,11 @@ fn sign(tx: &Tx, progress_callback: PaymentProgressCallback) -> anyhow::Result<V
 }
 
 /// Build a multi payment for offline signing
+/// # Arguments
+/// * `last_height`: current block height
+/// * `recipients`: list of recipients
+/// * `use_transparent`: include transparent balance
+/// * `anchor_offset`: minimum number of confirmations for note selection
 pub async fn build_only_multi_payment(
     last_height: u32,
     recipients: &[RecipientMemo],
@@ -89,6 +96,10 @@ pub async fn build_only_multi_payment(
     Ok(tx)
 }
 
+/// Sign a transaction
+/// # Arguments
+/// * `tx`: transaction to sign
+/// * `progress_callback`: function callback during transaction building
 pub async fn sign_only_multi_payment(
     tx: &Tx,
     progress_callback: PaymentProgressCallback,
@@ -99,6 +110,12 @@ pub async fn sign_only_multi_payment(
 }
 
 /// Build, sign and broadcast a multi payment
+/// # Arguments
+/// * `last_height`: current block height
+/// * `recipients`: list of recipients
+/// * `use_transparent`: include transparent balance
+/// * `anchor_offset`: minimum number of confirmations for note selection
+/// * `progress_callback`: function callback during transaction building
 pub async fn build_sign_send_multi_payment(
     last_height: u32,
     recipients: &[RecipientMemo],
@@ -118,12 +135,14 @@ pub async fn build_sign_send_multi_payment(
     Ok(tx_id)
 }
 
+/// Make a transaction that shields the transparent balance
 pub async fn shield_taddr() -> anyhow::Result<String> {
     let last_height = get_latest_height().await?;
     let tx_id = build_sign_send_multi_payment(last_height, &[], true, 0, Box::new(|_| {})).await?;
     Ok(tx_id)
 }
 
+/// Parse a json document that contains a list of recipients
 pub fn parse_recipients(recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> {
     let c = CoinConfig::get_active();
     let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
@@ -135,12 +154,14 @@ pub fn parse_recipients(recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> 
     Ok(recipient_memos)
 }
 
+/// Encode a message into a memo
 pub fn encode_memo(from: &str, include_from: bool, subject: &str, body: &str) -> String {
     let from = if include_from { from } else { "" };
     let msg = format!("\u{1F6E1}MSG\n{}\n{}\n{}", from, subject, body);
     msg
 }
 
+/// Decode a memo into a message
 pub fn decode_memo(
     id_tx: u32,
     memo: &str,

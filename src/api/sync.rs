@@ -1,17 +1,26 @@
-// Sync
+//! Warp Synchronize
 
 use crate::coinconfig::CoinConfig;
 use crate::db::PlainNote;
 use crate::scan::{AMProgressCallback, Progress};
-use crate::{AccountData, BlockId, CTree, CompactTxStreamerClient, DbAdapter};
+use crate::{AccountData, BlockId, CompactTxStreamerClient, DbAdapter};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_primitives::sapling::Note;
+use crate::commitment::CTree;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 
+/// Asynchronously perform warp sync
+/// # Arguments
+/// * `coin`: 0 for zcash, 1 for ycash
+/// * `get_tx`: true to retrieve transaction details
+/// * `anchor_offset`: minimum number of confirmations for note selection
+/// * `max_cost`: tx that have a higher spending cost are excluded
+/// * `progress_callback`: function callback during synchronization
+/// * `cancel`: cancellation mutex, set to true to abort
 pub async fn coin_sync(
     coin: u8,
     get_tx: bool,
@@ -69,6 +78,7 @@ async fn coin_sync_impl(
     Ok(())
 }
 
+/// Return the latest block height
 pub async fn get_latest_height() -> anyhow::Result<u32> {
     let c = CoinConfig::get_active();
     let mut client = c.connect_lwd().await?;
@@ -76,12 +86,17 @@ pub async fn get_latest_height() -> anyhow::Result<u32> {
     Ok(last_height)
 }
 
+/// Return the latest block height synchronized
 pub fn get_synced_height() -> anyhow::Result<u32> {
     let c = CoinConfig::get_active();
     let db = c.db()?;
     db.get_last_sync_height().map(|h| h.unwrap_or(0))
 }
 
+/// Skip block synchronization and directly mark the chain synchronized
+/// Used for new accounts that have no transaction history
+/// # Arguments
+/// * `coin`: 0 for zcash, 1 for ycash
 pub async fn skip_to_last_height(coin: u8) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let mut client = c.connect_lwd().await?;
@@ -90,16 +105,17 @@ pub async fn skip_to_last_height(coin: u8) -> anyhow::Result<()> {
     Ok(())
 }
 
-// if exact = true, do not snap the height to a pre existing checkpoint
-// and get the tree_state from the server
-// this option is used when we rescan from a given height
-// We ignore any transaction that occurred before
+/// Rewind to a previous block height
+///
+/// Height is snapped to a closest earlier checkpoint.
+/// The effective height is returned
 pub async fn rewind_to(height: u32) -> anyhow::Result<u32> {
     let c = CoinConfig::get_active();
     let height = c.db()?.trim_to_height(height)?;
     Ok(height)
 }
 
+/// Synchronize from a given height
 pub async fn rescan_from(height: u32) -> anyhow::Result<()> {
     let c = CoinConfig::get_active();
     c.db()?.truncate_sync_data()?;
@@ -129,6 +145,7 @@ async fn fetch_and_store_tree_state(
     Ok(())
 }
 
+/// Return the date of sapling activation
 pub async fn get_activation_date() -> anyhow::Result<u32> {
     let c = CoinConfig::get_active();
     let mut client = c.connect_lwd().await?;
@@ -136,6 +153,9 @@ pub async fn get_activation_date() -> anyhow::Result<u32> {
     Ok(date_time)
 }
 
+/// Return the block height for a given timestamp
+/// # Arguments
+/// * `time`: seconds since epoch
 pub async fn get_block_by_time(time: u32) -> anyhow::Result<u32> {
     let c = CoinConfig::get_active();
     let mut client = c.connect_lwd().await?;
@@ -143,7 +163,7 @@ pub async fn get_block_by_time(time: u32) -> anyhow::Result<u32> {
     Ok(date_time)
 }
 
-pub fn trial_decrypt(
+fn trial_decrypt(
     height: u32,
     cmu: &[u8],
     epk: &[u8],

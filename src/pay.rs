@@ -2,7 +2,7 @@ use crate::db::SpendableNote;
 // use crate::wallet::RecipientMemo;
 use crate::api::payment::RecipientMemo;
 use crate::coinconfig::CoinConfig;
-use crate::{get_latest_height, hex_to_hash, GetAddressUtxosReply, RawTransaction};
+use crate::{GetAddressUtxosReply, Hash, RawTransaction};
 use anyhow::anyhow;
 use jubjub::Fr;
 use rand::prelude::SliceRandom;
@@ -28,6 +28,7 @@ use zcash_primitives::transaction::builder::{Builder, Progress};
 use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut as ZTxOut};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+use crate::chain::get_latest_height;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
@@ -318,7 +319,7 @@ impl Tx {
         let mut builder = Builder::new(*chain.network(), last_height);
         let efvk = ExtendedFullViewingKey::from(zsk);
 
-        let ovk = hex_to_hash(&self.ovk)?;
+        let ovk: Hash = hex::decode(&self.ovk)?.try_into().unwrap();
         builder.send_change_to(
             OutgoingViewingKey(ovk),
             decode_payment_address(chain.network().hrp_sapling_payment_address(), &self.change)
@@ -406,6 +407,7 @@ impl Tx {
     }
 }
 
+/// Broadcast a raw signed transaction to the network
 pub async fn broadcast_tx(tx: &[u8]) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
     let mut client = c.connect_lwd().await?;

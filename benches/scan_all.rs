@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use sync::scan_all;
+use warp_api_ffi::scan_all;
 use tokio::runtime::Runtime;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{Network, Parameters};

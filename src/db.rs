@@ -3,7 +3,7 @@ use crate::contact::Contact;
 use crate::prices::Quote;
 use crate::taddr::{derive_tkeys, TBalance};
 use crate::transaction::TransactionInfo;
-use crate::{CTree, Witness};
+use crate::commitment::{CTree, Witness};
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
@@ -1148,7 +1148,7 @@ pub struct AccountData {
 #[cfg(test)]
 mod tests {
     use crate::db::{DbAdapter, ReceivedNote, DEFAULT_DB_PATH};
-    use crate::{CTree, Witness};
+    use crate::commitment::{CTree, Witness};
     use zcash_params::coin::CoinType;
 
     #[test]
@@ -1157,8 +1157,8 @@ mod tests {
         db.init_db().unwrap();
         db.trim_to_height(0).unwrap();
 
-        db.store_block(1, &[0u8; 32], 0, &CTree::new()).unwrap();
         let db_tx = db.begin_transaction().unwrap();
+        DbAdapter::store_block(&db_tx, 1, &[0u8; 32], 0, &CTree::new()).unwrap();
         let id_tx = DbAdapter::store_transaction(&[0; 32], 1, 1, 0, 20, &db_tx).unwrap();
         DbAdapter::store_received_note(
             &ReceivedNote {
@@ -1184,8 +1184,8 @@ mod tests {
             filled: vec![],
             cursor: CTree::new(),
         };
+        DbAdapter::store_witnesses(&db_tx, &witness, 1000, 1).unwrap();
         db_tx.commit().unwrap();
-        Db::store_witnesses(&witness, 1000, 1).unwrap();
     }
 
     #[test]

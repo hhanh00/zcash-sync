@@ -112,10 +112,3 @@ impl KeyHelpers {
         recipient.is_some()
     }
 }
-
-pub fn generate_random_enc_key() -> anyhow::Result<String> {
-    let mut key = [0u8; 32];
-    OsRng.fill_bytes(&mut key);
-    let key = bech32::encode("zwk", key.to_base32(), Variant::Bech32)?;
-    Ok(key)
-}

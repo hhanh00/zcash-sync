@@ -8,13 +8,11 @@ use log::Level;
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
-static IS_ERROR: AtomicBool = AtomicBool::new(false);
 
 const MAX_COINS: u8 = 3;
 
@@ -90,55 +88,11 @@ fn try_init_logger() {
     let _ = env_logger::try_init();
 }
 
-// fn log_result<T: Default>(result: anyhow::Result<T>) -> T {
-//     match result {
-//         Err(err) => {
-//             log::error!("ERROR: {}", err);
-//             let last_error = LAST_ERROR.lock().unwrap();
-//             last_error.replace(err.to_string());
-//             IS_ERROR.store(true, Ordering::Release);
-//             T::default()
-//         }
-//         Ok(v) => {
-//             IS_ERROR.store(false, Ordering::Release);
-//             v
-//         }
-//     }
-// }
-//
-// fn log_string(result: anyhow::Result<String>) -> String {
-//     match result {
-//         Err(err) => {
-//             log::error!("{}", err);
-//             let last_error = LAST_ERROR.lock().unwrap();
-//             last_error.replace(err.to_string());
-//             IS_ERROR.store(true, Ordering::Release);
-//             format!("{}", err)
-//         }
-//         Ok(v) => {
-//             IS_ERROR.store(false, Ordering::Release);
-//             v
-//         }
-//     }
-// }
-
 #[repr(C)]
 pub struct CResult<T> {
     value: T,
     error: *mut c_char,
 }
-
-// #[no_mangle]
-// pub unsafe extern "C" fn get_error() -> bool {
-//     IS_ERROR.load(Ordering::Acquire)
-// }
-//
-// #[no_mangle]
-// pub unsafe extern "C" fn get_error_msg() -> *mut c_char {
-//     let error = LAST_ERROR.lock().unwrap();
-//     let e = error.take();
-//     to_c_str(e)
-// }
 
 #[no_mangle]
 pub unsafe extern "C" fn init_wallet(db_path: *mut c_char) {
@@ -254,14 +208,6 @@ pub async unsafe extern "C" fn warp(
             get_tx,
             anchor_offset,
             max_cost,
-            move |downloaded| {
-                let mut downloaded = downloaded.into_dart();
-                if port != 0 {
-                    if let Some(p) = POST_COBJ {
-                        p(port, &mut downloaded);
-                    }
-                }
-            },
             move |progress| {
                 let mut progress = serde_json::to_string(&progress).unwrap().into_dart();
                 if port != 0 {
@@ -588,7 +534,7 @@ pub unsafe extern "C" fn parse_payment_uri(uri: *mut c_char) -> CResult<*mut c_c
 
 #[no_mangle]
 pub unsafe extern "C" fn generate_random_enc_key() -> CResult<*mut c_char> {
-    to_cresult_str(crate::key::generate_random_enc_key())
+    to_cresult_str(crate::api::fullbackup::generate_random_enc_key())
 }
 
 #[no_mangle]
@@ -624,7 +570,7 @@ pub unsafe extern "C" fn restore_full_backup(key: *mut c_char, backup: *mut c_ch
 pub unsafe extern "C" fn split_data(id: u32, data: *mut c_char) -> CResult<*mut c_char> {
     from_c_str!(data);
     let res = || {
-        let res = crate::FountainCodes::encode_into_drops(id, &base64::decode(&*data)?)?;
+        let res = crate::fountain::FountainCodes::encode_into_drops(id, &base64::decode(&*data)?)?;
         let output = serde_json::to_string(&res)?;
         Ok(output)
     };
@@ -632,11 +578,10 @@ pub unsafe extern "C" fn split_data(id: u32, data: *mut c_char) -> CResult<*mut 
 }
 
 #[no_mangle]
-// TODO: who uses this?
 pub unsafe extern "C" fn merge_data(drop: *mut c_char) -> CResult<*mut c_char> {
     from_c_str!(drop);
     let res = || {
-        let res = crate::put_drop(&*drop)?
+        let res = crate::fountain::put_drop(&*drop)?
             .map(|d| base64::encode(&d))
             .unwrap_or(String::new());
         Ok::<_, anyhow::Error>(res)
@@ -650,7 +595,7 @@ pub unsafe extern "C" fn get_tx_summary(tx: *mut c_char) -> CResult<*mut c_char>
     from_c_str!(tx);
     let res = || {
         let tx: Tx = serde_json::from_str(&tx)?;
-        let summary = crate::get_tx_summary(&tx)?;
+        let summary = crate::pay::get_tx_summary(&tx)?;
         let summary = serde_json::to_string(&summary)?;
         Ok::<_, anyhow::Error>(summary)
     };
@@ -710,22 +655,22 @@ pub unsafe extern "C" fn disable_wal(db_path: *mut c_char) {
 
 #[no_mangle]
 pub unsafe extern "C" fn has_cuda() -> bool {
-    crate::has_cuda()
+    crate::gpu::has_cuda()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn has_metal() -> bool {
-    crate::has_metal()
+    crate::gpu::has_metal()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn has_gpu() -> bool {
-    crate::has_gpu()
+    crate::gpu::has_gpu()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn use_gpu(v: bool) {
-    crate::use_gpu(v)
+    crate::gpu::use_gpu(v)
 }
 
 #[tokio::main]

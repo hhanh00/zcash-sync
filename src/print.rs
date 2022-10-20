@@ -1,4 +1,4 @@
-use crate::{CTree, Witness};
+use crate::commitment::{CTree, Witness};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::Node;
 

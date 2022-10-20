@@ -1,3 +1,5 @@
+//! encode and decode Payment URI
+
 use crate::coinconfig::CoinConfig;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -7,6 +9,11 @@ use zcash_client_backend::zip321::{Payment, TransactionRequest};
 use zcash_primitives::memo::Memo;
 use zcash_primitives::transaction::components::Amount;
 
+/// Build a payment URI
+/// # Arguments
+/// * `address`: recipient address
+/// * `amount`: amount in zats
+/// * `memo`: memo text
 pub fn make_payment_uri(address: &str, amount: u64, memo: &str) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
     let addr = RecipientAddress::decode(c.chain.network(), address)
@@ -29,6 +36,9 @@ pub fn make_payment_uri(address: &str, amount: u64, memo: &str) -> anyhow::Resul
     Ok(uri)
 }
 
+/// Decode a payment uri
+/// # Arguments
+/// * `uri`: payment uri
 pub fn parse_payment_uri(uri: &str) -> anyhow::Result<PaymentURI> {
     let c = CoinConfig::get_active();
     let scheme = c.chain.ticker();

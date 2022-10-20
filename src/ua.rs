@@ -38,7 +38,7 @@ impl FromAddress for MyReceiver {
     }
 }
 
-pub fn get_ua(_sapling_addr: &str, _transparent_addr: &str) -> anyhow::Result<ZcashAddress> {
+fn get_ua(_sapling_addr: &str, _transparent_addr: &str) -> anyhow::Result<ZcashAddress> {
     todo!()
     // let sapling_addr = ZcashAddress::try_from_encoded(sapling_addr)?;
     // let transparent_addr = ZcashAddress::try_from_encoded(transparent_addr)?;
@@ -53,7 +53,7 @@ pub fn get_ua(_sapling_addr: &str, _transparent_addr: &str) -> anyhow::Result<Zc
     // Ok(ua_address)
 }
 
-pub fn get_sapling(ua_addr: &str) -> anyhow::Result<ZcashAddress> {
+fn get_sapling(ua_addr: &str) -> anyhow::Result<ZcashAddress> {
     let ua_addr = ZcashAddress::try_from_encoded(ua_addr)?;
     let r = ua_addr.convert::<MyReceiver>()?;
     if let Receiver::Sapling(data) = r.receiver {
@@ -64,7 +64,7 @@ pub fn get_sapling(ua_addr: &str) -> anyhow::Result<ZcashAddress> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ua::{get_sapling, get_ua};
+    use super::{get_sapling, get_ua};
 
     #[test]
     fn test_ua() -> anyhow::Result<()> {

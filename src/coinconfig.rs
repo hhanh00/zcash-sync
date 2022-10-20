@@ -1,4 +1,6 @@
-use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter, FountainCodes, MemPool};
+use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter};
+use crate::fountain::FountainCodes;
+use crate::mempool::MemPool;
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;
@@ -21,10 +23,12 @@ lazy_static! {
 
 pub static ACTIVE_COIN: AtomicU8 = AtomicU8::new(0);
 
+/// Set the active coin
 pub fn set_active(active: u8) {
     ACTIVE_COIN.store(active, Ordering::Release);
 }
 
+/// Set the active account for a given coin
 pub fn set_active_account(coin: u8, id: u32) {
     let mempool = {
         let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
@@ -35,16 +39,19 @@ pub fn set_active_account(coin: u8, id: u32) {
     let _ = mempool.clear();
 }
 
+/// Set the lightwalletd url for a given coin
 pub fn set_coin_lwd_url(coin: u8, lwd_url: &str) {
     let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
     c.lwd_url = Some(lwd_url.to_string());
 }
 
+/// Get the URL of the lightwalletd server for a given coin
 pub fn get_coin_lwd_url(coin: u8) -> String {
     let c = COIN_CONFIG[coin as usize].lock().unwrap();
     c.lwd_url.clone().unwrap_or_default()
 }
 
+/// Initialize a coin with a database path
 pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
     let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
     c.set_db_path(db_path)?;

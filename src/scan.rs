@@ -1,14 +1,16 @@
 use crate::builder::BlockProcessor;
-use crate::chain::{DecryptedBlock, Nf, NfRef};
+use crate::chain::{DecryptedBlock, get_latest_height, Nf, NfRef};
 use crate::db::{AccountViewKey, DbAdapter, PlainNote, ReceivedNote};
 use serde::Serialize;
 use std::cmp::Ordering;
 
 use crate::transaction::retrieve_tx_info;
 use crate::{
-    connect_lightwalletd, download_chain, get_latest_height, CompactBlock, CompactSaplingOutput,
-    CompactTx, DecryptNode, Witness,
+    connect_lightwalletd, CompactBlock, CompactSaplingOutput,
+    CompactTx
 };
+use crate::chain::{DecryptNode, download_chain};
+use crate::commitment::Witness;
 use ff::PrimeField;
 
 use anyhow::anyhow;
@@ -43,9 +45,9 @@ impl std::fmt::Debug for Blocks {
 
 #[derive(Clone, Serialize)]
 pub struct Progress {
-    height: u32,
-    trial_decryptions: u64,
-    downloaded: usize,
+    pub height: u32,
+    pub trial_decryptions: u64,
+    pub downloaded: usize,
 }
 
 pub type ProgressCallback = dyn Fn(Progress) + Send;
@@ -326,7 +328,8 @@ pub async fn sync_async(
                     db_transaction.commit()?;
                     // db_transaction is dropped here
                 }
-                log::info!("progress: {}", dec_block.height);
+                progress.height = dec_block.height;
+                log::info!("progress: {}", progress.height);
                 let callback = proc_callback.lock().await;
                 callback(progress.clone());
             }

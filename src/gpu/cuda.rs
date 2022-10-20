@@ -1,7 +1,7 @@
 use crate::chain::DecryptedBlock;
 use crate::gpu::{collect_nf, GPUProcessor};
 use crate::lw_rpc::CompactBlock;
-use crate::{Hash, GENERATORS_EXP};
+use crate::{Hash, hash::GENERATORS_EXP};
 use anyhow::Result;
 use ff::BatchInverter;
 use jubjub::Fq;

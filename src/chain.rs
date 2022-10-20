@@ -3,10 +3,9 @@ use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
 use crate::scan::Blocks;
-use crate::{advance_tree, has_cuda};
+use crate::builder::advance_tree;
 use ff::PrimeField;
 use futures::{future, FutureExt};
-use lazy_static::lazy_static;
 use log::info;
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
@@ -470,7 +469,7 @@ impl DecryptNode {
         if blocks.is_empty() {
             return vec![];
         }
-        if has_cuda() {
+        if crate::gpu::has_cuda() {
             let processor = CudaProcessor::setup_decrypt(network, blocks).unwrap();
             return trial_decrypt(processor, self.vks.iter()).unwrap();
         }
@@ -546,7 +545,8 @@ fn calculate_tree_state_v1(
     witnesses
 }
 
-pub fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) -> Vec<Witness> {
+#[allow(dead_code)]
+fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) -> Vec<Witness> {
     let mut p = 0usize;
     let mut nodes: Vec<Node> = vec![];
     let mut positions: Vec<usize> = vec![];
@@ -593,6 +593,7 @@ pub fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) 
     new_witnesses
 }
 
+/// Connect to a lightwalletd server
 pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
     log::info!("LWD URL: {}", url);
     let mut channel = tonic::transport::Channel::from_shared(url.to_owned())?;
@@ -613,6 +614,8 @@ async fn get_height(server: String) -> Option<(String, u32)> {
     Some((server, height))
 }
 
+/// Return the URL of the best server given a list of servers
+/// The best server is the one that has the highest height
 pub async fn get_best_server(servers: &[String]) -> Option<String> {
     let mut server_heights = vec![];
     for s in servers.iter() {

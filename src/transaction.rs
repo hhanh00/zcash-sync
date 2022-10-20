@@ -292,7 +292,8 @@ mod tests {
                 nf_map.insert((nf.0, nf.2.clone()), nf.1);
             }
         }
-        let fvk = db.get_ivk(account).unwrap();
+        let account = db.get_account_info(account).unwrap();
+        let fvk = account.fvk.clone();
         let fvk = decode_extended_full_viewing_key(
             Network::MainNetwork.hrp_sapling_extended_full_viewing_key(),
             &fvk,

@@ -1,3 +1,5 @@
+//! Contact Address book
+
 use crate::api::payment::{build_sign_send_multi_payment, RecipientMemo};
 use crate::api::sync::get_latest_height;
 use crate::coinconfig::CoinConfig;
@@ -5,6 +7,12 @@ use crate::contact::{serialize_contacts, Contact};
 use crate::db::AccountData;
 use zcash_primitives::memo::Memo;
 
+/// Store contact in the database
+/// # Arguments
+/// * `id`: contact id
+/// * `name`: contact name
+/// * `address`: contact address
+/// * `dirty`: true if the database hasn't been saved to the blockchain yet
 pub fn store_contact(id: u32, name: &str, address: &str, dirty: bool) -> anyhow::Result<()> {
     let c = CoinConfig::get_active();
     let contact = Contact {
@@ -16,6 +24,9 @@ pub fn store_contact(id: u32, name: &str, address: &str, dirty: bool) -> anyhow:
     Ok(())
 }
 
+/// Save the new/modified contacts to the blockchain
+/// # Arguments
+/// * `anchor_offset`: minimum confirmations required for note selection
 pub async fn commit_unsaved_contacts(anchor_offset: u32) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
     let contacts = c.db()?.get_unsaved_contacts()?;
@@ -24,7 +35,7 @@ pub async fn commit_unsaved_contacts(anchor_offset: u32) -> anyhow::Result<Strin
     Ok(tx_id)
 }
 
-pub async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<String> {
+async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
     let last_height = get_latest_height().await?;
     let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
