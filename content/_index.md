@@ -33,12 +33,12 @@ The easiest is to run as a [web service]({{< relref "rpc" >}})
 that provides synchronization
 and account management. 
 
-It can be used as a dynamic linked library with any language
+WarpSync can be used as a dynamic linked library from any language
 that supports [FFI]({{< relref "ffi" >}})
 C bindings. For an example in JAVA, go to 
 this [section]({{< relref "java" >}}).
 
-And finally, if you use rust, it is a crate that can be incorporated
+And finally, if you use rust, WarpSync is a crate that can be incorporated
 in your project. You will find an example [here]({{< relref "rust" >}}).
 The RustDoc is [here](/doc/warp_api_ffi).
 

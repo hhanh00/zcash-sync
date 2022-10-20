@@ -21,6 +21,3 @@ A checkpoint has the synchronization state at a given block height H:
 Blocks between checkpoints are processed but not stored in the database.
 {{%/notice %}}
 
-{{%notice note%}}
-
-{{%/notice %}}
