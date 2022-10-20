@@ -1,413 +1,101 @@
-<!doctype html><html lang=en class="js csstransforms3d">
-<head>
-<meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1">
-<meta name=generator content="Hugo 0.91.2">
-<meta name=description content>
-<link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
-<title>Witnesses :: Zcash Warp Sync</title>
-<link href=/zcash-sync/css/nucleus.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/fontawesome-all.min.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/hybrid.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/featherlight.min.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/perfect-scrollbar.min.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/auto-complete.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/atom-one-dark-reasonable.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/theme.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/tabs.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/hugo-theme.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/theme-blue.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/common.css?1665316482 rel=stylesheet>
-<script src=/zcash-sync/js/jquery-3.3.1.min.js?1665316482></script>
-<style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
-<link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
-</head>
-<body data-url=/zcash-sync/execution_model/tasks/witnesses/>
-<nav id=sidebar class=showVisitedLinks>
-<div id=header-wrapper>
-<div id=header>
-<a id=logo href=https://hhanh00.github.io/zcash-sync/>
-<img srcset="https://hhanh00.github.io/zcash-sync//logo.png 4x">
-</a>
-</div>
-<div class=searchbox>
-<label for=search-by><i class="fas fa-search"></i></label>
-<input data-search-input id=search-by type=search placeholder=Search...>
-<span data-search-clear><i class="fas fa-times"></i></span>
-</div>
-<script type=text/javascript src=/zcash-sync/js/lunr.min.js?1665316482></script>
-<script type=text/javascript src=/zcash-sync/js/auto-complete.js?1665316482></script>
-<script type=text/javascript>var baseurl="https://hhanh00.github.io/zcash-sync/"</script>
-<script type=text/javascript src=/zcash-sync/js/search.js?1665316482></script>
-</div>
-<div class=highlightable>
-<ul class=topics>
-<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class=dd-item>
-<a href=/zcash-sync/light_wallet/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#wallet"/></svg>
-Light Wallets
-<i class="fas fa-check read-icon"></i>
-</a>
-<ul>
-<li data-nav-id=/zcash-sync/light_wallet/purpose/ title=Purpose class=dd-item>
-<a href=/zcash-sync/light_wallet/purpose/>
-Purpose
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/light_wallet/privacy/ title=Privacy class=dd-item>
-<a href=/zcash-sync/light_wallet/privacy/>
-Privacy
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/light_wallet/utxo/ title="UTXO Model" class=dd-item>
-<a href=/zcash-sync/light_wallet/utxo/>
-UTXO Model
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/light_wallet/scan/ title="Scan / Sync" class=dd-item>
-<a href=/zcash-sync/light_wallet/scan/>
-Scan / Sync
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/light_wallet/reorg/ title=Reorganization class=dd-item>
-<a href=/zcash-sync/light_wallet/reorg/>
-Reorganization
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-</li>
-<li data-nav-id=/zcash-sync/data_model/ title="Data Model" class=dd-item>
-<a href=/zcash-sync/data_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#db"/></svg>
-Data Model
-<i class="fas fa-check read-icon"></i>
-</a>
-<ul>
-<li data-nav-id=/zcash-sync/data_model/tables/ title=Tables class=dd-item>
-<a href=/zcash-sync/data_model/tables/>
-Tables
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/data_model/chunks/ title="Block Chunks" class=dd-item>
-<a href=/zcash-sync/data_model/chunks/>
-Block Chunks
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/data_model/rollback/ title=Rollback class=dd-item>
-<a href=/zcash-sync/data_model/rollback/>
-Rollback
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/ title="Execution Model" class="dd-item
-parent">
-<a href=/zcash-sync/execution_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#work"/></svg>
-Execution Model
-<i class="fas fa-check read-icon"></i>
-</a>
-<ul>
-<li data-nav-id=/zcash-sync/execution_model/tasks/ title=Tasks class="dd-item
-parent">
-<a href=/zcash-sync/execution_model/tasks/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#task"/></svg>
-Tasks
-<i class="fas fa-check read-icon"></i>
-</a>
-<ul>
-<li data-nav-id=/zcash-sync/execution_model/tasks/download/ title=Download class=dd-item>
-<a href=/zcash-sync/execution_model/tasks/download/>
-Download
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/tasks/decrypt/ title=Decrypt class=dd-item>
-<a href=/zcash-sync/execution_model/tasks/decrypt/>
-Decrypt
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/tasks/witnesses/ title=Witnesses class="dd-item active">
-<a href=/zcash-sync/execution_model/tasks/witnesses/>
-Witnesses
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/pipeline/ title=Pipeline class=dd-item>
-<a href=/zcash-sync/execution_model/pipeline/>
-Pipeline
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/agents/ title=Agents class=dd-item>
-<a href=/zcash-sync/execution_model/agents/>
-Agents
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-</li>
-<li data-nav-id=/zcash-sync/api/ title=Interface class=dd-item>
-<a href=/zcash-sync/api/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#api"/></svg>
-Interface
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/example/ title=Example class=dd-item>
-<a href=/zcash-sync/example/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#demo"/></svg>
-Example
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-<section id=prefooter>
-<hr>
-<ul>
-<li><a class=padding href=# data-clear-history-toggle><i class="fas fa-history fa-fw"></i> Clear History</a></li>
-</ul>
-</section>
-<section id=footer>
-<p>Built with <a href=https://github.com/matcornic/hugo-theme-learn><i class="fas fa-heart"></i></a> from <a href=https://getgrav.org>Grav</a> and <a href=https://gohugo.io/>Hugo</a></p>
-</section>
-</div>
-</nav>
-<section id=body>
-<div id=overlay></div>
-<div class="padding highlightable">
-<div>
-<div id=top-bar>
-<div id=breadcrumbs itemscope itemtype=http://data-vocabulary.org/Breadcrumb>
-<span id=sidebar-toggle-span>
-<a href=# id=sidebar-toggle data-sidebar-toggle>
-<i class="fas fa-bars"></i>
-</a>
-</span>
-<span id=toc-menu><i class="fas fa-list-alt"></i></span>
-<span class=links>
-<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/execution_model/>Execution Model</a> > <a href=/zcash-sync/execution_model/tasks/>Tasks</a> > Witnesses
-</span>
-</div>
-<div class=progress>
-<div class=wrapper>
-<nav id=TableOfContents>
-<ul>
-<li><a href=#note-commitments>Note Commitments</a></li>
-<li><a href=#note-commitment-tree>Note Commitment Tree</a></li>
-<li><a href=#merkle-tree>Merkle Tree</a></li>
-<li><a href=#pedersen-hash>Pedersen Hash</a></li>
-<li><a href=#witnesses>Witnesses</a></li>
-<li><a href=#warp-sync-optimizations>Warp Sync Optimizations</a></li>
-<li><a href=#spend-statement-zkp>Spend Statement ZKP</a></li>
-</ul>
-</nav>
-</div>
-</div>
-</div>
-</div>
-<div id=head-tags>
-</div>
-<div id=body-inner>
-<h1>
-Witnesses
-</h1>
-<h2 id=note-commitments>Note Commitments</h2>
-<p>When someone makes a transactions and therefore creates output notes, they
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="height=device-height,width=device-width,initial-scale=1,minimum-scale=1"><meta name=generator content="Hugo 0.104.3"><meta name=generator content="Relearn 5.3.3+tip"><meta name=description content><title>Witnesses :: Zcash Warp Sync</title><link href=https://hhanh00.github.io/zcash-sync/images/favicon.png?1666235900 rel=icon type=image/png><link href=https://hhanh00.github.io/zcash-sync/css/fontawesome-all.min.css?1666235900 rel=stylesheet media=print onload='this.media="all",this.onload=null'><noscript><link href=https://hhanh00.github.io/zcash-sync/css/fontawesome-all.min.css?1666235900 rel=stylesheet></noscript><link href=https://hhanh00.github.io/zcash-sync/css/featherlight.min.css?1666235900 rel=stylesheet media=print onload='this.media="all",this.onload=null'><noscript><link href=https://hhanh00.github.io/zcash-sync/css/featherlight.min.css?1666235900 rel=stylesheet></noscript><link href=https://hhanh00.github.io/zcash-sync/css/auto-complete.css?1666235900 rel=stylesheet media=print onload='this.media="all",this.onload=null'><noscript><link href=https://hhanh00.github.io/zcash-sync/css/auto-complete.css?1666235900 rel=stylesheet></noscript><link href=https://hhanh00.github.io/zcash-sync/css/perfect-scrollbar.min.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/nucleus.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/fonts.css?1666235900 rel=stylesheet media=print onload='this.media="all",this.onload=null'><noscript><link href=https://hhanh00.github.io/zcash-sync/css/fonts.css?1666235900 rel=stylesheet></noscript><link href=https://hhanh00.github.io/zcash-sync/css/theme.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/theme-blue.css?1666235900 rel=stylesheet id=variant-style><link href=https://hhanh00.github.io/zcash-sync/css/ie.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/variant.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/print.css?1666235900 rel=stylesheet media=print><script src=https://hhanh00.github.io/zcash-sync/js/variant.js?1666235900></script>
+<script>var index_url="https://hhanh00.github.io/zcash-sync/index.json",baseUriFull,root_url="https://hhanh00.github.io/zcash-sync/",baseUri=root_url.replace(/\/$/,"");window.T_Copy_to_clipboard="Copy to clipboard",window.T_Copied_to_clipboard="Copied to clipboard!",window.T_Copy_link_to_clipboard="Copy link to clipboard",window.T_Link_copied_to_clipboard="Copied link to clipboard!",baseUriFull="https://hhanh00.github.io/zcash-sync/",window.variants&&variants.init(["blue"])</script><script src=https://hhanh00.github.io/zcash-sync/js/jquery.min.js?1666235900 defer></script><link rel=stylesheet href=https://hhanh00.github.io/zcash-sync//common.css>
+<link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous></head><body class="mobile-support default" data-url=https://hhanh00.github.io/zcash-sync/execution_model/tasks/witnesses/><div id=body class=default-animation><div id=sidebar-overlay></div><div id=toc-overlay></div><nav id=topbar class=highlightable><div><div class=navigation><a class="nav nav-next" href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/pipeline/ title="Pipeline (&#129106;)"><i class="fas fa-chevron-right fa-fw"></i></a></div><div class=navigation><a class="nav nav-prev" href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/decrypt/ title="Decrypt (&#129104;)"><i class="fas fa-chevron-left fa-fw"></i></a></div><div id=breadcrumbs><span id=sidebar-toggle-span><a href=# id=sidebar-toggle title='Menu (CTRL+ALT+n)'><i class="fas fa-bars fa-fw"></i></a></span>
+<span id=toc-menu title='Table of Contents (CTRL+ALT+t)'><i class="fas fa-list-alt fa-fw"></i></span><ol class=links itemscope itemtype=http://schema.org/BreadcrumbList><li itemscope itemtype=https://schema.org/ListItem itemprop=itemListElement><a itemprop=item href=https://hhanh00.github.io/zcash-sync/><span itemprop=name>WarpSync</span></a><meta itemprop=position content="1">></li><li itemscope itemtype=https://schema.org/ListItem itemprop=itemListElement><a itemprop=item href=https://hhanh00.github.io/zcash-sync/execution_model/><span itemprop=name>Execution Model</span></a><meta itemprop=position content="2">></li><li itemscope itemtype=https://schema.org/ListItem itemprop=itemListElement><a itemprop=item href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/><span itemprop=name>Tasks</span></a><meta itemprop=position content="3">></li><li itemscope itemtype=https://schema.org/ListItem itemprop=itemListElement><span itemprop=name>Witnesses</span><meta itemprop=position content="4"></li></ol></div><div class="default-animation progress"><div class=wrapper><nav id=TableOfContents><ul><li><a href=#note-commitments>Note Commitments</a></li><li><a href=#note-commitment-tree>Note Commitment Tree</a></li><li><a href=#merkle-tree>Merkle Tree</a></li><li><a href=#pedersen-hash>Pedersen Hash</a></li><li><a href=#witnesses>Witnesses</a></li><li><a href=#warp-sync-optimizations>Warp Sync Optimizations</a></li><li><a href=#spend-statement-zkp>Spend Statement ZKP</a></li></ul></nav></div></div></div></nav><main id=body-inner class="highlightable default" tabindex=-1><div class=flex-block-wrapper><div id=head-tags></div><article class=default><h1>Witnesses</h1><h2 id=note-commitments>Note Commitments</h2><p>When someone makes a transactions and therefore creates output notes, they
 are encrypted. Even when they are spent, notes are not revealed because
-that would also give the transaction that created them.</p>
-<p>In fact, we could imagine a scheme where the notes are not stored
+that would also give the transaction that created them.</p><p>In fact, we could imagine a scheme where the notes are not stored
 in the blockchain but only the zk proofs. Of course, it implies that
 clients have another way to retrieve the encrypted output if they
-don&rsquo;t store it themselves.</p>
-<p>In any case, the point is that when a transaction output, or note
+don&rsquo;t store it themselves.</p><p>In any case, the point is that when a transaction output, or note
 is created we cannot blindly trust that it does not double spend
-or just has a value that exceeds the inputs.</p>
-<p>In a public blockchain, full nodes can verify every transaction
+or just has a value that exceeds the inputs.</p><p>In a public blockchain, full nodes can verify every transaction
 and ensure that they are well-formed. But if the transaction is
-encrypted, it is impossible to check them.</p>
-<p>Thanks for zero knowledge proofs, we have now the technology to
+encrypted, it is impossible to check them.</p><p>Thanks for zero knowledge proofs, we have now the technology to
 create cryptographic proofs that the outputs follow the protocol
-rules without knowing precisely their value.</p>
-<p>But the ZKP is not enough. When we want to spend one of our note,
+rules without knowing precisely their value.</p><p>But the ZKP is not enough. When we want to spend one of our note,
 we must also show that what we spend is indeed a previously
-unspent output.</p>
-<p>The usual tool for that is the <em>cryptographic commitment</em>.</p>
-<p>Whenever you want to show that you know something but you don&rsquo;t want
-to reveal it <em>at the moment</em>, you can use a commitment.</p>
-<p>A commitment scheme works in two phases.</p>
-<ul>
-<li>You &ldquo;commit&rdquo; to your value by calculating a &ldquo;commitment value&rdquo;. You
-<em>publish</em> this value for everyone to see.</li>
-<li>When you want to show that you have the value, you reveal it
-and people can check that the commitment value matches the published commitment.</li>
-</ul>
-<p>For it to work, the commitment value must be:</p>
-<ul>
-<li>binding: You must reveal the right value. If you reveal something else, the
-commitment value will <em>not</em> match.</li>
-<li>hiding: The commitment value is public but it must not give any information
-that could reveal the source value.</li>
-</ul>
-<div class="notices note"><p>In Zcash, the note commitments ensure that when the notes are
-used, they refer to outputs of previous transactions.</p>
-</div>
-<p>Output notes are encrypted but their commitments are public.</p>
-<h2 id=note-commitment-tree>Note Commitment Tree</h2>
-<p>Note commitments are put in the Blockchain and the order
+unspent output.</p><p>The usual tool for that is the <em>cryptographic commitment</em>.</p><p>Whenever you want to show that you know something but you don&rsquo;t want
+to reveal it <em>at the moment</em>, you can use a commitment.</p><p>A commitment scheme works in two phases.</p><ul><li>You &ldquo;commit&rdquo; to your value by calculating a &ldquo;commitment value&rdquo;. You
+<em>publish</em> this value for everyone to see.</li><li>When you want to show that you have the value, you reveal it
+and people can check that the commitment value matches the published commitment.</li></ul><p>For it to work, the commitment value must be:</p><ul><li>binding: You must reveal the right value. If you reveal something else, the
+commitment value will <em>not</em> match.</li><li>hiding: The commitment value is public but it must not give any information
+that could reveal the source value.</li></ul><div class="box notices cstyle note"><div class=box-label><i class="fa-fw fas fa-exclamation-circle"></i> Note</div><div class=box-content><p>In Zcash, the note commitments ensure that when the notes are
+used, they refer to outputs of previous transactions.</p></div></div><p>Output notes are encrypted but their commitments are public.</p><h2 id=note-commitment-tree>Note Commitment Tree</h2><p>Note commitments are put in the Blockchain and the order
 in which they appear defines the order in which they added to a binary
 tree of height 63. This tree is called the Note Commitment Tree.
 Every zcash node agrees on the same commitment tree since it only
-contains public information.</p>
-<p>This tree has millions of leaves. They are never removed or modified.
-Therefore the tree keeps growing and is not prunable at the moment.</p>
-<p>If you receive a note from a transaction, the note is yours and
+contains public information.</p><p>This tree has millions of leaves. They are never removed or modified.
+Therefore the tree keeps growing and is not prunable at the moment.</p><p>If you receive a note from a transaction, the note is yours and
 you have the note that matches the commitment. However, only a
 small fraction of all the note commitments are yours. The rest
-belong to other users.</p>
-<p>When you want to spend a note, you must prove that it was a previous
+belong to other users.</p><p>When you want to spend a note, you must prove that it was a previous
 transaction output. The way you prove that is by showing that the note
-commitment is in the tree.</p>
-<p>Now, showing that your note is in the tree without telling which note it
-is, is difficult.</p>
-<p>It requires some cryptographic tools.</p>
-<h2 id=merkle-tree>Merkle Tree</h2>
-<p>We want to show that we have the note that matches a commitment that
-was transmitted earlier and is now part of the tree.</p>
-<p>This will also explain why the note commitments are stored as a tree
-and now as a plain list.</p>
-<p>The note commitment tree is organized as a binary tree. For each non-terminal
+commitment is in the tree.</p><p>Now, showing that your note is in the tree without telling which note it
+is, is difficult.</p><p>It requires some cryptographic tools.</p><h2 id=merkle-tree>Merkle Tree</h2><p>We want to show that we have the note that matches a commitment that
+was transmitted earlier and is now part of the tree.</p><p>This will also explain why the note commitments are stored as a tree
+and now as a plain list.</p><p>The note commitment tree is organized as a binary tree. For each non-terminal
 node, i.e. internal node, there are two children. The tree has a fixed depth
 of 63, for a total of 2^63 commitments. However, at this moment, there are
 about 20-30 million notes used. The vast majority of the leaves are unused.
-Unused leaves have a commitment value of [0; 32] (32 bytes of 00).</p>
-<p>The inner nodes are hashes of the two children. Since each child is a hash
-value (the leaf is also a hash value), they all have a size of 32 bytes.</p>
-<div class="notices note"><p>To get the value of an inner node, concatenate the hash value of the left node
-and the right node to form a 64 byte sequence and hash it.</p>
-</div>
-<p>Here&rsquo;s a small general Merkle Tree:
-<img class=img src=../img/Merkle-Tree-FA.jpg></p>
-<p>It has only 3 levels and therefore can store $2^3=8$ elements</p>
-<p>In the case of the Merkle Tree for the note commitments (NCT), the layer $T_x$
-is omitted because the data are already hashes.</p>
-<p>Ex: $H_{EF} = \text{Hash}(H_E, H_F)$, where the Hash function is defined
-in the next section.</p>
-<p>$$H_{ABCD} = \text{Hash}(H_{AB}, H_{CD})$$
-$$H_{ABCDEFGH} = \text{Hash}(H_{ABCD}, H_{EFGH})$$</p>
-<p>Also, the NCT stores notes incrementally: previous entries are never removed
+Unused leaves have a commitment value of [0; 32] (32 bytes of 00).</p><p>The inner nodes are hashes of the two children. Since each child is a hash
+value (the leaf is also a hash value), they all have a size of 32 bytes.</p><div class="box notices cstyle note"><div class=box-label><i class="fa-fw fas fa-exclamation-circle"></i> Note</div><div class=box-content><p>To get the value of an inner node, concatenate the hash value of the left node
+and the right node to form a 64 byte sequence and hash it.</p></div></div><p>Here&rsquo;s a small general Merkle Tree:
+<img class=img src=../img/Merkle-Tree-FA.jpg></p><p>It has only 3 levels and therefore can store $2^3=8$ elements</p><p>In the case of the Merkle Tree for the note commitments (NCT), the layer $T_x$
+is omitted because the data are already hashes.</p><p>Ex: $H_{EF} = \text{Hash}(H_E, H_F)$, where the Hash function is defined
+in the next section.</p><p>$$H_{ABCD} = \text{Hash}(H_{AB}, H_{CD})$$
+$$H_{ABCDEFGH} = \text{Hash}(H_{ABCD}, H_{EFGH})$$</p><p>Also, the NCT stores notes incrementally: previous entries are never removed
 or modified. We just assign an empty slot to a new commitment in the order
-they appear in the blockchain.</p>
-<p>We can see that the root of the tree, $H_{ABCDEFGH}$ depends on the value of
-every note commitment.</p>
-<p>Every time a new note gets added, the root hash will change. And because all
+they appear in the blockchain.</p><p>We can see that the root of the tree, $H_{ABCDEFGH}$ depends on the value of
+every note commitment.</p><p>Every time a new note gets added, the root hash will change. And because all
 the nodes are hash values, it is impossible to predict in advance the root
-value.</p>
-<p>Also, the NCT is tracked by every network participant and is part of consensus.
-We can query the current root hash from <code>zcashd</code>.</p>
-<p>If we were only interested in the security of the note commitments, we wouldn&rsquo;t
+value.</p><p>Also, the NCT is tracked by every network participant and is part of consensus.
+We can query the current root hash from <code>zcashd</code>.</p><p>If we were only interested in the security of the note commitments, we wouldn&rsquo;t
 need to build a Merkle Tree. We could simply build a list from all the note
 commitments and hash them at once, as a sequence of bytes. If any of the
-commitment is altered, the overall hash would also change.</p>
-<p>Instead of having all these intermediate hashes, we would have a single hash value
+commitment is altered, the overall hash would also change.</p><p>Instead of having all these intermediate hashes, we would have a single hash value
 that combines all the hashes together. The calculation would be much faster
-because only one hash would have to be computed.</p>
-<p>But a Merkle Tree has a major advantage if you want to prove that a value belongs
-to the set of hashes.</p>
-<p>If you had the hash of the list, to prove that a value is part of that list, you
-must:</p>
-<ul>
-<li>give every value of the list,</li>
-<li>have the verifier calculate the hash</li>
-<li>check it equals the &ldquo;official&rdquo; root hash</li>
-<li>check that the value you provided is in the list</li>
-</ul>
-<p>Obviously, Giving 20-30 million hash values is not practical.</p>
-<p>With a Merkle Tree, we can reduce that amount of data to only 63 hashes.</p>
-<p>Let&rsquo;s say we want to prove that $H_E$ is part of the tree.</p>
-<p>We start by giving $H_E$. In this scenario, the receiver does not have $H_x$
-but only knows the root hash.</p>
-<p>In addition to $H_E$, we also give the &ldquo;Merkle Path&rdquo;, which is the list of
-the <em>sibling hashes</em> from the leaf to the root</p>
-<p>In our case, that would be $H_F$, $H_{GH}$, $H_{ABCD}$. The direct path
-is $H_E$, $H_{EF}$ and $H_{EFGH}$, but we want the siblings.</p>
-<p>The receiver/verifier can then recompute the direct path using the Merkle Path:</p>
-<ul>
-<li>$H_{EF} = h(H_E, H_F)$,</li>
-<li>$H_{EFGH} = h(H_{EF}, H_{GH})$,</li>
-<li>$H_{ABCDEFGH} = h(H_{ABCD}, H_{EFGH})$</li>
-</ul>
-<p>The last hash is the root. If it matches, $H_E$ belongs to the tree.</p>
-<p>We cannot fool the verifier because every data we provide is a hash.
+because only one hash would have to be computed.</p><p>But a Merkle Tree has a major advantage if you want to prove that a value belongs
+to the set of hashes.</p><p>If you had the hash of the list, to prove that a value is part of that list, you
+must:</p><ul><li>give every value of the list,</li><li>have the verifier calculate the hash</li><li>check it equals the &ldquo;official&rdquo; root hash</li><li>check that the value you provided is in the list</li></ul><p>Obviously, Giving 20-30 million hash values is not practical.</p><p>With a Merkle Tree, we can reduce that amount of data to only 63 hashes.</p><p>Let&rsquo;s say we want to prove that $H_E$ is part of the tree.</p><p>We start by giving $H_E$. In this scenario, the receiver does not have $H_x$
+but only knows the root hash.</p><p>In addition to $H_E$, we also give the &ldquo;Merkle Path&rdquo;, which is the list of
+the <em>sibling hashes</em> from the leaf to the root</p><p>In our case, that would be $H_F$, $H_{GH}$, $H_{ABCD}$. The direct path
+is $H_E$, $H_{EF}$ and $H_{EFGH}$, but we want the siblings.</p><p>The receiver/verifier can then recompute the direct path using the Merkle Path:</p><ul><li>$H_{EF} = h(H_E, H_F)$,</li><li>$H_{EFGH} = h(H_{EF}, H_{GH})$,</li><li>$H_{ABCDEFGH} = h(H_{ABCD}, H_{EFGH})$</li></ul><p>The last hash is the root. If it matches, $H_E$ belongs to the tree.</p><p>We cannot fool the verifier because every data we provide is a hash.
 A main property of the hash function is that it computationnally impossible
-to find <em>different</em> values $(a, b)$ than $(H_E, H_F)$ such as $H_{EF} = h(a, b)$</p>
-<p>Therefore we are forced to give the real hash values if we want to match the
-root hash.</p>
-<p>In Zcash, this Merkle Path is an input to the Spend Statement ZKP that
-we cover briefly in the last section.</p>
-<h2 id=pedersen-hash>Pedersen Hash</h2>
-<p>As you can, the NCT contains a large number of hashes and needs to be updated
-every time a new note is added. The hash function used is a Pedersen Hash.</p>
-<p>The Pedersen Hash function securely maps a sequence of bits into a point on
-an elliptical curve, (Jubjub for Sapling).</p>
-<p>It is much more expensive to compute a Pedersen Hash than to compute a SHA
-or a Blake hash, due to the finite field arithmetic involved.</p>
-<p>But it can be implemented in a ZK circuit more efficiently than a classic hash
-function.</p>
-<h2 id=witnesses>Witnesses</h2>
-<p>For every UTXO that your wallet has, the app needs to update the Merkle Path
+to find <em>different</em> values $(a, b)$ than $(H_E, H_F)$ such as $H_{EF} = h(a, b)$</p><p>Therefore we are forced to give the real hash values if we want to match the
+root hash.</p><p>In Zcash, this Merkle Path is an input to the Spend Statement ZKP that
+we cover briefly in the last section.</p><h2 id=pedersen-hash>Pedersen Hash</h2><p>As you can, the NCT contains a large number of hashes and needs to be updated
+every time a new note is added. The hash function used is a Pedersen Hash.</p><p>The Pedersen Hash function securely maps a sequence of bits into a point on
+an elliptical curve, (Jubjub for Sapling).</p><p>It is much more expensive to compute a Pedersen Hash than to compute a SHA
+or a Blake hash, due to the finite field arithmetic involved.</p><p>But it can be implemented in a ZK circuit more efficiently than a classic hash
+function.</p><h2 id=witnesses>Witnesses</h2><p>For every UTXO that your wallet has, the app needs to update the Merkle Path
 when we receive new outputs. Even if none of the outputs are ours. With
 the growth of transaction outputs, we have now several million notes that have
-to be processed in every wallet.</p>
-<h2 id=warp-sync-optimizations>Warp Sync Optimizations</h2>
-<p>The main goal of Warp Sync is to minimize Pedersen Hash calculations
-and especially avoid recalculating the same hash twice.</p>
-<p>When you have several notes in your wallet, there is a good chance
+to be processed in every wallet.</p><h2 id=warp-sync-optimizations>Warp Sync Optimizations</h2><p>The main goal of Warp Sync is to minimize Pedersen Hash calculations
+and especially avoid recalculating the same hash twice.</p><p>When you have several notes in your wallet, there is a good chance
 that they have part of their Merkle Path in common. A non-optimized
 implementation would treat each note independently and update the
-witnesses by recomputing their Merkle Path sequentially.</p>
-<p>Warp Sync rebuilds the Merkle Tree in parallel, and distributes
+witnesses by recomputing their Merkle Path sequentially.</p><p>Warp Sync rebuilds the Merkle Tree in parallel, and distributes
 the hash values to the note. It ensures that the calculation are
 spread out across all the CPU core and that the witness updates
-are essentially data copies.</p>
-<p>Another advantage of doing hash calculations on the NCT instead
+are essentially data copies.</p><p>Another advantage of doing hash calculations on the NCT instead
 of on the witnesses, is that WS can use a cryptographic optimization,
-that reduces the number of field divisions.</p>
-<h2 id=spend-statement-zkp>Spend Statement ZKP</h2>
-<p>In the case of Zcash, the Merkle Path is not published and stored in
+that reduces the number of field divisions.</p><h2 id=spend-statement-zkp>Spend Statement ZKP</h2><p>In the case of Zcash, the Merkle Path is not published and stored in
 the blockchain but serves as a secret input to the ZKP spend statements.
 Essentially, we state that we know the Merkle Path for the note
-we spend but we don&rsquo;t reveal it.</p>
-<footer class=footline>
-</footer>
-</div>
-</div>
-<div id=navigation>
-<a class="nav nav-prev" href=/zcash-sync/execution_model/tasks/decrypt/ title=Decrypt> <i class="fa fa-chevron-left"></i></a>
-<a class="nav nav-next" href=/zcash-sync/execution_model/pipeline/ title=Pipeline style=margin-right:0><i class="fa fa-chevron-right"></i></a>
-</div>
-</section>
-<div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>
-<div style=border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px></div>
-</div>
-<script src=/zcash-sync/js/clipboard.min.js?1665316482></script>
-<script src=/zcash-sync/js/perfect-scrollbar.min.js?1665316482></script>
-<script src=/zcash-sync/js/perfect-scrollbar.jquery.min.js?1665316482></script>
-<script src=/zcash-sync/js/jquery.sticky.js?1665316482></script>
-<script src=/zcash-sync/js/featherlight.min.js?1665316482></script>
-<script src=/zcash-sync/js/highlight.pack.js?1665316482></script>
-<script>hljs.initHighlightingOnLoad()</script>
-<script src=/zcash-sync/js/modernizr.custom-3.6.0.js?1665316482></script>
-<script src=/zcash-sync/js/learn.js?1665316482></script>
-<script src=/zcash-sync/js/hugo-learn.js?1665316482></script>
-<script src=/zcash-sync/mermaid/mermaid.js?1665316482></script>
-<script>mermaid.initialize({startOnLoad:!0})</script>
-<script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.js integrity=sha384-ljao5I1l+8KYFXG7LNEA7DyaFvuvSCmedUf6Y6JI7LJqiu8q5dEivP2nDdFH31V4 crossorigin=anonymous></script>
-<script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/contrib/auto-render.min.js integrity=sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1}]})'></script>
-</body>
-</html>
+we spend but we don&rsquo;t reveal it.</p><footer class=footline></footer></article></div></main></div><aside id=sidebar class="default-animation showVisitedLinks"><div id=header-wrapper class=default-animation><div id=header class=default-animation><a id=logo href=https://hhanh00.github.io/zcash-sync/><img srcset="https://hhanh00.github.io/zcash-sync//logo.png 4x"></a></div><div class="searchbox default-animation"><label class=a11y-only for=search-by>Search</label>
+<i class="fas fa-search"></i>
+<input data-search-input id=search-by type=search placeholder=Search...>
+<span data-search-clear><i class="fas fa-times"></i></span></div><script>var contentLangs=["en"]</script><script src=https://hhanh00.github.io/zcash-sync/js/auto-complete.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/lunr.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/lunr.stemmer.support.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/lunr.multi.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/lunr.en.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/search.js?1666235900 defer></script></div><div id=content-wrapper class=highlightable><ul class=topics><li data-nav-id=/light_wallet/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#wallet"/></svg>Light Wallets<i class="fas fa-check read-icon"></i></a><ul id=subsections-36215d82f105e6a1480b638eaa9c8d85><li data-nav-id=/light_wallet/purpose/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/purpose/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Purpose<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/light_wallet/privacy/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/privacy/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Privacy<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/light_wallet/utxo/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/utxo/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>UTXO Model<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/light_wallet/scan/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/scan/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Scan / Sync<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/light_wallet/reorg/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/reorg/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Reorganization<i class="fas fa-check read-icon"></i></a></li></ul></li><li data-nav-id=/data_model/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/data_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#db"/></svg>Data Model<i class="fas fa-check read-icon"></i></a><ul id=subsections-a50bfc3b4a08a12e2c0e6712a71aa7c5><li data-nav-id=/data_model/tables/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/data_model/tables/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Tables<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/data_model/chunks/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/data_model/chunks/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Block Chunks<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/data_model/rollback/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/data_model/rollback/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Rollback<i class="fas fa-check read-icon"></i></a></li></ul></li><li data-nav-id=/execution_model/ class="dd-item parent"><a href=https://hhanh00.github.io/zcash-sync/execution_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#work"/></svg>Execution Model<i class="fas fa-check read-icon"></i></a><ul id=subsections-35801c1dd9f796a90a09e9cea0ee9e39><li data-nav-id=/execution_model/tasks/ class="dd-item parent alwaysopen"><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#task"/></svg>Tasks<i class="fas fa-check read-icon"></i></a><ul id=subsections-b9a4a25588d5cce3c4a556db5f3a429f><li data-nav-id=/execution_model/tasks/download/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/download/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Download<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/execution_model/tasks/decrypt/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/decrypt/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Decrypt<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/execution_model/tasks/witnesses/ class="dd-item active"><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/witnesses/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Witnesses<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/execution_model/tasks/pipeline/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/pipeline/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Pipeline<i class="fas fa-check read-icon"></i></a></li></ul></li></ul></li><li data-nav-id=/developer/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#api"/></svg>Developer<i class="fas fa-check read-icon"></i></a><ul id=subsections-66449613fb7f90399b05c565e3093d8b><li data-nav-id=/developer/rpc/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/rpc/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>RPC<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/rest/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/rest/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>REST API<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/database/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/database/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Database<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/ffi/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/ffi/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>FFI<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/java/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/java/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Java<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/rust/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/rust/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Rust<i class="fas fa-check read-icon"></i></a></li></ul></li></ul><div class="footermargin footerLangSwitch footerVariantSwitch footerVisitedLinks footerFooter showVisitedLinks showFooter"></div><hr class="default-animation footerLangSwitch footerVariantSwitch footerVisitedLinks footerFooter showVisitedLinks showFooter"><div id=prefooter class="footerLangSwitch footerVariantSwitch footerVisitedLinks showVisitedLinks"><ul><li id=select-language-container class=footerLangSwitch><div class="padding select-container"><i class="fas fa-language fa-fw"></i>
+<span>&nbsp;</span><div class=select-style><label class=a11y-only for=select-language>Language</label>
+<select id=select-language onchange="location=baseUri+this.value"></select></div><div class=select-clear></div></div></li><li id=select-variant-container class=footerVariantSwitch><div class="padding select-container"><i class="fas fa-paint-brush fa-fw"></i>
+<span>&nbsp;</span><div class=select-style><label class=a11y-only for=select-variant>Theme</label>
+<select id=select-variant onchange=window.variants&&variants.changeVariant(this.value)><option id=blue value=blue selected>Blue</option></select></div><div class=select-clear></div></div><script>window.variants&&variants.markSelectedVariant()</script></li><li class="footerVisitedLinks showVisitedLinks"><a class=padding onclick=clearHistory()><i class="fas fa-history fa-fw"></i> Clear History</a></li></ul></div><div id=footer class="footerFooter showFooter"><p>Built with <a href=https://github.com/McShelby/hugo-theme-relearn title=love><i class="fas fa-heart"></i></a> by <a href=https://gohugo.io/>Hugo</a></p></div></div></aside><script src=https://hhanh00.github.io/zcash-sync/js/clipboard.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/perfect-scrollbar.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/featherlight.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/theme.js?1666235900 defer></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.js integrity=sha384-ljao5I1l+8KYFXG7LNEA7DyaFvuvSCmedUf6Y6JI7LJqiu8q5dEivP2nDdFH31V4 crossorigin=anonymous></script>
+<script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/contrib/auto-render.min.js integrity=sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1}]})'></script></body></html>

@@ -1,297 +1,42 @@
-<!doctype html><html lang=en class="js csstransforms3d">
-<head>
-<meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1">
-<meta name=generator content="Hugo 0.91.2">
-<meta name=description content>
-<link rel=icon href=/zcash-sync/images/favicon.png type=image/png>
-<title>UTXO Model :: Zcash Warp Sync</title>
-<link href=/zcash-sync/css/nucleus.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/fontawesome-all.min.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/hybrid.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/featherlight.min.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/perfect-scrollbar.min.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/auto-complete.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/atom-one-dark-reasonable.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/theme.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/tabs.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/hugo-theme.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/css/theme-blue.css?1665316482 rel=stylesheet>
-<link href=/zcash-sync/common.css?1665316482 rel=stylesheet>
-<script src=/zcash-sync/js/jquery-3.3.1.min.js?1665316482></script>
-<style>:root #header+#content>#left>#rlblock_left{display:none!important}</style>
-<link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous>
-</head>
-<body data-url=/zcash-sync/light_wallet/utxo/>
-<nav id=sidebar class=showVisitedLinks>
-<div id=header-wrapper>
-<div id=header>
-<a id=logo href=https://hhanh00.github.io/zcash-sync/>
-<img srcset="https://hhanh00.github.io/zcash-sync//logo.png 4x">
-</a>
-</div>
-<div class=searchbox>
-<label for=search-by><i class="fas fa-search"></i></label>
-<input data-search-input id=search-by type=search placeholder=Search...>
-<span data-search-clear><i class="fas fa-times"></i></span>
-</div>
-<script type=text/javascript src=/zcash-sync/js/lunr.min.js?1665316482></script>
-<script type=text/javascript src=/zcash-sync/js/auto-complete.js?1665316482></script>
-<script type=text/javascript>var baseurl="https://hhanh00.github.io/zcash-sync/"</script>
-<script type=text/javascript src=/zcash-sync/js/search.js?1665316482></script>
-</div>
-<div class=highlightable>
-<ul class=topics>
-<li data-nav-id=/zcash-sync/light_wallet/ title="Light Wallets" class="dd-item
-parent">
-<a href=/zcash-sync/light_wallet/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#wallet"/></svg>
-Light Wallets
-<i class="fas fa-check read-icon"></i>
-</a>
-<ul>
-<li data-nav-id=/zcash-sync/light_wallet/purpose/ title=Purpose class=dd-item>
-<a href=/zcash-sync/light_wallet/purpose/>
-Purpose
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/light_wallet/privacy/ title=Privacy class=dd-item>
-<a href=/zcash-sync/light_wallet/privacy/>
-Privacy
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/light_wallet/utxo/ title="UTXO Model" class="dd-item active">
-<a href=/zcash-sync/light_wallet/utxo/>
-UTXO Model
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/light_wallet/scan/ title="Scan / Sync" class=dd-item>
-<a href=/zcash-sync/light_wallet/scan/>
-Scan / Sync
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/light_wallet/reorg/ title=Reorganization class=dd-item>
-<a href=/zcash-sync/light_wallet/reorg/>
-Reorganization
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-</li>
-<li data-nav-id=/zcash-sync/data_model/ title="Data Model" class=dd-item>
-<a href=/zcash-sync/data_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#db"/></svg>
-Data Model
-<i class="fas fa-check read-icon"></i>
-</a>
-<ul>
-<li data-nav-id=/zcash-sync/data_model/tables/ title=Tables class=dd-item>
-<a href=/zcash-sync/data_model/tables/>
-Tables
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/data_model/chunks/ title="Block Chunks" class=dd-item>
-<a href=/zcash-sync/data_model/chunks/>
-Block Chunks
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/data_model/rollback/ title=Rollback class=dd-item>
-<a href=/zcash-sync/data_model/rollback/>
-Rollback
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/ title="Execution Model" class=dd-item>
-<a href=/zcash-sync/execution_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#work"/></svg>
-Execution Model
-<i class="fas fa-check read-icon"></i>
-</a>
-<ul>
-<li data-nav-id=/zcash-sync/execution_model/tasks/ title=Tasks class=dd-item>
-<a href=/zcash-sync/execution_model/tasks/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#task"/></svg>
-Tasks
-<i class="fas fa-check read-icon"></i>
-</a>
-<ul>
-<li data-nav-id=/zcash-sync/execution_model/tasks/download/ title=Download class=dd-item>
-<a href=/zcash-sync/execution_model/tasks/download/>
-Download
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/tasks/decrypt/ title=Decrypt class=dd-item>
-<a href=/zcash-sync/execution_model/tasks/decrypt/>
-Decrypt
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/tasks/witnesses/ title=Witnesses class=dd-item>
-<a href=/zcash-sync/execution_model/tasks/witnesses/>
-Witnesses
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/pipeline/ title=Pipeline class=dd-item>
-<a href=/zcash-sync/execution_model/pipeline/>
-Pipeline
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/execution_model/agents/ title=Agents class=dd-item>
-<a href=/zcash-sync/execution_model/agents/>
-Agents
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-</li>
-<li data-nav-id=/zcash-sync/api/ title=Interface class=dd-item>
-<a href=/zcash-sync/api/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#api"/></svg>
-Interface
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-<li data-nav-id=/zcash-sync/example/ title=Example class=dd-item>
-<a href=/zcash-sync/example/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#demo"/></svg>
-Example
-<i class="fas fa-check read-icon"></i>
-</a>
-</li>
-</ul>
-<section id=prefooter>
-<hr>
-<ul>
-<li><a class=padding href=# data-clear-history-toggle><i class="fas fa-history fa-fw"></i> Clear History</a></li>
-</ul>
-</section>
-<section id=footer>
-<p>Built with <a href=https://github.com/matcornic/hugo-theme-learn><i class="fas fa-heart"></i></a> from <a href=https://getgrav.org>Grav</a> and <a href=https://gohugo.io/>Hugo</a></p>
-</section>
-</div>
-</nav>
-<section id=body>
-<div id=overlay></div>
-<div class="padding highlightable">
-<div>
-<div id=top-bar>
-<div id=breadcrumbs itemscope itemtype=http://data-vocabulary.org/Breadcrumb>
-<span id=sidebar-toggle-span>
-<a href=# id=sidebar-toggle data-sidebar-toggle>
-<i class="fas fa-bars"></i>
-</a>
-</span>
-<span id=toc-menu><i class="fas fa-list-alt"></i></span>
-<span class=links>
-<a href=/zcash-sync/>WarpSync</a> > <a href=/zcash-sync/light_wallet/>Light Wallets</a> > UTXO Model
-</span>
-</div>
-<div class=progress>
-<div class=wrapper>
-<nav id=TableOfContents>
-<ul>
-<li><a href=#utxo>UTXO</a></li>
-<li><a href=#notes>Notes</a></li>
-<li><a href=#unspent-transaction-outputs-utxo>Unspent Transaction Outputs (UTXO)</a>
-<ul>
-<li><a href=#transparent-utxo>Transparent UTXO</a></li>
-<li><a href=#shielded-utxo>Shielded UTXO</a></li>
-</ul>
-</li>
-</ul>
-</nav>
-</div>
-</div>
-</div>
-</div>
-<div id=head-tags>
-</div>
-<div id=body-inner>
-<h1>
-UTXO Model
-</h1>
-<p>Zcash is a Blockchain that uses the UTXO model first introduced in Bitcoin.</p>
-<h2 id=utxo>UTXO</h2>
-<p>Initially, every account/address has an empty balance. The only way to get
-coins into an account is through a transaction (TX).</p>
-<p>Transactions take <em>inputs</em> and produce <em>outputs</em>. Except for the mining
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="height=device-height,width=device-width,initial-scale=1,minimum-scale=1"><meta name=generator content="Hugo 0.104.3"><meta name=generator content="Relearn 5.3.3+tip"><meta name=description content><title>UTXO Model :: Zcash Warp Sync</title><link href=https://hhanh00.github.io/zcash-sync/images/favicon.png?1666235900 rel=icon type=image/png><link href=https://hhanh00.github.io/zcash-sync/css/fontawesome-all.min.css?1666235900 rel=stylesheet media=print onload='this.media="all",this.onload=null'><noscript><link href=https://hhanh00.github.io/zcash-sync/css/fontawesome-all.min.css?1666235900 rel=stylesheet></noscript><link href=https://hhanh00.github.io/zcash-sync/css/featherlight.min.css?1666235900 rel=stylesheet media=print onload='this.media="all",this.onload=null'><noscript><link href=https://hhanh00.github.io/zcash-sync/css/featherlight.min.css?1666235900 rel=stylesheet></noscript><link href=https://hhanh00.github.io/zcash-sync/css/auto-complete.css?1666235900 rel=stylesheet media=print onload='this.media="all",this.onload=null'><noscript><link href=https://hhanh00.github.io/zcash-sync/css/auto-complete.css?1666235900 rel=stylesheet></noscript><link href=https://hhanh00.github.io/zcash-sync/css/perfect-scrollbar.min.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/nucleus.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/fonts.css?1666235900 rel=stylesheet media=print onload='this.media="all",this.onload=null'><noscript><link href=https://hhanh00.github.io/zcash-sync/css/fonts.css?1666235900 rel=stylesheet></noscript><link href=https://hhanh00.github.io/zcash-sync/css/theme.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/theme-blue.css?1666235900 rel=stylesheet id=variant-style><link href=https://hhanh00.github.io/zcash-sync/css/ie.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/variant.css?1666235900 rel=stylesheet><link href=https://hhanh00.github.io/zcash-sync/css/print.css?1666235900 rel=stylesheet media=print><script src=https://hhanh00.github.io/zcash-sync/js/variant.js?1666235900></script>
+<script>var index_url="https://hhanh00.github.io/zcash-sync/index.json",baseUriFull,root_url="https://hhanh00.github.io/zcash-sync/",baseUri=root_url.replace(/\/$/,"");window.T_Copy_to_clipboard="Copy to clipboard",window.T_Copied_to_clipboard="Copied to clipboard!",window.T_Copy_link_to_clipboard="Copy link to clipboard",window.T_Link_copied_to_clipboard="Copied link to clipboard!",baseUriFull="https://hhanh00.github.io/zcash-sync/",window.variants&&variants.init(["blue"])</script><script src=https://hhanh00.github.io/zcash-sync/js/jquery.min.js?1666235900 defer></script><link rel=stylesheet href=https://hhanh00.github.io/zcash-sync//common.css>
+<link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.css integrity=sha384-ZPe7yZ91iWxYumsBEOn7ieg8q/o+qh/hQpSaPow8T6BwALcXSCS6C6fSRPIAnTQs crossorigin=anonymous></head><body class="mobile-support default" data-url=https://hhanh00.github.io/zcash-sync/light_wallet/utxo/><div id=body class=default-animation><div id=sidebar-overlay></div><div id=toc-overlay></div><nav id=topbar class=highlightable><div><div class=navigation><a class="nav nav-next" href=https://hhanh00.github.io/zcash-sync/light_wallet/scan/ title="Scan / Sync (&#129106;)"><i class="fas fa-chevron-right fa-fw"></i></a></div><div class=navigation><a class="nav nav-prev" href=https://hhanh00.github.io/zcash-sync/light_wallet/privacy/ title="Privacy (&#129104;)"><i class="fas fa-chevron-left fa-fw"></i></a></div><div id=breadcrumbs><span id=sidebar-toggle-span><a href=# id=sidebar-toggle title='Menu (CTRL+ALT+n)'><i class="fas fa-bars fa-fw"></i></a></span>
+<span id=toc-menu title='Table of Contents (CTRL+ALT+t)'><i class="fas fa-list-alt fa-fw"></i></span><ol class=links itemscope itemtype=http://schema.org/BreadcrumbList><li itemscope itemtype=https://schema.org/ListItem itemprop=itemListElement><a itemprop=item href=https://hhanh00.github.io/zcash-sync/><span itemprop=name>WarpSync</span></a><meta itemprop=position content="1">></li><li itemscope itemtype=https://schema.org/ListItem itemprop=itemListElement><a itemprop=item href=https://hhanh00.github.io/zcash-sync/light_wallet/><span itemprop=name>Light Wallets</span></a><meta itemprop=position content="2">></li><li itemscope itemtype=https://schema.org/ListItem itemprop=itemListElement><span itemprop=name>UTXO Model</span><meta itemprop=position content="3"></li></ol></div><div class="default-animation progress"><div class=wrapper><nav id=TableOfContents><ul><li><a href=#utxo>UTXO</a></li><li><a href=#notes>Notes</a></li><li><a href=#unspent-transaction-outputs-utxo>Unspent Transaction Outputs (UTXO)</a><ul><li><a href=#transparent-utxo>Transparent UTXO</a></li><li><a href=#shielded-utxo>Shielded UTXO</a></li></ul></li></ul></nav></div></div></div></nav><main id=body-inner class="highlightable default" tabindex=-1><div class=flex-block-wrapper><div id=head-tags></div><article class=default><h1>UTXO Model</h1><p>Zcash is a Blockchain that uses the UTXO model first introduced in Bitcoin.</p><h2 id=utxo>UTXO</h2><p>Initially, every account/address has an empty balance. The only way to get
+coins into an account is through a transaction (TX).</p><p>Transactions take <em>inputs</em> and produce <em>outputs</em>. Except for the mining
 transaction called the coinbase transaction, every transaction has inputs
-that fund the outputs.</p>
-<p>We&rsquo;ll not consider mining or minting and therefore we&rsquo;ll ignore the
-coinbase transaction.</p>
-<h2 id=notes>Notes</h2>
-<p>Inputs and outputs are <em>notes</em>. They have an amount and belong to an address.
+that fund the outputs.</p><p>We&rsquo;ll not consider mining or minting and therefore we&rsquo;ll ignore the
+coinbase transaction.</p><h2 id=notes>Notes</h2><p>Inputs and outputs are <em>notes</em>. They have an amount and belong to an address.
 The address is associated with a secret key that let&rsquo;s you use the note as
 an input of a transaction. If you do not have the secret key, you cannot to spend
-the output.</p>
-<p>For public coins, notes are in clear text. By analyzing the blockchain, one can
+the output.</p><p>For public coins, notes are in clear text. By analyzing the blockchain, one can
 calculate the balance of every address in use. They just need to tally every
-incoming note and deduct every spent note.</p>
-<p>However, Zcash has both public and private notes. Public notes behave exactly
-like explained above but private notes are <em>encrypted</em>.</p>
-<p>Encrypted notes also have an amount and an address but this information is
-not readable unless you have a viewing key.</p>
-<div class="notices note"><p>Without the right viewing key, an encrypted note appears as random bytes.
-Encrypted notes are also called shielded notes.</p>
-</div>
-<p>It may be worth remembering that a note belong to a single address but
-an address may own any number of notes.</p>
-<h2 id=unspent-transaction-outputs-utxo>Unspent Transaction Outputs (UTXO)</h2>
-<p>UTXO are the notes that haven&rsquo;t been spent yet.</p>
-<p>Their total is the amount of coins in circulation. The UTXO for which you have the secret key are
-the funds you can spend.</p>
-<p>Therefore it is very important that your wallet keeps track of all the UTXO you can
-spend.</p>
-<p>The only way to know which UTXO are yours is to <em>scan</em> the blockchain and look at
-every transaction inputs and outputs.</p>
-<h3 id=transparent-utxo>Transparent UTXO</h3>
-<p>If the UTXO belong to a transparent address, a wallet can leverage an external
+incoming note and deduct every spent note.</p><p>However, Zcash has both public and private notes. Public notes behave exactly
+like explained above but private notes are <em>encrypted</em>.</p><p>Encrypted notes also have an amount and an address but this information is
+not readable unless you have a viewing key.</p><div class="box notices cstyle note"><div class=box-label><i class="fa-fw fas fa-exclamation-circle"></i> Note</div><div class=box-content><p>Without the right viewing key, an encrypted note appears as random bytes.
+Encrypted notes are also called shielded notes.</p></div></div><p>It may be worth remembering that a note belong to a single address but
+an address may own any number of notes.</p><h2 id=unspent-transaction-outputs-utxo>Unspent Transaction Outputs (UTXO)</h2><p>UTXO are the notes that haven&rsquo;t been spent yet.</p><p>Their total is the amount of coins in circulation. The UTXO for which you have the secret key are
+the funds you can spend.</p><p>Therefore it is very important that your wallet keeps track of all the UTXO you can
+spend.</p><p>The only way to know which UTXO are yours is to <em>scan</em> the blockchain and look at
+every transaction inputs and outputs.</p><h3 id=transparent-utxo>Transparent UTXO</h3><p>If the UTXO belong to a transparent address, a wallet can leverage an external
 service, for example a block explorer, and delegate the scan. The service can scan
-the Blockchain once and track every transparent UTXO in a database.</p>
-<div class="notices note"><p>Zcashd can index every transaction and keep a track of every transparent address
-ever used.</p>
-</div>
-<p>This requires address storage and processing power, therefore <code>zcashd</code> needs to run
-with the <code>txindex=1</code> option.</p>
-<h3 id=shielded-utxo>Shielded UTXO</h3>
-<p>Shielded UTXO <em>cannot</em> be indexed by an external service or by <code>zcashd</code>. <code>zcashd</code> knows
-about your shielded UTXO but it cannot possibly decrypt other users' encrypted notes.</p>
-<p>Therefore, your wallet must scan the blockchain itself.</p>
-<div class="notices info"><p>To determine the balance of your shielded address, your wallet MUST scan
-the blockchain.</p>
-</div>
-<footer class=footline>
-</footer>
-</div>
-</div>
-<div id=navigation>
-<a class="nav nav-prev" href=/zcash-sync/light_wallet/privacy/ title=Privacy> <i class="fa fa-chevron-left"></i></a>
-<a class="nav nav-next" href=/zcash-sync/light_wallet/scan/ title="Scan / Sync" style=margin-right:0><i class="fa fa-chevron-right"></i></a>
-</div>
-</section>
-<div style=left:-1000px;overflow:scroll;position:absolute;top:-1000px;border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px>
-<div style=border:none;box-sizing:content-box;height:200px;margin:0;padding:0;width:200px></div>
-</div>
-<script src=/zcash-sync/js/clipboard.min.js?1665316482></script>
-<script src=/zcash-sync/js/perfect-scrollbar.min.js?1665316482></script>
-<script src=/zcash-sync/js/perfect-scrollbar.jquery.min.js?1665316482></script>
-<script src=/zcash-sync/js/jquery.sticky.js?1665316482></script>
-<script src=/zcash-sync/js/featherlight.min.js?1665316482></script>
-<script src=/zcash-sync/js/highlight.pack.js?1665316482></script>
-<script>hljs.initHighlightingOnLoad()</script>
-<script src=/zcash-sync/js/modernizr.custom-3.6.0.js?1665316482></script>
-<script src=/zcash-sync/js/learn.js?1665316482></script>
-<script src=/zcash-sync/js/hugo-learn.js?1665316482></script>
-<script src=/zcash-sync/mermaid/mermaid.js?1665316482></script>
-<script>mermaid.initialize({startOnLoad:!0})</script>
-<script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.js integrity=sha384-ljao5I1l+8KYFXG7LNEA7DyaFvuvSCmedUf6Y6JI7LJqiu8q5dEivP2nDdFH31V4 crossorigin=anonymous></script>
-<script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/contrib/auto-render.min.js integrity=sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1}]})'></script>
-</body>
-</html>
+the Blockchain once and track every transparent UTXO in a database.</p><div class="box notices cstyle note"><div class=box-label><i class="fa-fw fas fa-exclamation-circle"></i> Note</div><div class=box-content><p>Zcashd can index every transaction and keep a track of every transparent address
+ever used.</p></div></div><p>This requires address storage and processing power, therefore <code>zcashd</code> needs to run
+with the <code>txindex=1</code> option.</p><h3 id=shielded-utxo>Shielded UTXO</h3><p>Shielded UTXO <em>cannot</em> be indexed by an external service or by <code>zcashd</code>. <code>zcashd</code> knows
+about your shielded UTXO but it cannot possibly decrypt other users&rsquo; encrypted notes.</p><p>Therefore, your wallet must scan the blockchain itself.</p><div class="box notices cstyle info"><div class=box-label><i class="fa-fw fas fa-info-circle"></i> Info</div><div class=box-content><p>To determine the balance of your shielded address, your wallet MUST scan
+the blockchain.</p></div></div><footer class=footline></footer></article></div></main></div><aside id=sidebar class="default-animation showVisitedLinks"><div id=header-wrapper class=default-animation><div id=header class=default-animation><a id=logo href=https://hhanh00.github.io/zcash-sync/><img srcset="https://hhanh00.github.io/zcash-sync//logo.png 4x"></a></div><div class="searchbox default-animation"><label class=a11y-only for=search-by>Search</label>
+<i class="fas fa-search"></i>
+<input data-search-input id=search-by type=search placeholder=Search...>
+<span data-search-clear><i class="fas fa-times"></i></span></div><script>var contentLangs=["en"]</script><script src=https://hhanh00.github.io/zcash-sync/js/auto-complete.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/lunr.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/lunr.stemmer.support.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/lunr.multi.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/lunr.en.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/search.js?1666235900 defer></script></div><div id=content-wrapper class=highlightable><ul class=topics><li data-nav-id=/light_wallet/ class="dd-item parent"><a href=https://hhanh00.github.io/zcash-sync/light_wallet/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#wallet"/></svg>Light Wallets<i class="fas fa-check read-icon"></i></a><ul id=subsections-36215d82f105e6a1480b638eaa9c8d85><li data-nav-id=/light_wallet/purpose/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/purpose/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Purpose<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/light_wallet/privacy/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/privacy/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Privacy<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/light_wallet/utxo/ class="dd-item active"><a href=https://hhanh00.github.io/zcash-sync/light_wallet/utxo/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>UTXO Model<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/light_wallet/scan/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/scan/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Scan / Sync<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/light_wallet/reorg/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/light_wallet/reorg/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Reorganization<i class="fas fa-check read-icon"></i></a></li></ul></li><li data-nav-id=/data_model/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/data_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#db"/></svg>Data Model<i class="fas fa-check read-icon"></i></a><ul id=subsections-a50bfc3b4a08a12e2c0e6712a71aa7c5><li data-nav-id=/data_model/tables/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/data_model/tables/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Tables<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/data_model/chunks/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/data_model/chunks/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Block Chunks<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/data_model/rollback/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/data_model/rollback/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Rollback<i class="fas fa-check read-icon"></i></a></li></ul></li><li data-nav-id=/execution_model/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/execution_model/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#work"/></svg>Execution Model<i class="fas fa-check read-icon"></i></a><ul id=subsections-35801c1dd9f796a90a09e9cea0ee9e39><li data-nav-id=/execution_model/tasks/ class="dd-item alwaysopen"><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#task"/></svg>Tasks<i class="fas fa-check read-icon"></i></a><ul id=subsections-b9a4a25588d5cce3c4a556db5f3a429f><li data-nav-id=/execution_model/tasks/download/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/download/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Download<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/execution_model/tasks/decrypt/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/decrypt/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Decrypt<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/execution_model/tasks/witnesses/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/witnesses/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Witnesses<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/execution_model/tasks/pipeline/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/execution_model/tasks/pipeline/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Pipeline<i class="fas fa-check read-icon"></i></a></li></ul></li></ul></li><li data-nav-id=/developer/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#api"/></svg>Developer<i class="fas fa-check read-icon"></i></a><ul id=subsections-66449613fb7f90399b05c565e3093d8b><li data-nav-id=/developer/rpc/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/rpc/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>RPC<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/rest/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/rest/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>REST API<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/database/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/database/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Database<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/ffi/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/ffi/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>FFI<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/java/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/java/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Java<i class="fas fa-check read-icon"></i></a></li><li data-nav-id=/developer/rust/ class=dd-item><a href=https://hhanh00.github.io/zcash-sync/developer/rust/><svg class="icon"><use xlink:href="https://hhanh00.github.io/zcash-sync//sprite.svg#"/></svg>Rust<i class="fas fa-check read-icon"></i></a></li></ul></li></ul><div class="footermargin footerLangSwitch footerVariantSwitch footerVisitedLinks footerFooter showVisitedLinks showFooter"></div><hr class="default-animation footerLangSwitch footerVariantSwitch footerVisitedLinks footerFooter showVisitedLinks showFooter"><div id=prefooter class="footerLangSwitch footerVariantSwitch footerVisitedLinks showVisitedLinks"><ul><li id=select-language-container class=footerLangSwitch><div class="padding select-container"><i class="fas fa-language fa-fw"></i>
+<span>&nbsp;</span><div class=select-style><label class=a11y-only for=select-language>Language</label>
+<select id=select-language onchange="location=baseUri+this.value"></select></div><div class=select-clear></div></div></li><li id=select-variant-container class=footerVariantSwitch><div class="padding select-container"><i class="fas fa-paint-brush fa-fw"></i>
+<span>&nbsp;</span><div class=select-style><label class=a11y-only for=select-variant>Theme</label>
+<select id=select-variant onchange=window.variants&&variants.changeVariant(this.value)><option id=blue value=blue selected>Blue</option></select></div><div class=select-clear></div></div><script>window.variants&&variants.markSelectedVariant()</script></li><li class="footerVisitedLinks showVisitedLinks"><a class=padding onclick=clearHistory()><i class="fas fa-history fa-fw"></i> Clear History</a></li></ul></div><div id=footer class="footerFooter showFooter"><p>Built with <a href=https://github.com/McShelby/hugo-theme-relearn title=love><i class="fas fa-heart"></i></a> by <a href=https://gohugo.io/>Hugo</a></p></div></div></aside><script src=https://hhanh00.github.io/zcash-sync/js/clipboard.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/perfect-scrollbar.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/featherlight.min.js?1666235900 defer></script>
+<script src=https://hhanh00.github.io/zcash-sync/js/theme.js?1666235900 defer></script><script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.js integrity=sha384-ljao5I1l+8KYFXG7LNEA7DyaFvuvSCmedUf6Y6JI7LJqiu8q5dEivP2nDdFH31V4 crossorigin=anonymous></script>
+<script defer src=https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/contrib/auto-render.min.js integrity=sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR crossorigin=anonymous onload='renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:!0},{left:"$",right:"$",display:!1}]})'></script></body></html>
