@@ -1,83 +1,60 @@
 ---
-title: Java
-weight: 50
+title: Rust
+weight: 60
 ---
 
-## Example using Java
+## Documentation
 
-Checkout the `integrations/java` directory for an example of 
+The API has its own [documentation pages](/doc/warp_api_ffi).
+
+## Example using Rust
+
+Checkout the `integrations/rust` directory for an example of 
 how to use JAVA with Warp Sync to create a new account
 and query the seed phrase and address.
 
-### Main class
+```rust
+use warp_api_ffi::api::account::{get_backup, new_account};
+use warp_api_ffi::api::sync::coin_sync;
+use warp_api_ffi::{CoinConfig, init_coin, set_coin_lwd_url};
+use lazy_static::lazy_static;
+use std::sync::Mutex;
 
-```java
-package app.ywallet;
+lazy_static! {
+    static ref CANCEL: Mutex<bool> = Mutex::new(false);
+}
 
-import java.sql.*;
+const FVK: &str = "zxviews1q0duytgcqqqqpqre26wkl45gvwwwd706xw608hucmvfalr759ejwf7qshjf5r9aa7323zulvz6plhttp5mltqcgs9t039cx2d09mgq05ts63n8u35hyv6h9nc9ctqqtue2u7cer2mqegunuulq2luhq3ywjcz35yyljewa4mgkgjzyfwh6fr6jd0dzd44ghk0nxdv2hnv4j5nxfwv24rwdmgllhe0p8568sgqt9ckt02v2kxf5ahtql6s0ltjpkckw8gtymxtxuu9gcr0swvz";
 
-/**
- */
-public class App
-{
-    static {
-        System.loadLibrary("java_warp");
-    }
+#[tokio::main]
+async fn main() {
+    env_logger::init();
 
-    public static void main( String[] args ) throws Exception
-    {
-        Class.forName("org.sqlite.JDBC");
-        final App app = new App();
+    // Initialize the library for Zcash (coin = 0)
+    init_coin(0, "./zec.db").unwrap();
+    set_coin_lwd_url(0, "https://lwdv3.zecwallet.co:443"); // ZecWallet Lightwalletd URL
 
-        // Create a new account
-        final int id = app.newAccount();
+    // Create a new account with the ZEC pages viewing key
+    let id_account = new_account(0, "test_account", Some(FVK.to_string()),
+        None).unwrap();
 
-        // Connect to the database via JDBC
-        Connection conn = DriverManager.getConnection("jdbc:sqlite:zec.db");
+    // Synchronize
+    coin_sync(0 /* zcash */, 
+              true /* retrieve tx details */, 
+              0 /* sync to tip */, 
+              100 /* spam filter threshold */, |p| {
+        log::info!("Progress: {}", p.height);
+    }, &CANCEL).await.unwrap();
 
-        // Query the seed and address of the account by id
-        String query = "SELECT seed, address FROM accounts WHERE id_account = ?";
-        PreparedStatement statement = conn.prepareStatement(query);
-        statement.setInt(1, id);
-        ResultSet rs = statement.executeQuery();
-        while (rs.next()) {
-            String seed = rs.getString(1);
-            String address = rs.getString(2);
+    // Grab the database accessor
+    let cc = &CoinConfig::get(0 /* zcash */);
+    let db = cc.db.as_ref().unwrap().clone();
+    let db = db.lock().unwrap();
 
-            System.out.println("seed phrase: " + seed + ", address: " + address);
-        }
-    }
+    // Query the account balance
+    let balance = db.get_balance(id_account).unwrap();
 
-    private native int newAccount();
+    println!("Balance = {}", balance)
 }
 ```
 
-### JNI Wrapper
-
-The JNI wrapper calls `new_account` and returns the new account id.
-In a more realistic case, the wallet would be initialized only once
-and the account name would be passed in.
-
-```c++
-JNIEXPORT jint JNICALL Java_app_ywallet_App_newAccount
-  (JNIEnv *, jobject) {
-    init_wallet((char *)".");
-    CResult_u32 result = new_account(0, (char *)"test", (char*)"", 0);
-    return result.value;
-}
-```
-
-### Makefile
-
-The Makefile builds the JNI library that should be copied into the JAVA
-lib path.
-
-```makefile
-libjava_warp.so:
-
-app_ywallet_App.o: app_ywallet_App.cpp
-	g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux app_ywallet_App.cpp
-
-libjava_warp.so: app_ywallet_App.o
-	g++ -shared -fPIC -o libjava_warp.so app_ywallet_App.o  -L/usr/lib -lwarp_api_ffi
-```

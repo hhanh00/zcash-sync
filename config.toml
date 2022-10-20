@@ -1,14 +1,14 @@
 baseURL = 'https://hhanh00.github.io/zcash-sync/'
+canonifyURLs = true
 languageCode = 'en-us'
 title = 'Zcash Warp Sync'
 
-theme = "hugo-theme-learn"
+theme = "hugo-theme-relearn"
 
 [params]
 themeVariant = "blue"
 showVisitedLinks = true
 disableLandingPageButton = true
-custom_css = ["common.css"]
 
 [outputs]
 home = [ "HTML", "RSS", "JSON"]

@@ -10,19 +10,42 @@ completes.
 From the "largest" data to the "smallest" data:
 
 ## Blocks
+
+```sql
+CREATE TABLE IF NOT EXISTS blocks (
+    height INTEGER PRIMARY KEY,
+    hash BLOB NOT NULL,
+    timestamp INTEGER NOT NULL,
+    sapling_tree BLOB NOT NULL)
+```
+
 First we have blocks. We keep the block:
 
 - height, hash and time,
 - sapling tree
 
 The sapling tree field is unique to Zcash. The wallet needs it
-to update the note witnesses.
+to update the [note witnesses]({{< relref "tables#witnesses" >}}).
 
 ## Transactions
 
 The wallet only keeps the transactions for which it has detected either
 an incoming note or a spent note. Transparent transactions are not 
 kept. They are not included in the wallet history either.
+
+```sql
+CREATE TABLE IF NOT EXISTS transactions (
+    id_tx INTEGER PRIMARY KEY,
+    account INTEGER NOT NULL,
+    txid BLOB NOT NULL,
+    height INTEGER NOT NULL,
+    timestamp INTEGER NOT NULL,
+    value INTEGER NOT NULL,
+    address TEXT,
+    memo TEXT,
+    tx_index INTEGER,
+    CONSTRAINT tx_account UNIQUE (height, tx_index, account))
+```
 
 - id_tx: the id of the transactions. This is an internal ID only used by
 in our database. 
@@ -54,6 +77,24 @@ In other words, it's purely informational.
 
 On the contrary, the Received Notes table plays a critical role in
 defining the account state.
+
+```sql
+CREATE TABLE IF NOT EXISTS received_notes (
+    id_note INTEGER PRIMARY KEY,
+    account INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    tx INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    output_index INTEGER NOT NULL,
+    diversifier BLOB NOT NULL,
+    value INTEGER NOT NULL,
+    rcm BLOB NOT NULL,
+    nf BLOB NOT NULL UNIQUE,
+    spent INTEGER,
+    excluded BOOL,
+    CONSTRAINT tx_output UNIQUE (tx, output_index))
+```
+
 
 The Received Notes table has the following columns:
 
@@ -89,6 +130,15 @@ The Received Notes table allows us to:
 ## Witnesses
 
 Finally, we have the note witnesses table.
+
+```sql
+CREATE TABLE IF NOT EXISTS sapling_witnesses (
+    id_witness INTEGER PRIMARY KEY,
+    note INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    witness BLOB NOT NULL,
+    CONSTRAINT witness_height UNIQUE (note, height))
+```
 
 - id_witness: The primary key of the table
 - note: The id of the note

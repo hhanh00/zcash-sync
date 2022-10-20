@@ -1,42 +1,34 @@
 ---
-title: Database
-weight: 30
+title: FFI
+weight: 40
 ---
 
-You can also directly query the database if you just want to leverage
-WarpSync for synchronization but you want to implement the wallet logic
-yourself.
+You can build the Warp Sync library as a dynamic library and 
+use it from your code as long as it supports interfacing
+with native code.
 
-{{% notice warning %}}
-In this workflow, you *must* only query the database and never 
-update it.
-{{% /notice %}}
+Most programming languages have the ability to call into C
+code. Therefore, you should be able to use FFI (Foreign Function Interface).
 
-You should use the [REST API]({{< relref "rest" >}}) to manage
-accounts and perform synchronization.
+In this section, we'll describe the low-level C API.
 
-Then you can query the tables `accounts`, `received_notes`
-and `transactions`.
+## Build
 
-## Accounts
-
-```sql
-CREATE TABLE IF NOT EXISTS accounts (
-    id_account INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    seed TEXT,
-    aindex INTEGER NOT NULL,
-    sk TEXT,
-    ivk TEXT NOT NULL UNIQUE,
-    address TEXT NOT NULL)
+- First edit the file `Cargo.toml` and change the library type
+from `rlib` to `cdylib`
+- Then compile:
+```shell
+cargo b -r --features=dart_ffi
 ```
 
-- seed: account passphrase. Can be NULL if the account was created by secret key or viewing key
-- aindex: account sub index
-- sk: secret key. Can be NULL if the account was created by viewing key
-- ivk: viewing key
-- address: shielded address
+This should create a dynamic library in the `target/release` directory.
+On Linux, the file is named `libwarp_api_ffi.so`. Other platforms have
+slightly different names.
 
-## Transactions, Notes, Witnesses
+Even if your programming language is not DART, the feature is `dart_ffi`
+for historical reasons.
 
-They are documented in the [Data Model]({{< relref "data_model/tables" >}})
+## Header file
+
+The C header file is `binding.h`
+
