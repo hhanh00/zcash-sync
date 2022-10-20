@@ -271,7 +271,7 @@ pub async fn retrieve_tx_info(
 #[cfg(test)]
 mod tests {
     use crate::transaction::decode_transaction;
-    use crate::{connect_lightwalletd, DbAdapter, LWD_URL};
+    use crate::{AccountData, connect_lightwalletd, DbAdapter, LWD_URL};
     use std::collections::HashMap;
     use zcash_client_backend::encoding::decode_extended_full_viewing_key;
     use zcash_params::coin::CoinType;
@@ -292,8 +292,7 @@ mod tests {
                 nf_map.insert((nf.0, nf.2.clone()), nf.1);
             }
         }
-        let account = db.get_account_info(account).unwrap();
-        let fvk = account.fvk.clone();
+        let AccountData { fvk, .. } = db.get_account_info(account).unwrap();
         let fvk = decode_extended_full_viewing_key(
             Network::MainNetwork.hrp_sapling_extended_full_viewing_key(),
             &fvk,

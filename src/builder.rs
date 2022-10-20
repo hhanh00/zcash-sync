@@ -9,6 +9,20 @@ use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::*;
 use zcash_primitives::sapling::Node;
 
+pub enum ProvingSystem {
+    Sapling,
+    Orchard
+}
+
+pub trait ProvingSystemHasher {
+    type ExtendedPoint;
+    type AffinePoint;
+
+    fn combine_pair(depth: usize, left: &Node, right: &Node) -> Node;
+    fn batch_combine(depth: usize, left: &Node, right: &Node) -> Node;
+    fn batch_normalize(hash_extended: &[Self::ExtendedPoint], hash_affine: &mut [Self::AffinePoint]);
+}
+
 #[inline(always)]
 fn batch_node_combine1(depth: usize, left: &Node, right: &Node) -> ExtendedPoint {
     // Node::new(pedersen_hash(depth as u8, &left.repr, &right.repr))

@@ -177,8 +177,26 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         connection.execute("ALTER TABLE messages ADD id_tx INTEGER", [])?;
     }
 
-    if version != 4 {
-        update_schema_version(connection, 4)?;
+    if version < 5 {
+        connection.execute("ALTER TABLE blocks ADD orchard_tree BLOB", [])?;
+        connection.execute("ALTER TABLE received_notes ADD rho BLOB", [])?;
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS orchard_witnesses (
+            id_witness INTEGER PRIMARY KEY,
+            note INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            witness BLOB NOT NULL,
+            CONSTRAINT witness_height UNIQUE (note, height))",
+            [],
+        )?;
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS i_orchard_witness ON orchard_witnesses(height)",
+            [],
+        )?;
+    }
+
+    if version != 5 {
+        update_schema_version(connection, 5)?;
         log::info!("Database migrated");
     }
 

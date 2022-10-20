@@ -72,6 +72,8 @@ const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
 // YCash
 // pub const LWD_URL: &str = "https://lite.ycash.xyz:9067";
 
+pub type Hash = [u8; 32];
+
 mod builder;
 mod chain;
 mod coinconfig;
@@ -80,6 +82,8 @@ mod contact;
 mod db;
 mod fountain;
 mod hash;
+pub mod sync;
+pub mod sapling;
 mod key;
 mod key2;
 mod mempool;
@@ -115,11 +119,11 @@ pub use crate::chain::{
     ChainError,
 };
 pub use crate::coinconfig::{
-    init_coin, set_active, set_active_account, set_coin_lwd_url, CoinConfig,
+    CoinConfig, init_coin, set_active, set_active_account, set_coin_lwd_url,
+    COIN_CONFIG,
 };
-pub use crate::db::{AccountData, AccountInfo, AccountRec, DbAdapter, TxRec};
-// pub use crate::fountain::FountainCodes;
-pub use crate::hash::Hash;
+pub use crate::db::{AccountData, AccountInfo, AccountRec, DbAdapter, TxRec, DbAdapterBuilder};
+pub use crate::fountain::{FountainCodes, RaptorQDrops};
 pub use crate::key::KeyHelpers;
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;

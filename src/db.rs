@@ -9,17 +9,25 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_params::coin::{get_coin_chain, get_coin_id, CoinType};
+use zcash_params::coin::{CoinType, get_coin_chain, get_coin_id};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
+use crate::sync;
 
 mod migration;
 
 #[allow(dead_code)]
 pub const DEFAULT_DB_PATH: &str = "zec.db";
+
+#[derive(Clone)]
+pub struct DbAdapterBuilder {
+    pub coin_type: CoinType,
+    pub db_path: String,
+}
 
 pub struct DbAdapter {
     pub coin_type: CoinType,
@@ -35,7 +43,15 @@ pub struct ReceivedNote {
     pub value: u64,
     pub rcm: Vec<u8>,
     pub nf: Vec<u8>,
+    pub rho: Option<Vec<u8>>,
     pub spent: Option<u32>,
+}
+
+pub struct ReceivedNoteShort {
+    pub id: u32,
+    pub account: u32,
+    pub nf: Nf,
+    pub value: u64,
 }
 
 #[derive(Clone)]
@@ -79,6 +95,15 @@ pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> any
     move |err: rusqlite::Error| match err {
         QueryReturnedNoRows => anyhow::anyhow!("Query {} returned no rows", name),
         other => anyhow::anyhow!(other.to_string()),
+    }
+}
+
+impl DbAdapterBuilder {
+    pub fn build(&self) -> anyhow::Result<DbAdapter> {
+        DbAdapter::new(
+            self.coin_type,
+            &self.db_path,
+        )
     }
 }
 
@@ -227,6 +252,10 @@ impl DbAdapter {
             params![height],
         )?;
         tx.execute(
+            "DELETE FROM orchard_witnesses WHERE height > ?1",
+            params![height],
+        )?;
+        tx.execute(
             "DELETE FROM received_notes WHERE height > ?1",
             params![height],
         )?;
@@ -265,16 +294,48 @@ impl DbAdapter {
         height: u32,
         hash: &[u8],
         timestamp: u32,
-        tree: &CTree,
+        sapling_tree: &CTree,
+        orchard_tree: Option<&CTree>,
     ) -> anyhow::Result<()> {
         log::debug!("+block");
-        let mut bb: Vec<u8> = vec![];
-        tree.write(&mut bb)?;
+        let mut sapling_bb: Vec<u8> = vec![];
+        sapling_tree.write(&mut sapling_bb)?;
+        let orchard_bb = orchard_tree.map(|tree| {
+            let mut bb: Vec<u8> = vec![];
+            tree.write(&mut bb).unwrap();
+            bb
+        });
         connection.execute(
-            "INSERT INTO blocks(height, hash, timestamp, sapling_tree)
-        VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO blocks(height, hash, timestamp, sapling_tree, orchard_tree)
+        VALUES (?1, ?2, ?3, ?4, ?5)
         ON CONFLICT DO NOTHING",
-            params![height, hash, timestamp, &bb],
+            params![height, hash, timestamp, &sapling_bb, orchard_bb],
+        )?;
+        log::debug!("-block");
+        Ok(())
+    }
+
+    pub fn store_block2(
+        height: u32,
+        hash: &[u8],
+        timestamp: u32,
+        sapling_tree: &sync::CTree,
+        orchard_tree: Option<&sync::CTree>,
+        connection: &Connection,
+    ) -> anyhow::Result<()> {
+        log::debug!("+block");
+        let mut sapling_bb: Vec<u8> = vec![];
+        sapling_tree.write(&mut sapling_bb)?;
+        let orchard_bb = orchard_tree.map(|tree| {
+            let mut bb: Vec<u8> = vec![];
+            tree.write(&mut bb).unwrap();
+            bb
+        });
+        connection.execute(
+            "INSERT INTO blocks(height, hash, timestamp, sapling_tree, orchard_tree)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+        ON CONFLICT DO NOTHING",
+            params![height, hash, timestamp, &sapling_bb, orchard_bb],
         )?;
         log::debug!("-block");
         Ok(())
@@ -313,9 +374,9 @@ impl DbAdapter {
         db_tx: &Transaction,
     ) -> anyhow::Result<u32> {
         log::debug!("+received_note {}", id_tx);
-        db_tx.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, nf, spent)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-        ON CONFLICT DO NOTHING", params![note.account, id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.nf, note.spent])?;
+        db_tx.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, rho, nf, spent)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        ON CONFLICT DO NOTHING", params![note.account, id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.rho, note.nf, note.spent])?;
         let id_note: u32 = db_tx
             .query_row(
                 "SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2",
@@ -327,6 +388,7 @@ impl DbAdapter {
         Ok(id_note)
     }
 
+    // TODO: Depends on the type of witness
     pub fn store_witnesses(
         connection: &Connection,
         witness: &Witness,
@@ -342,6 +404,25 @@ impl DbAdapter {
             params![id_note, height, bb],
         )?;
         log::debug!("-witnesses");
+        Ok(())
+    }
+
+    pub fn store_witness(
+        witness: &sync::Witness,
+        height: u32,
+        id_note: u32,
+        connection: &Connection,
+        shielded_pool: &str
+    ) -> anyhow::Result<()> {
+        log::debug!("+store_witness");
+        let mut bb: Vec<u8> = vec![];
+        witness.write(&mut bb)?;
+        connection.execute(
+            &format!("INSERT INTO {}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)
+        ON CONFLICT DO NOTHING", shielded_pool),
+            params![id_note, height, bb],
+        )?;
+        log::debug!("-store_witness");
         Ok(())
     }
 
@@ -420,8 +501,12 @@ impl DbAdapter {
     }
 
     pub fn get_tree(&self) -> anyhow::Result<(CTree, Vec<Witness>)> {
+        todo!()
+    }
+
+    pub fn get_tree_by_name(&self, shielded_pool: &str) -> anyhow::Result<(sync::CTree, Vec<sync::Witness>)> {
         let res = self.connection.query_row(
-            "SELECT height, sapling_tree FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)",
+            &format!("SELECT height, {}_tree FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)", shielded_pool),
             [], |row| {
                 let height: u32 = row.get(0)?;
                 let tree: Vec<u8> = row.get(1)?;
@@ -429,21 +514,21 @@ impl DbAdapter {
             }).optional()?;
         Ok(match res {
             Some((height, tree)) => {
-                let tree = CTree::read(&*tree)?;
+                let tree = sync::CTree::read(&*tree)?;
                 let mut statement = self.connection.prepare(
-                    "SELECT id_note, witness FROM sapling_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND (n.spent IS NULL OR n.spent = 0)")?;
+                    &format!("SELECT id_note, witness FROM {}_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND (n.spent IS NULL OR n.spent = 0)", shielded_pool))?;
                 let ws = statement.query_map(params![height], |row| {
                     let id_note: u32 = row.get(0)?;
                     let witness: Vec<u8> = row.get(1)?;
-                    Ok(Witness::read(id_note, &*witness).unwrap())
+                    Ok(sync::Witness::read(id_note, &*witness).unwrap())
                 })?;
-                let mut witnesses: Vec<Witness> = vec![];
+                let mut witnesses = vec![];
                 for w in ws {
                     witnesses.push(w?);
                 }
                 (tree, witnesses)
             }
-            None => (CTree::new(), vec![]),
+            None => (sync::CTree::new(), vec![]),
         })
     }
 
@@ -493,6 +578,33 @@ impl DbAdapter {
         Ok(nfs)
     }
 
+    pub fn get_unspent_nullifiers(
+        &self,
+        account: u32,
+    ) -> anyhow::Result<Vec<ReceivedNoteShort>> {
+        let sql = "SELECT id_note, nf, value FROM received_notes WHERE account = ?1 AND (spent IS NULL OR spent = 0)";
+        let mut statement = self.connection.prepare(sql)?;
+        let nfs_res = statement.query_map(params![account], |row| {
+            let id: u32 = row.get(0)?;
+            let nf: Vec<u8> = row.get(1)?;
+            let value: i64 = row.get(2)?;
+            let nf: [u8; 32] = nf.try_into().unwrap();
+            let nf = Nf(nf);
+            Ok(ReceivedNoteShort {
+                id,
+                account,
+                nf,
+                value: value as u64,
+            })
+        })?;
+        let mut nfs = vec![];
+        for n in nfs_res {
+            let n = n?;
+            nfs.push(n);
+        }
+        Ok(nfs)
+    }
+
     pub fn get_nullifiers_raw(&self) -> anyhow::Result<Vec<(u32, u64, Vec<u8>)>> {
         let mut statement = self
             .connection
@@ -510,6 +622,7 @@ impl DbAdapter {
         Ok(v)
     }
 
+    // TODO: Depends on the type of witness - Should it returned any spendable note? sapling or orchard
     pub fn get_spendable_notes(
         &self,
         account: u32,
@@ -590,6 +703,10 @@ impl DbAdapter {
                 "DELETE FROM sapling_witnesses WHERE height < ?1",
                 params![min_height],
             )?;
+            transaction.execute(
+                "DELETE FROM orchard_witnesses WHERE height < ?1",
+                params![min_height],
+            )?;
             transaction.execute("DELETE FROM blocks WHERE height < ?1", params![min_height])?;
             transaction.commit()?;
         }
@@ -634,6 +751,7 @@ impl DbAdapter {
         Ok(contacts)
     }
 
+    // TODO: Orchard diversifiers have a different space
     pub fn get_diversifier(&self, account: u32) -> anyhow::Result<DiversifierIndex> {
         let diversifier_index = self
             .connection
@@ -650,6 +768,21 @@ impl DbAdapter {
             .optional()?
             .unwrap_or([0u8; 11]);
         Ok(DiversifierIndex(diversifier_index))
+    }
+
+    // TODO: See get_diversifier
+    pub fn store_diversifier(
+        &self,
+        account: u32,
+        diversifier_index: &DiversifierIndex,
+    ) -> anyhow::Result<()> {
+        let diversifier_bytes = diversifier_index.0.to_vec();
+        self.connection.execute(
+            "INSERT INTO diversifiers(account, diversifier_index) VALUES (?1, ?2) ON CONFLICT \
+            (account) DO UPDATE SET diversifier_index = excluded.diversifier_index",
+            params![account, diversifier_bytes],
+        )?;
+        Ok(())
     }
 
     pub fn get_account_info(&self, account: u32) -> anyhow::Result<AccountData> {
@@ -677,20 +810,6 @@ impl DbAdapter {
             )
             .map_err(wrap_query_no_rows("get_account_info"))?;
         Ok(account_data)
-    }
-
-    pub fn store_diversifier(
-        &self,
-        account: u32,
-        diversifier_index: &DiversifierIndex,
-    ) -> anyhow::Result<()> {
-        let diversifier_bytes = diversifier_index.0.to_vec();
-        self.connection.execute(
-            "INSERT INTO diversifiers(account, diversifier_index) VALUES (?1, ?2) ON CONFLICT \
-            (account) DO UPDATE SET diversifier_index = excluded.diversifier_index",
-            params![account, diversifier_bytes],
-        )?;
-        Ok(())
     }
 
     pub fn get_taddr(&self, account: u32) -> anyhow::Result<Option<String>> {
@@ -813,6 +932,8 @@ impl DbAdapter {
         self.connection.execute("DELETE FROM received_notes", [])?;
         self.connection
             .execute("DELETE FROM sapling_witnesses", [])?;
+        self.connection
+            .execute("DELETE FROM orchard_witnesses", [])?;
         self.connection.execute("DELETE FROM transactions", [])?;
         self.connection.execute("DELETE FROM messages", [])?;
         Ok(())
@@ -1147,7 +1268,7 @@ pub struct AccountData {
 
 #[cfg(test)]
 mod tests {
-    use crate::db::{DbAdapter, ReceivedNote, DEFAULT_DB_PATH};
+    use crate::db::{DbAdapter, DEFAULT_DB_PATH, ReceivedNote};
     use crate::commitment::{CTree, Witness};
     use zcash_params::coin::CoinType;
 
@@ -1158,7 +1279,7 @@ mod tests {
         db.trim_to_height(0).unwrap();
 
         let db_tx = db.begin_transaction().unwrap();
-        DbAdapter::store_block(&db_tx, 1, &[0u8; 32], 0, &CTree::new()).unwrap();
+        DbAdapter::store_block(&db_tx, 1, &[0u8; 32], 0, &CTree::new(), None).unwrap();
         let id_tx = DbAdapter::store_transaction(&[0; 32], 1, 1, 0, 20, &db_tx).unwrap();
         DbAdapter::store_received_note(
             &ReceivedNote {
@@ -1169,6 +1290,7 @@ mod tests {
                 value: 0,
                 rcm: vec![],
                 nf: vec![],
+                rho: None,
                 spent: None,
             },
             id_tx,

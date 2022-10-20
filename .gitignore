@@ -1,5 +1,5 @@
 /target
-.env
+../../.env
 .idea/
 docs/_site/
 *.db

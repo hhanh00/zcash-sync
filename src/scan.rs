@@ -210,6 +210,7 @@ pub async fn sync_async(
                                 diversifier: n.pa.diversifier().0.to_vec(),
                                 value: note.value,
                                 rcm: rcm.to_vec(),
+                                rho: None,
                                 nf: nf.0.to_vec(),
                                 spent: None,
                             },
@@ -324,6 +325,7 @@ pub async fn sync_async(
                         &block.hash,
                         block.time,
                         &tree,
+                        None,
                     )?;
                     db_transaction.commit()?;
                     // db_transaction is dropped here

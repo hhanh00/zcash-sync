@@ -6,6 +6,7 @@ use std::io::Read;
 use std::ops::AddAssign;
 use zcash_params::GENERATORS;
 use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
+use crate::Hash;
 
 lazy_static! {
     pub static ref GENERATORS_EXP: Vec<ExtendedNielsPoint> = read_generators_bin();
@@ -31,6 +32,7 @@ fn read_generators_bin() -> Vec<ExtendedNielsPoint> {
 
 macro_rules! accumulate_scalar {
     ($acc: ident, $cur: ident, $x: expr) => {
+        // println!("accumulate_scalar {}", $x);
         let mut tmp = $cur;
         if $x & 1 != 0 {
             tmp.add_assign(&$cur);
@@ -46,8 +48,6 @@ macro_rules! accumulate_scalar {
         $acc.add_assign(&tmp);
     };
 }
-
-pub type Hash = [u8; 32];
 
 pub fn pedersen_hash(depth: u8, left: &Hash, right: &Hash) -> Hash {
     let p = pedersen_hash_inner(depth, left, right);
@@ -68,11 +68,9 @@ pub fn pedersen_hash_inner(depth: u8, left: &Hash, right: &Hash) -> ExtendedPoin
     let b = depth >> 3;
     accumulate_scalar!(acc, cur, a);
     cur = cur.double().double().double();
-    // println!("{}", hex::encode(acc.to_bytes()));
 
     accumulate_scalar!(acc, cur, b);
     cur = cur.double().double().double();
-    // println!("{}", hex::encode(acc.to_bytes()));
 
     let mut i_generator = 0;
     let mut chunks_remaining = PEDERSEN_HASH_CHUNKS_PER_GENERATOR - 3;
@@ -104,8 +102,6 @@ pub fn pedersen_hash_inner(depth: u8, left: &Hash, right: &Hash) -> ExtendedPoin
 
         chunks_remaining -= 1;
         if chunks_remaining == 0 {
-            // println!("++ {}", hex::encode(acc.to_bytes()));
-
             result += generator_multiplication(&acc, &GENERATORS_EXP, i_generator);
 
             i_generator += 1;

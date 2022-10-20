@@ -96,7 +96,9 @@ impl FountainCodes {
     }
 }
 
-pub fn put_drop(drop: &str) -> anyhow::Result<Option<Vec<u8>>> {
-    let mut fc = RAPTORQ.lock().unwrap();
-    fc.put_drop(drop)
+impl RaptorQDrops {
+    pub fn put_drop(drop: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        let mut fc = RAPTORQ.lock().unwrap();
+        fc.put_drop(drop)
+    }
 }

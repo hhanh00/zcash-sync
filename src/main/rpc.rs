@@ -15,10 +15,7 @@ use std::sync::Mutex;
 use thiserror::Error;
 use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
 use warp_api_ffi::api::payment_uri::PaymentURI;
-use warp_api_ffi::{
-    derive_zip32, get_best_server, AccountData, AccountInfo, AccountRec, CoinConfig, KeyPack,
-    RaptorQDrops, Tx, TxRec,
-};
+use warp_api_ffi::{get_best_server, AccountData, AccountInfo, AccountRec, CoinConfig, KeyPack, Tx, TxRec, RaptorQDrops};
 
 lazy_static! {
     static ref SYNC_CANCELED: Mutex<bool> = Mutex::new(false);
@@ -102,7 +99,6 @@ async fn main() -> anyhow::Result<()> {
                 merge_data,
                 derive_keys,
                 instant_sync,
-                trial_decrypt,
             ],
         )
         .attach(AdHoc::config::<Config>())
@@ -310,7 +306,7 @@ pub fn split_data(id: u32, data: String) -> Result<Json<RaptorQDrops>, Error> {
 
 #[post("/merge?<data>")]
 pub fn merge_data(data: String) -> Result<String, Error> {
-    let result = warp_api_ffi::put_drop(&data)?
+    let result = warp_api_ffi::RaptorQDrops::put_drop(&data)?
         .map(|data| hex::encode(&data))
         .unwrap_or(String::new());
     Ok(result)
@@ -331,21 +327,6 @@ pub fn derive_keys(
         address,
     )?;
     Ok(Json(result))
-}
-
-#[post("/trial_decrypt?<height>&<cmu>&<epk>&<ciphertext>")]
-pub async fn trial_decrypt(
-    height: u32,
-    cmu: String,
-    epk: String,
-    ciphertext: String,
-) -> Result<String, Error> {
-    let epk = hex::decode(&epk)?;
-    let cmu = hex::decode(&cmu)?;
-    let ciphertext = hex::decode(&ciphertext)?;
-    let note = warp_api_ffi::api::sync::trial_decrypt(height, &cmu, &epk, &ciphertext)?;
-    log::info!("{:?}", note);
-    Ok(note.is_some().to_string())
 }
 
 #[post("/instant_sync")]

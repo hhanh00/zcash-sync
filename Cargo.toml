@@ -7,6 +7,7 @@ edition = "2021"
 [[bench]]
 name = "scan_all"
 harness = false
+required-features = ["dotenv"]
 
 [[bin]]
 name = "warp-rpc"
@@ -16,6 +17,11 @@ required-features = ["rpc"]
 [[bin]]
 name = "wallet"
 path = "src/main/wallet.rs"
+required-features = ["dotenv"]
+
+[[bin]]
+name = "tests"
+path = "src/main/tests.rs"
 required-features = ["dotenv"]
 
 #[[bin]]

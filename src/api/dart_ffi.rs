@@ -581,7 +581,7 @@ pub unsafe extern "C" fn split_data(id: u32, data: *mut c_char) -> CResult<*mut 
 pub unsafe extern "C" fn merge_data(drop: *mut c_char) -> CResult<*mut c_char> {
     from_c_str!(drop);
     let res = || {
-        let res = crate::fountain::put_drop(&*drop)?
+        let res = crate::fountain::RaptorQDrops::put_drop(&*drop)?
             .map(|d| base64::encode(&d))
             .unwrap_or(String::new());
         Ok::<_, anyhow::Error>(res)

@@ -141,7 +141,7 @@ async fn fetch_and_store_tree_state(
         .into_inner();
     let tree = CTree::read(&*hex::decode(&tree_state.sapling_tree)?)?;
     let db = c.db()?;
-    DbAdapter::store_block(&db.connection, height, &block.hash, block.time, &tree)?;
+    DbAdapter::store_block(&db.connection, height, &block.hash, block.time, &tree, None)?;
     Ok(())
 }
 
