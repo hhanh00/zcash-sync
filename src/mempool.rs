@@ -6,7 +6,7 @@ use tonic::Request;
 
 use crate::coinconfig::CoinConfig;
 use zcash_primitives::consensus::BlockHeight;
-use zcash_primitives::sapling::note_encryption::try_sapling_compact_note_decryption;
+use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, try_sapling_compact_note_decryption};
 use zcash_primitives::sapling::SaplingIvk;
 
 const DEFAULT_EXCLUDE_LEN: u8 = 1;
@@ -96,12 +96,13 @@ impl MemPool {
                 balance -= value as i64;
             }
         }
+        let pivk = PreparedIncomingViewingKey::new(ivk);
         for co in tx.outputs.iter() {
             let od = to_output_description(co);
             if let Some((note, _)) = try_sapling_compact_note_decryption(
                 c.chain.network(),
                 BlockHeight::from_u32(height),
-                ivk,
+                &pivk,
                 &od,
             ) {
                 balance += note.value as i64; // value is incoming

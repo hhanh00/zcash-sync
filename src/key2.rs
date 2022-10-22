@@ -18,12 +18,12 @@ pub fn decode_key(
     let res = if let Ok(mnemonic) = Mnemonic::from_phrase(key, Language::English) {
         let (sk, ivk, pa) = derive_secret_key(network, &mnemonic, index)?;
         Ok((Some(key.to_string()), Some(sk), ivk, pa))
-    } else if let Ok(Some(sk)) =
+    } else if let Ok(sk) =
         decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key)
     {
         let (ivk, pa) = derive_viewing_key(network, &sk)?;
         Ok((None, Some(key.to_string()), ivk, pa))
-    } else if let Ok(Some(fvk)) =
+    } else if let Ok(fvk) =
         decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
     {
         let pa = derive_address(network, &fvk)?;
@@ -40,13 +40,11 @@ pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     if Mnemonic::from_phrase(key, Language::English).is_ok() {
         return 0;
     }
-    if let Ok(Some(_)) =
-        decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key)
+    if decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key).is_ok()
     {
         return 1;
     }
-    if let Ok(Some(_)) =
-        decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
+    if decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key).is_ok()
     {
         return 2;
     }

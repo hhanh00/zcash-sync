@@ -1,3 +1,5 @@
+//! This file is not in use!
+
 use zcash_address::unified::{Address, Container, Receiver};
 use zcash_address::{FromAddress, Network, ToAddress, UnsupportedAddress, ZcashAddress};
 

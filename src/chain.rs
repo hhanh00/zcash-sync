@@ -27,7 +27,7 @@ use zcash_note_encryption::batch::try_compact_note_decryption;
 use zcash_note_encryption::{Domain, EphemeralKeyBytes, ShieldedOutput, COMPACT_NOTE_SIZE};
 use zcash_primitives::consensus::{BlockHeight, Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
-use zcash_primitives::sapling::note_encryption::SaplingDomain;
+use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
@@ -355,7 +355,7 @@ fn decrypt_notes<'a, N: Parameters>(
     let mut count_outputs = 0u32;
     let mut spends: Vec<Nf> = vec![];
     let mut notes: Vec<DecryptedNote> = vec![];
-    let vvks: Vec<_> = vks.iter().map(|vk| vk.1.ivk.clone()).collect();
+    let vvks: Vec<_> = vks.iter().map(|vk| PreparedIncomingViewingKey::new(&vk.1.ivk)).collect();
     let mut outputs: Vec<(SaplingDomain<N>, AccountOutput<N>)> = vec![];
     for (tx_index, vtx) in block.vtx.iter().enumerate() {
         for cs in vtx.spends.iter() {
@@ -393,7 +393,7 @@ fn decrypt_notes<'a, N: Parameters>(
     let elapsed = start.elapsed().as_millis() as usize;
 
     for (pos, opt_note) in notes_decrypted.iter().enumerate() {
-        if let Some((note, pa)) = opt_note {
+        if let Some(((note, pa), _)) = opt_note {
             let vk = &vks[pos / outputs.len()];
             let output = &outputs[pos % outputs.len()];
             notes.push(DecryptedNote {

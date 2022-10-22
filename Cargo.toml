@@ -114,32 +114,32 @@ apple_metal = ["metal", "objc", "block"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
-rev = "0f1975b0d8799d852fe62e717dad8885eec1f106"
+rev = "849107a56e83f150c86405df733bf87ae589811d"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "625a06128659d011881698ec13edb66c078a6aa2"
+rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "625a06128659d011881698ec13edb66c078a6aa2"
+rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "625a06128659d011881698ec13edb66c078a6aa2"
+rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
 
 [dependencies.zcash_address]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "625a06128659d011881698ec13edb66c078a6aa2"
+rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
 
 [dependencies.zcash_encoding]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "625a06128659d011881698ec13edb66c078a6aa2"
+rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
 
 [dependencies.zcash_note_encryption]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "625a06128659d011881698ec13edb66c078a6aa2"
+rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
 
 [build-dependencies]
 tonic-build = "0.7.2"

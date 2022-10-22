@@ -184,7 +184,7 @@ pub async fn sync_async(
 
                         let note = &n.note;
                         let rcm = note.rcm().to_repr();
-                        let nf = note.nf(&n.ivk.fvk.vk, p as u64);
+                        let nf = note.nf(&n.ivk.fvk.vk.nk, p as u64);
 
                         let id_tx = DbAdapter::store_transaction(
                             &n.txid,
@@ -393,8 +393,8 @@ pub fn trial_decrypt_one(
 ) -> anyhow::Result<Option<Note>> {
     let mut vks = HashMap::new();
     let fvk =
-        decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)?
-            .ok_or(anyhow!("Invalid FVK"))?;
+        decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
+            .map_err(|e| anyhow!("Bech32 Decode Error"))?;
     let ivk = fvk.fvk.vk.ivk();
     vks.insert(
         0,

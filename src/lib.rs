@@ -94,7 +94,7 @@ mod print;
 mod scan;
 mod taddr;
 mod transaction;
-mod ua;
+// mod ua;
 mod zip32;
 // mod wallet;
 /// accounts, sync, payments, etc.

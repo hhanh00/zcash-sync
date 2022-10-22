@@ -7,7 +7,7 @@ use std::convert::TryInto;
 use std::sync::Mutex;
 use zcash_note_encryption::Domain;
 use zcash_primitives::consensus::{BlockHeight, Network};
-use zcash_primitives::sapling::note_encryption::SaplingDomain;
+use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
 use zcash_primitives::sapling::SaplingIvk;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
@@ -115,6 +115,7 @@ fn collect_decrypted_notes(
     buffer_stride: usize,
     decrypted_blocks: &mut [DecryptedBlock],
 ) {
+    let pivk = PreparedIncomingViewingKey::new(ivk);
     // merge the decrypted blocks
     let mut i = 0;
     for db in decrypted_blocks {
@@ -129,7 +130,7 @@ fn collect_decrypted_notes(
                     // version and amount must be in range - 21 million ZEC is less than 0x0008 0000 0000 0000
                     if plaintext[0] <= 2 && plaintext[18] < 0x08 && plaintext[19] == 0 {
                         if let Some((note, pa)) =
-                            domain.parse_note_plaintext_without_memo_ivk(&ivk, plaintext)
+                            domain.parse_note_plaintext_without_memo_ivk(&pivk, plaintext)
                         {
                             let position_in_block =
                                 usize::from_le_bytes(plaintext[52..60].try_into().unwrap());

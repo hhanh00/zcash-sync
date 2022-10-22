@@ -16,9 +16,7 @@ use zcash_client_backend::encoding::{
 use zcash_params::coin::{get_branch, get_coin_chain, CoinType};
 use zcash_primitives::consensus::{BlockHeight, Network, Parameters};
 use zcash_primitives::memo::Memo;
-use zcash_primitives::sapling::note_encryption::{
-    try_sapling_note_decryption, try_sapling_output_recovery,
-};
+use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, try_sapling_note_decryption, try_sapling_output_recovery};
 use zcash_primitives::transaction::Transaction;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
@@ -91,7 +89,7 @@ pub async fn decode_transaction(
 
     if let Some(transparent_bundle) = tx.transparent_bundle() {
         for output in transparent_bundle.vout.iter() {
-            if let Some(taddr) = output.script_pubkey.address() {
+            if let Some(taddr) = output.recipient_address() {
                 taddress = encode_transparent_address(
                     &network.b58_pubkey_address_prefix(),
                     &network.b58_script_address_prefix(),
@@ -102,7 +100,8 @@ pub async fn decode_transaction(
     }
 
     for output in sapling_bundle.shielded_outputs.iter() {
-        if let Some((note, pa, memo)) = try_sapling_note_decryption(network, height, &ivk, output) {
+        let pivk = PreparedIncomingViewingKey::new(&ivk);
+        if let Some((note, pa, memo)) = try_sapling_note_decryption(network, height, &pivk, output) {
             amount += note.value as i64; // change or self transfer
             let _ = contact_decoder.add_memo(&memo); // ignore memo that is not for contacts
             let memo = Memo::try_from(memo)?;
@@ -193,7 +192,6 @@ pub async fn retrieve_tx_info(
         let (account, height, timestamp, tx_hash, ivk) = db.get_txhash(id_tx)?;
         let fvk: &ExtendedFullViewingKey = fvk_cache.entry(account).or_insert_with(|| {
             decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &ivk)
-                .unwrap()
                 .unwrap()
         });
         let params = DecodeTxParams {

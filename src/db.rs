@@ -212,7 +212,6 @@ impl DbAdapter {
                 self.network().hrp_sapling_extended_full_viewing_key(),
                 &ivk,
             )
-            .unwrap()
             .unwrap();
             let ivk = fvk.fvk.vk.ivk();
             Ok((

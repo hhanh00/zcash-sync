@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use ff::PrimeField;
 use zcash_note_encryption::Domain;
 use zcash_primitives::consensus::{BlockHeight, Parameters};
-use zcash_primitives::sapling::note_encryption::SaplingDomain;
+use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
 use zcash_primitives::sapling::{PaymentAddress, SaplingIvk};
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 use crate::chain::Nf;
@@ -21,7 +21,7 @@ pub struct SaplingViewKey {
 impl <P: Parameters> ViewKey<SaplingDomain<P>> for SaplingViewKey {
     fn account(&self) -> u32 { self.account }
     fn ivk(&self) -> <SaplingDomain<P> as Domain>::IncomingViewingKey {
-        self.ivk.clone()
+        PreparedIncomingViewingKey::new(&self.ivk)
     }
 }
 
@@ -61,7 +61,7 @@ impl <P: Parameters> DecryptedNote<SaplingDomain<P>, SaplingViewKey> for Decrypt
             diversifier: self.pa.diversifier().0.to_vec(),
             value: self.note.value,
             rcm: self.note.rcm().to_repr().to_vec(),
-            nf: self.note.nf(viewing_key, position).to_vec(),
+            nf: self.note.nf(&viewing_key.nk, position).to_vec(),
             rho: None,
             spent: None
         }

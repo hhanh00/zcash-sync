@@ -37,7 +37,6 @@ async fn prepare_multi_payment(
         c.chain.network().hrp_sapling_extended_full_viewing_key(),
         &fvk,
     )
-    .unwrap()
     .unwrap();
     let utxos = if use_transparent {
         let mut client = c.connect_lwd().await?;
@@ -72,7 +71,6 @@ fn sign(tx: &Tx, progress_callback: PaymentProgressCallback) -> anyhow::Result<V
         .map(|tsk| SecretKey::from_str(&tsk).unwrap());
     let extsk =
         decode_extended_spending_key(c.chain.network().hrp_sapling_extended_spending_key(), &zsk)
-            .unwrap()
             .unwrap();
     let raw_tx = tx.sign(tsk, &extsk, prover, progress_callback)?;
     Ok(raw_tx)

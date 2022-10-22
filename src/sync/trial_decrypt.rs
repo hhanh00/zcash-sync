@@ -131,7 +131,7 @@ pub trait TrialDecrypter<N: Parameters, D: BatchDomain<ExtractedCommitmentBytes 
         let elapsed = start.elapsed().as_millis() as usize;
 
         for (pos, opt_note) in notes_decrypted.iter().enumerate() {
-            if let Some((note, pa)) = opt_note {
+            if let Some(((note, pa), _)) = opt_note {
                 let vk = &vks[pos / outputs.len()];
                 let account = vk.account();
                 let output = &outputs[pos % outputs.len()];

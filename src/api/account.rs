@@ -126,8 +126,7 @@ pub fn new_diversified_address() -> anyhow::Result<String> {
     let fvk = decode_extended_full_viewing_key(
         c.chain.network().hrp_sapling_extended_full_viewing_key(),
         &fvk,
-    )?
-    .unwrap();
+    ).map_err(|_| anyhow!("Bech32 Decode Error"))?;
     let mut diversifier_index = db.get_diversifier(c.id_account)?;
     diversifier_index.increment().unwrap();
     let (new_diversifier_index, pa) = fvk

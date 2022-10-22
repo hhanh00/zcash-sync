@@ -12,10 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
-use zcash_client_backend::encoding::{
-    decode_extended_full_viewing_key, decode_payment_address, encode_extended_full_viewing_key,
-    encode_payment_address,
-};
+use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address, encode_extended_full_viewing_key, encode_payment_address};
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::keys::OutgoingViewingKey;
@@ -291,6 +288,9 @@ impl TxBuilder {
                     RecipientAddress::Transparent(_address) => {
                         self.add_t_output(&r.address, note_amount)
                     }
+                    RecipientAddress::Unified(_ua) => {
+                        todo!() // TODO
+                    }
                 }?;
             }
         }
@@ -323,7 +323,6 @@ impl Tx {
         builder.send_change_to(
             OutgoingViewingKey(ovk),
             decode_payment_address(chain.network().hrp_sapling_payment_address(), &self.change)
-                .unwrap()
                 .unwrap(),
         );
 
@@ -351,8 +350,7 @@ impl Tx {
             let fvk = decode_extended_full_viewing_key(
                 chain.network().hrp_sapling_extended_full_viewing_key(),
                 &txin.fvk,
-            )?
-            .unwrap();
+            ).map_err(|_| anyhow!("Bech32 Decode Error"))?;
             if fvk != efvk {
                 anyhow::bail!("Incorrect account - Secret key mismatch")
             }
@@ -386,6 +384,9 @@ impl Tx {
                     memo[..m.len()].copy_from_slice(&m);
                     let memo = MemoBytes::from_bytes(&memo)?;
                     builder.add_sapling_output(Some(ovk), pa, amount, memo)?;
+                }
+                RecipientAddress::Unified(_ua) => {
+                    todo!() // TODO
                 }
             }
         }
@@ -438,3 +439,4 @@ pub fn get_tx_summary(tx: &Tx) -> anyhow::Result<TxSummary> {
     }
     Ok(TxSummary { recipients })
 }
+
