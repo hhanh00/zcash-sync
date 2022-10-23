@@ -215,6 +215,11 @@ impl Witness {
     }
 }
 
+pub struct TreeCheckpoint {
+    pub tree: CTree,
+    pub witnesses: Vec<Witness>,
+}
+
 trait Builder {
     type Context;
     type Output;

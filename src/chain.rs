@@ -1,9 +1,7 @@
-use crate::commitment::{CTree, Witness};
 use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
 use crate::scan::Blocks;
-use crate::builder::advance_tree;
 use ff::PrimeField;
 use futures::{future, FutureExt};
 use log::info;

@@ -1,6 +1,7 @@
-use crate::commitment::{CTree, Witness};
-use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
-use zcash_primitives::sapling::Node;
+use std::io::{Read, Write};
+use crate::sync::tree::{CTree, Witness};
+use zcash_primitives::merkle_tree::{CommitmentTree, HashSer, IncrementalWitness};
+use crate::sync::Node;
 
 #[allow(dead_code)]
 pub fn print_node(n: &Node) {
@@ -30,10 +31,10 @@ pub fn print_witness(w: &IncrementalWitness<Node>) {
 
 pub fn print_ctree(t: &CTree) {
     println!("Tree");
-    println!("{:?}", t.left.map(|n| hex::encode(n.repr)));
-    println!("{:?}", t.right.map(|n| hex::encode(n.repr)));
+    println!("{:?}", t.left.map(|n| hex::encode(n)));
+    println!("{:?}", t.right.map(|n| hex::encode(n)));
     for p in t.parents.iter() {
-        println!("{:?}", p.map(|n| hex::encode(n.repr)));
+        println!("{:?}", p.map(|n| hex::encode(n)));
     }
 }
 
@@ -47,9 +48,9 @@ pub fn print_witness2(w: &Witness) {
     }
     let t = &w.cursor;
     println!("Cursor");
-    println!("{:?}", t.left.map(|n| hex::encode(n.repr)));
-    println!("{:?}", t.right.map(|n| hex::encode(n.repr)));
+    println!("{:?}", t.left.map(|n| hex::encode(n)));
+    println!("{:?}", t.right.map(|n| hex::encode(n)));
     for p in t.parents.iter() {
-        println!("{:?}", p.map(|n| hex::encode(n.repr)));
+        println!("{:?}", p.map(|n| hex::encode(n)));
     }
 }

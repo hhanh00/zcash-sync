@@ -74,15 +74,15 @@ const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
 
 pub type Hash = [u8; 32];
 
-mod builder;
+// mod builder;
 mod chain;
 mod coinconfig;
-mod commitment;
+// mod commitment;
 mod contact;
 mod db;
 mod fountain;
 mod hash;
-pub mod sync;
+pub(crate) mod sync;
 pub mod sapling;
 mod key;
 mod key2;
@@ -90,7 +90,7 @@ mod mempool;
 mod misc;
 mod pay;
 mod prices;
-mod print;
+// mod print;
 mod scan;
 mod taddr;
 mod transaction;

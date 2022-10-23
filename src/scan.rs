@@ -1,4 +1,3 @@
-use crate::builder::BlockProcessor;
 use crate::chain::{DecryptedBlock, get_latest_height, Nf, NfRef};
 use crate::db::{AccountViewKey, DbAdapter, PlainNote, ReceivedNote};
 use serde::Serialize;
@@ -10,7 +9,6 @@ use crate::{
     CompactTx
 };
 use crate::chain::{DecryptNode, download_chain};
-use crate::commitment::Witness;
 use ff::PrimeField;
 
 use anyhow::anyhow;
@@ -144,7 +142,7 @@ pub async fn sync_async(
                 continue;
             }
             progress.downloaded += blocks_size;
-            let (mut tree, witnesses) = db.get_tree()?;
+            let (mut sapling_checkpoint, mut orchard_checkpoint) = db.get_tree()?;
             let mut bp = BlockProcessor::new(&tree, &witnesses);
             let mut absolute_position_at_block_start = tree.get_position();
 

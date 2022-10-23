@@ -9,11 +9,12 @@ use crate::{CompactBlock, DbAdapter};
 use crate::chain::Nf;
 use crate::db::{DbAdapterBuilder, ReceivedNote, ReceivedNoteShort};
 
-mod tree;
-mod trial_decrypt;
+pub mod tree;
+pub mod trial_decrypt;
 
 pub use trial_decrypt::{ViewKey, DecryptedNote, TrialDecrypter, CompactOutputBytes, OutputPosition};
 pub use tree::{Hasher, Node, WarpProcessor, Witness, CTree};
+use crate::sync::tree::TreeCheckpoint;
 
 pub struct Synchronizer<N: Parameters, D: BatchDomain<ExtractedCommitmentBytes = [u8; 32]>, VK: ViewKey<D>, DN: DecryptedNote<D, VK>,
     TD: TrialDecrypter<N, D, VK, DN>, H: Hasher> {
@@ -38,7 +39,7 @@ impl <N: Parameters + Sync,
     H: Hasher> Synchronizer<N, D, VK, DN, TD, H> {
     pub fn initialize(&mut self) -> Result<()> {
         let db = self.db.build()?;
-        let (tree, witnesses) = db.get_tree_by_name(&self.shielded_pool)?;
+        let TreeCheckpoint { tree, witnesses } = db.get_tree_by_name(&self.shielded_pool)?;
         self.tree = tree;
         self.witnesses = witnesses;
         for vk in self.vks.iter() {

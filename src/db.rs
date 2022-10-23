@@ -3,7 +3,7 @@ use crate::contact::Contact;
 use crate::prices::Quote;
 use crate::taddr::{derive_tkeys, TBalance};
 use crate::transaction::TransactionInfo;
-use crate::commitment::{CTree, Witness};
+use crate::sync::tree::{CTree, TreeCheckpoint, Witness};
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
@@ -499,11 +499,11 @@ impl DbAdapter {
         }))
     }
 
-    pub fn get_tree(&self) -> anyhow::Result<(CTree, Vec<Witness>)> {
-        todo!()
+    pub fn get_tree(&self) -> anyhow::Result<(TreeCheckpoint, TreeCheckpoint)> {
+        self.get_tree_by_name("sapling");
     }
 
-    pub fn get_tree_by_name(&self, shielded_pool: &str) -> anyhow::Result<(sync::CTree, Vec<sync::Witness>)> {
+    pub fn get_tree_by_name(&self, shielded_pool: &str) -> anyhow::Result<(TreeCheckpoint)> {
         let res = self.connection.query_row(
             &format!("SELECT height, {}_tree FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)", shielded_pool),
             [], |row| {
@@ -525,9 +525,12 @@ impl DbAdapter {
                 for w in ws {
                     witnesses.push(w?);
                 }
-                (tree, witnesses)
+                TreeCheckpoint { tree, witnesses }
             }
-            None => (sync::CTree::new(), vec![]),
+            None => TreeCheckpoint {
+                tree: CTree::new(),
+                witnesses: vec![],
+            },
         })
     }
 
