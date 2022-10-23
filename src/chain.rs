@@ -543,54 +543,6 @@ fn calculate_tree_state_v1(
     witnesses
 }
 
-#[allow(dead_code)]
-fn calculate_tree_state_v2(cbs: &[CompactBlock], blocks: &[DecryptedBlock]) -> Vec<Witness> {
-    let mut p = 0usize;
-    let mut nodes: Vec<Node> = vec![];
-    let mut positions: Vec<usize> = vec![];
-
-    let start = Instant::now();
-    for (cb, block) in cbs.iter().zip(blocks) {
-        assert_eq!(cb.height as u32, block.height);
-        if !block.notes.is_empty() {
-            println!("{} {}", block.height, block.notes.len());
-        }
-        let mut notes = block.notes.iter();
-        let mut n = notes.next();
-        let mut i = 0usize;
-        for tx in cb.vtx.iter() {
-            for co in tx.outputs.iter() {
-                let mut cmu = [0u8; 32];
-                cmu.copy_from_slice(&co.cmu);
-                let node = Node::new(cmu);
-                nodes.push(node);
-
-                if let Some(nn) = n {
-                    if i == nn.position_in_block {
-                        positions.push(p);
-                        n = notes.next();
-                    }
-                }
-                i += 1;
-                p += 1;
-            }
-        }
-    }
-    info!(
-        "Build CMU list: {} ms - {} nodes",
-        start.elapsed().as_millis(),
-        nodes.len()
-    );
-
-    let witnesses: Vec<_> = positions
-        .iter()
-        .map(|p| Witness::new(*p, 0, None))
-        .collect();
-    let (_, new_witnesses) = advance_tree(&CTree::new(), &witnesses, &mut nodes, true);
-    info!("Tree State & Witnesses: {} ms", start.elapsed().as_millis());
-    new_witnesses
-}
-
 /// Connect to a lightwalletd server
 pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
     log::info!("LWD URL: {}", url);

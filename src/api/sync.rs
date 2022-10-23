@@ -138,7 +138,7 @@ async fn fetch_and_store_tree_state(
         .get_tree_state(Request::new(block_id))
         .await?
         .into_inner();
-    let tree = CTree::read(&*hex::decode(&tree_state.sapling_tree)?)?;
+    let tree = CTree::read(&*hex::decode(&tree_state.sapling_tree)?)?; // retrieve orchard state and store it too
     let db = c.db()?;
     DbAdapter::store_block(&db.connection, height, &block.hash, block.time, &tree, None)?;
     Ok(())

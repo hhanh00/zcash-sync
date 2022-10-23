@@ -500,10 +500,10 @@ impl DbAdapter {
     }
 
     pub fn get_tree(&self) -> anyhow::Result<(TreeCheckpoint, TreeCheckpoint)> {
-        self.get_tree_by_name("sapling");
+        self.get_tree_by_name("sapling"); // TODO: pack in TreeCheckpoint
     }
 
-    pub fn get_tree_by_name(&self, shielded_pool: &str) -> anyhow::Result<(TreeCheckpoint)> {
+    pub fn get_tree_by_name(&self, shielded_pool: &str) -> anyhow::Result<TreeCheckpoint> {
         let res = self.connection.query_row(
             &format!("SELECT height, {}_tree FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)", shielded_pool),
             [], |row| {

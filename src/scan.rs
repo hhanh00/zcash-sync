@@ -143,6 +143,15 @@ pub async fn sync_async(
             }
             progress.downloaded += blocks_size;
             let (mut sapling_checkpoint, mut orchard_checkpoint) = db.get_tree()?;
+            /* TODO
+            - Change to WarpProcessors & Trial Decryptors - sapling & orchard
+            - Feed block into WP sapling
+            - Check height vs orchard activation height -> Feed block into WP orchard
+            - Refactor into function
+            - Remove new_idtx
+
+             */
+
             let mut bp = BlockProcessor::new(&tree, &witnesses);
             let mut absolute_position_at_block_start = tree.get_position();
 
