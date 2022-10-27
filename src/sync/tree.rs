@@ -415,6 +415,7 @@ struct WitnessBuilder<H: Hasher> {
 impl <H: Hasher> WitnessBuilder<H> {
     fn new(tree_builder: &CTreeBuilder<H>, prev_witness: &Witness, count: usize) -> Self {
         let position = prev_witness.position;
+        // log::info!("Witness::new - {} {},{}", position, tree_builder.start, tree_builder.start + count);
         let inside = position >= tree_builder.start && position < tree_builder.start + count;
         WitnessBuilder {
             witness: prev_witness.clone(),
@@ -434,7 +435,6 @@ impl <H: Hasher> Builder for WitnessBuilder<H> {
         let depth = context.depth;
 
         let tree = &mut self.witness.tree;
-
         if self.inside {
             let rp = self.p - context.adjusted_start(&offset);
             if depth == 0 {

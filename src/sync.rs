@@ -37,14 +37,31 @@ impl <N: Parameters + Sync,
     DN: DecryptedNote<D, VK> + Sync,
     TD: TrialDecrypter<N, D, VK, DN> + Sync,
     H: Hasher> Synchronizer<N, D, VK, DN, TD, H> {
+    pub fn new(decrypter: TD, warper: WarpProcessor<H>, vks: Vec<VK>, db: DbAdapterBuilder, shielded_pool: String) -> Self {
+        Synchronizer {
+            decrypter,
+            warper,
+            vks,
+            db,
+            shielded_pool,
+
+            note_position: 0,
+            nullifiers: HashMap::default(),
+            tree: CTree::new(),
+            witnesses: vec![],
+            _phantom: Default::default()
+        }
+    }
+
+
     pub fn initialize(&mut self) -> Result<()> {
         let db = self.db.build()?;
         let TreeCheckpoint { tree, witnesses } = db.get_tree_by_name(&self.shielded_pool)?;
         self.tree = tree;
         self.witnesses = witnesses;
+        self.note_position = self.tree.get_position();
         for vk in self.vks.iter() {
-            let account = vk.account();
-            let nfs = db.get_unspent_nullifiers(account)?;
+            let nfs = db.get_unspent_nullifiers()?;
             for rn in nfs.into_iter() {
                 self.nullifiers.insert(rn.nf.clone(), rn);
             }
@@ -93,6 +110,7 @@ impl <N: Parameters + Sync,
         // Detect spends and collect note commitments
         let mut new_cmx = vec![];
         let mut height = 0;
+        let mut hash = [0u8; 32];
         for b in blocks.iter() {
             for (tx_index, tx) in b.vtx.iter().enumerate() {
                 for sp in self.decrypter.spends(tx).iter() {
@@ -106,6 +124,7 @@ impl <N: Parameters + Sync,
                 new_cmx.extend(self.decrypter.outputs(tx).into_iter().map(|cob| cob.cmx));
             }
             height = b.height as u32;
+            hash.copy_from_slice(&b.hash);
         }
 
         // Run blocks through warp sync
@@ -116,6 +135,7 @@ impl <N: Parameters + Sync,
         for w in updated_witnesses.iter() {
             DbAdapter::store_witness(w, height, w.id_note, &db_tx, &self.shielded_pool)?;
         }
+        DbAdapter::store_tree(height, &hash, &updated_tree, &db_tx, &self.shielded_pool)?;
         self.tree = updated_tree;
         self.witnesses = updated_witnesses;
 

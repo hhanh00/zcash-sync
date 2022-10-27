@@ -295,7 +295,6 @@ mod tests {
             Network::MainNetwork.hrp_sapling_extended_full_viewing_key(),
             &fvk,
         )
-        .unwrap()
         .unwrap();
         let tx_info = decode_transaction(
             &Network::MainNetwork,

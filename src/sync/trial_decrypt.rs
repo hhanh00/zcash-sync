@@ -59,9 +59,9 @@ pub struct CompactOutputBytes {
 impl From<&CompactSaplingOutput> for CompactOutputBytes {
     fn from(co: &CompactSaplingOutput) -> Self {
         CompactOutputBytes {
-            epk: co.epk.clone().try_into().unwrap(),
-            cmx: co.cmu.clone().try_into().unwrap(),
-            ciphertext: co.ciphertext.clone().try_into().unwrap(),
+            epk: if co.epk.is_empty() { [0u8; 32] } else { co.epk.clone().try_into().unwrap() } ,
+            cmx: co.cmu.clone().try_into().unwrap(), // cannot be filtered out
+            ciphertext: if co.ciphertext.is_empty() { [0u8; 52] } else { co.ciphertext.clone().try_into().unwrap() },
         }
     }
 }

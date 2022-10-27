@@ -47,6 +47,7 @@ pub struct ReceivedNote {
     pub spent: Option<u32>,
 }
 
+#[derive(Clone)]
 pub struct ReceivedNoteShort {
     pub id: u32,
     pub account: u32,
@@ -425,6 +426,19 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn store_tree(height: u32, hash: &[u8], tree: &CTree, db_tx: &Connection, shielded_pool: &str) -> anyhow::Result<()> {
+        let mut bb: Vec<u8> = vec![];
+        tree.write(&mut bb)?;
+        db_tx.execute(&format!("INSERT INTO blocks(height, hash, {pool}_tree, timestamp) VALUES (?1,?2,?3,0) ON CONFLICT DO UPDATE
+            SET {pool}_tree = excluded.{pool}_tree", pool = shielded_pool), params![height, hash, &bb])?;
+        Ok(())
+    }
+
+    pub fn store_block_timestamp(&self, height: u32, timestamp: u32) -> anyhow::Result<()> {
+        self.connection.execute("UPDATE blocks SET timestamp = ?1 WHERE height = ?2", params![timestamp, height])?;
+        Ok(())
+    }
+
     pub fn store_tx_metadata(&self, id_tx: u32, tx_info: &TransactionInfo) -> anyhow::Result<()> {
         self.connection.execute(
             "UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3",
@@ -500,7 +514,8 @@ impl DbAdapter {
     }
 
     pub fn get_tree(&self) -> anyhow::Result<(TreeCheckpoint, TreeCheckpoint)> {
-        self.get_tree_by_name("sapling"); // TODO: pack in TreeCheckpoint
+        self.get_tree_by_name("sapling")?; // TODO: pack in TreeCheckpoint
+        todo!()
     }
 
     pub fn get_tree_by_name(&self, shielded_pool: &str) -> anyhow::Result<TreeCheckpoint> {
@@ -582,14 +597,14 @@ impl DbAdapter {
 
     pub fn get_unspent_nullifiers(
         &self,
-        account: u32,
     ) -> anyhow::Result<Vec<ReceivedNoteShort>> {
-        let sql = "SELECT id_note, nf, value FROM received_notes WHERE account = ?1 AND (spent IS NULL OR spent = 0)";
+        let sql = "SELECT id_note, account, nf, value FROM received_notes WHERE spent IS NULL OR spent = 0";
         let mut statement = self.connection.prepare(sql)?;
-        let nfs_res = statement.query_map(params![account], |row| {
+        let nfs_res = statement.query_map(params![], |row| {
             let id: u32 = row.get(0)?;
-            let nf: Vec<u8> = row.get(1)?;
-            let value: i64 = row.get(2)?;
+            let account: u32 = row.get(1)?;
+            let nf: Vec<u8> = row.get(2)?;
+            let value: i64 = row.get(3)?;
             let nf: [u8; 32] = nf.try_into().unwrap();
             let nf = Nf(nf);
             Ok(ReceivedNoteShort {
@@ -1271,8 +1286,8 @@ pub struct AccountData {
 #[cfg(test)]
 mod tests {
     use crate::db::{DbAdapter, DEFAULT_DB_PATH, ReceivedNote};
-    use crate::commitment::{CTree, Witness};
     use zcash_params::coin::CoinType;
+    use crate::sync::{CTree, Witness};
 
     #[test]
     fn test_db() {
@@ -1303,10 +1318,10 @@ mod tests {
         let witness = Witness {
             position: 10,
             id_note: 0,
-            note: None,
             tree: CTree::new(),
             filled: vec![],
             cursor: CTree::new(),
+            cmx: [0u8; 32]
         };
         DbAdapter::store_witnesses(&db_tx, &witness, 1000, 1).unwrap();
         db_tx.commit().unwrap();

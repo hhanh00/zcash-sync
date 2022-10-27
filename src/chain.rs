@@ -4,12 +4,12 @@ use crate::lw_rpc::*;
 use crate::scan::Blocks;
 use ff::PrimeField;
 use futures::{future, FutureExt};
-use log::info;
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::future::Future;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Mutex;
@@ -140,13 +140,12 @@ const MAX_OUTPUTS_PER_CHUNKS: usize = 200_000;
 #[allow(unused_variables)]
 pub async fn download_chain(
     client: &mut CompactTxStreamerClient<Channel>,
-    n_ivks: usize,
     start_height: u32,
     end_height: u32,
     mut prev_hash: Option<[u8; 32]>,
     max_cost: u32,
-    blocks_tx: Sender<Blocks>,
     cancel: &'static Mutex<bool>,
+    handler: Sender<Blocks>,
 ) -> anyhow::Result<()> {
     let outputs_per_chunk = get_available_memory()? / get_mem_per_output();
     let outputs_per_chunk = outputs_per_chunk.min(MAX_OUTPUTS_PER_CHUNKS);
@@ -210,7 +209,10 @@ pub async fn download_chain(
             // output
             let out = cbs;
             cbs = Vec::new();
-            blocks_tx.send(Blocks(out, total_block_size)).await.unwrap();
+            let blocks = Blocks(out, total_block_size);
+            if !blocks.0.is_empty() {
+                let _ = handler.send(blocks).await;
+            }
             output_count = 0;
             total_block_size = 0;
         }
@@ -218,7 +220,10 @@ pub async fn download_chain(
         cbs.push(block);
         output_count += block_output_count;
     }
-    let _ = blocks_tx.send(Blocks(cbs, total_block_size)).await;
+    let blocks = Blocks(cbs, total_block_size);
+    if !blocks.0.is_empty() {
+        let _ = handler.send(blocks).await;
+    }
     Ok(())
 }
 

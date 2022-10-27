@@ -128,8 +128,9 @@ pub unsafe extern "C" fn get_lwd_url(coin: u8) -> *mut c_char {
 #[no_mangle]
 pub unsafe extern "C" fn reset_app() {
     let res = || {
-        crate::api::account::reset_db(0)?;
-        crate::api::account::reset_db(1)?;
+        for i in 0..MAX_COINS {
+            crate::api::account::reset_db(i)?;
+        }
         Ok(())
     };
     log_error(res())

@@ -121,7 +121,7 @@ mod tests {
     use std::convert::TryInto;
     use rand::RngCore;
     use rand::rngs::OsRng;
-    use crate::pedersen_hash;
+    use crate::hash::pedersen_hash;
     use crate::sapling::hash::hash_combine;
 
     #[test]

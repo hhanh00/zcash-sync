@@ -4,10 +4,7 @@ use serde::Serialize;
 use std::cmp::Ordering;
 
 use crate::transaction::retrieve_tx_info;
-use crate::{
-    connect_lightwalletd, CompactBlock, CompactSaplingOutput,
-    CompactTx
-};
+use crate::{connect_lightwalletd, CompactBlock, CompactSaplingOutput, CompactTx, DbAdapterBuilder, chain};
 use crate::chain::{DecryptNode, download_chain};
 use ff::PrimeField;
 
@@ -25,6 +22,9 @@ use zcash_params::coin::{get_coin_chain, CoinType};
 use zcash_primitives::consensus::{Network, Parameters};
 
 use zcash_primitives::sapling::{Node, Note};
+use zcash_primitives::sapling::note_encryption::SaplingDomain;
+use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
+use crate::sync::{CTree, Synchronizer, WarpProcessor};
 
 pub struct Blocks(pub Vec<CompactBlock>, pub usize);
 
@@ -58,7 +58,86 @@ pub struct TxIdHeight {
     index: u32,
 }
 
-pub async fn sync_async(
+type SaplingSynchronizer = Synchronizer<Network, SaplingDomain<Network>, SaplingViewKey, DecryptedSaplingNote,
+    SaplingDecrypter<Network>, SaplingHasher>;
+
+pub async fn sync_async<'a>(
+    coin_type: CoinType,
+    _chunk_size: u32,
+    get_tx: bool,
+    db_path: &'a str,
+    target_height_offset: u32,
+    max_cost: u32,
+    progress_callback: AMProgressCallback,
+    cancel: &'static std::sync::Mutex<bool>,
+    ld_url: &'a str,
+) -> anyhow::Result<()> {
+    let ld_url = ld_url.to_owned();
+    let db_path = db_path.to_owned();
+    let network = {
+        let chain = get_coin_chain(coin_type);
+        *chain.network()
+    };
+
+    let mut client = connect_lightwalletd(&ld_url).await?;
+    let (start_height, prev_hash, sapling_vks) = {
+        let db = DbAdapter::new(coin_type, &db_path)?;
+        let height = db.get_db_height()?;
+        let hash = db.get_db_hash(height)?;
+        let vks = db.get_fvks()?;
+        let sapling_vks: Vec<_> = vks.iter().map(|(&account, ak)| {
+            SaplingViewKey {
+                account,
+                fvk: ak.fvk.clone(),
+                ivk: ak.ivk.clone()
+            }
+        }).collect();
+        (height, hash, sapling_vks)
+    };
+    let end_height = get_latest_height(&mut client).await?;
+    let end_height = (end_height - target_height_offset).max(start_height);
+    if start_height >= end_height {
+        return Ok(());
+    }
+
+    let (blocks_tx, mut blocks_rx) = mpsc::channel::<Blocks>(1);
+    tokio::spawn(async move {
+        download_chain(&mut client, start_height, end_height, prev_hash, max_cost, cancel, blocks_tx).await?;
+        Ok::<_, anyhow::Error>(())
+    });
+
+    let db_builder = DbAdapterBuilder { coin_type, db_path: db_path.clone() };
+    while let Some(blocks) = blocks_rx.recv().await {
+        let first_block = blocks.0.first().unwrap(); // cannot be empty because blocks are not
+        log::info!("Height: {}", first_block.height);
+        let last_block = blocks.0.last().unwrap();
+        let last_height = last_block.height as u32;
+        let last_timestamp = last_block.time;
+
+        let decrypter = SaplingDecrypter::new(network);
+        let warper = WarpProcessor::new(SaplingHasher::default());
+        let mut sapling_synchronizer = SaplingSynchronizer::new(
+            decrypter,
+            warper,
+            sapling_vks.clone(),
+            db_builder.clone(),
+            "sapling".to_string(),
+        );
+        sapling_synchronizer.initialize()?;
+        sapling_synchronizer.process(blocks.0)?;
+
+        // TODO - Orchard
+
+        let db = db_builder.build()?;
+        db.store_block_timestamp(last_height, last_timestamp)?;
+    }
+
+    Ok(())
+}
+
+
+
+fn sync_async_old(
     coin_type: CoinType,
     _chunk_size: u32,
     get_tx: bool,
@@ -69,6 +148,7 @@ pub async fn sync_async(
     cancel: &'static std::sync::Mutex<bool>,
     ld_url: &str,
 ) -> anyhow::Result<()> {
+    /*
     let ld_url = ld_url.to_owned();
     let db_path = db_path.to_string();
     let network = {
@@ -84,6 +164,13 @@ pub async fn sync_async(
         let vks = db.get_fvks()?;
         (height, hash, vks)
     };
+    let saplingvks: Vec<_> = vks.iter().map(|(&account, vk)| {
+        SaplingViewKey {
+            account,
+            fvk: vk.fvk.clone(),
+            ivk: vk.ivk.clone(),
+        }
+    }).collect();
 
     let end_height = get_latest_height(&mut client).await?;
     let end_height = (end_height - target_height_offset).max(start_height);
@@ -91,8 +178,6 @@ pub async fn sync_async(
         return Ok(());
     }
     let n_ivks = vks.len();
-
-    let decrypter = DecryptNode::new(vks);
 
     let (decryptor_tx, mut decryptor_rx) = mpsc::channel::<Blocks>(1);
     let (processor_tx, mut processor_rx) = mpsc::channel::<(Vec<DecryptedBlock>, usize)>(1);
@@ -135,14 +220,12 @@ pub async fn sync_async(
 
     let processor = tokio::spawn(async move {
         let mut db = DbAdapter::new(coin_type, &db_path2)?;
-        let mut nfs = db.get_nullifiers()?;
 
         while let Some((dec_blocks, blocks_size)) = processor_rx.recv().await {
             if dec_blocks.is_empty() {
                 continue;
             }
             progress.downloaded += blocks_size;
-            let (mut sapling_checkpoint, mut orchard_checkpoint) = db.get_tree()?;
             /* TODO
             - Change to WarpProcessors & Trial Decryptors - sapling & orchard
             - Feed block into WP sapling
@@ -152,19 +235,26 @@ pub async fn sync_async(
 
              */
 
-            let mut bp = BlockProcessor::new(&tree, &witnesses);
-            let mut absolute_position_at_block_start = tree.get_position();
-
             log::info!("start processing - {}", dec_blocks[0].height);
             log::info!("Time {:?}", chrono::offset::Local::now());
             let start = Instant::now();
 
-            let mut new_ids_tx: HashMap<u32, TxIdHeight> = HashMap::new();
-            let mut witnesses: Vec<Witness> = vec![];
+            let decrypter = DecryptNode::new(vks);
+
+            let mut sapling_synchronizer = SaplingSynchronizer::new(
+                decrypter,
+                warper,
+                saplingvks.clone(),
+                DbAdapterBuilder { coin_type, db_path: db_path.clone() },
+                "sapling".to_string(),
+            );
+            sapling_synchronizer.initialize()?;
 
             {
                 // db tx scope
                 let db_tx = db.begin_transaction()?;
+
+                /*
                 let outputs = dec_blocks
                     .iter()
                     .map(|db| db.count_outputs as usize)
@@ -271,12 +361,15 @@ pub async fn sync_async(
                     }
 
                     absolute_position_at_block_start += b.count_outputs as usize;
+
                 }
+             */
                 log::info!("Dec end : {}", start.elapsed().as_millis());
 
                 db_tx.commit()?;
             }
 
+            /*
             let start = Instant::now();
             let mut nodes: Vec<Node> = vec![];
             for block in dec_blocks.iter() {
@@ -318,22 +411,24 @@ pub async fn sync_async(
             tree = new_tree;
             witnesses = new_witnesses;
 
+
+             */
             if let Some(dec_block) = dec_blocks.last() {
                 {
                     let block = &dec_block.compact_block;
                     let mut db_transaction = db.begin_transaction()?;
                     let height = block.height as u32;
-                    for w in witnesses.iter() {
-                        DbAdapter::store_witnesses(&db_transaction, w, height, w.id_note)?;
-                    }
-                    DbAdapter::store_block(
-                        &mut db_transaction,
-                        height,
-                        &block.hash,
-                        block.time,
-                        &tree,
-                        None,
-                    )?;
+                    // for w in witnesses.iter() {
+                    //     DbAdapter::store_witnesses(&db_transaction, w, height, w.id_note)?;
+                    // }
+                    // DbAdapter::store_block(
+                    //     &mut db_transaction,
+                    //     height,
+                    //     &block.hash,
+                    //     block.time,
+                    //     &tree,
+                    //     None,
+                    // )?;
                     db_transaction.commit()?;
                     // db_transaction is dropped here
                 }
@@ -379,6 +474,8 @@ pub async fn sync_async(
 
     log::info!("Sync completed");
 
+
+     */
     Ok(())
 }
 
