@@ -1,6 +1,6 @@
 use ff::PrimeField;
 use group::Curve;
-use jubjub::{ExtendedPoint, Fr};
+use jubjub::{AffinePoint, ExtendedPoint, Fr};
 use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 use crate::sync::{Hasher, Node};
 use super::GENERATORS_EXP;
@@ -35,6 +35,14 @@ fn accumulate_generator(acc: &Fr, idx_generator: u32) -> ExtendedPoint {
 }
 
 pub fn hash_combine(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
+    let p = hash_combine_inner(depth, left, right);
+    p
+        .to_affine()
+        .get_u()
+        .to_repr()
+}
+
+pub fn hash_combine_inner(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> ExtendedPoint {
     let mut hash = ExtendedPoint::identity();
     let mut acc = Fr::zero();
     let mut cur = Fr::one();
@@ -95,10 +103,6 @@ pub fn hash_combine(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
     }
     hash += accumulate_generator(&acc, idx_generator);
 
-    let hash = hash
-        .to_affine()
-        .get_u()
-        .to_repr();
     hash
 }
 
@@ -106,6 +110,8 @@ pub fn hash_combine(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
 pub struct SaplingHasher {}
 
 impl Hasher for SaplingHasher {
+    type Extended = ExtendedPoint;
+
     fn uncommited_node() -> Node {
         [0u8; 32]
     }
@@ -113,8 +119,20 @@ impl Hasher for SaplingHasher {
     fn node_combine(&self, depth: u8, left: &Node, right: &Node) -> Node {
         hash_combine(depth, left, right)
     }
-}
 
+    fn node_combine_extended(&self, depth: u8, left: &Node, right: &Node) -> Self::Extended {
+        hash_combine_inner(depth, left, right)
+    }
+
+    fn normalize(&self, extended: &[Self::Extended]) -> Vec<Node> {
+        let mut hash_affine: Vec<AffinePoint> = vec![AffinePoint::identity(); extended.len()];
+        ExtendedPoint::batch_normalize(extended, &mut hash_affine);
+        hash_affine
+            .iter()
+            .map(|p| p.get_u().to_repr())
+            .collect()
+    }
+}
 
 #[cfg(test)]
 mod tests {

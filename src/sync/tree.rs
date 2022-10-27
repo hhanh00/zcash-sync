@@ -2,13 +2,19 @@ use rayon::prelude::*;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
 use byteorder::WriteBytesExt;
+use group::Curve;
 use zcash_encoding::{Optional, Vector};
 
 pub type Node = [u8; 32];
 
 pub trait Hasher: Clone + Sync {
+    type Extended: Curve + Clone + Send;
+
     fn uncommited_node() -> Node;
     fn node_combine(&self, depth: u8, left: &Node, right: &Node) -> Node;
+
+    fn node_combine_extended(&self, depth: u8, left: &Node, right: &Node) -> Self::Extended;
+    fn normalize(&self, extended: &[Self::Extended]) -> Vec<Node>;
 }
 
 #[derive(Clone)]
@@ -388,9 +394,34 @@ fn combine_level<H: Hasher>(
 ) -> usize {
     assert_eq!(n % 2, 0);
 
-    // TODO: Support batch hash combine
     let nn = n / 2;
-    let next_level: Vec<_> = (0..nn)
+    let next_level = if nn > 100 {
+        batch_level_combine(commitments, offset, nn, depth, hasher)
+    }
+    else {
+        single_level_combine(commitments, offset, nn, depth, hasher)
+    };
+
+    commitments[0..nn].copy_from_slice(&next_level);
+    nn
+}
+
+fn batch_level_combine<H: Hasher>(commitments: &mut [Node], offset: Option<Node>, nn: usize, depth: u8, hasher: &H) -> Vec<Node> {
+    let hash_extended: Vec<_> = (0..nn)
+        .into_par_iter()
+        .map(|i| {
+            hasher.node_combine_extended(
+                depth,
+                CTreeBuilder::<H>::get(commitments, 2 * i, &offset),
+                CTreeBuilder::<H>::get(commitments, 2 * i + 1, &offset),
+            )
+        })
+        .collect();
+    hasher.normalize(&hash_extended)
+}
+
+fn single_level_combine<H: Hasher>(commitments: &mut [Node], offset: Option<Node>, nn: usize, depth: u8, hasher: &H) -> Vec<Node> {
+    (0..nn)
         .into_par_iter()
         .map(|i| {
             hasher.node_combine(
@@ -399,10 +430,7 @@ fn combine_level<H: Hasher>(
                 CTreeBuilder::<H>::get(commitments, 2 * i + 1, &offset),
             )
         })
-        .collect();
-
-    commitments[0..nn].copy_from_slice(&next_level);
-    nn
+        .collect()
 }
 
 struct WitnessBuilder<H: Hasher> {
