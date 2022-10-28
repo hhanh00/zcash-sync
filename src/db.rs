@@ -92,6 +92,11 @@ pub struct AccountBackup {
     pub t_addr: Option<String>,
 }
 
+pub struct AccountSeed {
+    pub id_account: u32,
+    pub seed: String,
+}
+
 pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> anyhow::Error {
     move |err: rusqlite::Error| match err {
         QueryReturnedNoRows => anyhow::anyhow!("Query {} returned no rows", name),
@@ -230,6 +235,24 @@ impl DbAdapter {
             fvks.insert(row.0, row.1);
         }
         Ok(fvks)
+    }
+
+    pub fn get_seeds(&self) -> anyhow::Result<Vec<AccountSeed>> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT id_account, seed FROM accounts WHERE seed IS NOT NULL")?;
+        let rows = statement.query_map([], |row| {
+            let id_account: u32 = row.get(0)?;
+            let seed: String = row.get(1)?;
+            Ok(AccountSeed {
+                    id_account,
+                    seed})
+        })?;
+        let mut accounts = vec![];
+        for row in rows {
+            accounts.push(row?);
+        }
+        Ok(accounts)
     }
 
     pub fn trim_to_height(&mut self, height: u32) -> anyhow::Result<u32> {
@@ -426,16 +449,15 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn store_tree(height: u32, hash: &[u8], tree: &CTree, db_tx: &Connection, shielded_pool: &str) -> anyhow::Result<()> {
-        let mut bb: Vec<u8> = vec![];
-        tree.write(&mut bb)?;
-        db_tx.execute(&format!("INSERT INTO blocks(height, hash, {pool}_tree, timestamp) VALUES (?1,?2,?3,0) ON CONFLICT DO UPDATE
-            SET {pool}_tree = excluded.{pool}_tree", pool = shielded_pool), params![height, hash, &bb])?;
+    pub fn store_block_timestamp(&self, height: u32, hash: &[u8], timestamp: u32) -> anyhow::Result<()> {
+        self.connection.execute("INSERT INTO blocks(height, hash, timestamp) VALUES (?1,?2,?3)", params![height, hash, timestamp])?;
         Ok(())
     }
 
-    pub fn store_block_timestamp(&self, height: u32, timestamp: u32) -> anyhow::Result<()> {
-        self.connection.execute("UPDATE blocks SET timestamp = ?1 WHERE height = ?2", params![timestamp, height])?;
+    pub fn store_tree(height: u32, tree: &CTree, db_tx: &Connection, shielded_pool: &str) -> anyhow::Result<()> {
+        let mut bb: Vec<u8> = vec![];
+        tree.write(&mut bb)?;
+        db_tx.execute(&format!("INSERT INTO {}_tree(height, tree) VALUES (?1,?2)", shielded_pool), params![height, &bb])?;
         Ok(())
     }
 
@@ -519,15 +541,21 @@ impl DbAdapter {
     }
 
     pub fn get_tree_by_name(&self, shielded_pool: &str) -> anyhow::Result<TreeCheckpoint> {
-        let res = self.connection.query_row(
-            &format!("SELECT height, {}_tree FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)", shielded_pool),
+        let height = self.connection.query_row(
+            "SELECT MAX(height) FROM blocks",
             [], |row| {
-                let height: u32 = row.get(0)?;
-                let tree: Vec<u8> = row.get(1)?;
-                Ok((height, tree))
-            }).optional()?;
-        Ok(match res {
-            Some((height, tree)) => {
+                let height: Option<u32> = row.get(0)?;
+                Ok(height)
+            })?;
+        Ok(match height {
+            Some(height) => {
+                let tree = self.connection.query_row(
+                    &format!("SELECT tree FROM {}_tree WHERE height = ?1", shielded_pool),
+                    [height], |row| {
+                        let tree: Vec<u8> = row.get(0)?;
+                        Ok(tree)
+                    })?;
+
                 let tree = sync::CTree::read(&*tree)?;
                 let mut statement = self.connection.prepare(
                     &format!("SELECT id_note, witness FROM {}_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND (n.spent IS NULL OR n.spent = 0)", shielded_pool))?;

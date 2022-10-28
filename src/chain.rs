@@ -190,7 +190,6 @@ pub async fn download_chain(
         ph.copy_from_slice(&block.hash);
         prev_hash = Some(ph);
         for tx in block.vtx.iter_mut() {
-            tx.actions.clear(); // don't need Orchard actions
             let mut skipped = false;
             if tx.outputs.len() > max_cost as usize {
                 for co in tx.outputs.iter_mut() {

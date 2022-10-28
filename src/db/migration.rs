@@ -178,7 +178,14 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
     }
 
     if version < 5 {
-        connection.execute("ALTER TABLE blocks ADD orchard_tree BLOB", [])?;
+        connection.execute("CREATE TABLE sapling_tree(
+            height INTEGER PRIMARY KEY,
+            tree BLOB NOT NULL)", [])?;
+        connection.execute("CREATE TABLE orchard_tree(
+            height INTEGER PRIMARY KEY,
+            tree BLOB NOT NULL)", [])?;
+        connection.execute("INSERT INTO sapling_tree SELECT height, sapling_tree FROM blocks", [])?;
+        connection.execute("ALTER TABLE blocks DROP sapling_tree", [])?;
         connection.execute("ALTER TABLE received_notes ADD rho BLOB", [])?;
         connection.execute(
             "CREATE TABLE IF NOT EXISTS orchard_witnesses (

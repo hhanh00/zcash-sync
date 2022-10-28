@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::cmp::Ordering;
 
 use crate::transaction::retrieve_tx_info;
-use crate::{connect_lightwalletd, CompactBlock, CompactSaplingOutput, CompactTx, DbAdapterBuilder, chain};
+use crate::{connect_lightwalletd, CompactBlock, CompactSaplingOutput, CompactTx, DbAdapterBuilder, chain, AccountRec};
 use crate::chain::{DecryptNode, download_chain};
 use ff::PrimeField;
 
@@ -14,15 +14,19 @@ use std::collections::HashMap;
 use std::panic;
 use std::sync::Arc;
 use std::time::Instant;
+use bip39::{Language, Mnemonic};
+use orchard::keys::{FullViewingKey, SpendingKey};
+use orchard::note_encryption::OrchardDomain;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_params::coin::{get_coin_chain, CoinType};
-use zcash_primitives::consensus::{Network, Parameters};
+use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 
 use zcash_primitives::sapling::{Node, Note};
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
+use crate::orchard::{DecryptedOrchardNote, OrchardDecrypter, OrchardHasher, OrchardViewKey};
 use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
 use crate::sync::{CTree, Synchronizer, WarpProcessor};
 
@@ -61,6 +65,9 @@ pub struct TxIdHeight {
 type SaplingSynchronizer = Synchronizer<Network, SaplingDomain<Network>, SaplingViewKey, DecryptedSaplingNote,
     SaplingDecrypter<Network>, SaplingHasher>;
 
+type OrchardSynchronizer = Synchronizer<Network, OrchardDomain, OrchardViewKey, DecryptedOrchardNote,
+    OrchardDecrypter<Network>, OrchardHasher>;
+
 pub async fn sync_async<'a>(
     coin_type: CoinType,
     _chunk_size: u32,
@@ -80,7 +87,7 @@ pub async fn sync_async<'a>(
     };
 
     let mut client = connect_lightwalletd(&ld_url).await?;
-    let (start_height, prev_hash, sapling_vks) = {
+    let (start_height, prev_hash, sapling_vks, orchard_vks) = {
         let db = DbAdapter::new(coin_type, &db_path)?;
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
@@ -92,7 +99,22 @@ pub async fn sync_async<'a>(
                 ivk: ak.ivk.clone()
             }
         }).collect();
-        (height, hash, sapling_vks)
+        let orchard_vks: Vec<_> = db.get_seeds()?.iter().map(|a| {
+            let mnemonic = Mnemonic::from_phrase(&a.seed, Language::English).unwrap();
+            let sk = SpendingKey::from_zip32_seed(
+                mnemonic.entropy(),
+                network.coin_type(),
+                a.id_account,
+            ).unwrap();
+            let fvk = FullViewingKey::from(&sk);
+            let vk =
+                OrchardViewKey {
+                    account: a.id_account,
+                    fvk,
+                };
+            vk
+        }).collect();
+        (height, hash, sapling_vks, orchard_vks)
     };
     let end_height = get_latest_height(&mut client).await?;
     let end_height = (end_height - target_height_offset).max(start_height);
@@ -111,25 +133,42 @@ pub async fn sync_async<'a>(
         let first_block = blocks.0.first().unwrap(); // cannot be empty because blocks are not
         log::info!("Height: {}", first_block.height);
         let last_block = blocks.0.last().unwrap();
+        let last_hash: [u8; 32] = last_block.hash.clone().try_into().unwrap();
         let last_height = last_block.height as u32;
         let last_timestamp = last_block.time;
 
-        let decrypter = SaplingDecrypter::new(network);
-        let warper = WarpProcessor::new(SaplingHasher::default());
-        let mut sapling_synchronizer = SaplingSynchronizer::new(
-            decrypter,
-            warper,
-            sapling_vks.clone(),
-            db_builder.clone(),
-            "sapling".to_string(),
-        );
-        sapling_synchronizer.initialize()?;
-        sapling_synchronizer.process(blocks.0)?;
+        // Sapling
+        {
+            let decrypter = SaplingDecrypter::new(network);
+            let warper = WarpProcessor::new(SaplingHasher::default());
+            let mut synchronizer = SaplingSynchronizer::new(
+                decrypter,
+                warper,
+                sapling_vks.clone(),
+                db_builder.clone(),
+                "sapling".to_string(),
+            );
+            synchronizer.initialize()?;
+            synchronizer.process(&blocks.0)?;
+        }
 
-        // TODO - Orchard
+        // Orchard
+        {
+            let decrypter = OrchardDecrypter::new(network);
+            let warper = WarpProcessor::new(OrchardHasher::new());
+            let mut synchronizer = OrchardSynchronizer::new(
+                decrypter,
+                warper,
+                orchard_vks.clone(),
+                db_builder.clone(),
+                "orchard".to_string(),
+            );
+            synchronizer.initialize()?;
+            synchronizer.process(&blocks.0)?;
+        }
 
         let db = db_builder.build()?;
-        db.store_block_timestamp(last_height, last_timestamp)?;
+        db.store_block_timestamp(last_height, &last_hash, last_timestamp)?;
     }
 
     Ok(())

@@ -53,7 +53,6 @@ impl <N: Parameters + Sync,
         }
     }
 
-
     pub fn initialize(&mut self) -> Result<()> {
         let db = self.db.build()?;
         let TreeCheckpoint { tree, witnesses } = db.get_tree_by_name(&self.shielded_pool)?;
@@ -69,7 +68,7 @@ impl <N: Parameters + Sync,
         Ok(())
     }
 
-    pub fn process(&mut self, blocks: Vec<CompactBlock>) -> Result<()> {
+    pub fn process(&mut self, blocks: &[CompactBlock]) -> Result<()> {
         if blocks.is_empty() { return Ok(()) }
         let decrypter = self.decrypter.clone();
         let decrypted_blocks: Vec<_> = blocks
@@ -135,7 +134,7 @@ impl <N: Parameters + Sync,
         for w in updated_witnesses.iter() {
             DbAdapter::store_witness(w, height, w.id_note, &db_tx, &self.shielded_pool)?;
         }
-        DbAdapter::store_tree(height, &hash, &updated_tree, &db_tx, &self.shielded_pool)?;
+        DbAdapter::store_tree(height, &updated_tree, &db_tx, &self.shielded_pool)?;
         self.tree = updated_tree;
         self.witnesses = updated_witnesses;
 

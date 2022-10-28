@@ -125,7 +125,7 @@ impl Hasher for SaplingHasher {
     }
 
     fn normalize(&self, extended: &[Self::Extended]) -> Vec<Node> {
-        let mut hash_affine: Vec<AffinePoint> = vec![AffinePoint::identity(); extended.len()];
+        let mut hash_affine = vec![AffinePoint::identity(); extended.len()];
         ExtendedPoint::batch_normalize(extended, &mut hash_affine);
         hash_affine
             .iter()

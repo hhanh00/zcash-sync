@@ -82,7 +82,7 @@ impl <N> SaplingDecrypter<N> {
 }
 
 impl <N: Parameters> TrialDecrypter<N, SaplingDomain<N>, SaplingViewKey, DecryptedSaplingNote> for SaplingDecrypter<N> {
-    fn domain(&self, height: BlockHeight) -> SaplingDomain<N> {
+    fn domain(&self, height: BlockHeight, _cob: &CompactOutputBytes) -> SaplingDomain<N> {
         SaplingDomain::<N>::for_height(self.network.clone(), height)
     }
 
@@ -97,4 +97,3 @@ impl <N: Parameters> TrialDecrypter<N, SaplingDomain<N>, SaplingViewKey, Decrypt
         vtx.outputs.iter().map(|co| co.into()).collect()
     }
 }
-

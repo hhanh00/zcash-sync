@@ -6,7 +6,7 @@ use std::time::Instant;
 use zcash_note_encryption::batch::try_compact_note_decryption;
 use zcash_note_encryption::{BatchDomain, COMPACT_NOTE_SIZE, EphemeralKeyBytes, ShieldedOutput};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
-use crate::{CompactBlock, CompactSaplingOutput, CompactTx};
+use crate::{CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactTx};
 use crate::db::ReceivedNote;
 use crate::sync::tree::Node;
 
@@ -51,6 +51,7 @@ pub trait DecryptedNote<D: BatchDomain, VK>: Send + Sync {
 
 // Deep copy from protobuf message
 pub struct CompactOutputBytes {
+    pub nullifier: [u8; 32],
     pub epk: [u8; 32],
     pub cmx: [u8; 32],
     pub ciphertext: [u8; 52],
@@ -59,12 +60,25 @@ pub struct CompactOutputBytes {
 impl From<&CompactSaplingOutput> for CompactOutputBytes {
     fn from(co: &CompactSaplingOutput) -> Self {
         CompactOutputBytes {
+            nullifier: [0u8; 32],
             epk: if co.epk.is_empty() { [0u8; 32] } else { co.epk.clone().try_into().unwrap() } ,
             cmx: co.cmu.clone().try_into().unwrap(), // cannot be filtered out
             ciphertext: if co.ciphertext.is_empty() { [0u8; 52] } else { co.ciphertext.clone().try_into().unwrap() },
         }
     }
 }
+
+impl From<&CompactOrchardAction> for CompactOutputBytes {
+    fn from(co: &CompactOrchardAction) -> Self {
+        CompactOutputBytes {
+            nullifier: co.nullifier.clone().try_into().unwrap(),
+            epk: if co.ephemeral_key.is_empty() { [0u8; 32] } else { co.ephemeral_key.clone().try_into().unwrap() } ,
+            cmx: co.cmx.clone().try_into().unwrap(), // cannot be filtered out
+            ciphertext: if co.ciphertext.is_empty() { [0u8; 52] } else { co.ciphertext.clone().try_into().unwrap() },
+        }
+    }
+}
+
 
 pub struct CompactShieldedOutput(CompactOutputBytes, OutputPosition);
 
@@ -95,17 +109,14 @@ pub trait TrialDecrypter<N: Parameters, D: BatchDomain<ExtractedCommitmentBytes 
         let mut outputs = vec![];
         let mut txs = HashMap::new();
         for (tx_index, vtx) in block.vtx.iter().enumerate() {
-            for cs in vtx.spends.iter() {
-                let mut nf = [0u8; 32];
-                nf.copy_from_slice(&cs.nf);
-                spends.push(Nf(nf));
-            }
+            let tx_inputs = self.spends(vtx);
+            spends.extend(tx_inputs.iter());
 
             let tx_outputs = self.outputs(vtx);
             if let Some(fco) = tx_outputs.first() {
                 if !fco.epk.is_empty() {
                     for (output_index, cob) in tx_outputs.into_iter().enumerate() {
-                        let domain = self.domain(height);
+                        let domain = self.domain(height, &cob);
                         let pos = OutputPosition {
                             height: block.height as u32,
                             tx_index,
@@ -167,7 +178,7 @@ pub trait TrialDecrypter<N: Parameters, D: BatchDomain<ExtractedCommitmentBytes 
         }
     }
 
-    fn domain(&self, height: BlockHeight) -> D;
+    fn domain(&self, height: BlockHeight, cob: &CompactOutputBytes) -> D;
     fn spends(&self, vtx: &CompactTx) -> Vec<Nf>;
     fn outputs(&self, vtx: &CompactTx) -> Vec<CompactOutputBytes>;
 }
