@@ -31,6 +31,7 @@ pub fn decode_key(
     } else {
         Err(anyhow::anyhow!("Not a valid key"))
     };
+    // TODO: Accept UA viewing key
     res
 }
 
@@ -48,6 +49,7 @@ pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     {
         return 2;
     }
+    // TODO: Accept UA viewing key
     -1
 }
 

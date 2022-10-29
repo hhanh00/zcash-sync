@@ -80,8 +80,17 @@ fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::
     let db = c.db()?;
     let (account, exists) =
         db.store_account(name, seed.as_deref(), index, sk.as_deref(), &ivk, &pa)?;
-    if !exists && c.chain.has_transparent() {
-        db.create_taddr(account)?;
+    if !exists {
+        if c.chain.has_transparent() {
+            db.create_taddr(account)?;
+        }
+        if c.chain.has_unified() {
+            db.create_orchard(account)?;
+        }
+        db.store_ua_settings(account, true, true, true)?;
+    }
+    else {
+        db.store_ua_settings(account, false, true, false)?;
     }
     Ok(account)
 }

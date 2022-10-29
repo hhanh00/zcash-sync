@@ -1,3 +1,6 @@
+//! DEAD CODE - Candidate for deletion
+//!
+
 use bech32::{ToBase32, Variant};
 use bip39::{Language, Mnemonic, Seed};
 use rand::rngs::OsRng;

@@ -1,4 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension};
+use zcash_primitives::consensus::{Network, Parameters};
+use crate::orchard::derive_orchard_keys;
 
 pub fn get_schema_version(connection: &Connection) -> anyhow::Result<u32> {
     let version: Option<u32> = connection
@@ -32,7 +34,7 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
+pub fn init_db(connection: &Connection, network: &Network) -> anyhow::Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS schema_version (
             id INTEGER PRIMARY KEY NOT NULL,
@@ -178,6 +180,16 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
     }
 
     if version < 5 {
+        connection.execute("CREATE TABLE orchard_addrs(
+            account INTEGER PRIMARY KEY,
+            sk BLOB,
+            fvk BLOB NOT NULL)", [])?;
+        connection.execute("CREATE TABLE ua_settings(
+            account INTEGER PRIMARY KEY,
+            transparent BOOL NOT NULL,
+            sapling BOOL NOT NULL,
+            orchard BOOL NOT NULL)", [])?;
+        upgrade_accounts(&connection, network)?;
         connection.execute("CREATE TABLE sapling_tree(
             height INTEGER PRIMARY KEY,
             tree BLOB NOT NULL)", [])?;
@@ -225,5 +237,31 @@ pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
         )?;
     }
 
+    Ok(())
+}
+
+fn upgrade_accounts(connection: &Connection, network: &Network) -> anyhow::Result<()> {
+    let mut statement = connection.prepare("SELECT a.id_account, a.seed, a.aindex, t.address FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account")?;
+    let rows = statement.query_map([], |row| {
+        let id_account: u32 = row.get(0)?;
+        let seed: Option<String> = row.get(1)?;
+        let aindex: u32 = row.get(2)?;
+        let transparent_address: Option<String> = row.get(3)?;
+        Ok((id_account, seed, aindex, transparent_address.is_some()))
+    })?;
+    let mut res = vec![];
+    for row in rows {
+        res.push(row?);
+    }
+
+    for (id_account, seed, aindex, has_transparent) in res {
+        let has_orchard = seed.is_some();
+        if let Some(seed) = seed {
+            let orchard_keys = derive_orchard_keys(network.coin_type(), &seed, aindex);
+            connection.execute("INSERT INTO orchard_addrs(account, sk, fvk) VALUES (?1,?2,?3)", params![id_account, &orchard_keys.sk, &orchard_keys.fvk])?;
+        }
+        connection.execute("INSERT INTO ua_settings(account, transparent, sapling, orchard) VALUES (?1,?2,?3,?4)",
+            params![id_account, has_transparent, true, has_orchard])?;
+    }
     Ok(())
 }

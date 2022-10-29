@@ -85,7 +85,7 @@ mod hash;
 mod sync;
 mod sapling;
 mod orchard;
-mod key;
+// mod key;
 mod key2;
 mod mempool;
 mod misc;
@@ -125,7 +125,7 @@ pub use crate::coinconfig::{
 };
 pub use crate::db::{AccountData, AccountInfo, AccountRec, DbAdapter, TxRec, DbAdapterBuilder};
 pub use crate::fountain::{FountainCodes, RaptorQDrops};
-pub use crate::key::KeyHelpers;
+// pub use crate::key::KeyHelpers;
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;
 pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};

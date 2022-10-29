@@ -16,6 +16,7 @@ use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
+use crate::orchard::derive_orchard_keys;
 use crate::sync;
 
 mod migration;
@@ -142,7 +143,7 @@ impl DbAdapter {
     // }
     //
     pub fn init_db(&mut self) -> anyhow::Result<()> {
-        migration::init_db(&self.connection)?;
+        migration::init_db(&self.connection, self.network())?;
         self.delete_incomplete_scan()?;
         Ok(())
     }
@@ -893,11 +894,30 @@ impl DbAdapter {
             let bip44_path = format!("m/44'/{}'/0'/0/{}", self.network().coin_type(), aindex);
             let (sk, address) = derive_tkeys(self.network(), &seed, &bip44_path)?;
             self.connection.execute(
-                "INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3) \
-            ON CONFLICT DO NOTHING",
+                "INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
                 params![account, &sk, &address],
             )?;
         }
+        Ok(())
+    }
+
+    pub fn create_orchard(&self, account: u32) -> anyhow::Result<()> {
+        let AccountData { seed, aindex, .. } = self.get_account_info(account)?;
+        if let Some(seed) = seed {
+            let keys = derive_orchard_keys(self.network().coin_type(), &seed, aindex);
+            self.connection.execute(
+                "INSERT INTO orchard_addrs(account, sk, fvk) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
+                params![account, &keys.sk, &keys.fvk],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn store_ua_settings(&self, account: u32, transparent: bool, sapling: bool, orchard: bool) -> anyhow::Result<()> {
+        self.connection.execute(
+            "INSERT INTO ua_settings(account, transparent, sapling, orchard) VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
+            params![account, transparent, sapling, orchard],
+        )?;
         Ok(())
     }
 

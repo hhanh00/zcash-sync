@@ -174,8 +174,6 @@ pub async fn sync_async<'a>(
     Ok(())
 }
 
-
-
 fn sync_async_old(
     coin_type: CoinType,
     _chunk_size: u32,
