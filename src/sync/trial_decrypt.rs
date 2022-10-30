@@ -3,6 +3,7 @@ use crate::chain::Nf;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::time::Instant;
+use orchard::note_encryption::OrchardDomain;
 use zcash_note_encryption::batch::try_compact_note_decryption;
 use zcash_note_encryption::{BatchDomain, COMPACT_NOTE_SIZE, EphemeralKeyBytes, ShieldedOutput};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
@@ -55,6 +56,29 @@ pub struct CompactOutputBytes {
     pub epk: [u8; 32],
     pub cmx: [u8; 32],
     pub ciphertext: [u8; 52],
+}
+
+impl std::fmt::Display for CompactOutputBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "nullifier: {}", hex::encode(self.nullifier))?;
+        writeln!(f, "epk: {}", hex::encode(self.epk))?;
+        writeln!(f, "cmx: {}", hex::encode(self.cmx))?;
+        writeln!(f, "ciphertext: {}", hex::encode(self.ciphertext))
+    }
+}
+
+impl ShieldedOutput<OrchardDomain, COMPACT_NOTE_SIZE> for CompactOutputBytes {
+    fn ephemeral_key(&self) -> EphemeralKeyBytes {
+        EphemeralKeyBytes(self.epk)
+    }
+
+    fn cmstar_bytes(&self) -> [u8; 32] {
+        self.cmx
+    }
+
+    fn enc_ciphertext(&self) -> &[u8; COMPACT_NOTE_SIZE] {
+        &self.ciphertext
+    }
 }
 
 impl From<&CompactSaplingOutput> for CompactOutputBytes {

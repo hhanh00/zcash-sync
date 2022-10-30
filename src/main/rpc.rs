@@ -86,6 +86,8 @@ async fn main() -> anyhow::Result<()> {
                 get_backup,
                 get_balance,
                 get_address,
+                get_unified_address,
+                decode_unified_address,
                 get_tx_history,
                 pay,
                 mark_synced,
@@ -175,6 +177,20 @@ pub fn get_address() -> Result<String, Error> {
     let db = c.db()?;
     let AccountData { address, .. } = db.get_account_info(c.id_account)?;
     Ok(address)
+}
+
+#[get("/unified_address")]
+pub fn get_unified_address() -> Result<String, Error> {
+    let c = CoinConfig::get_active();
+    let address = warp_api_ffi::api::account::get_unified_address(c.coin, c.id_account)?;
+    Ok(address)
+}
+
+#[post("/decode_unified_address?<address>")]
+pub fn decode_unified_address(address: String) -> Result<String, Error> {
+    let c = CoinConfig::get_active();
+    let result = warp_api_ffi::api::account::decode_unified_address(c.coin, &address)?;
+    Ok(result)
 }
 
 #[get("/backup")]

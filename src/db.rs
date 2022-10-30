@@ -10,14 +10,17 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use orchard::keys::FullViewingKey;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_params::coin::{CoinType, get_coin_chain, get_coin_id};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
-use crate::orchard::derive_orchard_keys;
+use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
+use crate::sapling::SaplingViewKey;
 use crate::sync;
+use crate::unified::UnifiedAddressType;
 
 mod migration;
 
@@ -36,6 +39,7 @@ pub struct DbAdapter {
     pub db_path: String,
 }
 
+#[derive(Debug)]
 pub struct ReceivedNote {
     pub account: u32,
     pub height: u32,
@@ -207,33 +211,51 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn get_fvks(&self) -> anyhow::Result<HashMap<u32, AccountViewKey>> {
+    pub fn get_sapling_fvks(&self) -> anyhow::Result<Vec<SaplingViewKey>> {
         let mut statement = self
             .connection
-            .prepare("SELECT id_account, ivk, sk FROM accounts")?;
+            .prepare("SELECT id_account, ivk FROM accounts")?;
         let rows = statement.query_map([], |row| {
             let account: u32 = row.get(0)?;
             let ivk: String = row.get(1)?;
-            let sk: Option<String> = row.get(2)?;
             let fvk = decode_extended_full_viewing_key(
                 self.network().hrp_sapling_extended_full_viewing_key(),
                 &ivk,
             )
             .unwrap();
             let ivk = fvk.fvk.vk.ivk();
-            Ok((
+            Ok(SaplingViewKey {
                 account,
-                AccountViewKey {
-                    fvk,
-                    ivk,
-                    viewonly: sk.is_none(),
-                },
-            ))
+                fvk,
+                ivk
+            })
         })?;
-        let mut fvks: HashMap<u32, AccountViewKey> = HashMap::new();
+        let mut fvks = vec![];
         for r in rows {
             let row = r?;
-            fvks.insert(row.0, row.1);
+            fvks.push(row);
+        }
+        Ok(fvks)
+    }
+
+    pub fn get_orchard_fvks(&self) -> anyhow::Result<Vec<OrchardViewKey>> {
+        let mut statement = self.connection.prepare("SELECT account, fvk FROM orchard_addrs")?;
+        let rows = statement.query_map([], |row| {
+            let account: u32 = row.get(0)?;
+            let fvk: Vec<u8> = row.get(1)?;
+            let fvk: [u8; 96] = fvk.try_into().unwrap();
+            let fvk = FullViewingKey::from_bytes(&fvk).unwrap();
+            let vk =
+                OrchardViewKey {
+                    account,
+                    fvk,
+                };
+            Ok(vk)
+        })?;
+        let mut fvks = vec![];
+        for r in rows {
+            let row = r?;
+            fvks.push(row);
         }
         Ok(fvks)
     }
@@ -271,6 +293,8 @@ impl DbAdapter {
 
         let tx = self.connection.transaction()?;
         tx.execute("DELETE FROM blocks WHERE height > ?1", params![height])?;
+        tx.execute("DELETE FROM sapling_tree WHERE height > ?1", params![height])?;
+        tx.execute("DELETE FROM orchard_tree WHERE height > ?1", params![height])?;
         tx.execute(
             "DELETE FROM sapling_witnesses WHERE height > ?1",
             params![height],
@@ -397,10 +421,9 @@ impl DbAdapter {
         position: usize,
         db_tx: &Transaction,
     ) -> anyhow::Result<u32> {
-        log::debug!("+received_note {}", id_tx);
+        log::info!("+received_note {} {:?}", id_tx, note);
         db_tx.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, rho, nf, spent)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-        ON CONFLICT DO NOTHING", params![note.account, id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.rho, note.nf, note.spent])?;
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)", params![note.account, id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.rho, note.nf, note.spent])?;
         let id_note: u32 = db_tx
             .query_row(
                 "SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2",
@@ -913,12 +936,38 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn get_orchard(&self, account: u32) -> anyhow::Result<Option<OrchardKeyBytes>> {
+        let key = self.connection.query_row("SELECT sk, fvk FROM orchard_addrs WHERE account = ?1", params![account], |row| {
+            let sk: Vec<u8> = row.get(0)?;
+            let fvk: Vec<u8> = row.get(1)?;
+            Ok(OrchardKeyBytes {
+                sk: sk.try_into().unwrap(),
+                fvk: fvk.try_into().unwrap(),
+            })
+        }).optional()?;
+        Ok(key)
+    }
+
     pub fn store_ua_settings(&self, account: u32, transparent: bool, sapling: bool, orchard: bool) -> anyhow::Result<()> {
         self.connection.execute(
             "INSERT INTO ua_settings(account, transparent, sapling, orchard) VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
             params![account, transparent, sapling, orchard],
         )?;
         Ok(())
+    }
+
+    pub fn get_ua_settings(&self, account: u32) -> anyhow::Result<UnifiedAddressType> {
+        let tpe = self.connection.query_row("SELECT transparent, sapling, orchard FROM ua_settings WHERE account = ?1", params![account], |row| {
+            let transparent: bool = row.get(0)?;
+            let sapling: bool = row.get(1)?;
+            let orchard: bool = row.get(2)?;
+            Ok(UnifiedAddressType {
+                transparent,
+                sapling,
+                orchard
+            })
+        })?;
+        Ok(tpe)
     }
 
     pub fn store_historical_prices(

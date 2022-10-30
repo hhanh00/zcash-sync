@@ -91,29 +91,8 @@ pub async fn sync_async<'a>(
         let db = DbAdapter::new(coin_type, &db_path)?;
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
-        let vks = db.get_fvks()?;
-        let sapling_vks: Vec<_> = vks.iter().map(|(&account, ak)| {
-            SaplingViewKey {
-                account,
-                fvk: ak.fvk.clone(),
-                ivk: ak.ivk.clone()
-            }
-        }).collect();
-        let orchard_vks: Vec<_> = db.get_seeds()?.iter().map(|a| {
-            let mnemonic = Mnemonic::from_phrase(&a.seed, Language::English).unwrap();
-            let sk = SpendingKey::from_zip32_seed(
-                mnemonic.entropy(),
-                network.coin_type(),
-                a.id_account,
-            ).unwrap();
-            let fvk = FullViewingKey::from(&sk);
-            let vk =
-                OrchardViewKey {
-                    account: a.id_account,
-                    fvk,
-                };
-            vk
-        }).collect();
+        let sapling_vks = db.get_sapling_fvks()?;
+        let orchard_vks = db.get_orchard_fvks()?;
         (height, hash, sapling_vks, orchard_vks)
     };
     let end_height = get_latest_height(&mut client).await?;
@@ -138,6 +117,7 @@ pub async fn sync_async<'a>(
         let last_timestamp = last_block.time;
 
         // Sapling
+        log::info!("Sapling");
         {
             let decrypter = SaplingDecrypter::new(network);
             let warper = WarpProcessor::new(SaplingHasher::default());
@@ -153,6 +133,7 @@ pub async fn sync_async<'a>(
         }
 
         // Orchard
+        log::info!("Orchard");
         {
             let decrypter = OrchardDecrypter::new(network);
             let warper = WarpProcessor::new(OrchardHasher::new());

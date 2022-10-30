@@ -294,3 +294,25 @@ pub async fn import_sync_data(coin: u8, file: &str) -> anyhow::Result<()> {
     retrieve_tx_info(c.coin_type, &mut client, c.db_path.as_ref().unwrap(), &ids).await?;
     Ok(())
 }
+
+/// Get the Unified address
+/// # Arguments
+/// * `coin`: 0 for zcash, 1 for ycash
+/// * `id_account`: account id as returned from [new_account]
+///
+/// The address depends on the UA settings and may include transparent, sapling & orchard receivers
+pub fn get_unified_address(coin: u8, id_account: u32) -> anyhow::Result<String> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let address = crate::get_unified_address(c.chain.network(), &db, id_account)?;
+    Ok(address)
+}
+
+/// Decode a unified address into its receivers
+///
+/// For testing only. The format of the returned value is subject to change
+pub fn decode_unified_address(coin: u8, address: &str) -> anyhow::Result<String> {
+    let c = CoinConfig::get(coin);
+    let res = crate::decode_unified_address(c.chain.network(), address)?;
+    Ok(res.to_string())
+}

@@ -152,6 +152,7 @@ mod tests {
     use crate::db::DbAdapterBuilder;
     use crate::init_coin;
     use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
+    use crate::scan::Blocks;
     use crate::sync::CTree;
     use crate::sync::tree::WarpProcessor;
     use super::Synchronizer;
@@ -179,7 +180,7 @@ mod tests {
         };
 
         synchronizer.initialize().unwrap();
-        synchronizer.process(vec![]).unwrap();
+        synchronizer.process(&vec![]).unwrap();
     }
 
 }

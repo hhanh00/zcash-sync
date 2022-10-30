@@ -95,6 +95,7 @@ mod prices;
 mod scan;
 mod taddr;
 mod transaction;
+mod unified;
 // mod ua;
 mod zip32;
 // mod wallet;
@@ -131,6 +132,8 @@ pub use crate::lw_rpc::*;
 pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
 pub use zip32::KeyPack;
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
+
+pub use unified::{get_unified_address, decode_unified_address};
 
 #[cfg(feature = "ledger_sapling")]
 pub use crate::ledger::sapling::build_tx_ledger;
