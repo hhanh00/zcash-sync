@@ -6,7 +6,6 @@ use crate::{CompactTx, DbAdapterBuilder};
 use crate::db::ReceivedNote;
 use crate::sync::{CompactOutputBytes, DecryptedNote, Node, OutputPosition, TrialDecrypter, ViewKey};
 use zcash_note_encryption;
-use zcash_primitives::sapling::Nullifier;
 use zcash_params::coin::CoinType;
 
 #[derive(Clone, Debug)]

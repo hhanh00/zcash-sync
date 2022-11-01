@@ -17,6 +17,7 @@ use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
+use crate::note_selection::{Source, UTXO};
 use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
 use crate::sapling::SaplingViewKey;
 use crate::sync;
@@ -735,6 +736,67 @@ impl DbAdapter {
         }
 
         Ok(spendable_notes)
+    }
+
+    pub fn get_unspent_received_notes(&self, account: u32, anchor_height: u32) -> anyhow::Result<Vec<UTXO>> {
+        let mut notes = vec![];
+        let mut statement = self.connection.prepare(
+            "SELECT id_note, diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL AND account = ?2 AND rho IS NULL
+            AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = (
+	            SELECT MAX(height) FROM sapling_witnesses WHERE height <= ?1
+            ) AND r.id_note = w.note")?;
+        let rows = statement.query_map(params![anchor_height, account], |row| {
+            let id_note: u32 = row.get(0)?;
+            let diversifier: Vec<u8> = row.get(1)?;
+            let amount: i64 = row.get(2)?;
+            let rcm: Vec<u8> = row.get(3)?;
+            let witness: Vec<u8> = row.get(4)?;
+            let source = Source::Sapling {
+                id_note,
+                diversifier: diversifier.try_into().unwrap(),
+                rseed: rcm.try_into().unwrap(),
+                witness
+            };
+            Ok(UTXO {
+                source,
+                amount: amount as u64,
+            })
+        })?;
+        for r in rows {
+            let note = r?;
+            notes.push(note);
+        }
+
+        let mut statement = self.connection.prepare(
+            "SELECT id_note, diversifier, value, rcm, rho, witness FROM received_notes r, orchard_witnesses w WHERE spent IS NULL AND account = ?2 AND rho IS NOT NULL
+            AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = (
+	            SELECT MAX(height) FROM orchard_witnesses WHERE height <= ?1
+            ) AND r.id_note = w.note")?;
+        let rows = statement.query_map(params![anchor_height, account], |row| {
+            let id_note: u32 = row.get(0)?;
+            let diversifier: Vec<u8> = row.get(1)?;
+            let amount: i64 = row.get(2)?;
+            let rcm: Vec<u8> = row.get(3)?;
+            let rho: Vec<u8> = row.get(4).unwrap();
+            let witness: Vec<u8> = row.get(5)?;
+            let source = Source::Orchard {
+                id_note,
+                diversifier: diversifier.try_into().unwrap(),
+                rseed: rcm.try_into().unwrap(),
+                rho: rho.try_into().unwrap(),
+                witness
+            };
+            Ok(UTXO {
+                source,
+                amount: amount as u64,
+            })
+        })?;
+        for r in rows {
+            let note = r?;
+            notes.push(note);
+        }
+
+        Ok(notes)
     }
 
     pub fn tx_mark_spend(&mut self, selected_notes: &[u32]) -> anyhow::Result<()> {

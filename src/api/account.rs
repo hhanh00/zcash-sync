@@ -304,7 +304,7 @@ pub async fn import_sync_data(coin: u8, file: &str) -> anyhow::Result<()> {
 pub fn get_unified_address(coin: u8, id_account: u32) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
-    let address = crate::get_unified_address(c.chain.network(), &db, id_account)?;
+    let address = crate::get_unified_address(c.chain.network(), &db, id_account, None)?; // use ua settings from db
     Ok(address)
 }
 

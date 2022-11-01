@@ -94,6 +94,7 @@ mod prices;
 // mod print;
 mod scan;
 mod taddr;
+mod note_selection;
 mod transaction;
 mod unified;
 // mod ua;

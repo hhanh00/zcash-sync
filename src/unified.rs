@@ -37,8 +37,9 @@ impl std::fmt::Display for DecodedUA {
     }
 }
 
-pub fn get_unified_address(network: &Network, db: &DbAdapter, account: u32) -> anyhow::Result<String> {
-    let tpe = db.get_ua_settings(account)?;
+pub fn get_unified_address(network: &Network, db: &DbAdapter, account: u32, tpe: Option<UnifiedAddressType>) -> anyhow::Result<String> {
+    let tpe = tpe.ok_or(anyhow!("")).or_else(|_| db.get_ua_settings(account))?;
+
     let mut rcvs = vec![];
     if tpe.transparent {
         let address = db.get_taddr(account)?;
