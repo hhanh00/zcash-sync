@@ -1,11 +1,12 @@
+use serde_json::Value;
 use zcash_primitives::memo::Memo;
 use crate::{CoinConfig, init_coin, set_coin_lwd_url};
 use crate::api::payment::RecipientMemo;
 use crate::unified::UnifiedAddressType;
 use super::{*, types::*, fill::*};
 
-// has T+S receivers
-const CHANGE_ADDRESS: &str = "u1utw7uds5fr5ephnrm8u57ytwgpcktdmvv3q0kmfapnhyy4g7n7wqce6d8xfqeewgd9td9a57qera92apjtljs543j5yl2kks0rpaf3y4hvsmpep5ajvd2s4ggc9dxjtek8s4x92j6p9";
+// must have T+S+O receivers
+const CHANGE_ADDRESS: &str = "u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qqmktzwktw772nlle6skkkxwmtzxaan3slntqev03g70tzpky3c58hfgvfjkcky255cwqgfuzdjcktfl7pjalt5sl33se75pmga09etn9dplr98eq2g8cgmvgvx6jx2a2xhy39x96c6rumvlyt35whml87r064qdzw30e";
 
 fn init() {
     env_logger::init();
@@ -24,125 +25,6 @@ async fn test_fetch_utxo() {
 }
 
 #[test]
-fn test_fill1() {
-    let mut config = NoteSelectConfig {
-        privacy_policy: PrivacyPolicy::AnyPool,
-        use_transparent: true,
-        precedence: [Pool::Transparent, Pool::Sapling, Pool::Orchard],
-        change_address: CHANGE_ADDRESS.to_string(),
-    };
-
-    // T2T
-    let selection = execute_orders(
-        &mut vec![
-            mock_order(1, 100, 1), // taddr
-        ],
-        &PoolAllocation([100, 0, 0]),
-        &config,
-    ).unwrap();
-    assert_eq!(selection.allocation.0[0], 100);
-
-    config.use_transparent = false; // disable transparent inputs
-    let mut orders = vec![
-        mock_order(1, 100, 1), // taddr
-    ];
-    let selection = execute_orders(
-        &mut orders,
-        &PoolAllocation([100, 0, 0]),
-        &config,
-    ).unwrap();
-    assert_eq!(selection.allocation.0[0], 0);
-    assert_eq!(orders[0].filled, 0); // no fill
-
-    // add sapling inputs: S2T
-    let mut orders = vec![
-        mock_order(1, 100, 1), // taddr
-    ];
-    let selection = execute_orders(
-        &mut orders,
-        &PoolAllocation([100, 80, 0]),
-        &config,
-    ).unwrap();
-    assert_eq!(selection.allocation.0[1], 80);
-    assert_eq!(orders[0].filled, 80); // partial fill
-
-    // add orchard inputs: S2T + O2T
-    let mut orders = vec![
-        mock_order(1, 100, 1), // taddr
-    ];
-    let selection = execute_orders(
-        &mut orders,
-        &PoolAllocation([100, 80, 40]),
-        &config,
-    ).unwrap();
-    assert_eq!(selection.allocation.0[1], 80);
-    assert_eq!(selection.allocation.0[2], 20);
-    assert_eq!(orders[0].filled, 100); // fill
-
-    // Orchard pool preference: O2T + S2T
-    config.precedence = [Pool::Transparent, Pool::Orchard, Pool::Sapling];
-    let mut orders = vec![
-        mock_order(1, 100, 1), // taddr
-    ];
-    let selection = execute_orders(
-        &mut orders,
-        &PoolAllocation([100, 80, 40]),
-        &config,
-    ).unwrap();
-    assert_eq!(selection.allocation.0[1], 60);
-    assert_eq!(selection.allocation.0[2], 40);
-    assert_eq!(orders[0].filled, 100); // fill
-
-    // UA T+S: T2T + S2S + O2S
-    config.use_transparent = true;
-    let mut orders = vec![
-        mock_order(1, 100, 3), // ua: t+s
-    ];
-    let selection = execute_orders(
-        &mut orders,
-        &PoolAllocation([10, 80, 40]),
-        &config,
-    ).unwrap();
-    assert_eq!(selection.allocation.0[0], 10);
-    assert_eq!(selection.allocation.0[1], 80);
-    assert_eq!(selection.allocation.0[2], 10);
-    assert_eq!(orders[0].filled, 100); // fill
-
-    // UA T+S, UA S+O: T2T + S2S + O2O - pool is empty
-    let mut orders = vec![
-        mock_order(1, 100, 3), // ua: t+s
-        mock_order(2, 100, 6), // ua: s+o
-    ];
-    let selection = execute_orders(
-        &mut orders,
-        &PoolAllocation([10, 80, 40]),
-        &config,
-    ).unwrap();
-    assert_eq!(selection.allocation.0[0], 10);
-    assert_eq!(selection.allocation.0[1], 80);
-    assert_eq!(selection.allocation.0[2], 40);
-    assert_eq!(orders[0].filled, 90); // partial fill
-    assert_eq!(orders[1].filled, 40); // partial fill
-
-    // Same as previously with more O inputs
-    let mut orders = vec![
-        mock_order(1, 100, 3), // ua: t+s
-        mock_order(2, 100, 6), // ua: s+o
-    ];
-    let selection = execute_orders(
-        &mut orders,
-        &PoolAllocation([10, 80, 120]),
-        &config,
-    ).unwrap();
-    println!("{:?}", selection);
-    assert_eq!(selection.allocation.0[0], 10);
-    assert_eq!(selection.allocation.0[1], 80);
-    assert_eq!(selection.allocation.0[2], 110);
-    assert_eq!(orders[0].filled, 100); // fill
-    assert_eq!(orders[1].filled, 100); // fill
-}
-
-#[test]
 fn test_ua() {
     init();
     let c = CoinConfig::get(0);
@@ -155,12 +37,7 @@ fn test_ua() {
 #[tokio::test]
 async fn test_payment() {
     init();
-    let config = NoteSelectConfig {
-        privacy_policy: PrivacyPolicy::SamePoolTypeOnly, // Minimum privacy level required for this tx, because the change has to go from orchard to sapling
-        use_transparent: true,
-        precedence: [Pool::Transparent, Pool::Sapling, Pool::Orchard],
-        change_address: CHANGE_ADDRESS.to_string(), // does not have orchard receiver
-    };
+    let config = NoteSelectConfig::new(CHANGE_ADDRESS);
 
     let recipients = vec![
         RecipientMemo {
@@ -211,3 +88,249 @@ fn mock_order(id: u32, amount: u64, tpe: u8) -> Order {
     }
 }
 
+macro_rules! order {
+    ($id:expr, $q:expr, $destinations:expr) => {
+        Order {
+            id: $id,
+            amount: $q * 1000,
+            destinations: $destinations,
+            filled: 0,
+            no_fee: false,
+            memo: MemoBytes::empty(),
+        }
+    };
+}
+
+macro_rules! utxo {
+    ($id:expr, $q:expr) => {
+        UTXO {
+            amount: $q * 1000,
+            source: Source::Transparent { txid: [0u8; 32], index: $id },
+        }
+    };
+}
+
+macro_rules! sapling {
+    ($id:expr, $q:expr) => {
+        UTXO {
+            amount: $q * 1000,
+            source: Source::Sapling {
+                id_note: $id,
+                diversifier: [0u8; 11],
+                rseed: [0u8; 32],
+                witness: vec![],
+            },
+        }
+    };
+}
+
+macro_rules! orchard {
+    ($id:expr, $q:expr) => {
+        UTXO {
+            amount: $q * 1000,
+            source: Source::Orchard {
+                id_note: $id,
+                diversifier: [0u8; 11],
+                rseed: [0u8; 32],
+                rho: [0u8; 32],
+                witness: vec![],
+            },
+        }
+    };
+}
+
+macro_rules! t {
+    ($id: expr, $q:expr) => {
+        order!($id, $q, [Some(Destination::Transparent([0u8; 20])), None, None])
+    };
+}
+
+macro_rules! s {
+    ($id: expr, $q:expr) => {
+        order!($id, $q, [None, Some(Destination::Sapling([0u8; 43])), None])
+    };
+}
+
+macro_rules! o {
+    ($id: expr, $q:expr) => {
+        order!($id, $q, [None, None, Some(Destination::Orchard([0u8; 43]))])
+    };
+}
+
+macro_rules! ts {
+    ($id: expr, $q:expr) => {
+        order!($id, $q, [Some(Destination::Transparent([0u8; 20])), Some(Destination::Sapling([0u8; 43])), None])
+    };
+}
+
+macro_rules! to {
+    ($id: expr, $q:expr) => {
+        order!($id, $q, [Some(Destination::Transparent([0u8; 20])), None, Some(Destination::Orchard([0u8; 43]))])
+    };
+}
+
+macro_rules! so {
+    ($id: expr, $q:expr) => {
+        order!($id, $q, [None, Some(Destination::Sapling([0u8; 43])), Some(Destination::Orchard([0u8; 43]))])
+    };
+}
+
+macro_rules! tso {
+    ($id: expr, $q:expr) => {
+        order!($id, $q, [Some(Destination::Transparent([0u8; 20])), Some(Destination::Sapling([0u8; 43])), Some(Destination::Orchard([0u8; 43]))])
+    };
+}
+
+#[test]
+fn test_example1() {
+    env_logger::init();
+    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
+    config.use_transparent = true;
+    config.privacy_policy = PrivacyPolicy::AnyPool;
+
+    let utxos = [utxo!(1, 5), utxo!(2, 7), sapling!(3, 12), orchard!(4, 10)];
+    let mut orders = [t!(1, 10)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+}
+
+#[test]
+fn test_example2() {
+    env_logger::init();
+    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
+    config.privacy_policy = PrivacyPolicy::AnyPool;
+
+    let utxos = [utxo!(1, 5), utxo!(2, 7), sapling!(3, 12), orchard!(4, 10), orchard!(5, 10)];
+    let mut orders = [t!(1, 10)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+}
+
+#[test]
+fn test_example3() {
+    env_logger::init();
+    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
+    config.use_transparent = true;
+    config.privacy_policy = PrivacyPolicy::AnyPool;
+    config.precedence = [ Pool::Sapling, Pool::Orchard, Pool::Transparent ];
+
+    let utxos = [utxo!(1, 100), sapling!(2, 160), orchard!(3, 70), orchard!(4, 50)];
+    let mut orders = [t!(1, 10), s!(2, 20), o!(3, 30), ts!(4, 40), to!(5, 50), so!(6, 60), tso!(7, 70)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+
+    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":100000},{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":160000},{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":70000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":2,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":20000},{"id_order":3,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000},{"id_order":4,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000},{"id_order":5,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":50000},{"id_order":6,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":60000},{"id_order":7,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000},{"id_order":7,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":55000}],"fee":45000}"#).unwrap();
+    assert_eq!(tx_plan_json, expected);
+}
+
+/// A simple t2t
+///
+#[test]
+fn test_example4() {
+    env_logger::init();
+    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
+    config.use_transparent = true;
+
+    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
+    let mut orders = [t!(1, 10)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+}
+
+/// A simple z2z
+///
+#[test]
+fn test_example5() {
+    env_logger::init();
+    let config = NoteSelectConfig::new(CHANGE_ADDRESS);
+
+    // z2z are preferred over t2z, so we can keep the t-notes
+    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
+    let mut orders = [s!(1, 10)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+}
+
+/// A simple z2z
+///
+#[test]
+fn test_example5b() {
+    env_logger::init();
+    let config = NoteSelectConfig::new(CHANGE_ADDRESS);
+
+    // z2z are preferred over t2z, so we can keep the t-notes
+    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
+    let mut orders = [o!(1, 10)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+}
+ /// A simple z2t sapling
+///
+#[test]
+fn test_example6() {
+    env_logger::init();
+    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
+    config.privacy_policy = PrivacyPolicy::AnyPool;
+
+    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
+    // Change the destination to t
+    let mut orders = [t!(1, 10)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+}
+
+/// A simple o2t
+///
+#[test]
+fn test_example7() {
+    env_logger::init();
+    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
+    config.precedence = [ Pool::Orchard, Pool::Sapling, Pool::Transparent ];
+    config.privacy_policy = PrivacyPolicy::AnyPool;
+
+    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
+    // Change the destination to t
+    let mut orders = [t!(1, 10)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+}
+
+/// A simple t2z
+///
+#[test]
+fn test_example8() {
+    env_logger::init();
+    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
+    config.privacy_policy = PrivacyPolicy::AnyPool;
+    config.use_transparent = true;
+    config.use_shielded = false;
+
+    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
+    let mut orders = [s!(1, 10)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+}
+
+/// A simple z2z (Sapling/Orchard)
+///
+#[test]
+fn test_example9() {
+    env_logger::init();
+    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
+
+    let utxos = [utxo!(1, 50), sapling!(2, 50)];
+    let mut orders = [o!(1, 10)];
+
+    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
+    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+}

@@ -2,7 +2,7 @@ use std::cmp::min;
 use zcash_address::{AddressKind, ZcashAddress};
 use zcash_address::unified::{Container, Receiver};
 use zcash_primitives::memo::{Memo, MemoBytes};
-use crate::note_selection::types::{PrivacyPolicy, NoteSelectConfig, Fill, Execution, Order, Pool, PoolAllocation, Destination};
+use crate::note_selection::types::{PrivacyPolicy, NoteSelectConfig, Fill, Execution, Order, Pool, PoolAllocation, Destination, PoolPrecedence};
 
 /// Decode address and return it as an order
 ///
@@ -48,54 +48,63 @@ pub fn decode(id: u32, address: &str, amount: u64, memo: MemoBytes) -> anyhow::R
     Ok(order)
 }
 
-pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, config: &NoteSelectConfig) -> anyhow::Result<Execution> {
-    let policy = config.privacy_policy.clone();
+pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, use_transparent: bool, use_shielded: bool,
+                      privacy_policy: PrivacyPolicy, precedence: &PoolPrecedence) -> anyhow::Result<Execution> {
     let mut allocation: PoolAllocation = PoolAllocation::default();
     let mut fills = vec![];
 
-    loop {
-        // Direct Fill - t2t, s2s, o2o
+    // Direct Shielded Fill - s2s, o2o
+    if use_shielded {
         for order in orders.iter_mut() {
-            for pool in config.precedence {
-                if order.destinations[pool as usize].is_none() { continue }
-                if !config.use_transparent && pool == Pool::Transparent { continue }
-                fill_order(pool, pool, order, initial_pool, &mut allocation, &mut fills);
+            for &pool in precedence {
+                if pool == Pool::Transparent { continue }
+                if order.destinations[pool as usize].is_some() {
+                    fill_order(pool, pool, order, initial_pool, &mut allocation, &mut fills);
+                }
             }
         }
-        if policy == PrivacyPolicy::SamePoolOnly { break }
+    }
 
+    if privacy_policy != PrivacyPolicy::SamePoolOnly {
         // Indirect Shielded - z2z: s2o, o2s
         for order in orders.iter_mut() {
-            for pool in config.precedence {
+            for &pool in precedence {
                 if order.destinations[pool as usize].is_none() { continue }
+                if !use_shielded { continue }
                 if let Some(from_pool) = pool.other_shielded() {
                     fill_order(from_pool, pool, order, initial_pool, &mut allocation, &mut fills);
                 }
             }
         }
-        if policy == PrivacyPolicy::SamePoolTypeOnly { break }
 
-        // Other - s2t, o2t, t2s, t2o
-        for order in orders.iter_mut() {
-            for pool in config.precedence {
-                if order.destinations[pool as usize].is_none() { continue }
-                match pool {
-                    Pool::Transparent => {
-                        for from_pool in config.precedence {
-                            if from_pool.is_shielded() {
-                                fill_order(from_pool, pool, order, initial_pool, &mut allocation, &mut fills);
+        if privacy_policy == PrivacyPolicy::AnyPool {
+            // Other - s2t, o2t, t2s, t2o
+            for order in orders.iter_mut() {
+                for &pool in precedence {
+                    if order.destinations[pool as usize].is_none() { continue }
+                    match pool {
+                        Pool::Transparent if use_shielded => {
+                            for &from_pool in precedence {
+                                if from_pool != Pool::Transparent {
+                                    fill_order(from_pool, pool, order, initial_pool, &mut allocation, &mut fills);
+                                }
                             }
                         }
-                    }
-                    Pool::Sapling | Pool::Orchard => {
-                        if !config.use_transparent { continue }
-                        fill_order(Pool::Transparent, pool, order, initial_pool, &mut allocation, &mut fills);
-                    }
-                };
+                        Pool::Sapling | Pool::Orchard if use_transparent => {
+                            fill_order(Pool::Transparent, pool, order, initial_pool, &mut allocation, &mut fills);
+                        }
+                        _ => {}
+                    };
+                }
             }
         }
-        assert_eq!(policy, PrivacyPolicy::AnyPool);
-        break;
+    }
+
+    // t2t
+    for order in orders.iter_mut() {
+        if use_transparent && order.destinations[Pool::Transparent as usize].is_some() {
+            fill_order(Pool::Transparent, Pool::Transparent, order, initial_pool, &mut allocation, &mut fills);
+        }
     }
 
     let execution = Execution {
@@ -134,14 +143,6 @@ impl Pool {
             Pool::Transparent => None,
             Pool::Sapling => Some(Pool::Orchard),
             Pool::Orchard => Some(Pool::Sapling),
-        }
-    }
-
-    fn is_shielded(&self) -> bool {
-        match self {
-            Pool::Transparent => false,
-            Pool::Sapling => true,
-            Pool::Orchard => true,
         }
     }
 }

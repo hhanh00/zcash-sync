@@ -97,6 +97,7 @@ pub struct Fill {
     pub id_order: u32,
     pub destination: Destination,
     pub amount: u64,
+    #[serde(skip)]
     pub is_fee: bool,
 }
 
@@ -110,6 +111,7 @@ pub struct Execution {
 pub struct TransactionPlan {
     pub spends: Vec<UTXO>,
     pub outputs: Vec<Fill>,
+    pub fee: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -168,8 +170,21 @@ impl Sub for PoolAllocation {
 pub struct NoteSelectConfig {
     pub privacy_policy: PrivacyPolicy,
     pub use_transparent: bool,
+    pub use_shielded: bool,
     pub precedence: PoolPrecedence,
     pub change_address: String,
+}
+
+impl NoteSelectConfig {
+    pub fn new(change_address: &str) -> Self {
+        NoteSelectConfig {
+            privacy_policy: PrivacyPolicy::SamePoolTypeOnly,
+            use_transparent: false,
+            use_shielded: true,
+            precedence: [ Pool::Transparent, Pool::Sapling, Pool::Orchard ], // We prefer to keep our orchard notes
+            change_address: change_address.to_string()
+        }
+    }
 }
 
 impl Source {
