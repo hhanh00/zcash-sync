@@ -48,14 +48,14 @@ pub enum Pool {
     Orchard = 2,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Order {
     pub id: u32,
     pub destinations: [Option<Destination>; 3],
     pub amount: u64,
     #[serde(with = "MemoBytesProxy")]
     pub memo: MemoBytes,
-    pub no_fee: bool,
+    pub is_fee: bool,
 
     pub filled: u64, // mutable
 }
@@ -86,7 +86,7 @@ impl Default for Order {
             destinations: [None; 3],
             amount: 0,
             memo: MemoBytes::empty(),
-            no_fee: false,
+            is_fee: false,
             filled: 0
         }
     }

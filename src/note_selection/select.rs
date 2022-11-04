@@ -92,7 +92,7 @@ pub fn note_select_with_fee<F: FeeCalculator>(utxos: &[UTXO], orders: &mut [Orde
             destinations: ANY_DESTINATION,
             amount: fee,
             memo: MemoBytes::empty(),
-            no_fee: true, // do not include in fee calculation
+            is_fee: true, // do not include in fee calculation
             filled: 0,
         };
 

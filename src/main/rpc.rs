@@ -179,10 +179,10 @@ pub fn get_address() -> Result<String, Error> {
     Ok(address)
 }
 
-#[get("/unified_address")]
-pub fn get_unified_address() -> Result<String, Error> {
+#[get("/unified_address?<t>&<s>&<o>")]
+pub fn get_unified_address(t: u8, s: u8, o: u8) -> Result<String, Error> {
     let c = CoinConfig::get_active();
-    let address = warp_api_ffi::api::account::get_unified_address(c.coin, c.id_account)?;
+    let address = warp_api_ffi::api::account::get_unified_address(c.coin, c.id_account, t != 0, s != 0, o != 0)?;
     Ok(address)
 }
 

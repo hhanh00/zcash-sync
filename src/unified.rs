@@ -104,14 +104,6 @@ pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<Dec
     Ok(decoded_ua)
 }
 
-fn network2network(n: &Network) -> zcash_address::Network {
-    match n {
-        Network::MainNetwork => zcash_address::Network::Main,
-        Network::TestNetwork => zcash_address::Network::Test,
-        Network::YCashMainNetwork => zcash_address::Network::Main,
-        Network::YCashTestNetwork => zcash_address::Network::Test,
-        Network::PirateChainMainNetwork => zcash_address::Network::Main,
-    }
-}
+fn network2network(n: &Network) -> zcash_address::Network { n.address_network().unwrap() }
 
 // u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qqmktzwktw772nlle6skkkxwmtzxaan3slntqev03g70tzpky3c58hfgvfjkcky255cwqgfuzdjcktfl7pjalt5sl33se75pmga09etn9dplr98eq2g8cgmvgvx6jx2a2xhy39x96c6rumvlyt35whml87r064qdzw30e

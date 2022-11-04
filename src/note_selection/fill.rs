@@ -53,21 +53,21 @@ pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, use_t
     let mut allocation: PoolAllocation = PoolAllocation::default();
     let mut fills = vec![];
 
-    // Direct Shielded Fill - s2s, o2o
-    if use_shielded {
-        for order in orders.iter_mut() {
+    for order in orders.iter_mut() {
+        // log::info!("Order {:?}", order);
+        // Direct Shielded Fill - s2s, o2o
+        // t2t only for fees
+        if use_shielded {
             for &pool in precedence {
-                if pool == Pool::Transparent { continue }
+                if pool == Pool::Transparent && !order.is_fee { continue }
                 if order.destinations[pool as usize].is_some() {
                     fill_order(pool, pool, order, initial_pool, &mut allocation, &mut fills);
                 }
             }
         }
-    }
 
-    if privacy_policy != PrivacyPolicy::SamePoolOnly {
-        // Indirect Shielded - z2z: s2o, o2s
-        for order in orders.iter_mut() {
+        if privacy_policy != PrivacyPolicy::SamePoolOnly {
+            // Indirect Shielded - z2z: s2o, o2s
             for &pool in precedence {
                 if order.destinations[pool as usize].is_none() { continue }
                 if !use_shielded { continue }
@@ -75,11 +75,9 @@ pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, use_t
                     fill_order(from_pool, pool, order, initial_pool, &mut allocation, &mut fills);
                 }
             }
-        }
 
-        if privacy_policy == PrivacyPolicy::AnyPool {
-            // Other - s2t, o2t, t2s, t2o
-            for order in orders.iter_mut() {
+            if privacy_policy == PrivacyPolicy::AnyPool {
+                // Other - s2t, o2t, t2s, t2o
                 for &pool in precedence {
                     if order.destinations[pool as usize].is_none() { continue }
                     match pool {
@@ -98,10 +96,8 @@ pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, use_t
                 }
             }
         }
-    }
 
-    // t2t
-    for order in orders.iter_mut() {
+        // t2t
         if use_transparent && order.destinations[Pool::Transparent as usize].is_some() {
             fill_order(Pool::Transparent, Pool::Transparent, order, initial_pool, &mut allocation, &mut fills);
         }
@@ -130,8 +126,9 @@ fn fill_order(from: Pool, to: Pool, order: &mut Order, initial_pool: &PoolAlloca
             id_order: order.id,
             destination: destination.clone(),
             amount,
-            is_fee: order.no_fee,
+            is_fee: order.is_fee,
         };
+        log::info!("{:?}", execution);
         executions.push(execution);
     }
     assert!(order.amount == order.filled || initial_pool.0[from] == fills.0[from]); // fill must be to the max

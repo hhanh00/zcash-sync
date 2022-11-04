@@ -16,6 +16,7 @@ use std::fs::File;
 use std::io::BufReader;
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
 use zcash_primitives::consensus::Parameters;
+use crate::unified::UnifiedAddressType;
 use crate::zip32::derive_zip32;
 
 /// Create a new account
@@ -299,12 +300,18 @@ pub async fn import_sync_data(coin: u8, file: &str) -> anyhow::Result<()> {
 /// # Arguments
 /// * `coin`: 0 for zcash, 1 for ycash
 /// * `id_account`: account id as returned from [new_account]
+/// * t, s, o: include transparent, sapling, orchard receivers?
 ///
 /// The address depends on the UA settings and may include transparent, sapling & orchard receivers
-pub fn get_unified_address(coin: u8, id_account: u32) -> anyhow::Result<String> {
+pub fn get_unified_address(coin: u8, id_account: u32, t: bool, s: bool, o: bool) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
-    let address = crate::get_unified_address(c.chain.network(), &db, id_account, None)?; // use ua settings from db
+    let tpe = UnifiedAddressType {
+        transparent: t,
+        sapling: s,
+        orchard: o
+    };
+    let address = crate::get_unified_address(c.chain.network(), &db, id_account, Some(tpe))?; // use ua settings from db
     Ok(address)
 }
 

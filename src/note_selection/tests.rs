@@ -7,11 +7,13 @@ use super::{*, types::*, fill::*};
 
 // must have T+S+O receivers
 const CHANGE_ADDRESS: &str = "u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qqmktzwktw772nlle6skkkxwmtzxaan3slntqev03g70tzpky3c58hfgvfjkcky255cwqgfuzdjcktfl7pjalt5sl33se75pmga09etn9dplr98eq2g8cgmvgvx6jx2a2xhy39x96c6rumvlyt35whml87r064qdzw30e";
+const UA_TSO: &str = "uregtest1mxy5wq2n0xw57nuxa4lqpl358zw4vzyfgadsn5jungttmqcv6nx6cpx465dtpzjzw0vprjle4j4nqqzxtkuzm93regvgg4xce0un5ec6tedquc469zjhtdpkxz04kunqqyasv4rwvcweh3ue0ku0payn29stl2pwcrghyzscrrju9ar57rn36wgz74nmynwcyw27rjd8yk477l97ez8";
+const UA_O: &str = "uregtest1mzt5lx5s5u8kczlfr82av97kjckmfjfuq8y9849h6cl9chhdekxsm6r9dklracflqwplrnfzm5rucp5txfdm04z5myrde8y3y5rayev8";
 
 fn init() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     init_coin(0, "./zec.db").unwrap();
-    set_coin_lwd_url(0, "https://lwdv3.zecwallet.co:443");
+    set_coin_lwd_url(0, "http://127.0.0.1:9067");
 }
 
 #[tokio::test]
@@ -22,6 +24,8 @@ async fn test_fetch_utxo() {
     for utxo in utxos.iter() {
         log::info!("{:?}", utxo);
     }
+
+    assert_eq!(utxos[0].amount, 624999000);
 }
 
 #[test]
@@ -41,29 +45,28 @@ async fn test_payment() {
 
     let recipients = vec![
         RecipientMemo {
-            // has T+S+O receivers
-            address: "u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qqmktzwktw772nlle6skkkxwmtzxaan3slntqev03g70tzpky3c58hfgvfjkcky255cwqgfuzdjcktfl7pjalt5sl33se75pmga09etn9dplr98eq2g8cgmvgvx6jx2a2xhy39x96c6rumvlyt35whml87r064qdzw30e".to_string(),
+            address: UA_O.to_string(),
             amount: 89000,
             memo: Memo::Empty.into(),
             max_amount_per_note: 0,
         }
     ];
-    let tx_plan = prepare_multi_payment(0, 1, 1900000,
+    let tx_plan = prepare_multi_payment(0, 1, 205,
                                         &recipients, &config, 3,
     ).await.unwrap();
 
     let tx_json = serde_json::to_string(&tx_plan).unwrap();
     println!("{}", tx_json);
 
-    // expected: o2o because the recipient ua has an orchard receiver
+    // expected: s2o because the recipient ua has only an orchard receiver
     assert_eq!(tx_plan.outputs[0].destination.pool(), Pool::Orchard);
     assert_eq!(tx_plan.outputs[0].amount, 89000);
+    assert_eq!(tx_plan.outputs[1].destination.pool(), Pool::Sapling); // change goes back to sapling
+    assert_eq!(tx_plan.outputs[1].amount, 624900000);
     // fee = 10000 per zip-317
-    assert_eq!(tx_plan.outputs[1].amount, 10000);
-    assert_eq!(tx_plan.outputs[1].is_fee, true);
-    // change has to cross pools because the change address does not receive orchard
-    assert_eq!(tx_plan.outputs[2].destination.pool(), Pool::Sapling);
-    assert_eq!(tx_plan.outputs[2].amount, 1000);
+    assert_eq!(tx_plan.fee, 10000);
+
+    assert_eq!(tx_plan.spends[0].amount, tx_plan.outputs[0].amount + tx_plan.outputs[1].amount + tx_plan.fee);
 }
 
 fn mock_order(id: u32, amount: u64, tpe: u8) -> Order {
@@ -83,7 +86,7 @@ fn mock_order(id: u32, amount: u64, tpe: u8) -> Order {
         destinations,
         amount,
         memo: MemoBytes::empty(),
-        no_fee: false,
+        is_fee: false,
         filled: 0,
     }
 }
@@ -95,7 +98,7 @@ macro_rules! order {
             amount: $q * 1000,
             destinations: $destinations,
             filled: 0,
-            no_fee: false,
+            is_fee: false,
             memo: MemoBytes::empty(),
         }
     };
@@ -183,7 +186,7 @@ macro_rules! tso {
 
 #[test]
 fn test_example1() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
     config.use_transparent = true;
     config.privacy_policy = PrivacyPolicy::AnyPool;
@@ -193,11 +196,15 @@ fn test_example1() {
 
     let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
+
+    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":5000},{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":2}},"amount":7000},{"source":{"Sapling":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":12000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":10000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":4000}],"fee":20000}"#).unwrap();
+    assert_eq!(tx_plan_json, expected);
 }
 
 #[test]
 fn test_example2() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
     config.privacy_policy = PrivacyPolicy::AnyPool;
 
@@ -206,11 +213,15 @@ fn test_example2() {
 
     let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
+
+    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":5000},{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":2}},"amount":7000},{"source":{"Sapling":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":12000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":10000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":4000}],"fee":20000}"#).unwrap();
+    assert_eq!(tx_plan_json, expected);
 }
 
 #[test]
 fn test_example3() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
     config.use_transparent = true;
     config.privacy_policy = PrivacyPolicy::AnyPool;
@@ -223,7 +234,7 @@ fn test_example3() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":100000},{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":160000},{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":70000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":2,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":20000},{"id_order":3,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000},{"id_order":4,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000},{"id_order":5,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":50000},{"id_order":6,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":60000},{"id_order":7,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000},{"id_order":7,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":55000}],"fee":45000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":100000},{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":160000},{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":70000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":2,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":20000},{"id_order":3,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000},{"id_order":4,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000},{"id_order":5,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":50000},{"id_order":6,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":60000},{"id_order":7,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000},{"id_order":7,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":55000}],"fee":45000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
 
@@ -231,7 +242,7 @@ fn test_example3() {
 ///
 #[test]
 fn test_example4() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
     config.use_transparent = true;
 
@@ -240,13 +251,17 @@ fn test_example4() {
 
     let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
+
+    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":30000}],"fee":10000}"#).unwrap();
+    assert_eq!(tx_plan_json, expected);
 }
 
 /// A simple z2z
 ///
 #[test]
 fn test_example5() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let config = NoteSelectConfig::new(CHANGE_ADDRESS);
 
     // z2z are preferred over t2z, so we can keep the t-notes
@@ -255,13 +270,17 @@ fn test_example5() {
 
     let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
+
+    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000}],"fee":10000}"#).unwrap();
+    assert_eq!(tx_plan_json, expected);
 }
 
 /// A simple z2z
 ///
 #[test]
 fn test_example5b() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let config = NoteSelectConfig::new(CHANGE_ADDRESS);
 
     // z2z are preferred over t2z, so we can keep the t-notes
@@ -270,12 +289,16 @@ fn test_example5b() {
 
     let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
+
+    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":30000}],"fee":10000}"#).unwrap();
+    assert_eq!(tx_plan_json, expected);
 }
  /// A simple z2t sapling
 ///
 #[test]
 fn test_example6() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
     config.privacy_policy = PrivacyPolicy::AnyPool;
 
@@ -285,13 +308,17 @@ fn test_example6() {
 
     let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
-}
+
+     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+     let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000}],"fee":10000}"#).unwrap();
+     assert_eq!(tx_plan_json, expected);
+ }
 
 /// A simple o2t
 ///
 #[test]
 fn test_example7() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
     config.precedence = [ Pool::Orchard, Pool::Sapling, Pool::Transparent ];
     config.privacy_policy = PrivacyPolicy::AnyPool;
@@ -302,13 +329,17 @@ fn test_example7() {
 
     let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
+
+    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":30000}],"fee":10000}"#).unwrap();
+    assert_eq!(tx_plan_json, expected);
 }
 
 /// A simple t2z
 ///
 #[test]
 fn test_example8() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
     config.privacy_policy = PrivacyPolicy::AnyPool;
     config.use_transparent = true;
@@ -319,13 +350,17 @@ fn test_example8() {
 
     let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
+
+    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":30000}],"fee":10000}"#).unwrap();
+    assert_eq!(tx_plan_json, expected);
 }
 
 /// A simple z2z (Sapling/Orchard)
 ///
 #[test]
 fn test_example9() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
 
     let utxos = [utxo!(1, 50), sapling!(2, 50)];
@@ -333,4 +368,8 @@ fn test_example9() {
 
     let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
+
+    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000}],"fee":10000}"#).unwrap();
+    assert_eq!(tx_plan_json, expected);
 }
