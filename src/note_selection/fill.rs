@@ -2,13 +2,14 @@ use std::cmp::min;
 use zcash_address::{AddressKind, ZcashAddress};
 use zcash_address::unified::{Container, Receiver};
 use zcash_primitives::memo::MemoBytes;
-use crate::note_selection::types::{PrivacyPolicy, Fill, Execution, Order, Pool, PoolAllocation, Destination, PoolPrecedence};
+use crate::note_selection::types::{PrivacyPolicy, Fill, Execution, Order, Pool, PoolAllocation, Destination, PoolPrecedence, PoolPriority};
 
 /// Decode address and return it as an order
 ///
 pub fn decode(id: u32, address: &str, amount: u64, memo: MemoBytes) -> anyhow::Result<Order> {
     let address = ZcashAddress::try_from_encoded(address)?;
     let mut order = Order::default();
+    let mut precedence = order.priority.to_pool_precedence().clone();
     order.id = id;
     match address.kind {
         AddressKind::Sprout(_) => {}
@@ -17,7 +18,7 @@ pub fn decode(id: u32, address: &str, amount: u64, memo: MemoBytes) -> anyhow::R
             order.destinations[Pool::Sapling as usize] = Some(destination);
         }
         AddressKind::Unified(unified_address) => {
-            for address in unified_address.items() {
+            for (i, address) in unified_address.items().into_iter().enumerate() {
                 match address {
                     Receiver::Orchard(data) => {
                         let destination = Destination::Orchard(data);
@@ -54,11 +55,12 @@ pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, use_t
     let mut fills = vec![];
 
     for order in orders.iter_mut() {
+        let order_precedence = order.priority.to_pool_precedence();
         // log::info!("Order {:?}", order);
         // Direct Shielded Fill - s2s, o2o
         // t2t only for fees
         if use_shielded {
-            for &pool in precedence {
+            for &pool in order_precedence {
                 if pool == Pool::Transparent && !order.is_fee { continue }
                 if order.destinations[pool as usize].is_some() {
                     fill_order(pool, pool, order, initial_pool, &mut allocation, &mut fills);
@@ -68,7 +70,7 @@ pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, use_t
 
         if privacy_policy != PrivacyPolicy::SamePoolOnly {
             // Indirect Shielded - z2z: s2o, o2s
-            for &pool in precedence {
+            for &pool in order_precedence {
                 if order.destinations[pool as usize].is_none() { continue }
                 if !use_shielded { continue }
                 if let Some(from_pool) = pool.other_shielded() {
@@ -78,7 +80,7 @@ pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, use_t
 
             if privacy_policy == PrivacyPolicy::AnyPool {
                 // Other - s2t, o2t, t2s, t2o
-                for &pool in precedence {
+                for &pool in order_precedence {
                     if order.destinations[pool as usize].is_none() { continue }
                     match pool {
                         Pool::Transparent if use_shielded => {
@@ -94,12 +96,12 @@ pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, use_t
                         _ => {}
                     };
                 }
-            }
-        }
 
-        // t2t
-        if use_transparent && order.destinations[Pool::Transparent as usize].is_some() {
-            fill_order(Pool::Transparent, Pool::Transparent, order, initial_pool, &mut allocation, &mut fills);
+                // t2t
+                if use_transparent && order.destinations[Pool::Transparent as usize].is_some() {
+                    fill_order(Pool::Transparent, Pool::Transparent, order, initial_pool, &mut allocation, &mut fills);
+                }
+            }
         }
     }
 

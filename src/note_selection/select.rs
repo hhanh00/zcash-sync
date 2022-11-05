@@ -4,7 +4,7 @@ use zcash_primitives::memo::MemoBytes;
 use crate::note_selection::decode;
 use crate::note_selection::fee::FeeCalculator;
 use crate::note_selection::fill::execute_orders;
-use crate::note_selection::types::{NoteSelectConfig, Order, PoolAllocation, UTXO, Destination, TransactionPlan, Fill, PoolPrecedence};
+use crate::note_selection::types::{NoteSelectConfig, Order, PoolAllocation, UTXO, Destination, TransactionPlan, Fill, PoolPrecedence, PoolPriority};
 
 pub fn select_notes(allocation: &PoolAllocation, utxos: &[UTXO]) -> anyhow::Result<Vec<UTXO>> {
     let mut allocation = allocation.clone();
@@ -82,14 +82,6 @@ pub fn note_select_with_fee<F: FeeCalculator>(utxos: &[UTXO], orders: &mut [Orde
             fee = F::calculate_fee(&notes, &executor.fills);
             log::debug!("base fee: {}", fee);
         }
-        let mut fee_order = Order {
-            id: u32::MAX,
-            destinations: ANY_DESTINATION,
-            amount: fee,
-            memo: MemoBytes::empty(),
-            is_fee: true, // do not include in fee calculation
-            filled: 0,
-        };
 
         // Favor the pools that are already used, because it may cause lower fees
         let pool_needed = executor.pool_used;
@@ -97,6 +89,15 @@ pub fn note_select_with_fee<F: FeeCalculator>(utxos: &[UTXO], orders: &mut [Orde
         let prec_2 = config.precedence.iter().filter(|&&p| pool_needed.0[p as usize] == 0);
         let fee_precedence: PoolPrecedence = prec_1.chain(prec_2).cloned().collect::<Vec<_>>().try_into().unwrap();
         log::debug!("Fee precedence: {:?}", fee_precedence);
+        let mut fee_order = Order {
+            id: u32::MAX,
+            destinations: ANY_DESTINATION,
+            priority: fee_precedence.try_into().unwrap(),
+            amount: fee,
+            memo: MemoBytes::empty(),
+            is_fee: true, // do not include in fee calculation
+            filled: 0,
+        };
 
         if !executor.execute(slice::from_mut(&mut fee_order), &fee_precedence)? {
             anyhow::bail!("Unsufficient Funds [fees]")

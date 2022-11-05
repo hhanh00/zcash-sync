@@ -1,4 +1,5 @@
 use std::ops::{Add, Sub};
+use anyhow::anyhow;
 use zcash_primitives::memo::MemoBytes;
 use serde::Serialize;
 use serde_with::serde_as;
@@ -52,6 +53,7 @@ pub enum Pool {
 pub struct Order {
     pub id: u32,
     pub destinations: [Option<Destination>; 3],
+    pub priority: PoolPriority,
     pub amount: u64,
     #[serde(with = "MemoBytesProxy")] pub memo: MemoBytes,
     pub is_fee: bool,
@@ -83,6 +85,7 @@ impl Default for Order {
         Order {
             id: 0,
             destinations: [None; 3],
+            priority: PoolPriority::OST,
             amount: 0,
             memo: MemoBytes::empty(),
             is_fee: false,
@@ -204,5 +207,43 @@ impl Destination {
             Destination::Sapling { .. } => Pool::Sapling,
             Destination::Orchard { .. } => Pool::Orchard,
         }
+    }
+}
+
+#[derive(Clone, Copy, Serialize, Debug)]
+pub enum PoolPriority {
+    TSO = 1,
+    OST = 2,
+    TOS = 3,
+    SOT = 4,
+    OTS = 5,
+    STO = 6,
+}
+
+impl PoolPriority {
+    const VALUES: [PoolPriority; 6] = [ PoolPriority::TSO, PoolPriority::OST, PoolPriority::TOS, PoolPriority::SOT, PoolPriority::OTS, PoolPriority::STO];
+    pub fn to_pool_precedence(&self) -> &'static PoolPrecedence {
+        match self {
+            PoolPriority::TSO => &[ Pool:: Transparent, Pool::Sapling, Pool::Orchard ],
+            PoolPriority::OST => &[ Pool::Orchard, Pool::Sapling, Pool:: Transparent ],
+            PoolPriority::TOS => &[ Pool:: Transparent, Pool::Orchard, Pool::Sapling ],
+            PoolPriority::SOT => &[ Pool::Sapling, Pool::Orchard, Pool:: Transparent ],
+            PoolPriority::OTS => &[ Pool::Orchard, Pool:: Transparent, Pool::Sapling ],
+            PoolPriority::STO => &[ Pool::Sapling, Pool:: Transparent, Pool::Orchard ],
+        }
+    }
+}
+
+impl TryFrom<PoolPrecedence> for PoolPriority {
+    type Error = anyhow::Error;
+
+    fn try_from(value: PoolPrecedence) -> Result<Self, Self::Error> {
+        let p: [Pool; 3] = value.try_into().unwrap();
+        for pp in PoolPriority::VALUES {
+            if p == *pp.to_pool_precedence() {
+                return Ok(pp)
+            }
+        }
+        Err(anyhow!("Pool preference invalid"))
     }
 }

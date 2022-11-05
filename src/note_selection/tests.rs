@@ -75,6 +75,7 @@ macro_rules! order {
             id: $id,
             amount: $q * 1000,
             destinations: $destinations,
+            priority: PoolPriority::OST,
             filled: 0,
             is_fee: false,
             memo: MemoBytes::empty(),
@@ -176,7 +177,7 @@ fn test_example1() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":5000},{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":2}},"amount":7000},{"source":{"Sapling":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":12000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":10000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":4000}],"fee":20000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":5000},{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":2}},"amount":7000},{"source":{"Sapling":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":12000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":10000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":4000,"memo":[246]}],"fee":20000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
 
@@ -193,7 +194,7 @@ fn test_example2() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":5000},{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":2}},"amount":7000},{"source":{"Sapling":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":12000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":10000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":4000}],"fee":20000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":5000},{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":2}},"amount":7000},{"source":{"Sapling":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":12000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":10000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":4000,"memo":[246]}],"fee":20000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
 
@@ -212,7 +213,7 @@ fn test_example3() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":100000},{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":160000},{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":70000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":2,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":20000},{"id_order":3,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000},{"id_order":4,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000},{"id_order":5,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":50000},{"id_order":6,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":60000},{"id_order":7,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000},{"id_order":7,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":55000}],"fee":45000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":100000},{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":160000},{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":70000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":2,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":20000,"memo":[246]},{"id_order":3,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000,"memo":[246]},{"id_order":4,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000,"memo":[246]},{"id_order":5,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":50000,"memo":[246]},{"id_order":6,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000,"memo":[246]},{"id_order":6,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":20000,"memo":[246]},{"id_order":7,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":70000,"memo":[246]},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":55000,"memo":[246]}],"fee":45000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
 
@@ -223,6 +224,8 @@ fn test_example4() {
     let _ = env_logger::try_init();
     let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
     config.use_transparent = true;
+    config.use_shielded = false;
+    config.privacy_policy = PrivacyPolicy::AnyPool;
 
     let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
     let mut orders = [t!(1, 10)];
@@ -231,7 +234,7 @@ fn test_example4() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":30000}],"fee":10000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
 
@@ -250,7 +253,7 @@ fn test_example5() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000}],"fee":10000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
 
@@ -269,7 +272,7 @@ fn test_example5b() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":30000}],"fee":10000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
  /// A simple z2t sapling
@@ -288,7 +291,7 @@ fn test_example6() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
      let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-     let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000}],"fee":10000}"#).unwrap();
+     let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
      assert_eq!(tx_plan_json, expected);
  }
 
@@ -309,7 +312,7 @@ fn test_example7() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":30000}],"fee":10000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
 
@@ -330,7 +333,7 @@ fn test_example8() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":30000}],"fee":10000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
 
@@ -348,6 +351,6 @@ fn test_example9() {
     println!("{}", serde_json::to_string(&tx_plan).unwrap());
 
     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000}],"fee":10000}"#).unwrap();
+    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
