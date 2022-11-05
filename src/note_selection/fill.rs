@@ -1,8 +1,8 @@
 use std::cmp::min;
 use zcash_address::{AddressKind, ZcashAddress};
 use zcash_address::unified::{Container, Receiver};
-use zcash_primitives::memo::{Memo, MemoBytes};
-use crate::note_selection::types::{PrivacyPolicy, NoteSelectConfig, Fill, Execution, Order, Pool, PoolAllocation, Destination, PoolPrecedence};
+use zcash_primitives::memo::MemoBytes;
+use crate::note_selection::types::{PrivacyPolicy, Fill, Execution, Order, Pool, PoolAllocation, Destination, PoolPrecedence};
 
 /// Decode address and return it as an order
 ///
@@ -126,9 +126,10 @@ fn fill_order(from: Pool, to: Pool, order: &mut Order, initial_pool: &PoolAlloca
             id_order: order.id,
             destination: destination.clone(),
             amount,
+            memo: order.memo.clone(),
             is_fee: order.is_fee,
         };
-        log::info!("{:?}", execution);
+        log::debug!("{:?}", execution);
         executions.push(execution);
     }
     assert!(order.amount == order.filled || initial_pool.0[from] == fills.0[from]); // fill must be to the max

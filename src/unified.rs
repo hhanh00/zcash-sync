@@ -1,10 +1,8 @@
 use anyhow::anyhow;
 use orchard::Address;
 use orchard::keys::{FullViewingKey, Scope};
-use rusqlite::Connection;
 use zcash_address::{ToAddress, unified, ZcashAddress};
 use zcash_address::unified::{Container, Encoding, Receiver};
-use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{AddressCodec, decode_payment_address, encode_payment_address};
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
@@ -58,7 +56,6 @@ pub fn get_unified_address(network: &Network, db: &DbAdapter, account: u32, tpe:
         rcvs.push(rcv);
     }
     if tpe.orchard {
-        let AccountData { address: zaddr, .. } = db.get_account_info(account)?;
         let okey = db.get_orchard(account)?;
         if let Some(okey) = okey {
             let fvk = FullViewingKey::from_bytes(&okey.fvk).unwrap();

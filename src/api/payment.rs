@@ -206,6 +206,12 @@ pub struct Recipient {
     pub max_amount_per_note: u64,
 }
 
+#[derive(Deserialize)]
+pub struct RecipientShort {
+    pub address: String,
+    pub amount: u64,
+}
+
 pub struct RecipientMemo {
     pub address: String,
     pub amount: u64,
@@ -225,6 +231,17 @@ impl RecipientMemo {
             amount: r.amount,
             memo: Memo::from_str(&memo).unwrap(),
             max_amount_per_note: r.max_amount_per_note,
+        }
+    }
+}
+
+impl From<RecipientShort> for RecipientMemo {
+    fn from(r: RecipientShort) -> Self {
+        RecipientMemo {
+            address: r.address,
+            amount: r.amount,
+            memo: Memo::Empty,
+            max_amount_per_note: 0
         }
     }
 }

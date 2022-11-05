@@ -12,7 +12,7 @@ mod hash;
 mod note;
 
 pub use note::{SaplingDecrypter, SaplingViewKey, DecryptedSaplingNote};
-pub use hash::SaplingHasher;
+pub use hash::{SaplingHasher, SAPLING_ROOTS};
 
 fn read_generators_bin() -> Vec<ExtendedNielsPoint> {
     let mut generators_bin = GENERATORS;

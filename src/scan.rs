@@ -101,6 +101,7 @@ pub async fn sync_async<'a>(
         return Ok(());
     }
 
+    let mut height = start_height;
     let (blocks_tx, mut blocks_rx) = mpsc::channel::<Blocks>(1);
     tokio::spawn(async move {
         download_chain(&mut client, start_height, end_height, prev_hash, max_cost, cancel, blocks_tx).await?;
@@ -128,7 +129,7 @@ pub async fn sync_async<'a>(
                 db_builder.clone(),
                 "sapling".to_string(),
             );
-            synchronizer.initialize()?;
+            synchronizer.initialize(height)?;
             synchronizer.process(&blocks.0)?;
         }
 
@@ -144,12 +145,13 @@ pub async fn sync_async<'a>(
                 db_builder.clone(),
                 "orchard".to_string(),
             );
-            synchronizer.initialize()?;
+            synchronizer.initialize(height)?;
             synchronizer.process(&blocks.0)?;
         }
 
         let db = db_builder.build()?;
         db.store_block_timestamp(last_height, &last_hash, last_timestamp)?;
+        height = last_height;
     }
 
     Ok(())

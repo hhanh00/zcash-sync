@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 use byteorder::WriteBytesExt;
 use group::Curve;
 use zcash_encoding::{Optional, Vector};
+use crate::Hash;
 
 pub type Node = [u8; 32];
 
@@ -15,6 +16,17 @@ pub trait Hasher: Clone + Sync {
 
     fn node_combine_extended(&self, depth: u8, left: &Node, right: &Node) -> Self::Extended;
     fn normalize(&self, extended: &[Self::Extended]) -> Vec<Node>;
+
+    fn empty_roots(&self, height: usize) -> Vec<Hash> {
+        let mut roots = vec![];
+        let mut cur = Self::uncommited_node();
+        roots.push(cur);
+        for depth in 0..height {
+            cur = self.node_combine(depth as u8, &cur, &cur);
+            roots.push(cur);
+        }
+        roots
+    }
 }
 
 #[derive(Clone)]
@@ -145,7 +157,7 @@ impl Witness {
         }
     }
 
-    pub fn auth_path<H: Hasher>(&self, height: usize, empty_roots: &[Node], hasher: H) -> Vec<Node> {
+    pub fn auth_path<H: Hasher>(&self, height: usize, empty_roots: &[Node], hasher: &H) -> Vec<Node> {
         let mut filled_iter = self.filled.iter();
         let mut cursor_used = false;
         let mut next_filler = move |depth: usize| {
@@ -153,7 +165,7 @@ impl Witness {
                 *f
             } else if !cursor_used {
                 cursor_used = true;
-                self.cursor.root(depth, empty_roots, &hasher)
+                self.cursor.root(depth, empty_roots, hasher)
             } else {
                 empty_roots[depth]
             }

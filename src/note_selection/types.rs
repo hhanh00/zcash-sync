@@ -1,5 +1,5 @@
 use std::ops::{Add, Sub};
-use zcash_primitives::memo::{Memo, MemoBytes};
+use zcash_primitives::memo::MemoBytes;
 use serde::Serialize;
 use serde_with::serde_as;
 use serde_hex::{SerHex,Strict};
@@ -53,8 +53,7 @@ pub struct Order {
     pub id: u32,
     pub destinations: [Option<Destination>; 3],
     pub amount: u64,
-    #[serde(with = "MemoBytesProxy")]
-    pub memo: MemoBytes,
+    #[serde(with = "MemoBytesProxy")] pub memo: MemoBytes,
     pub is_fee: bool,
 
     pub filled: u64, // mutable
@@ -97,6 +96,7 @@ pub struct Fill {
     pub id_order: u32,
     pub destination: Destination,
     pub amount: u64,
+    #[serde(with = "MemoBytesProxy")] pub memo: MemoBytes,
     #[serde(skip)]
     pub is_fee: bool,
 }
@@ -107,7 +107,7 @@ pub struct Execution {
     pub fills: Vec<Fill>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 pub struct TransactionPlan {
     pub spends: Vec<UTXO>,
     pub outputs: Vec<Fill>,

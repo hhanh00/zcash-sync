@@ -1,9 +1,18 @@
 use ff::PrimeField;
 use group::Curve;
 use jubjub::{AffinePoint, ExtendedPoint, Fr};
+use lazy_static::lazy_static;
 use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 use crate::sync::{Hasher, Node};
+use crate::Hash;
 use super::GENERATORS_EXP;
+
+lazy_static! {
+    pub static ref SAPLING_ROOTS: Vec<Hash> = {
+        let h = SaplingHasher {};
+        h.empty_roots(32)
+    };
+}
 
 #[inline(always)]
 fn accumulate_scalar(acc: &mut Fr, cur: &mut Fr, x: u8) {

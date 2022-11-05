@@ -1,5 +1,4 @@
 use std::cmp::max;
-use zcash_primitives::memo::MemoBytes;
 use crate::note_selection::types::*;
 
 const MARGINAL_FEE: u64 = 5000;

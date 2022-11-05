@@ -72,17 +72,6 @@ impl OrchardHasher {
         }
         acc
     }
-
-    pub fn empty_roots(&self, height: usize) -> Vec<Hash> {
-        let mut roots = vec![];
-        let mut cur = pallas::Base::from(2).to_repr();
-        roots.push(cur);
-        for depth in 0..height {
-            cur = self.node_combine(depth as u8, &cur, &cur);
-            roots.push(cur);
-        }
-        roots
-    }
 }
 
 impl Hasher for OrchardHasher {

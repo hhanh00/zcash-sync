@@ -423,8 +423,10 @@ impl DbAdapter {
         db_tx: &Transaction,
     ) -> anyhow::Result<u32> {
         log::info!("+received_note {} {:?}", id_tx, note);
-        db_tx.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, rho, nf, spent)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)", params![note.account, id_tx, note.height, position as u32, note.output_index, note.diversifier, note.value as i64, note.rcm, note.rho, note.nf, note.spent])?;
+        let orchard = note.rho.is_some();
+        db_tx.execute("INSERT INTO received_notes(account, tx, height, position, output_index, diversifier, value, rcm, rho, nf, orchard, spent)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)", params![note.account, id_tx, note.height, position as u32, note.output_index,
+            note.diversifier, note.value as i64, note.rcm, note.rho, note.nf, orchard, note.spent])?;
         let id_note: u32 = db_tx
             .query_row(
                 "SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2",
@@ -560,27 +562,16 @@ impl DbAdapter {
         }))
     }
 
-    pub fn get_tree(&self) -> anyhow::Result<(TreeCheckpoint, TreeCheckpoint)> {
-        self.get_tree_by_name("sapling")?; // TODO: pack in TreeCheckpoint
-        todo!()
-    }
+    pub fn get_tree_by_name(&self, height: u32, shielded_pool: &str) -> anyhow::Result<TreeCheckpoint> {
+        let tree = self.connection.query_row(
+            &format!("SELECT tree FROM {}_tree WHERE height = ?1", shielded_pool),
+            [height], |row| {
+                let tree: Vec<u8> = row.get(0)?;
+                Ok(tree)
+            }).optional()?;
 
-    pub fn get_tree_by_name(&self, shielded_pool: &str) -> anyhow::Result<TreeCheckpoint> {
-        let height = self.connection.query_row(
-            "SELECT MAX(height) FROM blocks",
-            [], |row| {
-                let height: Option<u32> = row.get(0)?;
-                Ok(height)
-            })?;
-        Ok(match height {
-            Some(height) => {
-                let tree = self.connection.query_row(
-                    &format!("SELECT tree FROM {}_tree WHERE height = ?1", shielded_pool),
-                    [height], |row| {
-                        let tree: Vec<u8> = row.get(0)?;
-                        Ok(tree)
-                    })?;
-
+        match tree {
+            Some(tree) => {
                 let tree = sync::CTree::read(&*tree)?;
                 let mut statement = self.connection.prepare(
                     &format!("SELECT id_note, witness FROM {}_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND (n.spent IS NULL OR n.spent = 0)", shielded_pool))?;
@@ -593,13 +584,13 @@ impl DbAdapter {
                 for w in ws {
                     witnesses.push(w?);
                 }
-                TreeCheckpoint { tree, witnesses }
+                Ok(TreeCheckpoint { tree, witnesses })
             }
-            None => TreeCheckpoint {
+            None => Ok(TreeCheckpoint {
                 tree: CTree::new(),
                 witnesses: vec![],
-            },
-        })
+            })
+        }
     }
 
     pub fn get_nullifiers(&self) -> anyhow::Result<HashMap<Nf, NfRef>> {
@@ -965,8 +956,8 @@ impl DbAdapter {
                 "SELECT sk FROM taddrs WHERE account = ?1",
                 params![account],
                 |row| {
-                    let address: String = row.get(0)?;
-                    Ok(address)
+                    let sk: String = row.get(0)?;
+                    Ok(sk)
                 },
             )
             .optional()?;

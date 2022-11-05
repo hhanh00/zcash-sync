@@ -52,6 +52,7 @@ impl DecryptedNote<OrchardDomain, OrchardViewKey> for DecryptedOrchardNote {
     }
 
     fn to_received_note(&self, _position: u64) -> ReceivedNote {
+        log::info!("Note {:?}", self.note);
         ReceivedNote {
             account: self.vk.account,
             height: self.output_position.height,
@@ -103,9 +104,9 @@ pub fn test_decrypt() -> anyhow::Result<()> {
     // let mut cmx = hex::decode("df45e00eb39e4c281e2804a366d3010b7f663724472d12637e0a749e6ce22719").unwrap();
     // let ciphertext = hex::decode("d9bc6ee09b0afde5dd69bfdf4b667a38da3e1084e84eb6752d54800b9f5110203b60496ab5313dba3f2acb9ef30bcaf68fbfcc59").unwrap();
 
-    let mut nullifier = hex::decode("ea1b97cc83d326db4130433022f68dd32a0bc707448b19b0980e4e6404412b29").unwrap();
-    let mut epk = hex::decode("e2f666e905666f29bb678c694602b2768bea655c0f2b18f9c342ad8b64b18c0c").unwrap();
-    let mut cmx = hex::decode("4a95dbf0d1d0cac1376a0b8fb0fc2ed2843d0e2670dd976a63386b293f30de25").unwrap();
+    let nullifier = hex::decode("ea1b97cc83d326db4130433022f68dd32a0bc707448b19b0980e4e6404412b29").unwrap();
+    let epk = hex::decode("e2f666e905666f29bb678c694602b2768bea655c0f2b18f9c342ad8b64b18c0c").unwrap();
+    let cmx = hex::decode("4a95dbf0d1d0cac1376a0b8fb0fc2ed2843d0e2670dd976a63386b293f30de25").unwrap();
     let ciphertext = hex::decode("73640095a90bb03d14f687d6acf4822618a3def1da3b71a588da1c68e25042f7c9aa759778e73aa2bb39d1061e51c1e8cf5e0bce").unwrap();
 
     let db_builder = DbAdapterBuilder {

@@ -1,6 +1,5 @@
 use std::cmp::min;
 use std::slice;
-use anyhow::anyhow;
 use zcash_primitives::memo::MemoBytes;
 use crate::note_selection::decode;
 use crate::note_selection::fee::FeeCalculator;
@@ -20,10 +19,6 @@ pub fn select_notes(allocation: &PoolAllocation, utxos: &[UTXO]) -> anyhow::Resu
         }
     }
     Ok(selected)
-}
-
-fn has_unfilled(orders: &[Order]) -> bool {
-    orders.iter().any(|o| o.filled != o.amount)
 }
 
 struct OrderExecutor {
@@ -85,7 +80,7 @@ pub fn note_select_with_fee<F: FeeCalculator>(utxos: &[UTXO], orders: &mut [Orde
         if fee == 0 {
             let notes = executor.select_notes(utxos)?;
             fee = F::calculate_fee(&notes, &executor.fills);
-            log::info!("base fee: {}", fee);
+            log::debug!("base fee: {}", fee);
         }
         let mut fee_order = Order {
             id: u32::MAX,
@@ -101,7 +96,7 @@ pub fn note_select_with_fee<F: FeeCalculator>(utxos: &[UTXO], orders: &mut [Orde
         let prec_1 = config.precedence.iter().filter(|&&p| pool_needed.0[p as usize] != 0);
         let prec_2 = config.precedence.iter().filter(|&&p| pool_needed.0[p as usize] == 0);
         let fee_precedence: PoolPrecedence = prec_1.chain(prec_2).cloned().collect::<Vec<_>>().try_into().unwrap();
-        log::info!("Fee precedence: {:?}", fee_precedence);
+        log::debug!("Fee precedence: {:?}", fee_precedence);
 
         if !executor.execute(slice::from_mut(&mut fee_order), &fee_precedence)? {
             anyhow::bail!("Unsufficient Funds [fees]")
@@ -116,9 +111,9 @@ pub fn note_select_with_fee<F: FeeCalculator>(utxos: &[UTXO], orders: &mut [Orde
         let total_spent = pool_spent.total();
         let change = pool_spent - pool_needed; // must be >= 0 because the note selection covers the fills
 
-        log::info!("pool_needed: {:?} {}", pool_needed, total_needed);
-        log::info!("pool_spent: {:?} {}", pool_spent, total_spent);
-        log::info!("change: {:?}", change);
+        log::debug!("pool_needed: {:?} {}", pool_needed, total_needed);
+        log::debug!("pool_spent: {:?} {}", pool_spent, total_spent);
+        log::debug!("change: {:?}", change);
 
         for pool in 0..3 {
             if change.0[pool] != 0 {
@@ -126,6 +121,7 @@ pub fn note_select_with_fee<F: FeeCalculator>(utxos: &[UTXO], orders: &mut [Orde
                     id_order: u32::MAX,
                     destination: change_destinations[pool].unwrap(),
                     amount: change.0[pool],
+                    memo: MemoBytes::empty(),
                     is_fee: false
                 })
             }
@@ -133,7 +129,7 @@ pub fn note_select_with_fee<F: FeeCalculator>(utxos: &[UTXO], orders: &mut [Orde
 
         let notes = executor.select_notes(utxos)?;
         let new_fee = F::calculate_fee(&notes, &executor.fills);
-        log::info!("new fee: {}", new_fee);
+        log::debug!("new fee: {}", new_fee);
 
         if new_fee == fee || n_attempts == MAX_ATTEMPTS {
             let plan = TransactionPlan {

@@ -53,17 +53,15 @@ impl <N: Parameters + Sync,
         }
     }
 
-    pub fn initialize(&mut self) -> Result<()> {
+    pub fn initialize(&mut self, height: u32) -> Result<()> {
         let db = self.db.build()?;
-        let TreeCheckpoint { tree, witnesses } = db.get_tree_by_name(&self.shielded_pool)?;
+        let TreeCheckpoint { tree, witnesses } = db.get_tree_by_name(height, &self.shielded_pool)?;
         self.tree = tree;
         self.witnesses = witnesses;
         self.note_position = self.tree.get_position();
-        for vk in self.vks.iter() {
-            let nfs = db.get_unspent_nullifiers()?;
-            for rn in nfs.into_iter() {
-                self.nullifiers.insert(rn.nf.clone(), rn);
-            }
+        let nfs = db.get_unspent_nullifiers()?;
+        for rn in nfs.into_iter() {
+            self.nullifiers.insert(rn.nf.clone(), rn);
         }
         Ok(())
     }
@@ -178,7 +176,7 @@ mod tests {
             _phantom: Default::default()
         };
 
-        synchronizer.initialize().unwrap();
+        synchronizer.initialize(1000).unwrap();
         synchronizer.process(&vec![]).unwrap();
     }
 

@@ -3,7 +3,7 @@ use zcash_primitives::memo::Memo;
 use crate::{CoinConfig, init_coin, set_coin_lwd_url};
 use crate::api::payment::RecipientMemo;
 use crate::unified::UnifiedAddressType;
-use super::{*, types::*, fill::*};
+use super::{*, types::*};
 
 // must have T+S+O receivers
 const CHANGE_ADDRESS: &str = "u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qqmktzwktw772nlle6skkkxwmtzxaan3slntqev03g70tzpky3c58hfgvfjkcky255cwqgfuzdjcktfl7pjalt5sl33se75pmga09etn9dplr98eq2g8cgmvgvx6jx2a2xhy39x96c6rumvlyt35whml87r064qdzw30e";
@@ -19,7 +19,7 @@ fn init() {
 #[tokio::test]
 async fn test_fetch_utxo() {
     init();
-    let utxos = fetch_utxos(0, 1, 1900000, true, 3).await.unwrap();
+    let utxos = fetch_utxos(0, 1, 235, true, 0).await.unwrap();
 
     for utxo in utxos.iter() {
         log::info!("{:?}", utxo);
@@ -67,28 +67,6 @@ async fn test_payment() {
     assert_eq!(tx_plan.fee, 10000);
 
     assert_eq!(tx_plan.spends[0].amount, tx_plan.outputs[0].amount + tx_plan.outputs[1].amount + tx_plan.fee);
-}
-
-fn mock_order(id: u32, amount: u64, tpe: u8) -> Order {
-    assert!(tpe > 0 && tpe < 8);
-    let mut destinations = [None; 3];
-    if tpe & 1 != 0 {
-        destinations[0] = Some(Destination::Transparent([0u8; 20]));
-    }
-    if tpe & 2 != 0 {
-        destinations[1] = Some(Destination::Sapling([0u8; 43]));
-    }
-    if tpe & 4 != 0 {
-        destinations[2] = Some(Destination::Orchard([0u8; 43]));
-    }
-    Order {
-        id,
-        destinations,
-        amount,
-        memo: MemoBytes::empty(),
-        is_fee: false,
-        filled: 0,
-    }
 }
 
 macro_rules! order {
@@ -361,7 +339,7 @@ fn test_example8() {
 #[test]
 fn test_example9() {
     let _ = env_logger::try_init();
-    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
+    let config = NoteSelectConfig::new(CHANGE_ADDRESS);
 
     let utxos = [utxo!(1, 50), sapling!(2, 50)];
     let mut orders = [o!(1, 10)];

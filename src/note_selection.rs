@@ -3,6 +3,7 @@ mod fee;
 mod utxo;
 mod fill;
 mod select;
+mod builder;
 
 #[cfg(test)]
 mod tests;

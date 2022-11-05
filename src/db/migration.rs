@@ -198,7 +198,31 @@ pub fn init_db(connection: &Connection, network: &Network) -> anyhow::Result<()>
             tree BLOB NOT NULL)", [])?;
         connection.execute("INSERT INTO sapling_tree SELECT height, sapling_tree FROM blocks", [])?;
         connection.execute("ALTER TABLE blocks DROP sapling_tree", [])?;
-        connection.execute("ALTER TABLE received_notes ADD rho BLOB", [])?;
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS new_received_notes (
+            id_note INTEGER PRIMARY KEY,
+            account INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            tx INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            output_index INTEGER NOT NULL,
+            diversifier BLOB NOT NULL,
+            value INTEGER NOT NULL,
+            rcm BLOB NOT NULL,
+            nf BLOB NOT NULL UNIQUE,
+            rho BLOB,
+            orchard BOOL NOT NULL DEFAULT (false),
+            spent INTEGER,
+            excluded BOOL,
+            CONSTRAINT tx_output UNIQUE (tx, orchard, output_index))",
+            [],
+        )?;
+        connection.execute("INSERT INTO new_received_notes(
+            id_note, account, position, tx, height, output_index, diversifier, value,
+            rcm, nf, spent, excluded
+        ) SELECT * FROM received_notes", [])?;
+        connection.execute("DROP TABLE received_notes", [])?;
+        connection.execute("ALTER TABLE new_received_notes RENAME TO received_notes", [])?;
         connection.execute(
             "CREATE TABLE IF NOT EXISTS orchard_witnesses (
             id_witness INTEGER PRIMARY KEY,
