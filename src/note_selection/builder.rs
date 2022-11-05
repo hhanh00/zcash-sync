@@ -1,4 +1,3 @@
-use std::slice;
 use std::str::FromStr;
 use anyhow::anyhow;
 use jubjub::Fr;
@@ -9,8 +8,7 @@ use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
 use zcash_primitives::transaction::builder::Builder;
 use orchard::builder::Builder as OrchardBuilder;
 use orchard::bundle::Flags;
-use orchard::circuit::ProvingKey;
-use orchard::note::{ExtractedNoteCommitment, Nullifier};
+use orchard::note::Nullifier;
 use orchard::value::NoteValue;
 use rand::{CryptoRng, RngCore};
 use rand::rngs::OsRng;
@@ -18,8 +16,8 @@ use ripemd::{Digest, Ripemd160};
 use sha2::Sha256;
 use zcash_client_backend::encoding::decode_extended_spending_key;
 use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::memo::{Memo, MemoBytes};
-use zcash_primitives::merkle_tree::{IncrementalWitness, MerklePath};
+use zcash_primitives::memo::MemoBytes;
+use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
 use zcash_primitives::sapling::prover::TxProver;
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut};
@@ -27,13 +25,11 @@ use zcash_primitives::transaction::{Transaction, TransactionData, TxVersion};
 use zcash_primitives::transaction::sighash::SignableInput;
 use zcash_primitives::transaction::sighash_v5::v5_signature_hash;
 use zcash_primitives::transaction::txid::TxIdDigester;
-use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
-use zcash_proofs::prover::LocalTxProver;
-use crate::{AccountData, broadcast_tx, CoinConfig, DbAdapter, init_coin, set_active, set_coin_lwd_url};
-use crate::api::payment::RecipientMemo;
+use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+use crate::{AccountData, broadcast_tx, CoinConfig, init_coin, set_active, set_coin_lwd_url};
 use crate::coinconfig::get_prover;
 use crate::note_selection::types::TransactionPlan;
-use crate::note_selection::{decode, Destination, FeeFlat, fetch_utxos, note_select_with_fee, NoteSelectConfig, Pool, prepare_multi_payment, PrivacyPolicy, Source};
+use crate::note_selection::{decode, Destination, FeeFlat, fetch_utxos, note_select_with_fee, NoteSelectConfig, PrivacyPolicy, Source};
 use crate::orchard::{get_proving_key, ORCHARD_ROOTS, OrchardHasher};
 use crate::sapling::{SAPLING_ROOTS, SaplingHasher};
 use crate::sync::tree::TreeCheckpoint;
@@ -311,28 +307,4 @@ async fn submit_tx() {
 
     let r = broadcast_tx(&hex::decode(tx).unwrap()).await.unwrap();
     log::info!("{}", r);
-}
-
-#[test]
-fn tree_state() {
-    let _ = env_logger::try_init();
-    init_coin(0, "./zec.db").unwrap();
-    set_coin_lwd_url(0, "http://127.0.0.1:9067");
-
-    let h = OrchardHasher::new();
-    let c = CoinConfig::get(0);
-    let db = c.db.as_ref().unwrap();
-    let db = db.lock().unwrap();
-    let tree = db.get_tree_by_name(235, "orchard").unwrap();
-    let TreeCheckpoint { tree, witnesses } = tree;
-    let root = tree.root(32, &ORCHARD_ROOTS, &h);
-    println!("{}", hex::encode(root));
-
-    for witness in witnesses.iter() {
-        let auth_path: Vec<_> = witness.auth_path(32, &ORCHARD_ROOTS, &h).iter()
-            .map(|n| {
-                orchard::tree::MerkleHashOrchard::from_bytes(n).unwrap()
-            }).collect();
-        let merkle_path = orchard::tree::MerklePath::from_parts(witness.position as u32, auth_path.try_into().unwrap());
-    }
 }

@@ -92,7 +92,7 @@ pub fn note_select_with_fee<F: FeeCalculator>(utxos: &[UTXO], orders: &mut [Orde
         let mut fee_order = Order {
             id: u32::MAX,
             destinations: ANY_DESTINATION,
-            priority: fee_precedence.try_into().unwrap(),
+            priority: PoolPriority::OS, // ignored for fees
             amount: fee,
             memo: MemoBytes::empty(),
             is_fee: true, // do not include in fee calculation

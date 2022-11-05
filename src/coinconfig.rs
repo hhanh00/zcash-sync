@@ -46,6 +46,7 @@ pub fn set_coin_lwd_url(coin: u8, lwd_url: &str) {
 }
 
 /// Get the URL of the lightwalletd server for a given coin
+#[allow(dead_code)] // Used by C FFI
 pub fn get_coin_lwd_url(coin: u8) -> String {
     let c = COIN_CONFIG[coin as usize].lock().unwrap();
     c.lwd_url.clone().unwrap_or_default()

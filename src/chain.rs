@@ -32,7 +32,7 @@ use zcash_primitives::zip32::ExtendedFullViewingKey;
 use crate::gpu::cuda::{CudaProcessor, CUDA_CONTEXT};
 #[cfg(feature = "apple_metal")]
 use crate::gpu::metal::MetalProcessor;
-use crate::gpu::{trial_decrypt, USE_GPU};
+use crate::gpu::USE_GPU;
 
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,

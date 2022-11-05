@@ -52,6 +52,7 @@ pub trait GPUProcessor {
     fn buffer_stride() -> usize;
 }
 
+#[allow(dead_code)]
 pub fn trial_decrypt<
     'a,
     FVKIter: Iterator<Item = (&'a u32, &'a AccountViewKey)>,
@@ -80,6 +81,7 @@ pub fn trial_decrypt<
     Ok(processor.get_decrypted_blocks()?)
 }
 
+#[allow(dead_code)]
 fn collect_nf(blocks: Vec<CompactBlock>) -> Result<Vec<DecryptedBlock>> {
     let mut decrypted_blocks = vec![];
     // collect nullifiers
@@ -106,6 +108,7 @@ fn collect_nf(blocks: Vec<CompactBlock>) -> Result<Vec<DecryptedBlock>> {
     Ok(decrypted_blocks)
 }
 
+#[allow(dead_code)]
 fn collect_decrypted_notes(
     network: &Network,
     account: u32,

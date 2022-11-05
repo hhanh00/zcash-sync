@@ -1,6 +1,5 @@
 use crate::coinconfig::CoinConfig;
 use bip39::{Language, Mnemonic, Seed};
-use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key,
     encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address,
@@ -35,6 +34,7 @@ pub fn decode_key(
     res
 }
 
+#[allow(dead_code)] // Used by C FFI
 pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
@@ -53,12 +53,14 @@ pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     -1
 }
 
+#[allow(dead_code)] // Used by C FFI
 pub fn is_valid_address(coin: u8, address: &str) -> bool {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
-    let recipient = RecipientAddress::decode(network, address);
+    let recipient = zcash_client_backend::address::RecipientAddress::decode(network, address);
     recipient.is_some()
 }
+
 
 fn derive_secret_key(
     network: &Network,

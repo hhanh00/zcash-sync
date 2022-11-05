@@ -75,16 +75,6 @@ pub struct AccountViewKey {
     pub viewonly: bool,
 }
 
-impl AccountViewKey {
-    pub fn from_fvk(fvk: &ExtendedFullViewingKey) -> AccountViewKey {
-        AccountViewKey {
-            fvk: fvk.clone(),
-            ivk: fvk.fvk.vk.ivk(),
-            viewonly: false,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct AccountBackup {
     pub coin: u8,

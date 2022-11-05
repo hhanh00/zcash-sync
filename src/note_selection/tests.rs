@@ -75,7 +75,7 @@ macro_rules! order {
             id: $id,
             amount: $q * 1000,
             destinations: $destinations,
-            priority: PoolPriority::OST,
+            priority: PoolPriority::OS,
             filled: 0,
             is_fee: false,
             memo: MemoBytes::empty(),

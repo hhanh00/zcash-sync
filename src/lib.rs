@@ -56,8 +56,6 @@
 #[path = "generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod lw_rpc;
 
-use zcash_params::coin::{get_branch, get_coin_type, CoinType};
-
 // Mainnet
 const LWD_URL: &str = "https://mainnet.lightwalletd.com:9067";
 // pub const LWD_URL: &str = "https://lwdv3.zecwallet.co";

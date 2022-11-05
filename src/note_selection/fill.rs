@@ -2,14 +2,13 @@ use std::cmp::min;
 use zcash_address::{AddressKind, ZcashAddress};
 use zcash_address::unified::{Container, Receiver};
 use zcash_primitives::memo::MemoBytes;
-use crate::note_selection::types::{PrivacyPolicy, Fill, Execution, Order, Pool, PoolAllocation, Destination, PoolPrecedence, PoolPriority};
+use crate::note_selection::types::{PrivacyPolicy, Fill, Execution, Order, Pool, PoolAllocation, Destination, PoolPrecedence};
 
 /// Decode address and return it as an order
 ///
 pub fn decode(id: u32, address: &str, amount: u64, memo: MemoBytes) -> anyhow::Result<Order> {
     let address = ZcashAddress::try_from_encoded(address)?;
     let mut order = Order::default();
-    let mut precedence = order.priority.to_pool_precedence().clone();
     order.id = id;
     match address.kind {
         AddressKind::Sprout(_) => {}
@@ -18,7 +17,7 @@ pub fn decode(id: u32, address: &str, amount: u64, memo: MemoBytes) -> anyhow::R
             order.destinations[Pool::Sapling as usize] = Some(destination);
         }
         AddressKind::Unified(unified_address) => {
-            for (i, address) in unified_address.items().into_iter().enumerate() {
+            for address in unified_address.items() {
                 match address {
                     Receiver::Orchard(data) => {
                         let destination = Destination::Orchard(data);
@@ -55,7 +54,7 @@ pub fn execute_orders(orders: &mut [Order], initial_pool: &PoolAllocation, use_t
     let mut fills = vec![];
 
     for order in orders.iter_mut() {
-        let order_precedence = order.priority.to_pool_precedence();
+        let order_precedence = if order.is_fee { precedence } else { order.priority.to_pool_precedence() };
         // log::info!("Order {:?}", order);
         // Direct Shielded Fill - s2s, o2o
         // t2t only for fees

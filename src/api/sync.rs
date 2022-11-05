@@ -1,7 +1,6 @@
 //! Warp Synchronize
 
 use crate::coinconfig::CoinConfig;
-use crate::db::PlainNote;
 use crate::scan::{AMProgressCallback, Progress};
 use crate::{AccountData, BlockId, CompactTxStreamerClient, DbAdapter};
 use std::sync::Arc;
@@ -163,6 +162,7 @@ pub async fn get_block_by_time(time: u32) -> anyhow::Result<u32> {
     Ok(date_time)
 }
 
+#[allow(dead_code)]
 fn trial_decrypt(
     height: u32,
     cmu: &[u8],
