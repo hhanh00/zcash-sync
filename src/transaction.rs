@@ -1,8 +1,9 @@
+use std::collections::HashMap;
 use crate::contact::{Contact, ContactDecoder};
 use crate::{AccountData, CoinConfig, CompactTxStreamerClient, DbAdapter, Hash, TxFilter};
 use std::convert::TryFrom;
 use serde::Serialize;
-use orchard::keys::{FullViewingKey, Scope};
+use orchard::keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope};
 use orchard::note_encryption::OrchardDomain;
 use orchard::value::ValueCommitment;
 use tonic::transport::Channel;
@@ -16,6 +17,7 @@ use zcash_params::coin::get_branch;
 use zcash_primitives::consensus::{BlockHeight, Network, Parameters};
 use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, try_sapling_note_decryption, try_sapling_output_recovery};
+use zcash_primitives::sapling::SaplingIvk;
 use zcash_primitives::transaction::Transaction;
 use crate::unified::orchard_as_unified;
 
@@ -29,18 +31,37 @@ pub struct ContactRef {
 pub async fn get_transaction_details(coin: u8) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
+    let mut client = c.connect_lwd().await?;
+    let mut keys = HashMap::new();
+
+    let reqs = {
+        let db = c.db.as_ref().unwrap();
+        let db = db.lock().unwrap();
+        let reqs = db.get_txid_without_memo()?;
+        for req in reqs.iter() {
+            let decryption_keys = get_decryption_keys(network, req.account, &db)?;
+            keys.insert(req.account, decryption_keys);
+        }
+        reqs
+        // Make sure we don't hold a mutex across await
+    };
+
+    let mut details = vec![];
+    for req in reqs.iter() {
+        let tx_details = retrieve_tx_info(network, &mut client, req.height, req.id_tx, &req.txid, &keys[&req.account]).await?;
+        log::info!("{:?}", tx_details);
+        details.push(tx_details);
+    }
+
     let db = c.db.as_ref().unwrap();
     let db = db.lock().unwrap();
-    let mut client = c.connect_lwd().await?;
-    let reqs = db.get_txid_without_memo()?;
-    for req in reqs {
-        let tx_details = retrieve_tx_info(network, &mut client, &db, req.account, req.height, &req.txid).await?;
-        log::info!("{:?}", tx_details);
-        db.update_transaction_with_memo(req.id_tx, &tx_details)?;
+    for tx_details in details.iter() {
+        db.update_transaction_with_memo(tx_details)?;
         for c in tx_details.contacts.iter() {
             db.store_contact(c, false)?;
         }
     }
+
     Ok(())
 }
 
@@ -59,23 +80,20 @@ async fn fetch_raw_transaction(network: &Network, client: &mut CompactTxStreamer
     Ok(tx)
 }
 
+#[derive(Clone)]
+pub struct DecryptionKeys {
+    sapling_keys: (SaplingIvk, zcash_primitives::keys::OutgoingViewingKey),
+    orchard_keys: Option<(IncomingViewingKey, OutgoingViewingKey)>
+}
+
 pub fn decode_transaction(
     network: &Network,
-    account: u32,
     height: u32,
+    id_tx: u32,
     tx: Transaction,
-    db: &DbAdapter,
+    decryption_keys: &DecryptionKeys,
 ) -> anyhow::Result<TransactionDetails> {
-    let AccountData { fvk, .. } = db.get_account_info(account)?;
-    let fvk = decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk).unwrap();
-    let sapling_ivk = fvk.fvk.vk.ivk();
-    let sapling_ovk = fvk.fvk.ovk;
-
-    let okey = db.get_orchard(account)?;
-    let okey = okey.map(|okey| {
-        let fvk = FullViewingKey::from_bytes(&okey.fvk).unwrap();
-        (fvk.to_ivk(Scope::External), fvk.to_ovk(Scope::External))
-    });
+    let (sapling_ivk, sapling_ovk) = decryption_keys.sapling_keys.clone();
 
     let height = BlockHeight::from_u32(height);
     let mut taddress: Option<String> = None;
@@ -126,7 +144,7 @@ pub fn decode_transaction(
     }
 
     if let Some(orchard_bundle) = tx.orchard_bundle() {
-        if let Some((orchard_ivk, orchard_ovk)) = okey {
+        if let Some((orchard_ivk, orchard_ovk)) = decryption_keys.orchard_keys.clone() {
             for action in orchard_bundle.actions().iter() {
                 let domain = OrchardDomain::for_action(action);
                 if let Some((_note, pa, memo)) = try_note_decryption(&domain, &orchard_ivk, action) {
@@ -159,6 +177,7 @@ pub fn decode_transaction(
         Memo::Arbitrary(_) => "Unrecognized".to_string(),
     };
     let tx_details = TransactionDetails {
+        id_tx,
         address,
         memo,
         contacts,
@@ -167,16 +186,33 @@ pub fn decode_transaction(
     Ok(tx_details)
 }
 
+fn get_decryption_keys(network: &Network, account: u32, db: &DbAdapter) -> anyhow::Result<DecryptionKeys> {
+    let AccountData { fvk, .. } = db.get_account_info(account)?;
+    let fvk = decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk).unwrap();
+    let (sapling_ivk, sapling_ovk) = (fvk.fvk.vk.ivk(), fvk.fvk.ovk);
+
+    let okey = db.get_orchard(account)?;
+    let okey = okey.map(|okey| {
+        let fvk = FullViewingKey::from_bytes(&okey.fvk).unwrap();
+        (fvk.to_ivk(Scope::External), fvk.to_ovk(Scope::External))
+    });
+    let decryption_keys = DecryptionKeys {
+        sapling_keys: (sapling_ivk, sapling_ovk),
+        orchard_keys: okey,
+    };
+    Ok(decryption_keys)
+}
+
 pub async fn retrieve_tx_info(
     network: &Network,
     client: &mut CompactTxStreamerClient<Channel>,
-    db: &DbAdapter,
-    account: u32,
     height: u32,
+    id_tx: u32,
     txid: &Hash,
+    decryption_keys: &DecryptionKeys
 ) -> anyhow::Result<TransactionDetails> {
     let transaction = fetch_raw_transaction(network, client, height, txid).await?;
-    let tx_details = decode_transaction(network, account, height, transaction, db)?;
+    let tx_details = decode_transaction(network, height, id_tx, transaction, &decryption_keys)?;
 
     Ok(tx_details)
 }
@@ -190,6 +226,7 @@ pub struct GetTransactionDetailRequest {
 
 #[derive(Serialize, Debug)]
 pub struct TransactionDetails {
+    pub id_tx: u32,
     pub address: String,
     pub memo: String,
     pub contacts: Vec<Contact>,

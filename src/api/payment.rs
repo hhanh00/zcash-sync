@@ -29,51 +29,53 @@ async fn prepare_multi_payment(
     use_transparent: bool,
     anchor_offset: u32,
 ) -> anyhow::Result<(Tx, Vec<u32>)> {
-    let c = CoinConfig::get_active();
-    let mut tx_builder = TxBuilder::new(c.coin_type, last_height);
-
-    let AccountData { fvk, .. } = c.db()?.get_account_info(c.id_account)?;
-    let fvk = decode_extended_full_viewing_key(
-        c.chain.network().hrp_sapling_extended_full_viewing_key(),
-        &fvk,
-    )
-    .unwrap();
-    let utxos = if use_transparent {
-        let mut client = c.connect_lwd().await?;
-        let t_address = c.db()?.get_taddr(c.id_account)?;
-        if let Some(t_address) = t_address {
-            get_utxos(&mut client, &t_address, c.id_account).await?
-        } else {
-            vec![]
-        }
-    } else {
-        vec![]
-    };
-
-    let target_amount: u64 = recipients.iter().map(|r| r.amount).sum();
-    let anchor_height = last_height.saturating_sub(anchor_offset);
-    let spendable_notes = c
-        .db()?
-        .get_spendable_notes(c.id_account, anchor_height, &fvk)?;
-    let note_ids = tx_builder.select_inputs(&fvk, &spendable_notes, &utxos, target_amount)?;
-    tx_builder.select_outputs(&fvk, recipients)?;
-    Ok((tx_builder.tx, note_ids))
+    // let c = CoinConfig::get_active();
+    // let mut tx_builder = TxBuilder::new(c.coin_type, last_height);
+    //
+    // let AccountData { fvk, .. } = c.db()?.get_account_info(c.id_account)?;
+    // let fvk = decode_extended_full_viewing_key(
+    //     c.chain.network().hrp_sapling_extended_full_viewing_key(),
+    //     &fvk,
+    // )
+    // .unwrap();
+    // let utxos = if use_transparent {
+    //     let mut client = c.connect_lwd().await?;
+    //     let t_address = c.db()?.get_taddr(c.id_account)?;
+    //     if let Some(t_address) = t_address {
+    //         get_utxos(&mut client, &t_address, c.id_account).await?
+    //     } else {
+    //         vec![]
+    //     }
+    // } else {
+    //     vec![]
+    // };
+    //
+    // let target_amount: u64 = recipients.iter().map(|r| r.amount).sum();
+    // let anchor_height = last_height.saturating_sub(anchor_offset);
+    // let spendable_notes = c
+    //     .db()?
+    //     .get_spendable_notes(c.id_account, anchor_height, &fvk)?;
+    // let note_ids = tx_builder.select_inputs(&fvk, &spendable_notes, &utxos, target_amount)?;
+    // tx_builder.select_outputs(&fvk, recipients)?;
+    // Ok((tx_builder.tx, note_ids))
+    todo!()
 }
 
 fn sign(tx: &Tx, progress_callback: PaymentProgressCallback) -> anyhow::Result<Vec<u8>> {
-    let c = CoinConfig::get_active();
-    let prover = get_prover();
-    let db = c.db()?;
-    let AccountData { sk: zsk, .. } = db.get_account_info(c.id_account)?;
-    let zsk = zsk.ok_or(anyhow!("Cannot sign without secret key"))?;
-    let tsk = db
-        .get_tsk(c.id_account)?
-        .map(|tsk| SecretKey::from_str(&tsk).unwrap());
-    let extsk =
-        decode_extended_spending_key(c.chain.network().hrp_sapling_extended_spending_key(), &zsk)
-            .unwrap();
-    let raw_tx = tx.sign(tsk, &extsk, prover, progress_callback)?;
-    Ok(raw_tx)
+    // let c = CoinConfig::get_active();
+    // let prover = get_prover();
+    // let db = c.db()?;
+    // let AccountData { sk: zsk, .. } = db.get_account_info(c.id_account)?;
+    // let zsk = zsk.ok_or(anyhow!("Cannot sign without secret key"))?;
+    // let tsk = db
+    //     .get_tsk(c.id_account)?
+    //     .map(|tsk| SecretKey::from_str(&tsk).unwrap());
+    // let extsk =
+    //     decode_extended_spending_key(c.chain.network().hrp_sapling_extended_spending_key(), &zsk)
+    //         .unwrap();
+    // let raw_tx = tx.sign(tsk, &extsk, prover, progress_callback)?;
+    // Ok(raw_tx)
+    todo!()
 }
 
 /// Build a multi payment for offline signing

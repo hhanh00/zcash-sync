@@ -157,8 +157,7 @@ impl DbAdapter {
             .prepare("SELECT id_account FROM accounts WHERE ivk = ?1")?;
         let exists = statement.exists(params![ivk])?;
         self.connection.execute(
-            "INSERT INTO accounts(name, seed, aindex, sk, ivk, address) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-            ON CONFLICT DO NOTHING",
+            "INSERT INTO accounts(name, seed, aindex, sk, ivk, address) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![name, seed, index, sk, ivk, address],
         )?;
         let id_account: u32 = self
@@ -246,24 +245,6 @@ impl DbAdapter {
         Ok(fvks)
     }
 
-    pub fn get_seeds(&self) -> anyhow::Result<Vec<AccountSeed>> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT id_account, seed FROM accounts WHERE seed IS NOT NULL")?;
-        let rows = statement.query_map([], |row| {
-            let id_account: u32 = row.get(0)?;
-            let seed: String = row.get(1)?;
-            Ok(AccountSeed {
-                    id_account,
-                    seed})
-        })?;
-        let mut accounts = vec![];
-        for row in rows {
-            accounts.push(row?);
-        }
-        Ok(accounts)
-    }
-
     pub fn trim_to_height(&mut self, height: u32) -> anyhow::Result<u32> {
         // snap height to an existing checkpoint
         let height = self.connection.query_row(
@@ -307,22 +288,6 @@ impl DbAdapter {
         Ok(height)
     }
 
-    pub fn get_txhash(&self, id_tx: u32) -> anyhow::Result<(u32, u32, u32, Vec<u8>, String)> {
-        let (account, height, timestamp, tx_hash, ivk) = self.connection.query_row(
-            "SELECT account, height, timestamp, txid, ivk FROM transactions t, accounts a WHERE id_tx = ?1 AND t.account = a.id_account",
-            params![id_tx],
-            |row| {
-                let account: u32 = row.get(0)?;
-                let height: u32 = row.get(1)?;
-                let timestamp: u32 = row.get(2)?;
-                let tx_hash: Vec<u8> = row.get(3)?;
-                let ivk: String = row.get(4)?;
-                Ok((account, height, timestamp, tx_hash, ivk))
-            },
-        ).map_err(wrap_query_no_rows("get_txhash"))?;
-        Ok((account, height, timestamp, tx_hash, ivk))
-    }
-
     pub fn store_block(
         connection: &Connection,
         height: u32,
@@ -341,34 +306,7 @@ impl DbAdapter {
         });
         connection.execute(
             "INSERT INTO blocks(height, hash, timestamp, sapling_tree, orchard_tree)
-        VALUES (?1, ?2, ?3, ?4, ?5)
-        ON CONFLICT DO NOTHING",
-            params![height, hash, timestamp, &sapling_bb, orchard_bb],
-        )?;
-        log::debug!("-block");
-        Ok(())
-    }
-
-    pub fn store_block2(
-        height: u32,
-        hash: &[u8],
-        timestamp: u32,
-        sapling_tree: &sync::CTree,
-        orchard_tree: Option<&sync::CTree>,
-        connection: &Connection,
-    ) -> anyhow::Result<()> {
-        log::debug!("+block");
-        let mut sapling_bb: Vec<u8> = vec![];
-        sapling_tree.write(&mut sapling_bb)?;
-        let orchard_bb = orchard_tree.map(|tree| {
-            let mut bb: Vec<u8> = vec![];
-            tree.write(&mut bb).unwrap();
-            bb
-        });
-        connection.execute(
-            "INSERT INTO blocks(height, hash, timestamp, sapling_tree, orchard_tree)
-        VALUES (?1, ?2, ?3, ?4, ?5)
-        ON CONFLICT DO NOTHING",
+        VALUES (?1, ?2, ?3, ?4, ?5)",
             params![height, hash, timestamp, &sapling_bb, orchard_bb],
         )?;
         log::debug!("-block");
@@ -386,8 +324,7 @@ impl DbAdapter {
         log::debug!("+transaction");
         db_tx.execute(
             "INSERT INTO transactions(account, txid, height, timestamp, tx_index, value)
-        VALUES (?1, ?2, ?3, ?4, ?5, 0)
-        ON CONFLICT DO NOTHING",
+        VALUES (?1, ?2, ?3, ?4, ?5, 0)",
             params![account, txid, height, timestamp, tx_index],
         )?;
         let id_tx: u32 = db_tx
@@ -423,25 +360,6 @@ impl DbAdapter {
         Ok(id_note)
     }
 
-    // TODO: Depends on the type of witness
-    pub fn store_witnesses(
-        connection: &Connection,
-        witness: &Witness,
-        height: u32,
-        id_note: u32,
-    ) -> anyhow::Result<()> {
-        log::debug!("+witnesses");
-        let mut bb: Vec<u8> = vec![];
-        witness.write(&mut bb)?;
-        connection.execute(
-            "INSERT INTO sapling_witnesses(note, height, witness) VALUES (?1, ?2, ?3)
-        ON CONFLICT DO NOTHING",
-            params![id_note, height, bb],
-        )?;
-        log::debug!("-witnesses");
-        Ok(())
-    }
-
     pub fn store_witness(
         witness: &sync::Witness,
         height: u32,
@@ -453,8 +371,7 @@ impl DbAdapter {
         let mut bb: Vec<u8> = vec![];
         witness.write(&mut bb)?;
         connection.execute(
-            &format!("INSERT INTO {}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)
-        ON CONFLICT DO NOTHING", shielded_pool),
+            &format!("INSERT INTO {}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)", shielded_pool),
             params![id_note, height, bb],
         )?;
         log::debug!("-store_witness");
@@ -473,8 +390,8 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn update_transaction_with_memo(&self, id_tx: u32, details: &TransactionDetails) -> anyhow::Result<()> {
-        self.connection.execute("UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3", params![details.address, details.memo, id_tx])?;
+    pub fn update_transaction_with_memo(&self, details: &TransactionDetails) -> anyhow::Result<()> {
+        self.connection.execute("UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3", params![details.address, details.memo, details.id_tx])?;
         Ok(())
     }
 
@@ -486,21 +403,7 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn get_received_note_value(nf: &Nf, db_tx: &Transaction) -> anyhow::Result<(u32, i64)> {
-        let (account, value) = db_tx
-            .query_row(
-                "SELECT account, value FROM received_notes WHERE nf = ?1",
-                params![nf.0.to_vec()],
-                |row| {
-                    let account: u32 = row.get(0)?;
-                    let value: i64 = row.get(1)?;
-                    Ok((account, value))
-                },
-            )
-            .map_err(wrap_query_no_rows("get_received_note_value"))?;
-        Ok((account, value))
-    }
-
+    #[allow(dead_code)]
     pub fn get_balance(&self, account: u32) -> anyhow::Result<u64> {
         let balance: Option<i64> = self.connection.query_row(
             "SELECT SUM(value) FROM received_notes WHERE (spent IS NULL OR spent = 0) AND account = ?1",
@@ -575,28 +478,6 @@ impl DbAdapter {
         }
     }
 
-    pub fn get_nullifiers(&self) -> anyhow::Result<HashMap<Nf, NfRef>> {
-        let mut statement = self.connection.prepare(
-            "SELECT id_note, account, nf FROM received_notes WHERE spent IS NULL OR spent = 0",
-        )?;
-        let nfs_res = statement.query_map([], |row| {
-            let id_note: u32 = row.get(0)?;
-            let account: u32 = row.get(1)?;
-            let nf_vec: Vec<u8> = row.get(2)?;
-            let mut nf = [0u8; 32];
-            nf.clone_from_slice(&nf_vec);
-            let nf_ref = NfRef { id_note, account };
-            Ok((nf_ref, nf))
-        })?;
-        let mut nfs: HashMap<Nf, NfRef> = HashMap::new();
-        for n in nfs_res {
-            let n = n?;
-            nfs.insert(Nf(n.1), n.0);
-        }
-
-        Ok(nfs)
-    }
-
     pub fn get_nullifier_amounts(
         &self,
         account: u32,
@@ -646,69 +527,6 @@ impl DbAdapter {
             nfs.push(n);
         }
         Ok(nfs)
-    }
-
-    pub fn get_nullifiers_raw(&self) -> anyhow::Result<Vec<(u32, u64, Vec<u8>)>> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT account, value, nf FROM received_notes")?;
-        let res = statement.query_map([], |row| {
-            let account: u32 = row.get(0)?;
-            let amount: i64 = row.get(1)?;
-            let nf: Vec<u8> = row.get(2)?;
-            Ok((account, amount as u64, nf))
-        })?;
-        let mut v: Vec<(u32, u64, Vec<u8>)> = vec![];
-        for r in res {
-            v.push(r?);
-        }
-        Ok(v)
-    }
-
-    // TODO: Depends on the type of witness - Should it returned any spendable note? sapling or orchard
-    pub fn get_spendable_notes(
-        &self,
-        account: u32,
-        anchor_height: u32,
-        fvk: &ExtendedFullViewingKey,
-    ) -> anyhow::Result<Vec<SpendableNote>> {
-        let mut statement = self.connection.prepare(
-            "SELECT id_note, diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL AND account = ?2
-            AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = (
-	            SELECT MAX(height) FROM sapling_witnesses WHERE height <= ?1
-            ) AND r.id_note = w.note")?;
-        let notes = statement.query_map(params![anchor_height, account], |row| {
-            let id_note: u32 = row.get(0)?;
-
-            let diversifier: Vec<u8> = row.get(1)?;
-            let value: i64 = row.get(2)?;
-            let rcm: Vec<u8> = row.get(3)?;
-            let witness: Vec<u8> = row.get(4)?;
-
-            let mut diversifer_bytes = [0u8; 11];
-            diversifer_bytes.copy_from_slice(&diversifier);
-            let diversifier = Diversifier(diversifer_bytes);
-            let mut rcm_bytes = [0u8; 32];
-            rcm_bytes.copy_from_slice(&rcm);
-            let rcm = jubjub::Fr::from_bytes(&rcm_bytes).unwrap();
-            let rseed = Rseed::BeforeZip212(rcm);
-            let witness = IncrementalWitness::<Node>::read(&*witness).unwrap();
-
-            let pa = fvk.fvk.vk.to_payment_address(diversifier).unwrap();
-            let note = pa.create_note(value as u64, rseed).unwrap();
-            Ok(SpendableNote {
-                id: id_note,
-                note,
-                diversifier,
-                witness,
-            })
-        })?;
-        let mut spendable_notes: Vec<SpendableNote> = vec![];
-        for n in notes {
-            spendable_notes.push(n?);
-        }
-
-        Ok(spendable_notes)
     }
 
     pub fn get_unspent_received_notes(&self, account: u32, anchor_height: u32) -> anyhow::Result<Vec<UTXO>> {
@@ -855,7 +673,6 @@ impl DbAdapter {
         Ok(contacts)
     }
 
-    // TODO: Orchard diversifiers have a different space
     pub fn get_diversifier(&self, account: u32) -> anyhow::Result<DiversifierIndex> {
         let diversifier_index = self
             .connection
@@ -874,7 +691,6 @@ impl DbAdapter {
         Ok(DiversifierIndex(diversifier_index))
     }
 
-    // TODO: See get_diversifier
     pub fn store_diversifier(
         &self,
         account: u32,
@@ -952,7 +768,7 @@ impl DbAdapter {
             let bip44_path = format!("m/44'/{}'/0'/0/{}", self.network().coin_type(), aindex);
             let (sk, address) = derive_tkeys(self.network(), &seed, &bip44_path)?;
             self.connection.execute(
-                "INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
+                "INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3)",
                 params![account, &sk, &address],
             )?;
         }
@@ -964,7 +780,7 @@ impl DbAdapter {
         if let Some(seed) = seed {
             let keys = derive_orchard_keys(self.network().coin_type(), &seed, aindex);
             self.connection.execute(
-                "INSERT INTO orchard_addrs(account, sk, fvk) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
+                "INSERT INTO orchard_addrs(account, sk, fvk) VALUES (?1, ?2, ?3)",
                 params![account, &keys.sk, &keys.fvk],
             )?;
         }
@@ -985,7 +801,7 @@ impl DbAdapter {
 
     pub fn store_ua_settings(&self, account: u32, transparent: bool, sapling: bool, orchard: bool) -> anyhow::Result<()> {
         self.connection.execute(
-            "INSERT INTO ua_settings(account, transparent, sapling, orchard) VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
+            "INSERT INTO ua_settings(account, transparent, sapling, orchard) VALUES (?1, ?2, ?3, ?4)",
             params![account, transparent, sapling, orchard],
         )?;
         Ok(())
@@ -1033,37 +849,6 @@ impl DbAdapter {
                 Ok(Quote { timestamp, price })
             }).optional()?;
         Ok(quote)
-    }
-
-    pub fn store_share_secret(
-        &self,
-        account: u32,
-        secret: &str,
-        index: usize,
-        threshold: usize,
-        participants: usize,
-    ) -> anyhow::Result<()> {
-        self.connection.execute(
-            "INSERT INTO secret_shares(account, secret, idx, threshold, participants) VALUES (?1, ?2, ?3, ?4, ?5) \
-            ON CONFLICT (account) DO UPDATE SET secret = excluded.secret, threshold = excluded.threshold, participants = excluded.participants",
-            params![account, &secret, index as u32, threshold as u32, participants as u32],
-        )?;
-        Ok(())
-    }
-
-    pub fn get_share_secret(&self, account: u32) -> anyhow::Result<String> {
-        let secret = self
-            .connection
-            .query_row(
-                "SELECT secret FROM secret_shares WHERE account = ?1",
-                params![account],
-                |row| {
-                    let secret: String = row.get(0)?;
-                    Ok(secret)
-                },
-            )
-            .optional()?;
-        Ok(secret.unwrap_or("".to_string()))
     }
 
     pub fn truncate_data(&self) -> anyhow::Result<()> {
@@ -1441,44 +1226,6 @@ mod tests {
     use crate::db::{DbAdapter, DEFAULT_DB_PATH, ReceivedNote};
     use zcash_params::coin::CoinType;
     use crate::sync::{CTree, Witness};
-
-    #[test]
-    fn test_db() {
-        let mut db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
-        db.init_db().unwrap();
-        db.trim_to_height(0).unwrap();
-
-        let db_tx = db.begin_transaction().unwrap();
-        DbAdapter::store_block(&db_tx, 1, &[0u8; 32], 0, &CTree::new(), None).unwrap();
-        let id_tx = DbAdapter::store_transaction(&[0; 32], 1, 1, 0, 20, &db_tx).unwrap();
-        DbAdapter::store_received_note(
-            &ReceivedNote {
-                account: 1,
-                height: 1,
-                output_index: 0,
-                diversifier: vec![],
-                value: 0,
-                rcm: vec![],
-                nf: vec![],
-                rho: None,
-                spent: None,
-            },
-            id_tx,
-            5,
-            &db_tx,
-        )
-        .unwrap();
-        let witness = Witness {
-            position: 10,
-            id_note: 0,
-            tree: CTree::new(),
-            filled: vec![],
-            cursor: CTree::new(),
-            cmx: [0u8; 32]
-        };
-        DbAdapter::store_witnesses(&db_tx, &witness, 1000, 1).unwrap();
-        db_tx.commit().unwrap();
-    }
 
     #[test]
     fn test_balance() {
