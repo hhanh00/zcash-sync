@@ -7,12 +7,12 @@ lazy_static! {
 }
 
 mod hash;
-mod note;
 mod key;
+mod note;
 
-pub use note::{OrchardDecrypter, OrchardViewKey, DecryptedOrchardNote};
-pub use hash::{ORCHARD_ROOTS, OrchardHasher};
+pub use hash::{OrchardHasher, ORCHARD_ROOTS};
 pub use key::{derive_orchard_keys, OrchardKeyBytes};
+pub use note::{DecryptedOrchardNote, OrchardDecrypter, OrchardViewKey};
 
 pub fn get_proving_key() -> &'static ProvingKey {
     if !PROVING_KEY.filled() {

@@ -1,6 +1,7 @@
 use crate::db::SpendableNote;
 // use crate::wallet::RecipientMemo;
 use crate::api::payment::RecipientMemo;
+use crate::chain::get_latest_height;
 use crate::coinconfig::CoinConfig;
 use crate::{GetAddressUtxosReply, Hash, RawTransaction};
 use anyhow::anyhow;
@@ -12,7 +13,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
-use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_payment_address, encode_extended_full_viewing_key, encode_payment_address};
+use zcash_client_backend::encoding::{
+    decode_extended_full_viewing_key, decode_payment_address, encode_extended_full_viewing_key,
+    encode_payment_address,
+};
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::keys::OutgoingViewingKey;
@@ -25,7 +29,6 @@ use zcash_primitives::transaction::builder::{Builder, Progress};
 use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut as ZTxOut};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
-use crate::chain::get_latest_height;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
@@ -350,7 +353,8 @@ impl Tx {
             let fvk = decode_extended_full_viewing_key(
                 chain.network().hrp_sapling_extended_full_viewing_key(),
                 &txin.fvk,
-            ).map_err(|_| anyhow!("Bech32 Decode Error"))?;
+            )
+            .map_err(|_| anyhow!("Bech32 Decode Error"))?;
             if fvk != efvk {
                 anyhow::bail!("Incorrect account - Secret key mismatch")
             }
@@ -439,4 +443,3 @@ pub fn get_tx_summary(tx: &Tx) -> anyhow::Result<TxSummary> {
     }
     Ok(TxSummary { recipients })
 }
-

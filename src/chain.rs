@@ -355,7 +355,10 @@ fn decrypt_notes<'a, N: Parameters>(
     let mut count_outputs = 0u32;
     let mut spends: Vec<Nf> = vec![];
     let mut notes: Vec<DecryptedNote> = vec![];
-    let vvks: Vec<_> = vks.iter().map(|vk| PreparedIncomingViewingKey::new(&vk.1.ivk)).collect();
+    let vvks: Vec<_> = vks
+        .iter()
+        .map(|vk| PreparedIncomingViewingKey::new(&vk.1.ivk))
+        .collect();
     let mut outputs: Vec<(SaplingDomain<N>, AccountOutput<N>)> = vec![];
     for (tx_index, vtx) in block.vtx.iter().enumerate() {
         for cs in vtx.spends.iter() {

@@ -208,7 +208,7 @@ pub struct Recipient {
     pub max_amount_per_note: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct RecipientShort {
     pub address: String,
     pub amount: u64,
@@ -243,7 +243,7 @@ impl From<RecipientShort> for RecipientMemo {
             address: r.address,
             amount: r.amount,
             memo: Memo::Empty,
-            max_amount_per_note: 0
+            max_amount_per_note: 0,
         }
     }
 }

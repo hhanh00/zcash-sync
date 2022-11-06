@@ -1,10 +1,10 @@
+use crate::Hash;
+use byteorder::WriteBytesExt;
+use group::Curve;
 use rayon::prelude::*;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
-use byteorder::WriteBytesExt;
-use group::Curve;
 use zcash_encoding::{Optional, Vector};
-use crate::Hash;
 
 pub type Node = [u8; 32];
 
@@ -157,7 +157,12 @@ impl Witness {
         }
     }
 
-    pub fn auth_path<H: Hasher>(&self, height: usize, empty_roots: &[Node], hasher: &H) -> Vec<Node> {
+    pub fn auth_path<H: Hasher>(
+        &self,
+        height: usize,
+        empty_roots: &[Node],
+        hasher: &H,
+    ) -> Vec<Node> {
         let mut filled_iter = self.filled.iter();
         let mut cursor_used = false;
         let mut next_filler = move |depth: usize| {
@@ -261,7 +266,7 @@ struct CTreeBuilder<H: Hasher> {
     hasher: H,
 }
 
-impl <H: Hasher> Builder for CTreeBuilder<H> {
+impl<H: Hasher> Builder for CTreeBuilder<H> {
     type Context = ();
     type Output = CTree;
 
@@ -309,11 +314,10 @@ impl <H: Hasher> Builder for CTreeBuilder<H> {
 
     fn up(&mut self) {
         let h = if self.left.is_some() && self.right.is_some() {
-            Some(self.hasher.node_combine(
-                self.depth,
-                &self.left.unwrap(),
-                &self.right.unwrap(),
-            ))
+            Some(
+                self.hasher
+                    .node_combine(self.depth, &self.left.unwrap(), &self.right.unwrap()),
+            )
         } else {
             None
         };
@@ -333,7 +337,9 @@ impl <H: Hasher> Builder for CTreeBuilder<H> {
     }
 
     fn finished(&self) -> bool {
-        self.depth as usize >= self.prev_tree.parents.len() && self.left.is_none() && self.right.is_none()
+        self.depth as usize >= self.prev_tree.parents.len()
+            && self.left.is_none()
+            && self.right.is_none()
     }
 
     fn finalize(self, _context: &()) -> CTree {
@@ -345,7 +351,7 @@ impl <H: Hasher> Builder for CTreeBuilder<H> {
     }
 }
 
-impl <H: Hasher> CTreeBuilder<H> {
+impl<H: Hasher> CTreeBuilder<H> {
     fn new(prev_tree: &CTree, len: usize, first_block: bool, hasher: H) -> Self {
         let start = prev_tree.get_position();
         CTreeBuilder {
@@ -380,11 +386,7 @@ impl <H: Hasher> CTreeBuilder<H> {
     }
 
     #[inline(always)]
-    fn get<'a>(
-        commitments: &'a [Node],
-        index: usize,
-        offset: &'a Option<Node>,
-    ) -> &'a Node {
+    fn get<'a>(commitments: &'a [Node], index: usize, offset: &'a Option<Node>) -> &'a Node {
         Self::get_opt(commitments, index, offset).unwrap()
     }
 
@@ -409,8 +411,7 @@ fn combine_level<H: Hasher>(
     let nn = n / 2;
     let next_level = if nn > 100 {
         batch_level_combine(commitments, offset, nn, depth, hasher)
-    }
-    else {
+    } else {
         single_level_combine(commitments, offset, nn, depth, hasher)
     };
 
@@ -418,7 +419,13 @@ fn combine_level<H: Hasher>(
     nn
 }
 
-fn batch_level_combine<H: Hasher>(commitments: &mut [Node], offset: Option<Node>, nn: usize, depth: u8, hasher: &H) -> Vec<Node> {
+fn batch_level_combine<H: Hasher>(
+    commitments: &mut [Node],
+    offset: Option<Node>,
+    nn: usize,
+    depth: u8,
+    hasher: &H,
+) -> Vec<Node> {
     let hash_extended: Vec<_> = (0..nn)
         .into_par_iter()
         .map(|i| {
@@ -432,7 +439,13 @@ fn batch_level_combine<H: Hasher>(commitments: &mut [Node], offset: Option<Node>
     hasher.normalize(&hash_extended)
 }
 
-fn single_level_combine<H: Hasher>(commitments: &mut [Node], offset: Option<Node>, nn: usize, depth: u8, hasher: &H) -> Vec<Node> {
+fn single_level_combine<H: Hasher>(
+    commitments: &mut [Node],
+    offset: Option<Node>,
+    nn: usize,
+    depth: u8,
+    hasher: &H,
+) -> Vec<Node> {
     (0..nn)
         .into_par_iter()
         .map(|i| {
@@ -449,10 +462,10 @@ struct WitnessBuilder<H: Hasher> {
     witness: Witness,
     p: usize,
     inside: bool,
-    _phantom: PhantomData<H>
+    _phantom: PhantomData<H>,
 }
 
-impl <H: Hasher> WitnessBuilder<H> {
+impl<H: Hasher> WitnessBuilder<H> {
     fn new(tree_builder: &CTreeBuilder<H>, prev_witness: &Witness, count: usize) -> Self {
         let position = prev_witness.position;
         // log::info!("Witness::new - {} {},{}", position, tree_builder.start, tree_builder.start + count);
@@ -466,7 +479,7 @@ impl <H: Hasher> WitnessBuilder<H> {
     }
 }
 
-impl <H: Hasher> Builder for WitnessBuilder<H> {
+impl<H: Hasher> Builder for WitnessBuilder<H> {
     type Context = CTreeBuilder<H>;
     type Output = Witness;
 
@@ -514,7 +527,9 @@ impl <H: Hasher> Builder for WitnessBuilder<H> {
                 if tree.right.is_none() {
                     self.witness.filled.push(*p1);
                 }
-            } else if depth as usize > tree.parents.len() || tree.parents[depth as usize - 1].is_none() {
+            } else if depth as usize > tree.parents.len()
+                || tree.parents[depth as usize - 1].is_none()
+            {
                 self.witness.filled.push(*p1);
             }
         }
@@ -577,7 +592,7 @@ pub struct WarpProcessor<H> {
     hasher: H,
 }
 
-impl <H: Hasher> WarpProcessor<H> {
+impl<H: Hasher> WarpProcessor<H> {
     pub fn new(hasher: H) -> WarpProcessor<H> {
         WarpProcessor {
             prev_tree: CTree::new(),
@@ -599,9 +614,7 @@ impl <H: Hasher> WarpProcessor<H> {
             return;
         }
         self.prev_witnesses.extend_from_slice(new_witnesses);
-        let (t, ws) = self.advance_tree(
-            nodes,
-        );
+        let (t, ws) = self.advance_tree(nodes);
         self.first_block = false;
         self.prev_tree = t;
         self.prev_witnesses = ws;
@@ -616,12 +629,15 @@ impl <H: Hasher> WarpProcessor<H> {
         }
     }
 
-    fn advance_tree(
-        &self,
-        mut commitments: &mut [Node],
-    ) -> (CTree, Vec<Witness>) {
-        let mut builder = CTreeBuilder::<H>::new(&self.prev_tree, commitments.len(), self.first_block, self.hasher.clone());
-        let mut witness_builders: Vec<_> = self.prev_witnesses
+    fn advance_tree(&self, mut commitments: &mut [Node]) -> (CTree, Vec<Witness>) {
+        let mut builder = CTreeBuilder::<H>::new(
+            &self.prev_tree,
+            commitments.len(),
+            self.first_block,
+            self.hasher.clone(),
+        );
+        let mut witness_builders: Vec<_> = self
+            .prev_witnesses
             .iter()
             .map(|witness| WitnessBuilder::new(&builder, witness, commitments.len()))
             .collect();

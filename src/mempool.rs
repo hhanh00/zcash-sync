@@ -6,7 +6,9 @@ use tonic::Request;
 
 use crate::coinconfig::CoinConfig;
 use zcash_primitives::consensus::BlockHeight;
-use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, try_sapling_compact_note_decryption};
+use zcash_primitives::sapling::note_encryption::{
+    try_sapling_compact_note_decryption, PreparedIncomingViewingKey,
+};
 use zcash_primitives::sapling::SaplingIvk;
 
 const DEFAULT_EXCLUDE_LEN: u8 = 1;

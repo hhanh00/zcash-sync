@@ -1,6 +1,6 @@
-use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter};
 use crate::fountain::FountainCodes;
 use crate::mempool::MemPool;
+use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter};
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;

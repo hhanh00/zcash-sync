@@ -1,27 +1,27 @@
-use crate::chain::{Nf, NfRef};
+use crate::chain::Nf;
 use crate::contact::Contact;
+use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
 use crate::prices::Quote;
+use crate::sapling::SaplingViewKey;
+use crate::sync;
+use crate::sync::tree::{CTree, TreeCheckpoint};
 use crate::taddr::{derive_tkeys, TBalance};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
-use crate::sync::tree::{CTree, TreeCheckpoint, Witness};
+use crate::unified::UnifiedAddressType;
+use crate::note_selection::{Source, UTXO};
+use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use orchard::keys::FullViewingKey;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_params::coin::{CoinType, get_coin_chain, get_coin_id};
+use zcash_params::coin::{get_coin_chain, get_coin_id, CoinType};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
-use zcash_primitives::sapling::{Diversifier, Node, Note, Rseed, SaplingIvk};
+use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
-use crate::note_selection::{Source, UTXO};
-use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
-use crate::sapling::SaplingViewKey;
-use crate::sync;
-use crate::unified::UnifiedAddressType;
 
 mod migration;
 
@@ -88,11 +88,6 @@ pub struct AccountBackup {
     pub t_addr: Option<String>,
 }
 
-pub struct AccountSeed {
-    pub id_account: u32,
-    pub seed: String,
-}
-
 pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> anyhow::Error {
     move |err: rusqlite::Error| match err {
         QueryReturnedNoRows => anyhow::anyhow!("Query {} returned no rows", name),
@@ -102,10 +97,7 @@ pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> any
 
 impl DbAdapterBuilder {
     pub fn build(&self) -> anyhow::Result<DbAdapter> {
-        DbAdapter::new(
-            self.coin_type,
-            &self.db_path,
-        )
+        DbAdapter::new(self.coin_type, &self.db_path)
     }
 }
 
@@ -209,11 +201,7 @@ impl DbAdapter {
             )
             .unwrap();
             let ivk = fvk.fvk.vk.ivk();
-            Ok(SaplingViewKey {
-                account,
-                fvk,
-                ivk
-            })
+            Ok(SaplingViewKey { account, fvk, ivk })
         })?;
         let mut fvks = vec![];
         for r in rows {
@@ -224,17 +212,15 @@ impl DbAdapter {
     }
 
     pub fn get_orchard_fvks(&self) -> anyhow::Result<Vec<OrchardViewKey>> {
-        let mut statement = self.connection.prepare("SELECT account, fvk FROM orchard_addrs")?;
+        let mut statement = self
+            .connection
+            .prepare("SELECT account, fvk FROM orchard_addrs")?;
         let rows = statement.query_map([], |row| {
             let account: u32 = row.get(0)?;
             let fvk: Vec<u8> = row.get(1)?;
             let fvk: [u8; 96] = fvk.try_into().unwrap();
             let fvk = FullViewingKey::from_bytes(&fvk).unwrap();
-            let vk =
-                OrchardViewKey {
-                    account,
-                    fvk,
-                };
+            let vk = OrchardViewKey { account, fvk };
             Ok(vk)
         })?;
         let mut fvks = vec![];
@@ -260,8 +246,14 @@ impl DbAdapter {
 
         let tx = self.connection.transaction()?;
         tx.execute("DELETE FROM blocks WHERE height > ?1", params![height])?;
-        tx.execute("DELETE FROM sapling_tree WHERE height > ?1", params![height])?;
-        tx.execute("DELETE FROM orchard_tree WHERE height > ?1", params![height])?;
+        tx.execute(
+            "DELETE FROM sapling_tree WHERE height > ?1",
+            params![height],
+        )?;
+        tx.execute(
+            "DELETE FROM orchard_tree WHERE height > ?1",
+            params![height],
+        )?;
         tx.execute(
             "DELETE FROM sapling_witnesses WHERE height > ?1",
             params![height],
@@ -324,7 +316,7 @@ impl DbAdapter {
         log::debug!("+transaction");
         db_tx.execute(
             "INSERT INTO transactions(account, txid, height, timestamp, tx_index, value)
-        VALUES (?1, ?2, ?3, ?4, ?5, 0)",
+        VALUES (?1, ?2, ?3, ?4, ?5, 0) ON CONFLICT DO NOTHING", // ignore conflict when same tx has sapling + orchard outputs
             params![account, txid, height, timestamp, tx_index],
         )?;
         let id_tx: u32 = db_tx
@@ -351,8 +343,8 @@ impl DbAdapter {
             note.diversifier, note.value as i64, note.rcm, note.rho, note.nf, orchard, note.spent])?;
         let id_note: u32 = db_tx
             .query_row(
-                "SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2",
-                params![id_tx, note.output_index],
+                "SELECT id_note FROM received_notes WHERE tx = ?1 AND output_index = ?2 AND orchard = ?3",
+                params![id_tx, note.output_index, orchard],
                 |row| row.get(0),
             )
             .map_err(wrap_query_no_rows("store_received_note/id_note"))?;
@@ -365,33 +357,58 @@ impl DbAdapter {
         height: u32,
         id_note: u32,
         connection: &Connection,
-        shielded_pool: &str
+        shielded_pool: &str,
     ) -> anyhow::Result<()> {
         log::debug!("+store_witness");
         let mut bb: Vec<u8> = vec![];
         witness.write(&mut bb)?;
         connection.execute(
-            &format!("INSERT INTO {}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)", shielded_pool),
+            &format!(
+                "INSERT INTO {}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)",
+                shielded_pool
+            ),
             params![id_note, height, bb],
         )?;
         log::debug!("-store_witness");
         Ok(())
     }
 
-    pub fn store_block_timestamp(&self, height: u32, hash: &[u8], timestamp: u32) -> anyhow::Result<()> {
-        self.connection.execute("INSERT INTO blocks(height, hash, timestamp) VALUES (?1,?2,?3)", params![height, hash, timestamp])?;
+    pub fn store_block_timestamp(
+        &self,
+        height: u32,
+        hash: &[u8],
+        timestamp: u32,
+    ) -> anyhow::Result<()> {
+        self.connection.execute(
+            "INSERT INTO blocks(height, hash, timestamp) VALUES (?1,?2,?3)",
+            params![height, hash, timestamp],
+        )?;
         Ok(())
     }
 
-    pub fn store_tree(height: u32, tree: &CTree, db_tx: &Connection, shielded_pool: &str) -> anyhow::Result<()> {
+    pub fn store_tree(
+        height: u32,
+        tree: &CTree,
+        db_tx: &Connection,
+        shielded_pool: &str,
+    ) -> anyhow::Result<()> {
         let mut bb: Vec<u8> = vec![];
         tree.write(&mut bb)?;
-        db_tx.execute(&format!("INSERT INTO {}_tree(height, tree) VALUES (?1,?2)", shielded_pool), params![height, &bb])?;
+        db_tx.execute(
+            &format!(
+                "INSERT INTO {}_tree(height, tree) VALUES (?1,?2)",
+                shielded_pool
+            ),
+            params![height, &bb],
+        )?;
         Ok(())
     }
 
     pub fn update_transaction_with_memo(&self, details: &TransactionDetails) -> anyhow::Result<()> {
-        self.connection.execute("UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3", params![details.address, details.memo, details.id_tx])?;
+        self.connection.execute(
+            "UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3",
+            params![details.address, details.memo, details.id_tx],
+        )?;
         Ok(())
     }
 
@@ -447,13 +464,22 @@ impl DbAdapter {
         }))
     }
 
-    pub fn get_tree_by_name(&self, height: u32, shielded_pool: &str) -> anyhow::Result<TreeCheckpoint> {
-        let tree = self.connection.query_row(
-            &format!("SELECT tree FROM {}_tree WHERE height = ?1", shielded_pool),
-            [height], |row| {
-                let tree: Vec<u8> = row.get(0)?;
-                Ok(tree)
-            }).optional()?;
+    pub fn get_tree_by_name(
+        &self,
+        height: u32,
+        shielded_pool: &str,
+    ) -> anyhow::Result<TreeCheckpoint> {
+        let tree = self
+            .connection
+            .query_row(
+                &format!("SELECT tree FROM {}_tree WHERE height = ?1", shielded_pool),
+                [height],
+                |row| {
+                    let tree: Vec<u8> = row.get(0)?;
+                    Ok(tree)
+                },
+            )
+            .optional()?;
 
         match tree {
             Some(tree) => {
@@ -474,7 +500,7 @@ impl DbAdapter {
             None => Ok(TreeCheckpoint {
                 tree: CTree::new(),
                 witnesses: vec![],
-            })
+            }),
         }
     }
 
@@ -502,9 +528,7 @@ impl DbAdapter {
         Ok(nfs)
     }
 
-    pub fn get_unspent_nullifiers(
-        &self,
-    ) -> anyhow::Result<Vec<ReceivedNoteShort>> {
+    pub fn get_unspent_nullifiers(&self) -> anyhow::Result<Vec<ReceivedNoteShort>> {
         let sql = "SELECT id_note, account, nf, value FROM received_notes WHERE spent IS NULL OR spent = 0";
         let mut statement = self.connection.prepare(sql)?;
         let nfs_res = statement.query_map(params![], |row| {
@@ -529,7 +553,11 @@ impl DbAdapter {
         Ok(nfs)
     }
 
-    pub fn get_unspent_received_notes(&self, account: u32, anchor_height: u32) -> anyhow::Result<Vec<UTXO>> {
+    pub fn get_unspent_received_notes(
+        &self,
+        account: u32,
+        anchor_height: u32,
+    ) -> anyhow::Result<Vec<UTXO>> {
         let mut notes = vec![];
         let mut statement = self.connection.prepare(
             "SELECT id_note, diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL AND account = ?2 AND rho IS NULL
@@ -546,7 +574,7 @@ impl DbAdapter {
                 id_note,
                 diversifier: diversifier.try_into().unwrap(),
                 rseed: rcm.try_into().unwrap(),
-                witness
+                witness,
             };
             Ok(UTXO {
                 source,
@@ -575,7 +603,7 @@ impl DbAdapter {
                 diversifier: diversifier.try_into().unwrap(),
                 rseed: rcm.try_into().unwrap(),
                 rho: rho.try_into().unwrap(),
-                witness
+                witness,
             };
             Ok(UTXO {
                 source,
@@ -787,19 +815,47 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn find_account_by_fvk(&self, fvk: &str) -> anyhow::Result<Option<u32>> {
+        let account = self
+            .connection
+            .query_row(
+                "SELECT id_account FROM accounts WHERE fvk = ?1",
+                params![fvk],
+                |row| {
+                    let account: u32 = row.get(0)?;
+                    Ok(account)
+                },
+            )
+            .optional()?;
+        Ok(account)
+    }
+
     pub fn get_orchard(&self, account: u32) -> anyhow::Result<Option<OrchardKeyBytes>> {
-        let key = self.connection.query_row("SELECT sk, fvk FROM orchard_addrs WHERE account = ?1", params![account], |row| {
-            let sk: Vec<u8> = row.get(0)?;
-            let fvk: Vec<u8> = row.get(1)?;
-            Ok(OrchardKeyBytes {
-                sk: sk.try_into().unwrap(),
-                fvk: fvk.try_into().unwrap(),
-            })
-        }).optional()?;
+        let key = self
+            .connection
+            .query_row(
+                "SELECT sk, fvk FROM orchard_addrs WHERE account = ?1",
+                params![account],
+                |row| {
+                    let sk: Vec<u8> = row.get(0)?;
+                    let fvk: Vec<u8> = row.get(1)?;
+                    Ok(OrchardKeyBytes {
+                        sk: sk.try_into().unwrap(),
+                        fvk: fvk.try_into().unwrap(),
+                    })
+                },
+            )
+            .optional()?;
         Ok(key)
     }
 
-    pub fn store_ua_settings(&self, account: u32, transparent: bool, sapling: bool, orchard: bool) -> anyhow::Result<()> {
+    pub fn store_ua_settings(
+        &self,
+        account: u32,
+        transparent: bool,
+        sapling: bool,
+        orchard: bool,
+    ) -> anyhow::Result<()> {
         self.connection.execute(
             "INSERT INTO ua_settings(account, transparent, sapling, orchard) VALUES (?1, ?2, ?3, ?4)",
             params![account, transparent, sapling, orchard],
@@ -808,16 +864,20 @@ impl DbAdapter {
     }
 
     pub fn get_ua_settings(&self, account: u32) -> anyhow::Result<UnifiedAddressType> {
-        let tpe = self.connection.query_row("SELECT transparent, sapling, orchard FROM ua_settings WHERE account = ?1", params![account], |row| {
-            let transparent: bool = row.get(0)?;
-            let sapling: bool = row.get(1)?;
-            let orchard: bool = row.get(2)?;
-            Ok(UnifiedAddressType {
-                transparent,
-                sapling,
-                orchard
-            })
-        })?;
+        let tpe = self.connection.query_row(
+            "SELECT transparent, sapling, orchard FROM ua_settings WHERE account = ?1",
+            params![account],
+            |row| {
+                let transparent: bool = row.get(0)?;
+                let sapling: bool = row.get(1)?;
+                let orchard: bool = row.get(2)?;
+                Ok(UnifiedAddressType {
+                    transparent,
+                    sapling,
+                    orchard,
+                })
+            },
+        )?;
         Ok(tpe)
     }
 
@@ -1051,7 +1111,9 @@ impl DbAdapter {
     }
 
     pub fn get_txid_without_memo(&self) -> anyhow::Result<Vec<GetTransactionDetailRequest>> {
-        let mut stmt = self.connection.prepare("SELECT account, id_tx, height, txid FROM transactions WHERE memo IS NULL")?;
+        let mut stmt = self
+            .connection
+            .prepare("SELECT account, id_tx, height, txid FROM transactions WHERE memo IS NULL")?;
         let rows = stmt.query_map([], |row| {
             let account: u32 = row.get(0)?;
             let id_tx: u32 = row.get(1)?;
@@ -1223,9 +1285,9 @@ pub struct AccountData {
 
 #[cfg(test)]
 mod tests {
-    use crate::db::{DbAdapter, DEFAULT_DB_PATH, ReceivedNote};
-    use zcash_params::coin::CoinType;
+    use crate::db::{DbAdapter, ReceivedNote, DEFAULT_DB_PATH};
     use crate::sync::{CTree, Witness};
+    use zcash_params::coin::CoinType;
 
     #[test]
     fn test_balance() {

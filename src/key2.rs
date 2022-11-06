@@ -41,11 +41,11 @@ pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     if Mnemonic::from_phrase(key, Language::English).is_ok() {
         return 0;
     }
-    if decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key).is_ok()
-    {
+    if decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key).is_ok() {
         return 1;
     }
-    if decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key).is_ok()
+    if decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
+        .is_ok()
     {
         return 2;
     }
@@ -60,7 +60,6 @@ pub fn is_valid_address(coin: u8, address: &str) -> bool {
     let recipient = zcash_client_backend::address::RecipientAddress::decode(network, address);
     recipient.is_some()
 }
-
 
 fn derive_secret_key(
     network: &Network,

@@ -3,6 +3,7 @@ extern crate rocket;
 
 use anyhow::anyhow;
 use lazy_static::lazy_static;
+use rand::rngs::OsRng;
 use rocket::fairing::AdHoc;
 use rocket::http::Status;
 use rocket::response::Responder;
@@ -13,9 +14,9 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::sync::Mutex;
 use thiserror::Error;
-use warp_api_ffi::api::payment::{Recipient, RecipientMemo};
+use warp_api_ffi::api::payment::{Recipient, RecipientMemo, RecipientShort};
 use warp_api_ffi::api::payment_uri::PaymentURI;
-use warp_api_ffi::{get_best_server, AccountData, AccountInfo, AccountRec, CoinConfig, KeyPack, Tx, TxRec, RaptorQDrops};
+use warp_api_ffi::{build_tx, get_best_server, get_secret_keys, AccountData, AccountInfo, AccountRec, CoinConfig, KeyPack, RaptorQDrops, TransactionPlan, Tx, TxRec, TransactionBuilderConfig, TxBuilderContext};
 
 lazy_static! {
     static ref SYNC_CANCELED: Mutex<bool> = Mutex::new(false);
@@ -101,6 +102,8 @@ async fn main() -> anyhow::Result<()> {
                 merge_data,
                 derive_keys,
                 instant_sync,
+                get_tx_plan,
+                build_from_plan,
             ],
         )
         .attach(AdHoc::config::<Config>())
@@ -182,7 +185,13 @@ pub fn get_address() -> Result<String, Error> {
 #[get("/unified_address?<t>&<s>&<o>")]
 pub fn get_unified_address(t: u8, s: u8, o: u8) -> Result<String, Error> {
     let c = CoinConfig::get_active();
-    let address = warp_api_ffi::api::account::get_unified_address(c.coin, c.id_account, t != 0, s != 0, o != 0)?;
+    let address = warp_api_ffi::api::account::get_unified_address(
+        c.coin,
+        c.id_account,
+        t != 0,
+        s != 0,
+        o != 0,
+    )?;
     Ok(address)
 }
 
@@ -290,6 +299,60 @@ pub async fn broadcast_tx(tx_hex: String) -> Result<String, Error> {
     let tx = hex::decode(tx_hex.trim_end()).map_err(|e| anyhow!(e.to_string()))?;
     let tx_id = warp_api_ffi::api::payment::broadcast_tx(&tx).await?;
     Ok(tx_id)
+}
+
+#[post(
+    "/get_tx_plan?<confirmations>",
+    data = "<recipients>"
+)]
+pub async fn get_tx_plan(
+    confirmations: u32,
+    recipients: Json<Vec<RecipientShort>>,
+) -> Result<Json<TransactionPlan>, Error> {
+    let c = CoinConfig::get_active();
+    let coin = c.coin;
+    let account = c.id_account;
+    let last_height = warp_api_ffi::api::sync::get_latest_height().await?;
+    let change_address =
+        warp_api_ffi::api::account::get_unified_address(coin, account, true, true, true)?;
+    let recipients: Vec<_> = recipients
+        .iter()
+        .map(|r| RecipientMemo::from(r.clone()))
+        .collect();
+    let config = TransactionBuilderConfig::new(&change_address);
+
+    let plan = warp_api_ffi::api::payment_v2::build_tx_plan(
+        coin,
+        account,
+        last_height,
+        &recipients,
+        &config,
+        confirmations,
+    )
+    .await?;
+    Ok(Json(plan))
+}
+
+#[post("/build_from_plan", data = "<tx_plan>")]
+pub async fn build_from_plan(tx_plan: Json<TransactionPlan>) -> Result<String, Error> {
+    let c = CoinConfig::get_active();
+    let fvk = {
+        let db = c.db()?;
+        let AccountData { fvk, .. } = db.get_account_info(c.id_account)?;
+        fvk
+    };
+
+    if fvk != tx_plan.fvk {
+        return Err(Error::Other(anyhow::anyhow!(
+            "Account does not match transaction"
+        )));
+    }
+
+    let keys = get_secret_keys(c.coin, c.id_account)?;
+    let context = TxBuilderContext::from_height(c.coin, tx_plan.height)?;
+    let tx = build_tx(c.chain.network(), &keys, &tx_plan, context, OsRng).unwrap();
+    let tx = hex::encode(&tx);
+    Ok(tx)
 }
 
 #[get("/new_diversified_address")]

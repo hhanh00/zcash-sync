@@ -1,11 +1,11 @@
+use super::GENERATORS_EXP;
+use crate::sync::{Hasher, Node};
+use crate::Hash;
 use ff::PrimeField;
 use group::Curve;
 use jubjub::{AffinePoint, ExtendedPoint, Fr};
 use lazy_static::lazy_static;
 use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
-use crate::sync::{Hasher, Node};
-use crate::Hash;
-use super::GENERATORS_EXP;
 
 lazy_static! {
     pub static ref SAPLING_ROOTS: Vec<Hash> = {
@@ -45,10 +45,7 @@ fn accumulate_generator(acc: &Fr, idx_generator: u32) -> ExtendedPoint {
 
 pub fn hash_combine(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
     let p = hash_combine_inner(depth, left, right);
-    p
-        .to_affine()
-        .get_u()
-        .to_repr()
+    p.to_affine().get_u().to_repr()
 }
 
 pub fn hash_combine_inner(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> ExtendedPoint {
@@ -95,13 +92,12 @@ pub fn hash_combine_inner(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> Exten
         v = v >> bit_offset & 0x07; // keep 3 bits
         accumulate_scalar(&mut acc, &mut cur, v as u8);
 
-        if (i+3) % PEDERSEN_HASH_CHUNKS_PER_GENERATOR as u32 == 0 {
+        if (i + 3) % PEDERSEN_HASH_CHUNKS_PER_GENERATOR as u32 == 0 {
             hash += accumulate_generator(&acc, idx_generator);
             idx_generator += 1;
             acc = Fr::zero();
             cur = Fr::one();
-        }
-        else {
+        } else {
             cur = cur.double().double().double(); // 2^4 * cur
         }
         bit_offset += 3;
@@ -136,20 +132,17 @@ impl Hasher for SaplingHasher {
     fn normalize(&self, extended: &[Self::Extended]) -> Vec<Node> {
         let mut hash_affine = vec![AffinePoint::identity(); extended.len()];
         ExtendedPoint::batch_normalize(extended, &mut hash_affine);
-        hash_affine
-            .iter()
-            .map(|p| p.get_u().to_repr())
-            .collect()
+        hash_affine.iter().map(|p| p.get_u().to_repr()).collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
-    use rand::RngCore;
-    use rand::rngs::OsRng;
     use crate::hash::pedersen_hash;
     use crate::sapling::hash::hash_combine;
+    use rand::rngs::OsRng;
+    use rand::RngCore;
+    use std::convert::TryInto;
 
     #[test]
     fn test_hash1() {

@@ -80,9 +80,9 @@ mod contact;
 mod db;
 mod fountain;
 mod hash;
-mod sync;
-mod sapling;
 mod orchard;
+mod sapling;
+mod sync;
 // mod key;
 mod key2;
 mod mempool;
@@ -90,9 +90,9 @@ mod misc;
 mod pay;
 mod prices;
 // mod print;
+mod note_selection;
 mod scan;
 mod taddr;
-mod note_selection;
 mod transaction;
 mod unified;
 // mod ua;
@@ -115,15 +115,11 @@ mod ledger {
     }
 }
 
-pub use crate::chain::{
-    connect_lightwalletd, get_best_server,
-    ChainError,
-};
+pub use crate::chain::{connect_lightwalletd, get_best_server, ChainError};
 pub use crate::coinconfig::{
-    CoinConfig, init_coin, set_active, set_active_account, set_coin_lwd_url,
-    COIN_CONFIG,
+    init_coin, set_active, set_active_account, set_coin_lwd_url, CoinConfig, COIN_CONFIG,
 };
-pub use crate::db::{AccountData, AccountInfo, AccountRec, DbAdapter, TxRec, DbAdapterBuilder};
+pub use crate::db::{AccountData, AccountInfo, AccountRec, DbAdapter, DbAdapterBuilder, TxRec};
 pub use crate::fountain::{FountainCodes, RaptorQDrops};
 // pub use crate::key::KeyHelpers;
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
@@ -132,7 +128,13 @@ pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
 pub use zip32::KeyPack;
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
 
-pub use unified::{get_unified_address, decode_unified_address};
+pub use note_selection::{
+    build_tx_plan, build_tx, get_secret_keys,
+    TransactionPlan, TransactionBuilderConfig,
+    TxBuilderContext,
+    fetch_utxos,
+};
+pub use unified::{decode_unified_address, get_unified_address};
 
 #[cfg(feature = "ledger_sapling")]
 pub use crate::ledger::sapling::build_tx_ledger;
@@ -150,3 +152,4 @@ pub fn init_test() {
     init_coin(0, "./zec.db").unwrap();
     set_coin_lwd_url(0, "http://127.0.0.1:9067");
 }
+

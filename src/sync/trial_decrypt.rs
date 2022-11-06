@@ -1,15 +1,15 @@
-use std::collections::HashMap;
 use crate::chain::Nf;
+use crate::db::ReceivedNote;
+use crate::sync::tree::Node;
+use crate::{CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactTx};
+use orchard::note_encryption::OrchardDomain;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::time::Instant;
-use orchard::note_encryption::OrchardDomain;
 use zcash_note_encryption::batch::try_compact_note_decryption;
-use zcash_note_encryption::{BatchDomain, COMPACT_NOTE_SIZE, EphemeralKeyBytes, ShieldedOutput};
+use zcash_note_encryption::{BatchDomain, EphemeralKeyBytes, ShieldedOutput, COMPACT_NOTE_SIZE};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
-use crate::{CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactTx};
-use crate::db::ReceivedNote;
-use crate::sync::tree::Node;
 
 pub struct DecryptedBlock<D: BatchDomain, VK, DN: DecryptedNote<D, VK>> {
     pub height: u32,
@@ -44,7 +44,13 @@ pub struct OutputPosition {
 }
 
 pub trait DecryptedNote<D: BatchDomain, VK>: Send + Sync {
-    fn from_parts(vk: VK, note: D::Note, pa: D::Recipient, output_position: OutputPosition, cmx: Node) -> Self;
+    fn from_parts(
+        vk: VK,
+        note: D::Note,
+        pa: D::Recipient,
+        output_position: OutputPosition,
+        cmx: Node,
+    ) -> Self;
     fn position(&self, block_offset: usize) -> usize;
     fn cmx(&self) -> Node;
     fn to_received_note(&self, position: u64) -> ReceivedNote;
@@ -85,9 +91,17 @@ impl From<&CompactSaplingOutput> for CompactOutputBytes {
     fn from(co: &CompactSaplingOutput) -> Self {
         CompactOutputBytes {
             nullifier: [0u8; 32],
-            epk: if co.epk.is_empty() { [0u8; 32] } else { co.epk.clone().try_into().unwrap() } ,
+            epk: if co.epk.is_empty() {
+                [0u8; 32]
+            } else {
+                co.epk.clone().try_into().unwrap()
+            },
             cmx: co.cmu.clone().try_into().unwrap(), // cannot be filtered out
-            ciphertext: if co.ciphertext.is_empty() { [0u8; 52] } else { co.ciphertext.clone().try_into().unwrap() },
+            ciphertext: if co.ciphertext.is_empty() {
+                [0u8; 52]
+            } else {
+                co.ciphertext.clone().try_into().unwrap()
+            },
         }
     }
 }
@@ -96,18 +110,25 @@ impl From<&CompactOrchardAction> for CompactOutputBytes {
     fn from(co: &CompactOrchardAction) -> Self {
         CompactOutputBytes {
             nullifier: co.nullifier.clone().try_into().unwrap(),
-            epk: if co.ephemeral_key.is_empty() { [0u8; 32] } else { co.ephemeral_key.clone().try_into().unwrap() } ,
+            epk: if co.ephemeral_key.is_empty() {
+                [0u8; 32]
+            } else {
+                co.ephemeral_key.clone().try_into().unwrap()
+            },
             cmx: co.cmx.clone().try_into().unwrap(), // cannot be filtered out
-            ciphertext: if co.ciphertext.is_empty() { [0u8; 52] } else { co.ciphertext.clone().try_into().unwrap() },
+            ciphertext: if co.ciphertext.is_empty() {
+                [0u8; 52]
+            } else {
+                co.ciphertext.clone().try_into().unwrap()
+            },
         }
     }
 }
 
-
 pub struct CompactShieldedOutput(CompactOutputBytes, OutputPosition);
 
 impl<D: BatchDomain<ExtractedCommitmentBytes = [u8; 32]>> ShieldedOutput<D, COMPACT_NOTE_SIZE>
-for CompactShieldedOutput
+    for CompactShieldedOutput
 {
     fn ephemeral_key(&self) -> EphemeralKeyBytes {
         EphemeralKeyBytes(self.0.epk)
@@ -120,12 +141,14 @@ for CompactShieldedOutput
     }
 }
 
-pub trait TrialDecrypter<N: Parameters, D: BatchDomain<ExtractedCommitmentBytes = [u8; 32]>, VK: ViewKey<D>, DN: DecryptedNote<D, VK>>: Clone {
-    fn decrypt_notes(
-        &self,
-        block: &CompactBlock,
-        vks: &[VK],
-    ) -> DecryptedBlock<D, VK, DN> {
+pub trait TrialDecrypter<
+    N: Parameters,
+    D: BatchDomain<ExtractedCommitmentBytes = [u8; 32]>,
+    VK: ViewKey<D>,
+    DN: DecryptedNote<D, VK>,
+>: Clone
+{
+    fn decrypt_notes(&self, block: &CompactBlock, vks: &[VK]) -> DecryptedBlock<D, VK, DN> {
         let height = BlockHeight::from_u32(block.height as u32);
         let mut count_outputs = 0u32;
         let mut spends: Vec<Nf> = vec![];
@@ -161,33 +184,31 @@ pub trait TrialDecrypter<N: Parameters, D: BatchDomain<ExtractedCommitmentBytes 
         }
 
         let start = Instant::now();
-        let notes_decrypted =
-            try_compact_note_decryption(&vvks, &outputs);
+        let notes_decrypted = try_compact_note_decryption(&vvks, &outputs);
         let elapsed = start.elapsed().as_millis() as usize;
 
         for (pos, opt_note) in notes_decrypted.iter().enumerate() {
-            if let Some(((note, pa), _)) = opt_note {
-                let vk = &vks[pos / outputs.len()];
+            if let Some(((note, pa), vk_index)) = opt_note {
+                let vk = &vks[*vk_index];
                 let account = vk.account();
                 let output = &outputs[pos % outputs.len()];
-                let tx_index = output.1.1.tx_index;
+                let tx_index = output.1 .1.tx_index;
                 let tx_key = (account, tx_index);
-                let tx = txs.entry(tx_key).or_insert_with(||
-                   DecryptedTx {
-                       account,
-                       height: block.height as u32,
-                       timestamp: block.time,
-                       tx_index,
-                       tx_id: block.vtx[tx_index].hash.clone(),
-                       notes: vec![],
-                       _phantom: PhantomData::default(),
+                let tx = txs.entry(tx_key).or_insert_with(|| DecryptedTx {
+                    account,
+                    height: block.height as u32,
+                    timestamp: block.time,
+                    tx_index,
+                    tx_id: block.vtx[tx_index].hash.clone(),
+                    notes: vec![],
+                    _phantom: PhantomData::default(),
                 });
                 tx.notes.push(DN::from_parts(
                     vk.clone(),
                     note.clone(),
                     pa.clone(),
-                    output.1.1.clone(),
-                    output.1.0.cmx,
+                    output.1 .1.clone(),
+                    output.1 .0.cmx,
                 ));
             }
         }
@@ -206,4 +227,3 @@ pub trait TrialDecrypter<N: Parameters, D: BatchDomain<ExtractedCommitmentBytes 
     fn spends(&self, vtx: &CompactTx) -> Vec<Nf>;
     fn outputs(&self, vtx: &CompactTx) -> Vec<CompactOutputBytes>;
 }
-

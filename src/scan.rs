@@ -2,26 +2,29 @@ use crate::chain::get_latest_height;
 use crate::db::AccountViewKey;
 use serde::Serialize;
 
-use crate::transaction::{get_transaction_details, GetTransactionDetailRequest, retrieve_tx_info};
-use crate::{connect_lightwalletd, CompactBlock, CompactSaplingOutput, CompactTx, DbAdapterBuilder, CoinConfig};
-use crate::chain::{DecryptNode, download_chain};
+use crate::chain::{download_chain, DecryptNode};
+use crate::transaction::{get_transaction_details, retrieve_tx_info, GetTransactionDetailRequest};
+use crate::{
+    connect_lightwalletd, CoinConfig, CompactBlock, CompactSaplingOutput, CompactTx,
+    DbAdapterBuilder,
+};
 
 use anyhow::anyhow;
 use lazy_static::lazy_static;
+use orchard::note_encryption::OrchardDomain;
 use std::collections::HashMap;
 use std::sync::Arc;
-use orchard::note_encryption::OrchardDomain;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{Network, Parameters};
 
-use zcash_primitives::sapling::Note;
-use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use crate::orchard::{DecryptedOrchardNote, OrchardDecrypter, OrchardHasher, OrchardViewKey};
 use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
 use crate::sync::{Synchronizer, WarpProcessor};
+use zcash_primitives::sapling::note_encryption::SaplingDomain;
+use zcash_primitives::sapling::Note;
 
 pub struct Blocks(pub Vec<CompactBlock>, pub usize);
 
@@ -55,11 +58,23 @@ pub struct TxIdHeight {
     index: u32,
 }
 
-type SaplingSynchronizer = Synchronizer<Network, SaplingDomain<Network>, SaplingViewKey, DecryptedSaplingNote,
-    SaplingDecrypter<Network>, SaplingHasher>;
+type SaplingSynchronizer = Synchronizer<
+    Network,
+    SaplingDomain<Network>,
+    SaplingViewKey,
+    DecryptedSaplingNote,
+    SaplingDecrypter<Network>,
+    SaplingHasher,
+>;
 
-type OrchardSynchronizer = Synchronizer<Network, OrchardDomain, OrchardViewKey, DecryptedOrchardNote,
-    OrchardDecrypter<Network>, OrchardHasher>;
+type OrchardSynchronizer = Synchronizer<
+    Network,
+    OrchardDomain,
+    OrchardViewKey,
+    DecryptedOrchardNote,
+    OrchardDecrypter<Network>,
+    OrchardHasher,
+>;
 
 pub async fn sync_async<'a>(
     coin: u8,
@@ -95,11 +110,23 @@ pub async fn sync_async<'a>(
     let mut height = start_height;
     let (blocks_tx, mut blocks_rx) = mpsc::channel::<Blocks>(1);
     tokio::spawn(async move {
-        download_chain(&mut client, start_height, end_height, prev_hash, max_cost, cancel, blocks_tx).await?;
+        download_chain(
+            &mut client,
+            start_height,
+            end_height,
+            prev_hash,
+            max_cost,
+            cancel,
+            blocks_tx,
+        )
+        .await?;
         Ok::<_, anyhow::Error>(())
     });
 
-    let db_builder = DbAdapterBuilder { coin_type: c.coin_type, db_path: db_path.clone() };
+    let db_builder = DbAdapterBuilder {
+        coin_type: c.coin_type,
+        db_path: db_path.clone(),
+    };
     while let Some(blocks) = blocks_rx.recv().await {
         let first_block = blocks.0.first().unwrap(); // cannot be empty because blocks are not
         log::info!("Height: {}", first_block.height);

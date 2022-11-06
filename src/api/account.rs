@@ -7,6 +7,8 @@ use crate::db::AccountData;
 use crate::key2::decode_key;
 use crate::taddr::{derive_taddr, derive_tkeys};
 use crate::transaction::retrieve_tx_info;
+use crate::unified::UnifiedAddressType;
+use crate::zip32::derive_zip32;
 use crate::{connect_lightwalletd, AccountInfo, KeyPack};
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
@@ -16,8 +18,6 @@ use std::fs::File;
 use std::io::BufReader;
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
 use zcash_primitives::consensus::Parameters;
-use crate::unified::UnifiedAddressType;
-use crate::zip32::derive_zip32;
 
 /// Create a new account
 /// # Arguments
@@ -89,8 +89,7 @@ fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::
             db.create_orchard(account)?;
         }
         db.store_ua_settings(account, true, true, true)?;
-    }
-    else {
+    } else {
         db.store_ua_settings(account, false, true, false)?;
     }
     Ok(account)
@@ -136,7 +135,8 @@ pub fn new_diversified_address() -> anyhow::Result<String> {
     let fvk = decode_extended_full_viewing_key(
         c.chain.network().hrp_sapling_extended_full_viewing_key(),
         &fvk,
-    ).map_err(|_| anyhow!("Bech32 Decode Error"))?;
+    )
+    .map_err(|_| anyhow!("Bech32 Decode Error"))?;
     let mut diversifier_index = db.get_diversifier(c.id_account)?;
     diversifier_index.increment().unwrap();
     let (new_diversifier_index, pa) = fvk
@@ -301,13 +301,19 @@ pub async fn import_sync_data(coin: u8, file: &str) -> anyhow::Result<()> {
 /// * t, s, o: include transparent, sapling, orchard receivers?
 ///
 /// The address depends on the UA settings and may include transparent, sapling & orchard receivers
-pub fn get_unified_address(coin: u8, id_account: u32, t: bool, s: bool, o: bool) -> anyhow::Result<String> {
+pub fn get_unified_address(
+    coin: u8,
+    id_account: u32,
+    t: bool,
+    s: bool,
+    o: bool,
+) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
     let tpe = UnifiedAddressType {
         transparent: t,
         sapling: s,
-        orchard: o
+        orchard: o,
     };
     let address = crate::get_unified_address(c.chain.network(), &db, id_account, Some(tpe))?; // use ua settings from db
     Ok(address)

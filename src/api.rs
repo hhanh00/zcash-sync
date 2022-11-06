@@ -5,8 +5,8 @@ pub mod historical_prices;
 pub mod mempool;
 pub mod message;
 pub mod payment;
-pub mod payment_v2;
 pub mod payment_uri;
+pub mod payment_v2;
 pub mod sync;
 
 #[cfg(feature = "dart_ffi")]

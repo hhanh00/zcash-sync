@@ -4,8 +4,8 @@ use crate::db::AccountBackup;
 use bech32::{FromBase32, ToBase32, Variant};
 use chacha20poly1305::aead::{Aead, NewAead};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
 
 const NONCE: &[u8; 12] = b"unique nonce";
 

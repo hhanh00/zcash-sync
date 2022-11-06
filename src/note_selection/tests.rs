@@ -1,87 +1,23 @@
+use serde::Serialize;
+use assert_matches::assert_matches;
 use serde_json::Value;
-use zcash_primitives::memo::Memo;
-use crate::{CoinConfig, init_test};
-use crate::api::payment::RecipientMemo;
-use crate::unified::UnifiedAddressType;
-use super::{*, types::*};
-
-// must have T+S+O receivers
-const CHANGE_ADDRESS: &str = "u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qqmktzwktw772nlle6skkkxwmtzxaan3slntqev03g70tzpky3c58hfgvfjkcky255cwqgfuzdjcktfl7pjalt5sl33se75pmga09etn9dplr98eq2g8cgmvgvx6jx2a2xhy39x96c6rumvlyt35whml87r064qdzw30e";
-const UA_TSO: &str = "uregtest1mxy5wq2n0xw57nuxa4lqpl358zw4vzyfgadsn5jungttmqcv6nx6cpx465dtpzjzw0vprjle4j4nqqzxtkuzm93regvgg4xce0un5ec6tedquc469zjhtdpkxz04kunqqyasv4rwvcweh3ue0ku0payn29stl2pwcrghyzscrrju9ar57rn36wgz74nmynwcyw27rjd8yk477l97ez8";
-const UA_O: &str = "uregtest1mzt5lx5s5u8kczlfr82av97kjckmfjfuq8y9849h6cl9chhdekxsm6r9dklracflqwplrnfzm5rucp5txfdm04z5myrde8y3y5rayev8";
-
-#[tokio::test]
-async fn test_fetch_utxo() {
-    init_test();
-    let utxos = fetch_utxos(0, 1, 235, true, 0).await.unwrap();
-
-    for utxo in utxos.iter() {
-        log::info!("{:?}", utxo);
-    }
-
-    assert_eq!(utxos[0].amount, 624999000);
-}
-
-#[test]
-fn test_ua() {
-    init_test();
-    let c = CoinConfig::get(0);
-    let db = c.db().unwrap();
-    let address = crate::get_unified_address(c.chain.network(), &db, 1,
-                                             Some(UnifiedAddressType { transparent: true, sapling: true, orchard: false })).unwrap(); // use ua settings from db
-    println!("{}", address);
-}
-
-#[tokio::test]
-async fn test_payment() {
-    init_test();
-    let config = NoteSelectConfig::new(CHANGE_ADDRESS);
-
-    let recipients = vec![
-        RecipientMemo {
-            address: UA_O.to_string(),
-            amount: 89000,
-            memo: Memo::Empty.into(),
-            max_amount_per_note: 0,
-        }
-    ];
-    let tx_plan = prepare_multi_payment(0, 1, 205,
-                                        &recipients, &config, 3,
-    ).await.unwrap();
-
-    let tx_json = serde_json::to_string(&tx_plan).unwrap();
-    println!("{}", tx_json);
-
-    // expected: s2o because the recipient ua has only an orchard receiver
-    assert_eq!(tx_plan.outputs[0].destination.pool(), Pool::Orchard);
-    assert_eq!(tx_plan.outputs[0].amount, 89000);
-    assert_eq!(tx_plan.outputs[1].destination.pool(), Pool::Sapling); // change goes back to sapling
-    assert_eq!(tx_plan.outputs[1].amount, 624900000);
-    // fee = 10000 per zip-317
-    assert_eq!(tx_plan.fee, 10000);
-
-    assert_eq!(tx_plan.spends[0].amount, tx_plan.outputs[0].amount + tx_plan.outputs[1].amount + tx_plan.fee);
-}
-
-macro_rules! order {
-    ($id:expr, $q:expr, $destinations:expr) => {
-        Order {
-            id: $id,
-            amount: $q * 1000,
-            destinations: $destinations,
-            priority: PoolPriority::OS,
-            filled: 0,
-            is_fee: false,
-            memo: MemoBytes::empty(),
-        }
-    };
-}
+use zcash_primitives::memo::MemoBytes;
+use crate::note_selection::build_tx_plan;
+use crate::note_selection::fee::{FeeCalculator, FeeZIP327};
+use crate::note_selection::optimize::{outputs_for_change, select_inputs};
+use crate::note_selection::ua::decode;
+use super::types::*;
+use super::optimize::{allocate_funds, fill, group_orders};
+use super::TransactionBuilderError::NotEnoughFunds;
 
 macro_rules! utxo {
     ($id:expr, $q:expr) => {
         UTXO {
             amount: $q * 1000,
-            source: Source::Transparent { txid: [0u8; 32], index: $id },
+            source: Source::Transparent {
+                txid: [0u8; 32],
+                index: $id,
+            },
         }
     };
 }
@@ -115,9 +51,24 @@ macro_rules! orchard {
     };
 }
 
+macro_rules! order {
+    ($id:expr, $q:expr, $destinations:expr) => {
+        Order {
+            id: $id,
+            amount: $q * 1000,
+            destinations: $destinations,
+            memo: MemoBytes::empty(),
+        }
+    };
+}
+
 macro_rules! t {
     ($id: expr, $q:expr) => {
-        order!($id, $q, [Some(Destination::Transparent([0u8; 20])), None, None])
+        order!(
+            $id,
+            $q,
+            [Some(Destination::Transparent([0u8; 20])), None, None]
+        )
     };
 }
 
@@ -135,216 +86,650 @@ macro_rules! o {
 
 macro_rules! ts {
     ($id: expr, $q:expr) => {
-        order!($id, $q, [Some(Destination::Transparent([0u8; 20])), Some(Destination::Sapling([0u8; 43])), None])
+        order!(
+            $id,
+            $q,
+            [
+                Some(Destination::Transparent([0u8; 20])),
+                Some(Destination::Sapling([0u8; 43])),
+                None
+            ]
+        )
     };
 }
 
 macro_rules! to {
     ($id: expr, $q:expr) => {
-        order!($id, $q, [Some(Destination::Transparent([0u8; 20])), None, Some(Destination::Orchard([0u8; 43]))])
+        order!(
+            $id,
+            $q,
+            [
+                Some(Destination::Transparent([0u8; 20])),
+                None,
+                Some(Destination::Orchard([0u8; 43]))
+            ]
+        )
     };
 }
 
 macro_rules! so {
     ($id: expr, $q:expr) => {
-        order!($id, $q, [None, Some(Destination::Sapling([0u8; 43])), Some(Destination::Orchard([0u8; 43]))])
+        order!(
+            $id,
+            $q,
+            [
+                None,
+                Some(Destination::Sapling([0u8; 43])),
+                Some(Destination::Orchard([0u8; 43]))
+            ]
+        )
     };
 }
 
 macro_rules! tso {
     ($id: expr, $q:expr) => {
-        order!($id, $q, [Some(Destination::Transparent([0u8; 20])), Some(Destination::Sapling([0u8; 43])), Some(Destination::Orchard([0u8; 43]))])
+        order!(
+            $id,
+            $q,
+            [
+                Some(Destination::Transparent([0u8; 20])),
+                Some(Destination::Sapling([0u8; 43])),
+                Some(Destination::Orchard([0u8; 43]))
+            ]
+        )
     };
 }
 
 #[test]
-fn test_example1() {
-    let _ = env_logger::try_init();
-    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
-    config.use_transparent = true;
-    config.privacy_policy = PrivacyPolicy::AnyPool;
+#[ignore]
+fn test_select() {
+    env_logger::init();
 
-    let utxos = [utxo!(1, 5), utxo!(2, 7), sapling!(3, 12), orchard!(4, 10)];
-    let mut orders = [t!(1, 10)];
+    // Exhaustive test of every combination of T/S/O/S+O recipients
+    // with every combination of assets in sender's account
+    let mut c = 0usize;
+    for t in 0..=10 {
+        for s in 0..=10 {
+            for o in 0..=10 {
+                for so in 0..=10 {
+                    for fee in 0..=10 {
+                        let amounts = OrderGroupAmounts {
+                            t0: t * 10_000,
+                            s0: s * 10_000,
+                            o0: o * 10_000,
+                            x: so * 10_000,
+                            fee: fee * 1000,
+                        };
+                        for t in 0..=10 {
+                            for s in 0..=10 {
+                                for o in 0..=10 {
+                                    let _ = allocate_funds(&amounts, &&PoolAllocation([t * 20_000, s * 20_000, o * 20_000]));
+                                    c += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
-
-    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":5000},{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":2}},"amount":7000},{"source":{"Sapling":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":12000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":10000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":4000,"memo":[246]}],"fee":20000}"#).unwrap();
-    assert_eq!(tx_plan_json, expected);
+    println!("{} tests", c);
 }
 
 #[test]
-fn test_example2() {
-    let _ = env_logger::try_init();
-    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
-    config.privacy_policy = PrivacyPolicy::AnyPool;
-
-    let utxos = [utxo!(1, 5), utxo!(2, 7), sapling!(3, 12), orchard!(4, 10), orchard!(5, 10)];
-    let mut orders = [t!(1, 10)];
-
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
-
-    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":5000},{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":2}},"amount":7000},{"source":{"Sapling":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":12000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":10000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":4000,"memo":[246]}],"fee":20000}"#).unwrap();
-    assert_eq!(tx_plan_json, expected);
+fn test_t2t() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 100,
+        s0: 0,
+        o0: 0,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([150, 0, 0])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 110,
+        s2: 0,
+        o2: 0
+    })
 }
 
 #[test]
-fn test_example3() {
+fn test_t2zs() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 100,
+        o0: 0,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([150, 0, 0])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 110,
+        s2: 0,
+        o2: 0
+    })
+}
+
+#[test]
+fn test_t2zo() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 0,
+        o0: 100,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([150, 0, 0])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 110,
+        s2: 0,
+        o2: 0
+    })
+}
+
+#[test]
+fn test_t2ua() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 0,
+        o0: 0,
+        x: 100,
+        fee: 10
+    }, &PoolAllocation([150, 0, 0])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 50,
+        o1: 50,
+        t2: 110,
+        s2: 0,
+        o2: 0
+    })
+}
+
+#[test]
+fn test_zs2zs() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 100,
+        o0: 0,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([0, 150, 0])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 0,
+        s2: 110,
+        o2: 0
+    })
+}
+
+#[test]
+fn test_zo2zo() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 0,
+        o0: 100,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([0, 0, 150])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 0,
+        s2: 0,
+        o2: 110
+    })
+}
+
+#[test]
+fn test_ua2zs() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 100,
+        o0: 0,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([0, 150, 150])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 0,
+        s2: 105,
+        o2: 5,
+    }) // net change is (-5, -5) which is better than (-10, 0)
+}
+
+#[test]
+fn test_ua2zo() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 0,
+        o0: 100,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([0, 150, 150])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 0,
+        s2: 5,
+        o2: 105,
+    }) // net change is (-5, -5) which is better than (-10, 0)
+}
+
+#[test]
+fn test_ua2t() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 100,
+        s0: 0,
+        o0: 0,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([0, 150, 150])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 0,
+        s2: 55,
+        o2: 55,
+    }) // split equally between sapling & orchard
+}
+
+#[test]
+fn test_zs2t() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 100,
+        s0: 0,
+        o0: 0,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([0, 150, 0])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 0,
+        s2: 110,
+        o2: 0,
+    })
+}
+
+#[test]
+fn test_zo2t() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 100,
+        s0: 0,
+        o0: 0,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([0, 0, 150])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 0,
+        s2: 0,
+        o2: 110,
+    })
+}
+
+#[test]
+fn test_zo2zs() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 100,
+        o0: 0,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([0, 0, 150])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 0,
+        s2: 0,
+        o2: 110,
+    })
+}
+
+#[test]
+fn test_zs2zo() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 0,
+        o0: 100,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([0, 150, 0])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 0,
+        s2: 110,
+        o2: 0,
+    })
+}
+
+#[test]
+fn test_ua2ua() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 0,
+        o0: 0,
+        x: 100,
+        fee: 10
+    }, &PoolAllocation([0, 150, 150])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 50,
+        o1: 50,
+        t2: 0,
+        s2: 55,
+        o2: 55,
+    })
+}
+
+#[test]
+fn test_tzs2zs() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 100,
+        o0: 0,
+        x: 0,
+        fee: 10
+    }, &PoolAllocation([150, 10, 10])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 0,
+        t2: 90, // must use t because not enough zs & zo
+        s2: 10,
+        o2: 10,
+    })
+}
+
+#[test]
+fn test_tzs2ua() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 0,
+        o0: 0,
+        x: 100,
+        fee: 10
+    }, &PoolAllocation([150, 10, 10])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 50,
+        o1: 50, // split equally to minimize net change
+        t2: 90, // must use t because not enough zs & zo
+        s2: 10,
+        o2: 10,
+    })
+}
+
+#[test]
+fn test_neg_ua2ua() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 0,
+        s0: 0,
+        o0: 0,
+        x: 100,
+        fee: 10
+    }, &PoolAllocation([10, 10, 10]));
+    assert_matches!(r, Err(NotEnoughFunds))
+}
+
+#[test]
+fn test_odd_ua2ua() {
+    let r = allocate_funds(&OrderGroupAmounts {
+        t0: 1,
+        s0: 1,
+        o0: 1,
+        x: 1,
+        fee: 1
+    }, &PoolAllocation([10, 10, 10])).unwrap();
+    assert_eq!(r, FundAllocation {
+        s1: 0,
+        o1: 1,
+        t2: 0,
+        s2: 2,
+        o2: 3,
+    })
+}
+
+#[test]
+fn test_fill() {
     let _ = env_logger::try_init();
-    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
-    config.use_transparent = true;
-    config.privacy_policy = PrivacyPolicy::AnyPool;
-    config.precedence = [ Pool::Sapling, Pool::Orchard, Pool::Transparent ];
+    let orders = vec![
+        t!(1, 10),
+        s!(2, 20),
+        o!(3, 30),
+        ts!(4, 40),
+        to!(5, 50),
+        so!(6, 60),
+        tso!(7, 70),
+    ];
+    let (groups, amounts) = group_orders(&orders, 0).unwrap();
+    assert_eq!(amounts, OrderGroupAmounts {
+        t0: 10_000,
+        s0: 60_000,
+        o0: 80_000,
+        x: 130_000,
+        fee: 0
+    });
+    let allocation = allocate_funds(&amounts, &PoolAllocation([200_000, 200_000, 200_000])).unwrap();
 
-    let utxos = [utxo!(1, 100), sapling!(2, 160), orchard!(3, 70), orchard!(4, 50)];
-    let mut orders = [t!(1, 10), s!(2, 20), o!(3, 30), ts!(4, 40), to!(5, 50), so!(6, 60), tso!(7, 70)];
+    let fills = fill(&orders, &groups, &amounts, &allocation).unwrap();
+    log::info!("{:?}", allocation);
+    log::info!("{:?}", fills);
 
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
+    assert_eq!(fills[5].amount + fills[6].amount, 60_000);
+    assert_eq!(fills[7].amount + fills[8].amount, 70_000);
+    assert_eq!(fills[1].amount + fills[3].amount + fills[5].amount + fills[7].amount, fills[2].amount + fills[4].amount + fills[6].amount + fills[8].amount);
+}
 
-    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":100000},{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":160000},{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":70000},{"source":{"Orchard":{"id_note":4,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":2,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":20000,"memo":[246]},{"id_order":3,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":30000,"memo":[246]},{"id_order":4,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000,"memo":[246]},{"id_order":5,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":50000,"memo":[246]},{"id_order":6,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":40000,"memo":[246]},{"id_order":6,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":20000,"memo":[246]},{"id_order":7,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":70000,"memo":[246]},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":55000,"memo":[246]}],"fee":45000}"#).unwrap();
+#[test]
+fn test_select_utxo() {
+    let _ = env_logger::try_init();
+    let allocation = FundAllocation { s1: 75000, o1: 55000, t2: 0, s2: 140000, o2: 140000 };
+    let mut utxos = vec![];
+    for i in 0..30 {
+        if i < 10 {
+            utxos.push(utxo!(i, 25));
+        }
+        else if i < 20 {
+            utxos.push(sapling!(i, 25));
+        }
+        else {
+            utxos.push(orchard!(i, 25));
+        }
+    }
+    let (_inputs, change) = select_inputs(&utxos, &allocation).unwrap();
+
+    assert_eq!(change.0, [0, 10000, 10000]);
+}
+
+const CHANGE_ADDRESS: &str = "u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qqmktzwktw772nlle6skkkxwmtzxaan3slntqev03g70tzpky3c58hfgvfjkcky255cwqgfuzdjcktfl7pjalt5sl33se75pmga09etn9dplr98eq2g8cgmvgvx6jx2a2xhy39x96c6rumvlyt35whml87r064qdzw30e";
+
+#[test]
+fn test_change_fills() {
+    let _ = env_logger::try_init();
+    let destinations = decode(CHANGE_ADDRESS).unwrap();
+    let outputs = outputs_for_change(&destinations, &&PoolAllocation([0, 10000, 10000])).unwrap();
+    log::info!("{:?}", outputs);
+}
+
+#[test]
+fn test_fees() {
+    let _ = env_logger::try_init();
+    let utxos = utxos();
+    let orders = vec![
+        t!(1, 10),
+        s!(2, 20),
+        o!(3, 30),
+        ts!(4, 40),
+        to!(5, 50),
+        so!(6, 60),
+        tso!(7, 70),
+    ];
+    let (groups, amounts) = group_orders(&orders, 0).unwrap();
+    let allocation = allocate_funds(&amounts, &PoolAllocation([200_000, 200_000, 200_000])).unwrap();
+    let fills = fill(&orders, &groups, &amounts, &allocation).unwrap();
+
+    let fees = FeeZIP327::calculate_fee(
+        &utxos,
+        &fills);
+    assert_eq!(fees, 150_000);
+}
+
+#[test]
+fn test_tx_plan() {
+    let _ = env_logger::try_init();
+    let utxos = utxos();
+    let orders = vec![
+        t!(1, 10),
+        s!(2, 20),
+        o!(3, 30),
+        ts!(4, 40),
+        to!(5, 50),
+        so!(6, 60),
+        tso!(7, 70),
+    ];
+    let tx_plan = build_tx_plan::<FeeZIP327>("", 0, &utxos, &orders,
+                                &TransactionBuilderConfig { change_address: CHANGE_ADDRESS.to_string() }).unwrap();
+    let simple_plan: SimpleTxPlan = tx_plan.into();
+    let plan = serde_json::to_string(&simple_plan).unwrap();
+    log::info!("{}", plan);
+
+    let tx_plan_json = serde_json::to_value(&simple_plan).unwrap();
+    let expected: Value = serde_json::from_str(r#"{
+        "inputs": [{
+            "pool": 1,
+            "amount": 25000
+        }, {
+            "pool": 1,
+            "amount": 25000
+        }, {
+            "pool": 1,
+            "amount": 25000
+        }, {
+            "pool": 1,
+            "amount": 25000
+        }, {
+            "pool": 1,
+            "amount": 25000
+        }, {
+            "pool": 1,
+            "amount": 25000
+        }, {
+            "pool": 1,
+            "amount": 25000
+        }, {
+            "pool": 1,
+            "amount": 25000
+        }, {
+            "pool": 2,
+            "amount": 25000
+        }, {
+            "pool": 2,
+            "amount": 25000
+        }, {
+            "pool": 2,
+            "amount": 25000
+        }, {
+            "pool": 2,
+            "amount": 25000
+        }, {
+            "pool": 2,
+            "amount": 25000
+        }, {
+            "pool": 2,
+            "amount": 25000
+        }, {
+            "pool": 2,
+            "amount": 25000
+        }, {
+            "pool": 2,
+            "amount": 25000
+        }],
+        "outputs": [{
+            "pool": 0,
+            "amount": 10000
+        }, {
+            "pool": 1,
+            "amount": 20000
+        }, {
+            "pool": 2,
+            "amount": 30000
+        }, {
+            "pool": 1,
+            "amount": 40000
+        }, {
+            "pool": 2,
+            "amount": 50000
+        }, {
+            "pool": 1,
+            "amount": 34615
+        }, {
+            "pool": 2,
+            "amount": 25385
+        }, {
+            "pool": 1,
+            "amount": 40385
+        }, {
+            "pool": 2,
+            "amount": 29615
+        }, {
+            "pool": 1,
+            "amount": 17500
+        }, {
+            "pool": 2,
+            "amount": 17500
+        }],
+        "fee": 85000
+    }"#).unwrap();
     assert_eq!(tx_plan_json, expected);
 }
 
-/// A simple t2t
-///
-#[test]
-fn test_example4() {
-    let _ = env_logger::try_init();
-    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
-    config.use_transparent = true;
-    config.use_shielded = false;
-    config.privacy_policy = PrivacyPolicy::AnyPool;
-
-    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
-    let mut orders = [t!(1, 10)];
-
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
-
-    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
-    assert_eq!(tx_plan_json, expected);
+#[derive(Serialize)]
+struct SimpleTxPlan {
+    inputs: Vec<SimpleTxIO>,
+    outputs: Vec<SimpleTxIO>,
+    fee: u64,
 }
 
-/// A simple z2z
-///
-#[test]
-fn test_example5() {
-    let _ = env_logger::try_init();
-    let config = NoteSelectConfig::new(CHANGE_ADDRESS);
-
-    // z2z are preferred over t2z, so we can keep the t-notes
-    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
-    let mut orders = [s!(1, 10)];
-
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
-
-    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
-    assert_eq!(tx_plan_json, expected);
+#[derive(Serialize)]
+struct SimpleTxIO {
+    pool: u8,
+    amount: u64,
 }
 
-/// A simple z2z
-///
-#[test]
-fn test_example5b() {
-    let _ = env_logger::try_init();
-    let config = NoteSelectConfig::new(CHANGE_ADDRESS);
-
-    // z2z are preferred over t2z, so we can keep the t-notes
-    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
-    let mut orders = [o!(1, 10)];
-
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
-
-    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
-    assert_eq!(tx_plan_json, expected);
-}
- /// A simple z2t sapling
-///
-#[test]
-fn test_example6() {
-    let _ = env_logger::try_init();
-    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
-    config.privacy_policy = PrivacyPolicy::AnyPool;
-
-    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
-    // Change the destination to t
-    let mut orders = [t!(1, 10)];
-
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
-
-     let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-     let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
-     assert_eq!(tx_plan_json, expected);
- }
-
-/// A simple o2t
-///
-#[test]
-fn test_example7() {
-    let _ = env_logger::try_init();
-    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
-    config.precedence = [ Pool::Orchard, Pool::Sapling, Pool::Transparent ];
-    config.privacy_policy = PrivacyPolicy::AnyPool;
-
-    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
-    // Change the destination to t
-    let mut orders = [t!(1, 10)];
-
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
-
-    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Orchard":{"id_note":3,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","rho":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Transparent":"0000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Orchard":"2b6dca785c846b3752d13150e1c8f197ba9c8ead0a8bee1b3a52df0ad866362941e32d1b69d438b257cf82"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
-    assert_eq!(tx_plan_json, expected);
+impl From<TransactionPlan> for SimpleTxPlan {
+    fn from(p: TransactionPlan) -> Self {
+        SimpleTxPlan {
+            inputs: p.spends.iter().map(|utxo| SimpleTxIO {
+                pool: utxo.source.pool() as u8,
+                amount: utxo.amount,
+            }).collect(),
+            outputs: p.outputs.iter().map(|utxo| SimpleTxIO {
+                pool: utxo.destination.pool() as u8,
+                amount: utxo.amount,
+            }).collect(),
+            fee: p.fee,
+        }
+    }
 }
 
-/// A simple t2z
-///
-#[test]
-fn test_example8() {
-    let _ = env_logger::try_init();
-    let mut config = NoteSelectConfig::new(CHANGE_ADDRESS);
-    config.privacy_policy = PrivacyPolicy::AnyPool;
-    config.use_transparent = true;
-    config.use_shielded = false;
-
-    let utxos = [utxo!(1, 50), sapling!(2, 50), orchard!(3, 50)];
-    let mut orders = [s!(1, 10)];
-
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
-
-    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Transparent":{"txid":"0000000000000000000000000000000000000000000000000000000000000000","index":1}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Sapling":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Transparent":"c7b7b3d299bd173ea278d792b1bd5fbdd11afe34"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
-    assert_eq!(tx_plan_json, expected);
-}
-
-/// A simple z2z (Sapling/Orchard)
-///
-#[test]
-fn test_example9() {
-    let _ = env_logger::try_init();
-    let config = NoteSelectConfig::new(CHANGE_ADDRESS);
-
-    let utxos = [utxo!(1, 50), sapling!(2, 50)];
-    let mut orders = [o!(1, 10)];
-
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, &config).unwrap();
-    println!("{}", serde_json::to_string(&tx_plan).unwrap());
-
-    let tx_plan_json = serde_json::to_value(&tx_plan).unwrap();
-    let expected: Value = serde_json::from_str(r#"{"spends":[{"source":{"Sapling":{"id_note":2,"diversifier":"0000000000000000000000","rseed":"0000000000000000000000000000000000000000000000000000000000000000","witness":""}},"amount":50000}],"outputs":[{"id_order":1,"destination":{"Orchard":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},"amount":10000,"memo":[246]},{"id_order":4294967295,"destination":{"Sapling":"9fae6f28c245e095abf8c6730098e110bb67ae3e73302406b2b9c6d6b672ca9e64e14ef0560062a91dd429"},"amount":30000,"memo":[246]}],"fee":10000}"#).unwrap();
-    assert_eq!(tx_plan_json, expected);
+fn utxos() -> Vec<UTXO> {
+    let mut utxos = vec![];
+    for i in 0..30 {
+        if i < 10 {
+            utxos.push(utxo!(i, 25));
+        }
+        else if i < 20 {
+            utxos.push(sapling!(i, 25));
+        }
+        else {
+            utxos.push(orchard!(i, 25));
+        }
+    }
+    utxos
 }

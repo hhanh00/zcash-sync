@@ -1,13 +1,15 @@
+use crate::{AccountData, DbAdapter};
 use anyhow::anyhow;
-use orchard::Address;
 use orchard::keys::{FullViewingKey, Scope};
-use zcash_address::{ToAddress, unified, ZcashAddress};
+use orchard::Address;
 use zcash_address::unified::{Container, Encoding, Receiver};
-use zcash_client_backend::encoding::{AddressCodec, decode_payment_address, encode_payment_address};
+use zcash_address::{unified, ToAddress, ZcashAddress};
+use zcash_client_backend::encoding::{
+    decode_payment_address, encode_payment_address, AddressCodec,
+};
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::sapling::PaymentAddress;
-use crate::{AccountData, DbAdapter};
 
 pub struct UnifiedAddressType {
     pub transparent: bool,
@@ -24,9 +26,13 @@ pub struct DecodedUA {
 
 impl std::fmt::Display for DecodedUA {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DecodedUA: {:?} {:?} {:?}",
+        write!(
+            f,
+            "DecodedUA: {:?} {:?} {:?}",
             self.transparent.as_ref().map(|a| a.encode(&self.network)),
-            self.sapling.as_ref().map(|a| encode_payment_address(self.network.hrp_sapling_payment_address(), a)),
+            self.sapling
+                .as_ref()
+                .map(|a| encode_payment_address(self.network.hrp_sapling_payment_address(), a)),
             self.orchard.as_ref().map(|a| {
                 let ua = unified::Address(vec![Receiver::Orchard(a.to_raw_address_bytes())]);
                 ua.encode(&self.network.address_network().unwrap())
@@ -35,8 +41,15 @@ impl std::fmt::Display for DecodedUA {
     }
 }
 
-pub fn get_unified_address(network: &Network, db: &DbAdapter, account: u32, tpe: Option<UnifiedAddressType>) -> anyhow::Result<String> {
-    let tpe = tpe.ok_or(anyhow!("")).or_else(|_| db.get_ua_settings(account))?;
+pub fn get_unified_address(
+    network: &Network,
+    db: &DbAdapter,
+    account: u32,
+    tpe: Option<UnifiedAddressType>,
+) -> anyhow::Result<String> {
+    let tpe = tpe
+        .ok_or(anyhow!(""))
+        .or_else(|_| db.get_ua_settings(account))?;
 
     let mut rcvs = vec![];
     if tpe.transparent {
@@ -50,7 +63,7 @@ pub fn get_unified_address(network: &Network, db: &DbAdapter, account: u32, tpe:
         }
     }
     if tpe.sapling {
-        let AccountData { address , .. } = db.get_account_info(account)?;
+        let AccountData { address, .. } = db.get_account_info(account)?;
         let pa = decode_payment_address(network.hrp_sapling_payment_address(), &address).unwrap();
         let rcv = Receiver::Sapling(pa.to_bytes());
         rcvs.push(rcv);
@@ -75,7 +88,7 @@ pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<Dec
         network: network.clone(),
         transparent: None,
         sapling: None,
-        orchard: None
+        orchard: None,
     };
     let network = network.address_network().unwrap();
     let (a_network, ua) = unified::Address::decode(ua)?;

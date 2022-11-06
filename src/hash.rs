@@ -1,3 +1,4 @@
+use crate::Hash;
 use ff::PrimeField;
 use group::{Curve, GroupEncoding};
 use jubjub::{ExtendedNielsPoint, ExtendedPoint, Fr, SubgroupPoint};
@@ -6,7 +7,6 @@ use std::io::Read;
 use std::ops::AddAssign;
 use zcash_params::GENERATORS;
 use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
-use crate::Hash;
 
 lazy_static! {
     pub static ref GENERATORS_EXP: Vec<ExtendedNielsPoint> = read_generators_bin();

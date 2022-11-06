@@ -1,15 +1,15 @@
 #![allow(non_snake_case)]
 
+use crate::sync::{Hasher, Node};
+use crate::Hash;
 use group::cofactor::CofactorCurveAffine;
 use halo2_gadgets::sinsemilla::primitives::SINSEMILLA_S;
 use halo2_proofs::arithmetic::{CurveAffine, CurveExt};
-use halo2_proofs::pasta::EpAffine;
 use halo2_proofs::pasta::group::ff::PrimeField;
 use halo2_proofs::pasta::group::Curve;
 use halo2_proofs::pasta::pallas::{self, Affine, Point};
+use halo2_proofs::pasta::EpAffine;
 use lazy_static::lazy_static;
-use crate::Hash;
-use crate::sync::{Hasher, Node};
 
 pub const Q_PERSONALIZATION: &str = "z.cash:SinsemillaQ";
 pub const MERKLE_CRH_PERSONALIZATION: &str = "z.cash:Orchard-MerkleCRH";
@@ -100,8 +100,12 @@ impl Hasher for OrchardHasher {
         Point::batch_normalize(extended, &mut hash_affine);
         hash_affine
             .iter()
-            .map(|p|
-                p.coordinates().map(|c| *c.x()).unwrap_or_else(pallas::Base::zero).to_repr())
+            .map(|p| {
+                p.coordinates()
+                    .map(|c| *c.x())
+                    .unwrap_or_else(pallas::Base::zero)
+                    .to_repr()
+            })
             .collect()
     }
 }

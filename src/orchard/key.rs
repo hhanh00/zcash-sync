@@ -1,6 +1,6 @@
 use bip39::{Language, Mnemonic, Seed};
-use orchard::Address;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
+use orchard::Address;
 
 pub struct OrchardKeyBytes {
     pub sk: [u8; 32],
@@ -18,14 +18,10 @@ impl OrchardKeyBytes {
 pub fn derive_orchard_keys(coin_type: u32, seed: &str, account_index: u32) -> OrchardKeyBytes {
     let mnemonic = Mnemonic::from_phrase(seed, Language::English).unwrap();
     let seed = Seed::new(&mnemonic, "");
-    let sk = SpendingKey::from_zip32_seed(
-        seed.as_bytes(),
-        coin_type,
-        account_index,
-    ).unwrap();
+    let sk = SpendingKey::from_zip32_seed(seed.as_bytes(), coin_type, account_index).unwrap();
     let fvk = FullViewingKey::from(&sk);
     OrchardKeyBytes {
         sk: sk.to_bytes().clone(),
-        fvk: fvk.to_bytes()
+        fvk: fvk.to_bytes(),
     }
 }

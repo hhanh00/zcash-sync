@@ -1,7 +1,7 @@
-use std::io::Read;
 use group::GroupEncoding;
 use jubjub::{ExtendedNielsPoint, ExtendedPoint, SubgroupPoint};
 use lazy_static::lazy_static;
+use std::io::Read;
 use zcash_params::GENERATORS;
 
 lazy_static! {
@@ -11,8 +11,8 @@ lazy_static! {
 mod hash;
 mod note;
 
-pub use note::{SaplingDecrypter, SaplingViewKey, DecryptedSaplingNote};
 pub use hash::{SaplingHasher, SAPLING_ROOTS};
+pub use note::{DecryptedSaplingNote, SaplingDecrypter, SaplingViewKey};
 
 fn read_generators_bin() -> Vec<ExtendedNielsPoint> {
     let mut generators_bin = GENERATORS;
@@ -31,4 +31,3 @@ fn read_generators_bin() -> Vec<ExtendedNielsPoint> {
     }
     gens
 }
-

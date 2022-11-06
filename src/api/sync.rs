@@ -2,13 +2,13 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::scan::{AMProgressCallback, Progress};
+use crate::sync::CTree;
 use crate::{AccountData, BlockId, CompactTxStreamerClient, DbAdapter};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_primitives::sapling::Note;
-use crate::sync::CTree;
 
 const DEFAULT_CHUNK_SIZE: u32 = 100_000;
 

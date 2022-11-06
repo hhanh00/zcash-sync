@@ -1,48 +1,53 @@
+use std::str::FromStr;
+pub use crate::note_selection::TransactionBuilderError::TxTooComplex;
+pub use crate::note_selection::types::{
+    UTXO, Order, RecipientShort, TransactionBuilderConfig, TransactionPlan,
+    Source, Destination };
+pub use utxo::fetch_utxos;
+pub use builder::{TxBuilderContext, get_secret_keys, build_tx};
+pub use optimize::build_tx_plan;
+pub use fee::{FeeCalculator, FeeZIP327};
+
+use thiserror::Error;
+use zcash_primitives::memo::Memo;
+use ua::decode;
+use optimize::{allocate_funds, fill, group_orders, outputs_for_change, select_inputs, sum_utxos};
+use crate::api::payment::Recipient;
+
+#[derive(Error, Debug)]
+pub enum TransactionBuilderError {
+    #[error("Not enough funds")]
+    NotEnoughFunds,
+    #[error("Tx too complex")]
+    TxTooComplex,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+pub type Result<T> = std::result::Result<T, TransactionBuilderError>;
+
 mod types;
-mod fee;
+mod ser;
+mod ua;
 mod utxo;
-mod fill;
-mod select;
+mod optimize;
+mod fee;
 mod builder;
+
+const MAX_ATTEMPTS: usize = 10;
+
+pub fn recipients_to_orders(recipients: &[Recipient]) -> Result<Vec<Order>> {
+    let orders: Result<Vec<_>> = recipients.iter().enumerate().map(|(i, r)| {
+        let destinations = decode(&r.address)?;
+        Ok::<_, TransactionBuilderError>(Order {
+            id: i as u32,
+            destinations,
+            amount: r.amount,
+            memo: Memo::from_str(&r.memo).unwrap().into(),
+        })
+    }).collect();
+    Ok(orders?)
+}
 
 #[cfg(test)]
 mod tests;
-
-use std::cmp::min;
-use zcash_primitives::memo::MemoBytes;
-pub use types::{Source, Destination, PrivacyPolicy, Pool, UTXO, NoteSelectConfig};
-pub use utxo::fetch_utxos;
-pub use fill::decode;
-pub use select::note_select_with_fee;
-pub use fee::{FeeZIP327, FeeFlat};
-use crate::api::payment::RecipientMemo;
-use crate::note_selection::types::TransactionPlan;
-
-async fn prepare_multi_payment(
-    coin: u8,
-    account: u32,
-    last_height: u32,
-    recipients: &[RecipientMemo],
-    config: &NoteSelectConfig,
-    anchor_offset: u32) -> anyhow::Result<TransactionPlan>
-{
-    let mut orders = vec![];
-    let mut id_order = 0;
-    for r in recipients {
-        let mut amount = r.amount;
-        let max_amount_per_note = if r.max_amount_per_note == 0 { u64::MAX } else { r.max_amount_per_note };
-        while amount > 0 {
-            let a = min(amount, max_amount_per_note);
-            let memo_bytes: MemoBytes = r.memo.clone().into();
-            let order = decode(id_order, &r.address, a, memo_bytes)?;
-            orders.push(order);
-            amount -= a;
-            id_order += 1;
-        }
-    }
-    let utxos = fetch_utxos(coin, account, last_height, config.use_transparent, anchor_offset).await?;
-
-    let tx_plan = note_select_with_fee::<FeeZIP327>(&utxos, &mut orders, config)?;
-
-    Ok(tx_plan)
-}

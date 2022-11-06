@@ -1,44 +1,58 @@
-use std::ops::{Add, Sub};
-use zcash_primitives::memo::MemoBytes;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use serde_with::serde_as;
-use serde_hex::{SerHex,Strict};
+use serde_hex::{SerHex, Strict};
+use zcash_primitives::memo::MemoBytes;
+use crate::note_selection::ua::decode;
+use super::ser::MemoBytesProxy;
 
-#[derive(Clone, PartialEq, Debug)]
-pub enum PrivacyPolicy {
-    SamePoolOnly,
-    SamePoolTypeOnly,
-    AnyPool,
+pub struct TransactionBuilderConfig {
+    pub change_address: String,
+}
+
+impl TransactionBuilderConfig {
+    pub fn new(change_address: &str) -> Self {
+        TransactionBuilderConfig {
+            change_address: change_address.to_string(),
+        }
+    }
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum Source {
     Transparent {
-        #[serde(with = "SerHex::<Strict>")] txid: [u8; 32],
+        #[serde(with = "SerHex::<Strict>")]
+        txid: [u8; 32],
         index: u32,
     },
     Sapling {
         id_note: u32,
-        #[serde(with = "SerHex::<Strict>")] diversifier: [u8; 11],
-        #[serde(with = "SerHex::<Strict>")] rseed: [u8; 32],
-        #[serde_as(as = "serde_with::hex::Hex")] witness: Vec<u8>,
+        #[serde(with = "SerHex::<Strict>")]
+        diversifier: [u8; 11],
+        #[serde(with = "SerHex::<Strict>")]
+        rseed: [u8; 32],
+        #[serde_as(as = "serde_with::hex::Hex")]
+        witness: Vec<u8>,
     },
     Orchard {
         id_note: u32,
-        #[serde(with = "SerHex::<Strict>")] diversifier: [u8; 11],
-        #[serde(with = "SerHex::<Strict>")] rseed: [u8; 32],
-        #[serde(with = "SerHex::<Strict>")] rho: [u8; 32],
-        #[serde_as(as = "serde_with::hex::Hex")] witness: Vec<u8>,
+        #[serde(with = "SerHex::<Strict>")]
+        diversifier: [u8; 11],
+        #[serde(with = "SerHex::<Strict>")]
+        rseed: [u8; 32],
+        #[serde(with = "SerHex::<Strict>")]
+        rho: [u8; 32],
+        #[serde_as(as = "serde_with::hex::Hex")]
+        witness: Vec<u8>,
     },
 }
 
-#[derive(Clone, Copy, Serialize, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 #[serde_as]
 pub enum Destination {
     Transparent(#[serde(with = "SerHex::<Strict>")] [u8; 20]), // MD5
-    Sapling(#[serde(with = "SerHex::<Strict>")] [u8; 43]), // Diversifier + Jubjub Point
-    Orchard(#[serde(with = "SerHex::<Strict>")] [u8; 43]), // Diviersifer + Pallas Point
+    Sapling(#[serde(with = "SerHex::<Strict>")] [u8; 43]),     // Diversifier + Jubjub Point
+    Orchard(#[serde(with = "SerHex::<Strict>")] [u8; 43]),     // Diviersifer + Pallas Point
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -48,178 +62,98 @@ pub enum Pool {
     Orchard = 2,
 }
 
-#[derive(Serialize, Debug)]
-pub struct Order {
-    pub id: u32,
-    pub destinations: [Option<Destination>; 3],
-    pub priority: PoolPriority,
-    pub amount: u64,
-    #[serde(with = "MemoBytesProxy")] pub memo: MemoBytes,
-    pub is_fee: bool,
-
-    pub filled: u64, // mutable
-}
-
-#[derive(Serialize)]
-#[serde_as]
-#[serde(remote = "MemoBytes")]
-struct MemoBytesProxy(
-    #[serde_as(as = "serde_with::hex::Hex")]
-    #[serde(getter = "get_memo_bytes")]
-    pub Vec<u8>
-);
-
-fn get_memo_bytes(memo: &MemoBytes) -> Vec<u8> {
-    memo.as_slice().to_vec()
-}
-
-impl From<MemoBytesProxy> for MemoBytes {
-    fn from(p: MemoBytesProxy) -> MemoBytes {
-        MemoBytes::from_bytes(&p.0).unwrap()
-    }
-}
-
-impl Default for Order {
-    fn default() -> Self {
-        Order {
-            id: 0,
-            destinations: [None; 3],
-            priority: PoolPriority::OS,
-            amount: 0,
-            memo: MemoBytes::empty(),
-            is_fee: false,
-            filled: 0
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct Fill {
-    pub id_order: u32,
-    pub destination: Destination,
-    pub amount: u64,
-    #[serde(with = "MemoBytesProxy")] pub memo: MemoBytes,
-    #[serde(skip)]
-    pub is_fee: bool,
-}
-
-#[derive(Debug)]
-pub struct Execution {
-    pub allocation: PoolAllocation,
-    pub fills: Vec<Fill>,
-}
-
-#[derive(Serialize, Default)]
-pub struct TransactionPlan {
-    pub spends: Vec<UTXO>,
-    pub outputs: Vec<Fill>,
-    pub fee: u64,
-}
-
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PoolAllocation(pub [u64; 3]);
 
-pub type PoolPrecedence = [Pool; 3];
-
-#[derive(Clone, Serialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UTXO {
     pub source: Source,
     pub amount: u64,
 }
 
-impl PoolAllocation {
-    pub fn total(&self) -> u64 {
-        self.0.iter().sum()
-    }
+#[derive(Serialize, Debug)]
+pub struct Order {
+    pub id: u32,
+    pub destinations: [Option<Destination>; 3],
+    pub amount: u64,
+    #[serde(with = "MemoBytesProxy")] pub memo: MemoBytes,
 }
 
-impl From<&[UTXO]> for PoolAllocation {
-    fn from(utxos: &[UTXO]) -> Self {
-        let mut allocation = PoolAllocation::default();
-        for utxo in utxos {
-            let pool = utxo.source.pool() as usize;
-            allocation.0[pool] += utxo.amount;
-        }
-        allocation
-    }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Fill {
+    pub id_order: Option<u32>,
+    pub destination: Destination,
+    pub amount: u64,
+    #[serde(with = "MemoBytesProxy")] pub memo: MemoBytes,
 }
 
-impl Add for PoolAllocation {
-    type Output = PoolAllocation;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        let mut res = PoolAllocation::default();
-        for i in 0..3 {
-            res.0[i] = self.0[i] + rhs.0[i];
-        }
-        res
-    }
+#[derive(Clone, Deserialize)]
+pub struct RecipientShort {
+    pub address: String,
+    pub amount: u64,
 }
 
-impl Sub for PoolAllocation {
-    type Output = PoolAllocation;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        let mut res = PoolAllocation::default();
-        for i in 0..3 {
-            res.0[i] = self.0[i] - rhs.0[i];
-        }
-        res
-    }
+#[derive(Serialize, Deserialize, Default)]
+pub struct TransactionPlan {
+    pub fvk: String,
+    pub height: u32,
+    pub spends: Vec<UTXO>,
+    pub outputs: Vec<Fill>,
+    pub fee: u64,
+    pub net_chg: [i64; 2],
 }
 
-#[derive(Clone)]
-pub struct NoteSelectConfig {
-    pub privacy_policy: PrivacyPolicy,
-    pub use_transparent: bool,
-    pub use_shielded: bool,
-    pub precedence: PoolPrecedence,
-    pub change_address: String,
+#[derive(PartialEq, Debug)]
+pub struct OrderGroupAmounts {
+    pub t0: u64,
+    pub s0: u64,
+    pub o0: u64,
+    pub x: u64,
+    pub fee: u64,
 }
 
-impl NoteSelectConfig {
-    pub fn new(change_address: &str) -> Self {
-        NoteSelectConfig {
-            privacy_policy: PrivacyPolicy::SamePoolTypeOnly,
-            use_transparent: false,
-            use_shielded: true,
-            precedence: [ Pool::Transparent, Pool::Sapling, Pool::Orchard ], // We prefer to keep our orchard notes
-            change_address: change_address.to_string()
-        }
-    }
+pub struct OrderInfo {
+    pub group_type: usize,
+    pub amount: u64,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct FundAllocation {
+    pub s1: u64,
+    pub o1: u64,
+    pub t2: u64,
+    pub s2: u64,
+    pub o2: u64,
 }
 
 impl Source {
-    pub fn pool(&self) -> Pool {
+    pub fn pool(&self) -> usize {
         match self {
-            Source::Transparent { .. } => Pool::Transparent,
-            Source::Sapling { .. } => Pool::Sapling,
-            Source::Orchard { .. } => Pool::Orchard,
+            Source::Transparent { .. } => 0,
+            Source::Sapling { .. } => 1,
+            Source::Orchard { .. } => 2,
         }
     }
 }
 
 impl Destination {
-    pub fn pool(&self) -> Pool {
+    pub fn pool(&self) -> usize {
         match self {
-            Destination::Transparent { .. } => Pool::Transparent,
-            Destination::Sapling { .. } => Pool::Sapling,
-            Destination::Orchard { .. } => Pool::Orchard,
+            Destination::Transparent { .. } => 0,
+            Destination::Sapling { .. } => 1,
+            Destination::Orchard { .. } => 2,
         }
     }
 }
 
-#[derive(Clone, Copy, Serialize, Debug)]
-pub enum PoolPriority {
-    SO = 1,
-    OS = 2,
-}
-
-impl PoolPriority {
-    pub fn to_pool_precedence(&self) -> &'static PoolPrecedence {
-        match self {
-            PoolPriority::SO => &[ Pool::Sapling, Pool::Orchard, Pool::Transparent ],
-            PoolPriority::OS => &[ Pool::Orchard, Pool::Sapling, Pool::Transparent ],
+impl Order {
+    pub fn new(id: u32, address: &str, amount: u64, memo: MemoBytes) -> Self {
+        let destinations = decode(address).unwrap();
+        Order {
+            id,
+            destinations,
+            amount,
+            memo,
         }
     }
 }

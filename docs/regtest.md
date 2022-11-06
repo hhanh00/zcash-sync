@@ -39,6 +39,7 @@ Example
 $ zcashd -datadir=$PWD --daemon
 $ zcash-cli -datadir=$PWD getinfo
 $ zcash-cli -datadir=$PWD z_getnewaccount
+$ zcash-cli -datadir=$PWD z_getnewaddress
 $ zcash-cli -datadir=$PWD listaddresses
 $ zcash-cli -datadir=$PWD generate 200
 $ zcash-cli -datadir=$PWD getbalance
@@ -47,6 +48,11 @@ $ zcash-cli -datadir=$PWD z_getoperationresult
 $ zcash-cli -datadir=$PWD generate 10
 $ zcash-cli -datadir=$PWD z_gettotalbalance
 ```
+
+zcash-cli -datadir=$PWD z_sendmany "ANY_TADDR" '[{"address": "zregtestsapling12qlzvqkla5ysscxx9l4dn69m7zwjggplap4gp3x9r0mnk868whgpxc03atkj83zh3xqgz0rguq0", "amount": 62.49999}]'
+
+zcash-cli -datadir=$PWD z_sendmany "ANY_TADDR" '[{"address": "zregtestsapling1zdrds45f09kxhzq3ak2p6j6qj9a094tjp955f9nmk44ke5qm8xsrpncauxrx3efh76euq78nhyt", "amount": 624.99999}]'
+
 
 ## Lightwalletd
 
@@ -83,6 +89,15 @@ $ curl -X GET http://localhost:8000/balance
 $ curl -X GET http://localhost:8000/latest_height
 $ curl -X GET http://localhost:8000/unified_address?t=1\&s=1\&o=1
 ```
+
+zcash-cli -datadir=$PWD z_sendmany "zregtestsapling1zdrds45f09kxhzq3ak2p6j6qj9a094tjp955f9nmk44ke5qm8xsrpncauxrx3efh76euq78nhyt" '[
+{"address": "tmWXoSBwPoCjJCNZjw4P7heoVMcT2Ronrqq", "amount": 100},
+{"address": "zregtestsapling1qzy9wafd2axnenul6t6wav76dys6s8uatsq778mpmdvmx4k9myqxsd9m73aqdgc7gwnv53wga4j", "amount": 100},
+{"address": "uregtest1mzt5lx5s5u8kczlfr82av97kjckmfjfuq8y9849h6cl9chhdekxsm6r9dklracflqwplrnfzm5rucp5txfdm04z5myrde8y3y5rayev8", "amount": 100}
+]' 1 0.00001 "AllowRevealedRecipients"
+
+
+
 
 zcash-cli -datadir=$PWD z_sendmany "ANY_TADDR" '[{"address": "zregtestsapling1rlf8jpvk6qymgsn6pclkpnee0u77pajpz5g7955uzrxsefc837h326rkjag7rwuhn2cyympd8jh", "amount": 6.24999}]'
 zcash-cli -datadir=$PWD z_sendmany "zregtestsapling1rlf8jpvk6qymgsn6pclkpnee0u77pajpz5g7955uzrxsefc837h326rkjag7rwuhn2cyympd8jh" '[{"address": "tmWXoSBwPoCjJCNZjw4P7heoVMcT2Ronrqq", "amount": 6.24997}]'
