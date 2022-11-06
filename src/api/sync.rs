@@ -61,17 +61,14 @@ async fn coin_sync_impl(
     progress_callback: AMProgressCallback,
     cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
-    let c = CoinConfig::get(coin);
     crate::scan::sync_async(
-        c.coin_type,
+        coin,
         chunk_size,
         get_tx,
-        c.db_path.as_ref().unwrap(),
         target_height_offset,
         max_cost,
         progress_callback,
         cancel,
-        c.lwd_url.as_ref().unwrap(),
     )
     .await?;
     Ok(())

@@ -145,3 +145,8 @@ pub mod nodejs;
 
 mod gpu;
 
+pub fn init_test() {
+    let _ = env_logger::try_init();
+    init_coin(0, "./zec.db").unwrap();
+    set_coin_lwd_url(0, "http://127.0.0.1:9067");
+}

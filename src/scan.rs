@@ -1,9 +1,9 @@
 use crate::chain::get_latest_height;
-use crate::db::{AccountViewKey, DbAdapter};
+use crate::db::AccountViewKey;
 use serde::Serialize;
 
-use crate::transaction::retrieve_tx_info;
-use crate::{connect_lightwalletd, CompactBlock, CompactSaplingOutput, CompactTx, DbAdapterBuilder};
+use crate::transaction::{get_transaction_details, GetTransactionDetailRequest, retrieve_tx_info};
+use crate::{connect_lightwalletd, CompactBlock, CompactSaplingOutput, CompactTx, DbAdapterBuilder, CoinConfig};
 use crate::chain::{DecryptNode, download_chain};
 
 use anyhow::anyhow;
@@ -15,7 +15,6 @@ use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_params::coin::{get_coin_chain, CoinType};
 use zcash_primitives::consensus::{Network, Parameters};
 
 use zcash_primitives::sapling::Note;
@@ -63,26 +62,24 @@ type OrchardSynchronizer = Synchronizer<Network, OrchardDomain, OrchardViewKey, 
     OrchardDecrypter<Network>, OrchardHasher>;
 
 pub async fn sync_async<'a>(
-    coin_type: CoinType,
+    coin: u8,
     _chunk_size: u32,
-    _get_tx: bool, // TODO
-    db_path: &'a str,
+    get_tx: bool, // TODO
     target_height_offset: u32,
     max_cost: u32,
     _progress_callback: AMProgressCallback, // TODO
     cancel: &'static std::sync::Mutex<bool>,
-    ld_url: &'a str,
 ) -> anyhow::Result<()> {
-    let ld_url = ld_url.to_owned();
-    let db_path = db_path.to_owned();
-    let network = {
-        let chain = get_coin_chain(coin_type);
-        *chain.network()
-    };
+    let c = CoinConfig::get(coin);
+    let ld_url = c.lwd_url.as_ref().unwrap().clone();
+    let db_path = c.db_path.as_ref().unwrap().clone();
+
+    let network = *c.chain.network();
 
     let mut client = connect_lightwalletd(&ld_url).await?;
     let (start_height, prev_hash, sapling_vks, orchard_vks) = {
-        let db = DbAdapter::new(coin_type, &db_path)?;
+        let db = c.db.as_ref().unwrap();
+        let db = db.lock().unwrap();
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
         let sapling_vks = db.get_sapling_fvks()?;
@@ -102,7 +99,7 @@ pub async fn sync_async<'a>(
         Ok::<_, anyhow::Error>(())
     });
 
-    let db_builder = DbAdapterBuilder { coin_type, db_path: db_path.clone() };
+    let db_builder = DbAdapterBuilder { coin_type: c.coin_type, db_path: db_path.clone() };
     while let Some(blocks) = blocks_rx.recv().await {
         let first_block = blocks.0.first().unwrap(); // cannot be empty because blocks are not
         log::info!("Height: {}", first_block.height);
@@ -148,6 +145,9 @@ pub async fn sync_async<'a>(
         height = last_height;
     }
 
+    if get_tx {
+        get_transaction_details(coin).await?;
+    }
     Ok(())
 }
 

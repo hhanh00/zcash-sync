@@ -2,7 +2,7 @@ use crate::chain::{Nf, NfRef};
 use crate::contact::Contact;
 use crate::prices::Quote;
 use crate::taddr::{derive_tkeys, TBalance};
-use crate::transaction::TransactionInfo;
+use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::sync::tree::{CTree, TreeCheckpoint, Witness};
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
@@ -131,12 +131,7 @@ impl DbAdapter {
         let tx = self.connection.transaction()?;
         Ok(tx)
     }
-    //
-    // pub fn commit(&self) -> anyhow::Result<()> {
-    //     self.connection.execute("COMMIT", [])?;
-    //     Ok(())
-    // }
-    //
+
     pub fn init_db(&mut self) -> anyhow::Result<()> {
         migration::init_db(&self.connection, self.network())?;
         self.delete_incomplete_scan()?;
@@ -478,11 +473,8 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn store_tx_metadata(&self, id_tx: u32, tx_info: &TransactionInfo) -> anyhow::Result<()> {
-        self.connection.execute(
-            "UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3",
-            params![tx_info.address, &tx_info.memo, id_tx],
-        )?;
+    pub fn update_transaction_with_memo(&self, id_tx: u32, details: &TransactionDetails) -> anyhow::Result<()> {
+        self.connection.execute("UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3", params![details.address, details.memo, id_tx])?;
         Ok(())
     }
 
@@ -1271,6 +1263,27 @@ impl DbAdapter {
             txs.push(row?);
         }
         Ok(txs)
+    }
+
+    pub fn get_txid_without_memo(&self) -> anyhow::Result<Vec<GetTransactionDetailRequest>> {
+        let mut stmt = self.connection.prepare("SELECT account, id_tx, height, txid FROM transactions WHERE memo IS NULL")?;
+        let rows = stmt.query_map([], |row| {
+            let account: u32 = row.get(0)?;
+            let id_tx: u32 = row.get(1)?;
+            let height: u32 = row.get(2)?;
+            let txid: Vec<u8> = row.get(3)?;
+            Ok(GetTransactionDetailRequest {
+                account,
+                id_tx,
+                height,
+                txid: txid.try_into().unwrap(),
+            })
+        })?;
+        let mut reqs = vec![];
+        for r in rows {
+            reqs.push(r?);
+        }
+        Ok(reqs)
     }
 
     pub fn import_from_syncdata(&mut self, account_info: &AccountInfo) -> anyhow::Result<Vec<u32>> {

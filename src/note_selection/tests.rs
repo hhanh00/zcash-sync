@@ -1,6 +1,6 @@
 use serde_json::Value;
 use zcash_primitives::memo::Memo;
-use crate::{CoinConfig, init_coin, set_coin_lwd_url};
+use crate::{CoinConfig, init_test};
 use crate::api::payment::RecipientMemo;
 use crate::unified::UnifiedAddressType;
 use super::{*, types::*};
@@ -10,15 +10,9 @@ const CHANGE_ADDRESS: &str = "u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qq
 const UA_TSO: &str = "uregtest1mxy5wq2n0xw57nuxa4lqpl358zw4vzyfgadsn5jungttmqcv6nx6cpx465dtpzjzw0vprjle4j4nqqzxtkuzm93regvgg4xce0un5ec6tedquc469zjhtdpkxz04kunqqyasv4rwvcweh3ue0ku0payn29stl2pwcrghyzscrrju9ar57rn36wgz74nmynwcyw27rjd8yk477l97ez8";
 const UA_O: &str = "uregtest1mzt5lx5s5u8kczlfr82av97kjckmfjfuq8y9849h6cl9chhdekxsm6r9dklracflqwplrnfzm5rucp5txfdm04z5myrde8y3y5rayev8";
 
-fn init() {
-    let _ = env_logger::try_init();
-    init_coin(0, "./zec.db").unwrap();
-    set_coin_lwd_url(0, "http://127.0.0.1:9067");
-}
-
 #[tokio::test]
 async fn test_fetch_utxo() {
-    init();
+    init_test();
     let utxos = fetch_utxos(0, 1, 235, true, 0).await.unwrap();
 
     for utxo in utxos.iter() {
@@ -30,7 +24,7 @@ async fn test_fetch_utxo() {
 
 #[test]
 fn test_ua() {
-    init();
+    init_test();
     let c = CoinConfig::get(0);
     let db = c.db().unwrap();
     let address = crate::get_unified_address(c.chain.network(), &db, 1,
@@ -40,7 +34,7 @@ fn test_ua() {
 
 #[tokio::test]
 async fn test_payment() {
-    init();
+    init_test();
     let config = NoteSelectConfig::new(CHANGE_ADDRESS);
 
     let recipients = vec![

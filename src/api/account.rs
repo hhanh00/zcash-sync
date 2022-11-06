@@ -290,9 +290,7 @@ pub async fn import_sync_data(coin: u8, file: &str) -> anyhow::Result<()> {
     let file = File::open(file)?;
     let file = BufReader::new(file);
     let account_info: AccountInfo = serde_json::from_reader(file)?;
-    let ids = db.import_from_syncdata(&account_info)?;
-    let mut client = connect_lightwalletd(c.lwd_url.as_ref().unwrap()).await?;
-    retrieve_tx_info(c.coin_type, &mut client, c.db_path.as_ref().unwrap(), &ids).await?;
+    db.import_from_syncdata(&account_info)?;
     Ok(())
 }
 

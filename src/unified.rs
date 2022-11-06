@@ -29,7 +29,7 @@ impl std::fmt::Display for DecodedUA {
             self.sapling.as_ref().map(|a| encode_payment_address(self.network.hrp_sapling_payment_address(), a)),
             self.orchard.as_ref().map(|a| {
                 let ua = unified::Address(vec![Receiver::Orchard(a.to_raw_address_bytes())]);
-                ua.encode(&network2network(&self.network))
+                ua.encode(&self.network.address_network().unwrap())
             })
         )
     }
@@ -66,7 +66,7 @@ pub fn get_unified_address(network: &Network, db: &DbAdapter, account: u32, tpe:
     }
 
     let addresses = unified::Address(rcvs);
-    let unified_address = ZcashAddress::from_unified(network2network(network), addresses);
+    let unified_address = ZcashAddress::from_unified(network.address_network().unwrap(), addresses);
     Ok(unified_address.encode())
 }
 
@@ -77,7 +77,7 @@ pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<Dec
         sapling: None,
         orchard: None
     };
-    let network = network2network(network);
+    let network = network.address_network().unwrap();
     let (a_network, ua) = unified::Address::decode(ua)?;
     if network != a_network {
         anyhow::bail!("Invalid network")
@@ -101,6 +101,7 @@ pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<Dec
     Ok(decoded_ua)
 }
 
-fn network2network(n: &Network) -> zcash_address::Network { n.address_network().unwrap() }
-
-// u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qqmktzwktw772nlle6skkkxwmtzxaan3slntqev03g70tzpky3c58hfgvfjkcky255cwqgfuzdjcktfl7pjalt5sl33se75pmga09etn9dplr98eq2g8cgmvgvx6jx2a2xhy39x96c6rumvlyt35whml87r064qdzw30e
+pub fn orchard_as_unified(network: &Network, address: &Address) -> ZcashAddress {
+    let unified_address = unified::Address(vec![Receiver::Orchard(address.to_raw_address_bytes())]);
+    ZcashAddress::from_unified(network.address_network().unwrap(), unified_address)
+}
