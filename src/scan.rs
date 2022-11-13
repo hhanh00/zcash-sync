@@ -82,7 +82,7 @@ pub async fn sync_async<'a>(
     get_tx: bool, // TODO
     target_height_offset: u32,
     max_cost: u32,
-    _progress_callback: AMProgressCallback, // TODO
+    progress_callback: AMProgressCallback, // TODO
     cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
@@ -127,6 +127,12 @@ pub async fn sync_async<'a>(
         coin_type: c.coin_type,
         db_path: db_path.clone(),
     };
+    let mut progress = Progress {
+        height: 0,
+        trial_decryptions: 0,
+        downloaded: 0,
+    };
+
     while let Some(blocks) = blocks_rx.recv().await {
         let first_block = blocks.0.first().unwrap(); // cannot be empty because blocks are not
         log::info!("Height: {}", first_block.height);
@@ -134,6 +140,9 @@ pub async fn sync_async<'a>(
         let last_hash: [u8; 32] = last_block.hash.clone().try_into().unwrap();
         let last_height = last_block.height as u32;
         let last_timestamp = last_block.time;
+
+        progress.downloaded += blocks.1;
+        progress.height = last_height;
 
         // Sapling
         log::info!("Sapling");
@@ -148,7 +157,7 @@ pub async fn sync_async<'a>(
                 "sapling".to_string(),
             );
             synchronizer.initialize(height)?;
-            synchronizer.process(&blocks.0)?;
+            progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
         }
 
         // Orchard
@@ -164,12 +173,14 @@ pub async fn sync_async<'a>(
                 "orchard".to_string(),
             );
             synchronizer.initialize(height)?;
-            synchronizer.process(&blocks.0)?;
+            progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
         }
 
         let db = db_builder.build()?;
         db.store_block_timestamp(last_height, &last_hash, last_timestamp)?;
         height = last_height;
+        let cb = progress_callback.lock().await;
+        cb(progress.clone());
     }
 
     if get_tx {

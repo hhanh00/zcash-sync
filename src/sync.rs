@@ -84,15 +84,20 @@ impl<
         Ok(())
     }
 
-    pub fn process(&mut self, blocks: &[CompactBlock]) -> Result<()> {
+    pub fn process(&mut self, blocks: &[CompactBlock]) -> Result<usize> {
         if blocks.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
         let decrypter = self.decrypter.clone();
         let decrypted_blocks: Vec<_> = blocks
             .par_iter()
             .map(|b| decrypter.decrypt_notes(b, &self.vks))
             .collect();
+        let count_outputs: usize = decrypted_blocks
+            .iter()
+            .map(|b| b.count_outputs)
+            .sum::<u32>() as usize;
+
         let mut db = self.db.build()?;
         self.warper.initialize(&self.tree, &self.witnesses);
         let db_tx = db.begin_transaction()?;
@@ -179,7 +184,7 @@ impl<
         self.witnesses = updated_witnesses;
 
         db_tx.commit()?;
-        Ok(())
+        Ok(count_outputs * self.vks.len())
     }
 }
 
