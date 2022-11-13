@@ -37,6 +37,7 @@ anyhow = "1.0.40"
 thiserror = "1.0.25"
 log = "0.4.14"
 flexi_logger = {version="0.22.3", features = ["compress"]}
+assert_matches = "1.5"
 serde = {version = "1.0.126", features = ["derive"]}
 serde_json = "1.0.64"
 serde_with = { version = "2", features = ["hex"] }

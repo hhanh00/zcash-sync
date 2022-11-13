@@ -14,9 +14,12 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::sync::Mutex;
 use thiserror::Error;
-use warp_api_ffi::api::payment::{Recipient, RecipientMemo, RecipientShort};
 use warp_api_ffi::api::payment_uri::PaymentURI;
-use warp_api_ffi::{build_tx, get_best_server, get_secret_keys, AccountData, AccountInfo, AccountRec, CoinConfig, KeyPack, RaptorQDrops, TransactionPlan, Tx, TxRec, TransactionBuilderConfig, TxBuilderContext};
+use warp_api_ffi::api::recipient::{Recipient, RecipientMemo, RecipientShort};
+use warp_api_ffi::{
+    build_tx, get_best_server, get_secret_keys, AccountData, AccountInfo, AccountRec, CoinConfig,
+    KeyPack, RaptorQDrops, TransactionBuilderConfig, TransactionPlan, Tx, TxBuilderContext, TxRec,
+};
 
 lazy_static! {
     static ref SYNC_CANCELED: Mutex<bool> = Mutex::new(false);
@@ -231,7 +234,7 @@ pub fn get_balance() -> Result<String, Error> {
 }
 
 #[post("/create_offline_tx", data = "<payment>")]
-pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<Tx>, Error> {
+pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<TransactionPlan>, Error> {
     let c = CoinConfig::get_active();
     let latest = warp_api_ffi::api::sync::get_latest_height().await?;
     let from = {
@@ -244,10 +247,11 @@ pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<Tx>, Error
         .iter()
         .map(|p| RecipientMemo::from_recipient(&from, p))
         .collect();
-    let tx = warp_api_ffi::api::payment::build_only_multi_payment(
+    let tx = warp_api_ffi::api::payment_v2::build_tx_plan(
+        c.coin,
+        c.id_account,
         latest,
         &recipients,
-        false,
         payment.confirmations,
     )
     .await?;
@@ -255,12 +259,15 @@ pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<Tx>, Error
 }
 
 #[post("/sign_offline_tx", data = "<tx>")]
-pub async fn sign_offline_tx(tx: Json<Tx>, config: &State<Config>) -> Result<String, Error> {
+pub async fn sign_offline_tx(
+    tx: Json<TransactionPlan>,
+    config: &State<Config>,
+) -> Result<String, Error> {
+    let c = CoinConfig::get_active();
     if !config.allow_send {
         Err(anyhow!("Payment API not enabled").into())
     } else {
-        let tx_hex =
-            warp_api_ffi::api::payment::sign_only_multi_payment(&tx, Box::new(|_| {})).await?;
+        let tx_hex = warp_api_ffi::api::payment_v2::sign_plan(c.coin, c.id_account, &tx)?;
         Ok(hex::encode(tx_hex))
     }
 }
@@ -282,10 +289,11 @@ pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<Strin
             .iter()
             .map(|p| RecipientMemo::from_recipient(&from, p))
             .collect();
-        let txid = warp_api_ffi::api::payment::build_sign_send_multi_payment(
+        let txid = warp_api_ffi::api::payment_v2::build_sign_send_multi_payment(
+            c.coin,
+            c.id_account,
             latest,
             &recipients,
-            false,
             payment.confirmations,
             Box::new(|_| {}),
         )
@@ -297,14 +305,11 @@ pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<Strin
 #[post("/broadcast_tx?<tx_hex>")]
 pub async fn broadcast_tx(tx_hex: String) -> Result<String, Error> {
     let tx = hex::decode(tx_hex.trim_end()).map_err(|e| anyhow!(e.to_string()))?;
-    let tx_id = warp_api_ffi::api::payment::broadcast_tx(&tx).await?;
+    let tx_id = warp_api_ffi::api::payment_v2::broadcast_tx(&tx).await?;
     Ok(tx_id)
 }
 
-#[post(
-    "/get_tx_plan?<confirmations>",
-    data = "<recipients>"
-)]
+#[post("/get_tx_plan?<confirmations>", data = "<recipients>")]
 pub async fn get_tx_plan(
     confirmations: u32,
     recipients: Json<Vec<RecipientShort>>,
@@ -313,20 +318,16 @@ pub async fn get_tx_plan(
     let coin = c.coin;
     let account = c.id_account;
     let last_height = warp_api_ffi::api::sync::get_latest_height().await?;
-    let change_address =
-        warp_api_ffi::api::account::get_unified_address(coin, account, true, true, true)?;
     let recipients: Vec<_> = recipients
         .iter()
         .map(|r| RecipientMemo::from(r.clone()))
         .collect();
-    let config = TransactionBuilderConfig::new(&change_address);
 
     let plan = warp_api_ffi::api::payment_v2::build_tx_plan(
         coin,
         account,
         last_height,
         &recipients,
-        &config,
         confirmations,
     )
     .await?;

@@ -1,5 +1,6 @@
 use crate::coinconfig::{init_coin, CoinConfig};
-use crate::{ChainError, Tx};
+use crate::note_selection::TransactionReport;
+use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use anyhow::anyhow;
@@ -164,6 +165,16 @@ pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32, count: u
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn get_address(
+    coin: u8,
+    id_account: u32,
+    ua_type: u8,
+) -> CResult<*mut c_char> {
+    let address = crate::api::account::get_address(coin, id_account, ua_type);
+    to_cresult_str(address)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn import_transparent_key(coin: u8, id_account: u32, path: *mut c_char) {
     from_c_str!(path);
     let res = crate::api::account::import_transparent_key(coin, id_account, &path);
@@ -287,19 +298,21 @@ fn report_progress(progress: Progress, port: i64) {
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn send_multi_payment(
+    coin: u8,
+    account: u32,
     recipients_json: *mut c_char,
-    use_transparent: bool,
     anchor_offset: u32,
     port: i64,
 ) -> CResult<*mut c_char> {
     from_c_str!(recipients_json);
     let res = async move {
         let height = crate::api::sync::get_latest_height().await?;
-        let recipients = crate::api::payment::parse_recipients(&recipients_json)?;
-        let res = crate::api::payment::build_sign_send_multi_payment(
+        let recipients = crate::api::recipient::parse_recipients(&recipients_json)?;
+        let res = crate::api::payment_v2::build_sign_send_multi_payment(
+            coin,
+            account,
             height,
             &recipients,
-            use_transparent,
             anchor_offset,
             Box::new(move |progress| {
                 report_progress(progress, port);
@@ -366,8 +379,8 @@ pub async unsafe extern "C" fn get_taddr_balance(coin: u8, id_account: u32) -> C
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn shield_taddr() -> CResult<*mut c_char> {
-    let res = crate::api::payment::shield_taddr().await;
+pub async unsafe extern "C" fn shield_taddr(coin: u8, account: u32) -> CResult<*mut c_char> {
+    let res = crate::api::payment_v2::shield_taddr(coin, account).await;
     to_cresult_str(res)
 }
 
@@ -381,18 +394,20 @@ pub async unsafe extern "C" fn scan_transparent_accounts(gap_limit: u32) {
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn prepare_multi_payment(
+    coin: u8,
+    account: u32,
     recipients_json: *mut c_char,
-    use_transparent: bool,
     anchor_offset: u32,
 ) -> CResult<*mut c_char> {
     from_c_str!(recipients_json);
     let res = async {
         let last_height = crate::api::sync::get_latest_height().await?;
-        let recipients = crate::api::payment::parse_recipients(&recipients_json)?;
-        let tx = crate::api::payment::build_only_multi_payment(
+        let recipients = crate::api::recipient::parse_recipients(&recipients_json)?;
+        let tx = crate::api::payment_v2::build_tx_plan(
+            coin,
+            account,
             last_height,
             &recipients,
-            use_transparent,
             anchor_offset,
         )
         .await?;
@@ -402,25 +417,53 @@ pub async unsafe extern "C" fn prepare_multi_payment(
     to_cresult_str(res.await)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn transaction_report(coin: u8, plan: *mut c_char) -> CResult<*mut c_char> {
+    from_c_str!(plan);
+    let c = CoinConfig::get(coin);
+    let res = || {
+        let plan: TransactionPlan = serde_json::from_str(&plan)?;
+        let report = TransactionReport::from_plan(c.chain.network(), plan);
+        let report = serde_json::to_string(&report)?;
+        Ok(report)
+    };
+    to_cresult_str(res())
+}
+
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn sign(tx: *mut c_char, port: i64) -> CResult<*mut c_char> {
+pub async unsafe extern "C" fn sign(
+    coin: u8,
+    account: u32,
+    tx: *mut c_char,
+    port: i64,
+) -> CResult<*mut c_char> {
     from_c_str!(tx);
     let res = async {
-        let tx: Tx = serde_json::from_str(&tx)?;
-        let raw_tx = crate::api::payment::sign_only_multi_payment(
-            &tx,
-            Box::new(move |progress| {
-                report_progress(progress, port);
-            }),
-        )
-        .await?;
+        let tx: TransactionPlan = serde_json::from_str(&tx)?;
+        let raw_tx = crate::api::payment_v2::sign_plan(coin, account, &tx)?;
         let tx_str = base64::encode(&raw_tx);
         Ok::<_, anyhow::Error>(tx_str)
     };
     let res = res.await;
-    let res = res.map(to_c_str);
-    to_cresult(res)
+    to_cresult_str(res)
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn sign_and_broadcast(
+    coin: u8,
+    account: u32,
+    tx_plan: *mut c_char,
+) -> CResult<*mut c_char> {
+    from_c_str!(tx_plan);
+    let res = async {
+        let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
+        let txid = crate::api::payment_v2::sign_and_broadcast(coin, account, &tx_plan).await?;
+        Ok::<_, anyhow::Error>(txid)
+    };
+    let res = res.await;
+    to_cresult_str(res)
 }
 
 #[tokio::main]

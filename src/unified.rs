@@ -51,36 +51,49 @@ pub fn get_unified_address(
         .ok_or(anyhow!(""))
         .or_else(|_| db.get_ua_settings(account))?;
 
-    let mut rcvs = vec![];
-    if tpe.transparent {
-        let address = db.get_taddr(account)?;
-        if let Some(address) = address {
-            let address = TransparentAddress::decode(network, &address)?;
-            if let TransparentAddress::PublicKey(pkh) = address {
-                let rcv = Receiver::P2pkh(pkh);
+    let address = match (tpe.transparent, tpe.sapling, tpe.orchard) {
+        (true, false, false) => {
+            let address = db.get_taddr(account)?.ok_or(anyhow!("Missing t-addr"))?;
+            return Ok(address);
+        }
+        (false, true, false) => {
+            let AccountData { address, .. } = db.get_account_info(account)?;
+            return Ok(address);
+        }
+        _ => {
+            let mut rcvs = vec![];
+            if tpe.transparent {
+                let address = db.get_taddr(account)?;
+                if let Some(address) = address {
+                    let address = TransparentAddress::decode(network, &address)?;
+                    if let TransparentAddress::PublicKey(pkh) = address {
+                        let rcv = Receiver::P2pkh(pkh);
+                        rcvs.push(rcv);
+                    }
+                }
+            }
+            if tpe.sapling {
+                let AccountData { address, .. } = db.get_account_info(account)?;
+                let pa = decode_payment_address(network.hrp_sapling_payment_address(), &address)
+                    .unwrap();
+                let rcv = Receiver::Sapling(pa.to_bytes());
                 rcvs.push(rcv);
             }
-        }
-    }
-    if tpe.sapling {
-        let AccountData { address, .. } = db.get_account_info(account)?;
-        let pa = decode_payment_address(network.hrp_sapling_payment_address(), &address).unwrap();
-        let rcv = Receiver::Sapling(pa.to_bytes());
-        rcvs.push(rcv);
-    }
-    if tpe.orchard {
-        let okey = db.get_orchard(account)?;
-        if let Some(okey) = okey {
-            let fvk = FullViewingKey::from_bytes(&okey.fvk).unwrap();
-            let address = fvk.address_at(0usize, Scope::External);
-            let rcv = Receiver::Orchard(address.to_raw_address_bytes());
-            rcvs.push(rcv);
-        }
-    }
+            if tpe.orchard {
+                let okey = db.get_orchard(account)?;
+                if let Some(okey) = okey {
+                    let fvk = FullViewingKey::from_bytes(&okey.fvk).unwrap();
+                    let address = fvk.address_at(0usize, Scope::External);
+                    let rcv = Receiver::Orchard(address.to_raw_address_bytes());
+                    rcvs.push(rcv);
+                }
+            }
 
-    let addresses = unified::Address(rcvs);
-    let unified_address = ZcashAddress::from_unified(network.address_network().unwrap(), addresses);
-    Ok(unified_address.encode())
+            let addresses = unified::Address(rcvs);
+            ZcashAddress::from_unified(network.address_network().unwrap(), addresses)
+        }
+    };
+    Ok(address.encode())
 }
 
 pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<DecodedUA> {

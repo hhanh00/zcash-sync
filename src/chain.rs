@@ -189,19 +189,27 @@ pub async fn download_chain(
         prev_hash = Some(ph);
         for tx in block.vtx.iter_mut() {
             let mut skipped = false;
-            if tx.outputs.len() > max_cost as usize {
+            if tx.outputs.len() + tx.actions.len() > max_cost as usize {
                 for co in tx.outputs.iter_mut() {
                     co.epk.clear();
                     co.ciphertext.clear();
-                    skipped = true;
                 }
+                for a in tx.actions.iter_mut() {
+                    a.ephemeral_key.clear();
+                    a.ciphertext.clear();
+                }
+                skipped = true;
             }
             if skipped {
                 log::debug!("Output skipped {}", tx.outputs.len());
             }
         }
 
-        let block_output_count: usize = block.vtx.iter().map(|tx| tx.outputs.len()).sum();
+        let block_output_count: usize = block
+            .vtx
+            .iter()
+            .map(|tx| tx.outputs.len() + tx.actions.len())
+            .sum();
         if output_count + block_output_count > outputs_per_chunk {
             // output
             let out = cbs;

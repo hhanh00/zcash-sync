@@ -1,6 +1,6 @@
 use crate::db::SpendableNote;
 // use crate::wallet::RecipientMemo;
-use crate::api::payment::RecipientMemo;
+use crate::api::recipient::RecipientMemo;
 use crate::chain::get_latest_height;
 use crate::coinconfig::CoinConfig;
 use crate::{GetAddressUtxosReply, Hash, RawTransaction};

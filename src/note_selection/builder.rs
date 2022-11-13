@@ -1,6 +1,8 @@
-use crate::coinconfig::get_prover;
+use super::decode;
 use super::types::*;
-use super::{decode};
+use crate::coinconfig::get_prover;
+use crate::note_selection::fee::FeeFlat;
+use crate::note_selection::{build_tx_plan, fetch_utxos};
 use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
@@ -34,8 +36,6 @@ use zcash_primitives::transaction::sighash_v5::v5_signature_hash;
 use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_primitives::transaction::{Transaction, TransactionData, TxVersion};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
-use crate::note_selection::fee::FeeFlat;
-use crate::note_selection::{build_tx_plan, fetch_utxos};
 
 pub struct SecretKeys {
     pub transparent: Option<SecretKey>,
@@ -333,14 +333,12 @@ async fn dummy_test() {
 
     log::info!("Preparing outputs");
     let mut orders = vec![];
-    orders.push(
-        Order::new(
-            1,
-            "tmWXoSBwPoCjJCNZjw4P7heoVMcT2Ronrqq",
-            10000,
-            MemoBytes::empty(),
-        )
-    );
+    orders.push(Order::new(
+        1,
+        "tmWXoSBwPoCjJCNZjw4P7heoVMcT2Ronrqq",
+        10000,
+        MemoBytes::empty(),
+    ));
     orders.push(Order::new(2, "zregtestsapling1qzy9wafd2axnenul6t6wav76dys6s8uatsq778mpmdvmx4k9myqxsd9m73aqdgc7gwnv53wga4j", 20000, MemoBytes::empty()));
     orders.push(Order::new(3, "uregtest1mzt5lx5s5u8kczlfr82av97kjckmfjfuq8y9849h6cl9chhdekxsm6r9dklracflqwplrnfzm5rucp5txfdm04z5myrde8y3y5rayev8", 30000, MemoBytes::empty()));
     orders.push(Order::new(4, "uregtest1yvucqfqnmq5ldc6fkvuudlsjhxg56hxph9ymmcnmpzpywd752ym8sr5l5d24wqn4enz3gakk6alf5hlpw2cjs3jjrcdae3nksrefyum5x400f9gs3ak9yllcr8czhrlnjufuuy7n5mh", 40000, MemoBytes::empty()));
@@ -349,8 +347,7 @@ async fn dummy_test() {
     orders.push(Order::new(7, "uregtest1mxy5wq2n0xw57nuxa4lqpl358zw4vzyfgadsn5jungttmqcv6nx6cpx465dtpzjzw0vprjle4j4nqqzxtkuzm93regvgg4xce0un5ec6tedquc469zjhtdpkxz04kunqqyasv4rwvcweh3ue0ku0payn29stl2pwcrghyzscrrju9ar57rn36wgz74nmynwcyw27rjd8yk477l97ez8", 70000, MemoBytes::empty()));
 
     log::info!("Building tx plan");
-    let tx_plan =
-        build_tx_plan::<FeeFlat>("", 0, &utxos, &mut orders, &config).unwrap();
+    let tx_plan = build_tx_plan::<FeeFlat>("", 0, &utxos, &mut orders, &config).unwrap();
     log::info!("Plan: {}", serde_json::to_string(&tx_plan).unwrap());
 
     log::info!("Building tx");

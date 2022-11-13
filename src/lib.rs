@@ -129,10 +129,8 @@ pub use zip32::KeyPack;
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
 
 pub use note_selection::{
-    build_tx_plan, build_tx, get_secret_keys,
-    TransactionPlan, TransactionBuilderConfig,
-    TxBuilderContext,
-    fetch_utxos,
+    build_tx, build_tx_plan, fetch_utxos, get_secret_keys, TransactionBuilderConfig,
+    TransactionPlan, TxBuilderContext,
 };
 pub use unified::{decode_unified_address, get_unified_address};
 
@@ -152,4 +150,3 @@ pub fn init_test() {
     init_coin(0, "./zec.db").unwrap();
     set_coin_lwd_url(0, "http://127.0.0.1:9067");
 }
-

@@ -315,7 +315,17 @@ pub fn get_unified_address(
         sapling: s,
         orchard: o,
     };
-    let address = crate::get_unified_address(c.chain.network(), &db, id_account, Some(tpe))?; // use ua settings from db
+    let address = crate::get_unified_address(c.chain.network(), &db, id_account, Some(tpe))?; // use ua settings
+    Ok(address)
+}
+
+pub fn get_address(coin: u8, id_account: u32, address_type: u8) -> anyhow::Result<String> {
+    let c = CoinConfig::get(coin);
+    let t = address_type & 1 != 0;
+    let s = address_type & 2 != 0;
+    let o = address_type & 4 != 0;
+
+    let address = get_unified_address(coin, id_account, t, s, o)?;
     Ok(address)
 }
 

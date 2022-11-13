@@ -1,14 +1,14 @@
 use crate::chain::Nf;
 use crate::contact::Contact;
+use crate::note_selection::{Source, UTXO};
 use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
 use crate::prices::Quote;
 use crate::sapling::SaplingViewKey;
-use crate::sync;
 use crate::sync::tree::{CTree, TreeCheckpoint};
 use crate::taddr::{derive_tkeys, TBalance};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
-use crate::note_selection::{Source, UTXO};
+use crate::{get_unified_address, sync};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
@@ -919,6 +919,8 @@ impl DbAdapter {
 
     pub fn truncate_sync_data(&self) -> anyhow::Result<()> {
         self.connection.execute("DELETE FROM blocks", [])?;
+        self.connection.execute("DELETE FROM sapling_tree", [])?;
+        self.connection.execute("DELETE FROM orchard_tree", [])?;
         self.connection.execute("DELETE FROM contacts", [])?;
         self.connection.execute("DELETE FROM diversifiers", [])?;
         self.connection
@@ -960,6 +962,10 @@ impl DbAdapter {
         )?;
         self.connection
             .execute("DELETE FROM taddrs WHERE account = ?1", params![account])?;
+        self.connection.execute(
+            "DELETE FROM orchard_addrs WHERE account = ?1",
+            params![account],
+        )?;
         self.connection
             .execute("DELETE FROM messages WHERE account = ?1", params![account])?;
         Ok(())

@@ -1,11 +1,11 @@
-use std::str::FromStr;
-use anyhow::anyhow;
-use zcash_primitives::memo::{Memo, MemoBytes};
+use super::{types::*, Result};
 use crate::note_selection::fee::FeeCalculator;
-use crate::note_selection::{MAX_ATTEMPTS, TransactionBuilderError};
-use crate::note_selection::TransactionBuilderError::TxTooComplex;
 use crate::note_selection::ua::decode;
-use super::{Result, types::*};
+use crate::note_selection::TransactionBuilderError::TxTooComplex;
+use crate::note_selection::{TransactionBuilderError, MAX_ATTEMPTS};
+use anyhow::anyhow;
+use std::str::FromStr;
+use zcash_primitives::memo::{Memo, MemoBytes};
 
 pub fn sum_utxos(utxos: &[UTXO]) -> Result<PoolAllocation> {
     let mut pool = PoolAllocation::default();
@@ -61,24 +61,31 @@ pub fn group_orders(orders: &[Order], fee: u64) -> Result<(Vec<OrderInfo>, Order
             6 => {
                 x += info.amount;
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
     log::debug!("{} {} {} {}", t0, s0, o0, x);
-    let amounts = OrderGroupAmounts {
-        t0,
-        s0,
-        o0,
-        x,
-        fee,
-    };
+    let amounts = OrderGroupAmounts { t0, s0, o0, x, fee };
     Ok((order_info, amounts))
 }
 
-pub fn allocate_funds(amounts: &OrderGroupAmounts, initial: &PoolAllocation) -> Result<FundAllocation> {
+fn get_net_chg(t0: i64, s0: i64, o0: i64, x: i64, t2: i64, fee: i64) -> (i64, i64) {
+    let (d_s, d_o) = match (x, s0, o0) {
+        (0, 0, _) => (0, t0 + fee - t2), // only orchard
+        (0, _, 0) => (t0 + fee - t2, 0), // only sapling
+        _ => ((t0 - t2 + fee) / 2, t0 + fee - t2 - (t0 - t2 + fee) / 2), // do not simplify because of rounding
+    };
+    log::info!("{} {}", d_s, d_o);
+    (d_s, d_o)
+}
+
+pub fn allocate_funds(
+    amounts: &OrderGroupAmounts,
+    initial: &PoolAllocation,
+) -> Result<FundAllocation> {
     log::debug!("{:?}", initial);
 
-    let OrderGroupAmounts { t0, s0, o0, x , fee} = *amounts;
+    let OrderGroupAmounts { t0, s0, o0, x, fee } = *amounts;
     let (t0, s0, o0, x, fee) = (t0 as i64, s0 as i64, o0 as i64, x as i64, fee as i64);
 
     let sum = t0 + s0 + o0 + x + fee;
@@ -93,29 +100,25 @@ pub fn allocate_funds(amounts: &OrderGroupAmounts, initial: &PoolAllocation) -> 
     let mut t2 = sum - smax - omax;
     if t2 > 0 {
         if t2 > tmax {
-            return Err(TransactionBuilderError::NotEnoughFunds)
+            return Err(TransactionBuilderError::NotEnoughFunds);
         }
         // Not enough shielded notes. Use them all before using transparent notes
         s2 = smax;
         o2 = omax;
-        let d_s = (t0 + fee - t2) / 2;
-        let d_o = t0 + fee - t2 - d_s; // handle case when t0+fee-t2 is odd
+        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee);
         s1 = s2 - d_s - s0;
         o1 = o2 - d_o - o0;
 
         if s1 < 0 {
             s1 = 0;
             o1 = x;
-        }
-        else if o1 < 0 {
+        } else if o1 < 0 {
             o1 = 0;
             s1 = x;
         }
-    }
-    else {
+    } else {
         t2 = 0;
-        let d_s = (t0 + fee) / 2;
-        let d_o = t0 + fee - d_s;
+        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee);
 
         // Solve relaxed problem
         let inp = sum / 2;
@@ -177,7 +180,12 @@ pub fn allocate_funds(amounts: &OrderGroupAmounts, initial: &PoolAllocation) -> 
     Ok(fund_allocation)
 }
 
-pub fn fill(orders: &[Order], order_infos: &[OrderInfo], amounts: &OrderGroupAmounts, allocation: &FundAllocation) -> Result<Vec<Fill>> {
+pub fn fill(
+    orders: &[Order],
+    order_infos: &[OrderInfo],
+    amounts: &OrderGroupAmounts,
+    allocation: &FundAllocation,
+) -> Result<Vec<Fill>> {
     assert_eq!(orders.len(), order_infos.len());
     let mut fills = vec![];
     let mut f = 0f64;
@@ -208,17 +216,24 @@ pub fn fill(orders: &[Order], order_infos: &[OrderInfo], amounts: &OrderGroupAmo
                     amount: order.amount - fill1.amount,
                     memo: order.memo.clone(),
                 };
-                if fill1.amount != 0 { fills.push(fill1); }
-                if fill2.amount != 0 { fills.push(fill2); }
+                if fill1.amount != 0 {
+                    fills.push(fill1);
+                }
+                if fill2.amount != 0 {
+                    fills.push(fill2);
+                }
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     Ok(fills)
 }
 
-pub fn select_inputs(utxos: &[UTXO], allocation: &FundAllocation) -> Result<(Vec<UTXO>, PoolAllocation)> {
+pub fn select_inputs(
+    utxos: &[UTXO],
+    allocation: &FundAllocation,
+) -> Result<(Vec<UTXO>, PoolAllocation)> {
     let mut needed = [allocation.t2, allocation.s2, allocation.o2];
     let mut change = [0u64; 3];
     let mut inputs = vec![];
@@ -240,7 +255,10 @@ pub fn select_inputs(utxos: &[UTXO], allocation: &FundAllocation) -> Result<(Vec
     Ok((inputs, PoolAllocation(change)))
 }
 
-pub fn outputs_for_change(change_destinations: &[Option<Destination>; 3], change: &PoolAllocation) -> Result<Vec<Fill>> {
+pub fn outputs_for_change(
+    change_destinations: &[Option<Destination>; 3],
+    change: &PoolAllocation,
+) -> Result<Vec<Fill>> {
     let mut change_fills = vec![];
     for i in 0..3 {
         let destination = change_destinations[i];
@@ -251,15 +269,23 @@ pub fn outputs_for_change(change_destinations: &[Option<Destination>; 3], change
                 amount: change.0[i],
                 memo: MemoBytes::empty(),
             };
-            if change_fill.amount != 0 { change_fills.push(change_fill); }
+            if change_fill.amount != 0 {
+                change_fills.push(change_fill);
+            }
         } else {
-            return Err(anyhow!("No change address").into())
+            return Err(anyhow!("No change address").into());
         }
     }
     Ok(change_fills)
 }
 
-pub fn build_tx_plan<F: FeeCalculator>(fvk: &str, height: u32, utxos: &[UTXO], orders: &[Order], config: &TransactionBuilderConfig) -> Result<TransactionPlan> {
+pub fn build_tx_plan<F: FeeCalculator>(
+    fvk: &str,
+    height: u32,
+    utxos: &[UTXO],
+    orders: &[Order],
+    config: &TransactionBuilderConfig,
+) -> Result<TransactionPlan> {
     let mut fee = 0;
 
     for _ in 0..MAX_ATTEMPTS {
@@ -269,7 +295,9 @@ pub fn build_tx_plan<F: FeeCalculator>(fvk: &str, height: u32, utxos: &[UTXO], o
 
         let OrderGroupAmounts { s0, o0, .. } = amounts;
         let FundAllocation { s1, o1, s2, o2, .. } = allocation;
-        let (s0, o0, s1, o1, s2, o2) = (s0 as i64, o0 as i64, s1 as i64, o1 as i64, s2 as i64, o2 as i64);
+        let (s0, o0, s1, o1, s2, o2) = (
+            s0 as i64, o0 as i64, s1 as i64, o1 as i64, s2 as i64, o2 as i64,
+        );
         let net_chg = [s0 + s1 - s2, o0 + o1 - o2];
 
         let mut fills = fill(&orders, &groups, &amounts, &allocation)?;
@@ -287,9 +315,9 @@ pub fn build_tx_plan<F: FeeCalculator>(fvk: &str, height: u32, utxos: &[UTXO], o
                 spends: notes,
                 outputs: fills,
                 net_chg,
-                fee
+                fee,
             };
-            return Ok(tx_plan)
+            return Ok(tx_plan);
         }
         fee = updated_fee;
     }

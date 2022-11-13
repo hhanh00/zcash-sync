@@ -1,19 +1,24 @@
+use crate::api::account::get_unified_address;
+use crate::api::recipient::{RecipientMemo, RecipientShort};
+use crate::api::sync::get_latest_height;
+pub use crate::broadcast_tx;
+use crate::note_selection::{FeeZIP327, Order, TransactionReport};
+use crate::{
+    build_tx, fetch_utxos, get_secret_keys, AccountData, CoinConfig, TransactionBuilderConfig,
+    TransactionPlan, TxBuilderContext,
+};
+use rand::rngs::OsRng;
 use std::cmp::min;
 use zcash_primitives::memo::MemoBytes;
-use crate::api::payment::{RecipientMemo, RecipientShort};
-use crate::{AccountData, CoinConfig, fetch_utxos, TransactionBuilderConfig, TransactionPlan};
-use crate::note_selection::{FeeZIP327, Order};
+use zcash_primitives::transaction::builder::Progress;
 
-async fn prepare_payment_v2(recipients: &[RecipientShort]) -> anyhow::Result<()> {
-    todo!()
-}
+type PaymentProgressCallback = Box<dyn Fn(Progress) + Send + Sync>;
 
 pub async fn build_tx_plan(
     coin: u8,
     account: u32,
     last_height: u32,
     recipients: &[RecipientMemo],
-    config: &TransactionBuilderConfig,
     confirmations: u32,
 ) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
@@ -22,6 +27,7 @@ pub async fn build_tx_plan(
         let AccountData { fvk, .. } = db.get_account_info(account)?;
         fvk
     };
+    let change_address = get_unified_address(coin, account, true, true, true)?;
 
     let mut orders = vec![];
     let mut id_order = 0;
@@ -41,17 +47,64 @@ pub async fn build_tx_plan(
             id_order += 1;
         }
     }
-    let utxos = fetch_utxos(
-        coin,
-        account,
-        last_height,
-        true,
-        confirmations,
-    )
-        .await?;
+    let utxos = fetch_utxos(coin, account, last_height, true, confirmations).await?;
 
     log::info!("UTXO: {:?}", utxos);
 
-    let tx_plan = crate::note_selection::build_tx_plan::<FeeZIP327>(&fvk, last_height, &utxos, &orders, config)?;
+    let config = TransactionBuilderConfig::new(&change_address);
+    let tx_plan = crate::note_selection::build_tx_plan::<FeeZIP327>(
+        &fvk,
+        last_height,
+        &utxos,
+        &orders,
+        &config,
+    )?;
     Ok(tx_plan)
+}
+
+pub fn sign_plan(coin: u8, account: u32, tx_plan: &TransactionPlan) -> anyhow::Result<Vec<u8>> {
+    let c = CoinConfig::get(coin);
+    let fvk = {
+        let db = c.db()?;
+        let AccountData { fvk, .. } = db.get_account_info(account)?;
+        fvk
+    };
+
+    if fvk != tx_plan.fvk {
+        return Err(anyhow::anyhow!("Account does not match transaction"));
+    }
+
+    let keys = get_secret_keys(coin, account)?;
+    let context = TxBuilderContext::from_height(c.coin, tx_plan.height)?;
+    let tx = build_tx(c.chain.network(), &keys, &tx_plan, context, OsRng).unwrap();
+    Ok(tx)
+}
+
+pub async fn sign_and_broadcast(
+    coin: u8,
+    account: u32,
+    tx_plan: &TransactionPlan,
+) -> anyhow::Result<String> {
+    let tx = sign_plan(coin, account, tx_plan)?;
+    let txid = broadcast_tx(&tx).await?;
+    Ok(txid)
+}
+
+pub async fn build_sign_send_multi_payment(
+    coin: u8,
+    account: u32,
+    last_height: u32,
+    recipients: &[RecipientMemo],
+    confirmations: u32,
+    progress_callback: PaymentProgressCallback,
+) -> anyhow::Result<String> {
+    todo!()
+}
+
+/// Make a transaction that shields the transparent balance
+pub async fn shield_taddr(coin: u8, account: u32) -> anyhow::Result<String> {
+    // let last_height = get_latest_height().await?;
+    // let tx_id = build_sign_send_multi_payment(coin, account, last_height, &[], 0, Box::new(|_| {})).await?;
+    // Ok(tx_id)
+    todo!()
 }

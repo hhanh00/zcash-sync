@@ -22,15 +22,15 @@ typedef struct CResult_u32 {
   char *error;
 } CResult_u32;
 
-typedef struct CResult_u8 {
-  uint8_t value;
-  char *error;
-} CResult_u8;
-
 typedef struct CResult_____c_char {
   char *value;
   char *error;
 } CResult_____c_char;
+
+typedef struct CResult_u8 {
+  uint8_t value;
+  char *error;
+} CResult_u8;
 
 typedef struct CResult_i64 {
   int64_t value;
@@ -64,6 +64,8 @@ struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t ind
 
 void new_sub_account(char *name, int32_t index, uint32_t count);
 
+struct CResult_____c_char get_address(uint8_t coin, uint32_t id_account, uint8_t ua_type);
+
 void import_transparent_key(uint8_t coin, uint32_t id_account, char *path);
 
 void import_transparent_secret_key(uint8_t coin, uint32_t id_account, char *secret_key);
@@ -84,8 +86,9 @@ struct CResult_____c_char new_diversified_address(void);
 
 struct CResult_u32 get_latest_height(void);
 
-struct CResult_____c_char send_multi_payment(char *recipients_json,
-                                             bool use_transparent,
+struct CResult_____c_char send_multi_payment(uint8_t coin,
+                                             uint32_t account,
+                                             char *recipients_json,
                                              uint32_t anchor_offset,
                                              int64_t port);
 
@@ -103,15 +106,20 @@ int64_t get_mempool_balance(void);
 
 struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t id_account);
 
-struct CResult_____c_char shield_taddr(void);
+struct CResult_____c_char shield_taddr(uint8_t coin, uint32_t account);
 
 void scan_transparent_accounts(uint32_t gap_limit);
 
-struct CResult_____c_char prepare_multi_payment(char *recipients_json,
-                                                bool use_transparent,
+struct CResult_____c_char prepare_multi_payment(uint8_t coin,
+                                                uint32_t account,
+                                                char *recipients_json,
                                                 uint32_t anchor_offset);
 
-struct CResult_____c_char sign(char *tx, int64_t port);
+struct CResult_____c_char transaction_report(uint8_t coin, char *plan);
+
+struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx, int64_t port);
+
+struct CResult_____c_char sign_and_broadcast(uint8_t coin, uint32_t account, char *tx_plan);
 
 struct CResult_____c_char broadcast_tx(char *tx_str);
 

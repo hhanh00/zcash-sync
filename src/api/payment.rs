@@ -26,13 +26,12 @@ type PaymentProgressCallback = Box<dyn Fn(Progress) + Send + Sync>;
 async fn prepare_multi_payment(
     last_height: u32,
     recipients: &[RecipientMemo],
-    use_transparent: bool,
     anchor_offset: u32,
 ) -> anyhow::Result<(Tx, Vec<u32>)> {
-    // let c = CoinConfig::get_active();
+    let c = CoinConfig::get_active();
+    let change_address = c.db()?.get_account_change_address(c.id_account)?;
     // let mut tx_builder = TxBuilder::new(c.coin_type, last_height);
     //
-    // let AccountData { fvk, .. } = c.db()?.get_account_info(c.id_account)?;
     // let fvk = decode_extended_full_viewing_key(
     //     c.chain.network().hrp_sapling_extended_full_viewing_key(),
     //     &fvk,
@@ -125,7 +124,7 @@ pub async fn build_sign_send_multi_payment(
 ) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
     let (tx, note_ids) =
-        prepare_multi_payment(last_height, recipients, use_transparent, anchor_offset).await?;
+        prepare_multi_payment(last_height, recipients, anchor_offset).await?;
     let raw_tx = sign(&tx, progress_callback)?;
     let tx_id = broadcast_tx(&raw_tx).await?;
 
@@ -135,115 +134,3 @@ pub async fn build_sign_send_multi_payment(
     Ok(tx_id)
 }
 
-/// Make a transaction that shields the transparent balance
-pub async fn shield_taddr() -> anyhow::Result<String> {
-    let last_height = get_latest_height().await?;
-    let tx_id = build_sign_send_multi_payment(last_height, &[], true, 0, Box::new(|_| {})).await?;
-    Ok(tx_id)
-}
-
-/// Parse a json document that contains a list of recipients
-pub fn parse_recipients(recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> {
-    let c = CoinConfig::get_active();
-    let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
-    let recipients: Vec<Recipient> = serde_json::from_str(recipients)?;
-    let recipient_memos: Vec<_> = recipients
-        .iter()
-        .map(|r| RecipientMemo::from_recipient(&address, r))
-        .collect();
-    Ok(recipient_memos)
-}
-
-/// Encode a message into a memo
-pub fn encode_memo(from: &str, include_from: bool, subject: &str, body: &str) -> String {
-    let from = if include_from { from } else { "" };
-    let msg = format!("\u{1F6E1}MSG\n{}\n{}\n{}", from, subject, body);
-    msg
-}
-
-/// Decode a memo into a message
-pub fn decode_memo(
-    id_tx: u32,
-    memo: &str,
-    recipient: &str,
-    timestamp: u32,
-    height: u32,
-) -> ZMessage {
-    let memo_lines: Vec<_> = memo.splitn(4, '\n').collect();
-    let msg = if memo_lines[0] == "\u{1F6E1}MSG" {
-        ZMessage {
-            id_tx,
-            sender: if memo_lines[1].is_empty() {
-                None
-            } else {
-                Some(memo_lines[1].to_string())
-            },
-            recipient: recipient.to_string(),
-            subject: memo_lines[2].to_string(),
-            body: memo_lines[3].to_string(),
-            timestamp,
-            height,
-        }
-    } else {
-        ZMessage {
-            id_tx,
-            sender: None,
-            recipient: recipient.to_string(),
-            subject: memo_lines[0].chars().take(20).collect(),
-            body: memo.to_string(),
-            timestamp,
-            height,
-        }
-    };
-    msg
-}
-
-#[derive(Deserialize)]
-pub struct Recipient {
-    pub address: String,
-    pub amount: u64,
-    pub reply_to: bool,
-    pub subject: String,
-    pub memo: String,
-    pub max_amount_per_note: u64,
-}
-
-#[derive(Clone, Deserialize)]
-pub struct RecipientShort {
-    pub address: String,
-    pub amount: u64,
-}
-
-pub struct RecipientMemo {
-    pub address: String,
-    pub amount: u64,
-    pub memo: Memo,
-    pub max_amount_per_note: u64,
-}
-
-impl RecipientMemo {
-    pub fn from_recipient(from: &str, r: &Recipient) -> Self {
-        let memo = if !r.reply_to && r.subject.is_empty() {
-            r.memo.clone()
-        } else {
-            encode_memo(from, r.reply_to, &r.subject, &r.memo)
-        };
-        RecipientMemo {
-            address: r.address.clone(),
-            amount: r.amount,
-            memo: Memo::from_str(&memo).unwrap(),
-            max_amount_per_note: r.max_amount_per_note,
-        }
-    }
-}
-
-impl From<RecipientShort> for RecipientMemo {
-    fn from(r: RecipientShort) -> Self {
-        RecipientMemo {
-            address: r.address,
-            amount: r.amount,
-            memo: Memo::Empty,
-            max_amount_per_note: 0,
-        }
-    }
-}

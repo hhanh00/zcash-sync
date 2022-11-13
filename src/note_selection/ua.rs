@@ -1,6 +1,6 @@
-use zcash_address::{AddressKind, ZcashAddress};
-use zcash_address::unified::{Container, Receiver};
 use super::types::*;
+use zcash_address::unified::{Container, Receiver};
+use zcash_address::{AddressKind, ZcashAddress};
 
 pub fn decode(address: &str) -> anyhow::Result<[Option<Destination>; 3]> {
     let mut destinations: [Option<Destination>; 3] = [None; 3];

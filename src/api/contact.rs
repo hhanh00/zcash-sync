@@ -1,6 +1,7 @@
 //! Contact Address book
 
-use crate::api::payment::{build_sign_send_multi_payment, RecipientMemo};
+use crate::api::payment_v2::build_sign_send_multi_payment;
+use crate::api::recipient::RecipientMemo;
 use crate::api::sync::get_latest_height;
 use crate::coinconfig::CoinConfig;
 use crate::contact::{serialize_contacts, Contact};
@@ -50,9 +51,10 @@ async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<
         .collect();
 
     let tx_id = build_sign_send_multi_payment(
+        c.coin,
+        c.id_account,
         last_height,
         &recipients,
-        false,
         anchor_offset,
         Box::new(|_| {}),
     )
