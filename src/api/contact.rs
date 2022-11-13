@@ -1,6 +1,6 @@
 //! Contact Address book
 
-use crate::api::payment_v2::build_sign_send_multi_payment;
+use crate::api::payment_v2::{build_tx_plan, sign_and_broadcast};
 use crate::api::recipient::RecipientMemo;
 use crate::api::sync::get_latest_height;
 use crate::coinconfig::CoinConfig;
@@ -50,14 +50,14 @@ async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<
         })
         .collect();
 
-    let tx_id = build_sign_send_multi_payment(
+    let tx_plan = build_tx_plan(
         c.coin,
         c.id_account,
         last_height,
         &recipients,
         anchor_offset,
-        Box::new(|_| {}),
     )
     .await?;
+    let tx_id = sign_and_broadcast(c.coin, c.id_account, &tx_plan).await?;
     Ok(tx_id)
 }

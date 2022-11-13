@@ -86,12 +86,6 @@ struct CResult_____c_char new_diversified_address(void);
 
 struct CResult_u32 get_latest_height(void);
 
-struct CResult_____c_char send_multi_payment(uint8_t coin,
-                                             uint32_t account,
-                                             char *recipients_json,
-                                             uint32_t anchor_offset,
-                                             int64_t port);
-
 void skip_to_last_height(uint8_t coin);
 
 struct CResult_u32 rewind_to(uint32_t height);

@@ -39,6 +39,7 @@ async fn get_transparent_utxos(coin: u8, account: u32) -> anyhow::Result<Vec<UTX
                     index: utxo.index as u32,
                 };
                 UTXO {
+                    id: 0,
                     source,
                     amount: utxo.value_zat as u64,
                 }

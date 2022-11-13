@@ -160,20 +160,22 @@ pub async fn sync_async<'a>(
             progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
         }
 
-        // Orchard
-        log::info!("Orchard");
-        {
-            let decrypter = OrchardDecrypter::new(network);
-            let warper = WarpProcessor::new(OrchardHasher::new());
-            let mut synchronizer = OrchardSynchronizer::new(
-                decrypter,
-                warper,
-                orchard_vks.clone(),
-                db_builder.clone(),
-                "orchard".to_string(),
-            );
-            synchronizer.initialize(height)?;
-            progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
+        if c.chain.has_unified() {
+            // Orchard
+            log::info!("Orchard");
+            {
+                let decrypter = OrchardDecrypter::new(network);
+                let warper = WarpProcessor::new(OrchardHasher::new());
+                let mut synchronizer = OrchardSynchronizer::new(
+                    decrypter,
+                    warper,
+                    orchard_vks.clone(),
+                    db_builder.clone(),
+                    "orchard".to_string(),
+                );
+                synchronizer.initialize(height)?;
+                progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
+            }
         }
 
         let db = db_builder.build()?;

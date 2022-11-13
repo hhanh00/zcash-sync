@@ -99,7 +99,7 @@ pub struct CResult<T> {
 pub unsafe extern "C" fn init_wallet(db_path: *mut c_char) {
     try_init_logger();
     from_c_str!(db_path);
-    let _ = init_coin(0, &format!("{}/zec.db", &db_path));
+    let _ = init_coin(0, &format!("{}/zec-test.db", &db_path));
     let _ = init_coin(1, &format!("{}/yec.db", &db_path));
     let _ = init_coin(2, &format!("{}/arrr.db", &db_path));
 }
@@ -295,34 +295,34 @@ fn report_progress(progress: Progress, port: i64) {
     }
 }
 
-#[tokio::main]
-#[no_mangle]
-pub async unsafe extern "C" fn send_multi_payment(
-    coin: u8,
-    account: u32,
-    recipients_json: *mut c_char,
-    anchor_offset: u32,
-    port: i64,
-) -> CResult<*mut c_char> {
-    from_c_str!(recipients_json);
-    let res = async move {
-        let height = crate::api::sync::get_latest_height().await?;
-        let recipients = crate::api::recipient::parse_recipients(&recipients_json)?;
-        let res = crate::api::payment_v2::build_sign_send_multi_payment(
-            coin,
-            account,
-            height,
-            &recipients,
-            anchor_offset,
-            Box::new(move |progress| {
-                report_progress(progress, port);
-            }),
-        )
-        .await?;
-        Ok(res)
-    };
-    to_cresult_str(res.await)
-}
+// #[tokio::main]
+// #[no_mangle]
+// pub async unsafe extern "C" fn send_multi_payment(
+//     coin: u8,
+//     account: u32,
+//     recipients_json: *mut c_char,
+//     anchor_offset: u32,
+//     port: i64,
+// ) -> CResult<*mut c_char> {
+//     from_c_str!(recipients_json);
+//     let res = async move {
+//         let height = crate::api::sync::get_latest_height().await?;
+//         let recipients = crate::api::recipient::parse_recipients(&recipients_json)?;
+//         let res = crate::api::payment_v2::build_sign_send_multi_payment(
+//             coin,
+//             account,
+//             height,
+//             &recipients,
+//             anchor_offset,
+//             Box::new(move |progress| {
+//                 report_progress(progress, port);
+//             }),
+//         )
+//         .await?;
+//         Ok(res)
+//     };
+//     to_cresult_str(res.await)
+// }
 
 #[tokio::main]
 #[no_mangle]

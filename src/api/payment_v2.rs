@@ -87,18 +87,13 @@ pub async fn sign_and_broadcast(
 ) -> anyhow::Result<String> {
     let tx = sign_plan(coin, account, tx_plan)?;
     let txid = broadcast_tx(&tx).await?;
+    let id_notes: Vec<_> = tx_plan
+        .spends
+        .iter()
+        .filter_map(|n| if n.id != 0 { Some(n.id) } else { None })
+        .collect();
+    mark_spent(coin, &id_notes)?;
     Ok(txid)
-}
-
-pub async fn build_sign_send_multi_payment(
-    coin: u8,
-    account: u32,
-    last_height: u32,
-    recipients: &[RecipientMemo],
-    confirmations: u32,
-    progress_callback: PaymentProgressCallback,
-) -> anyhow::Result<String> {
-    todo!()
 }
 
 /// Make a transaction that shields the transparent balance
@@ -107,4 +102,11 @@ pub async fn shield_taddr(coin: u8, account: u32) -> anyhow::Result<String> {
     // let tx_id = build_sign_send_multi_payment(coin, account, last_height, &[], 0, Box::new(|_| {})).await?;
     // Ok(tx_id)
     todo!()
+}
+
+fn mark_spent(coin: u8, ids: &[u32]) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    let mut db = c.db()?;
+    db.tx_mark_spend(ids)?;
+    Ok(())
 }

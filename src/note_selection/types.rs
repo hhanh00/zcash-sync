@@ -94,6 +94,7 @@ pub struct PoolAllocation(pub [u64; 3]);
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UTXO {
+    pub id: u32,
     pub source: Source,
     pub amount: u64,
 }

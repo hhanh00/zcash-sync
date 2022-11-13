@@ -577,6 +577,7 @@ impl DbAdapter {
                 witness,
             };
             Ok(UTXO {
+                id: id_note,
                 source,
                 amount: amount as u64,
             })
@@ -606,6 +607,7 @@ impl DbAdapter {
                 witness,
             };
             Ok(UTXO {
+                id: id_note,
                 source,
                 amount: amount as u64,
             })
