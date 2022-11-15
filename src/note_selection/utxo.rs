@@ -5,9 +5,8 @@ use crate::CoinConfig;
 pub async fn fetch_utxos(
     coin: u8,
     account: u32,
-    last_height: u32,
+    checkpoint_height: u32,
     use_transparent_inputs: bool,
-    anchor_offset: u32,
 ) -> anyhow::Result<Vec<UTXO>> {
     let mut utxos = vec![];
     if use_transparent_inputs {
@@ -16,8 +15,7 @@ pub async fn fetch_utxos(
     let coin = CoinConfig::get(coin);
     let db = coin.db.as_ref().unwrap();
     let db = db.lock().unwrap();
-    let anchor_height = last_height.saturating_sub(anchor_offset);
-    utxos.extend(db.get_unspent_received_notes(account, anchor_height)?);
+    utxos.extend(db.get_unspent_received_notes(account, checkpoint_height)?);
     Ok(utxos)
 }
 

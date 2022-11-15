@@ -2,7 +2,7 @@ use crate::api::account::get_unified_address;
 use crate::api::recipient::{RecipientMemo, RecipientShort};
 use crate::api::sync::get_latest_height;
 pub use crate::broadcast_tx;
-use crate::note_selection::{FeeZIP327, Order, TransactionReport};
+use crate::note_selection::{FeeFlat, FeeZIP327, Order, TransactionReport};
 use crate::{
     build_tx, fetch_utxos, get_secret_keys, AccountData, CoinConfig, TransactionBuilderConfig,
     TransactionPlan, TxBuilderContext,
@@ -22,12 +22,17 @@ pub async fn build_tx_plan(
     confirmations: u32,
 ) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
-    let fvk = {
+    let (fvk, checkpoint_height) = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
-        fvk
+        let anchor_height = last_height.saturating_sub(confirmations);
+        let checkpoint_height = db
+            .get_checkpoint_height(anchor_height)?
+            .unwrap_or_else(|| db.sapling_activation_height()); // get the latest checkpoint before the requested anchor height
+        (fvk, checkpoint_height)
     };
     let change_address = get_unified_address(coin, account, true, true, true)?;
+    let context = TxBuilderContext::from_height(coin, checkpoint_height)?;
 
     let mut orders = vec![];
     let mut id_order = 0;
@@ -47,14 +52,15 @@ pub async fn build_tx_plan(
             id_order += 1;
         }
     }
-    let utxos = fetch_utxos(coin, account, last_height, true, confirmations).await?;
+    let utxos = fetch_utxos(coin, account, checkpoint_height, true).await?;
 
     log::info!("UTXO: {:?}", utxos);
 
     let config = TransactionBuilderConfig::new(&change_address);
-    let tx_plan = crate::note_selection::build_tx_plan::<FeeZIP327>(
+    let tx_plan = crate::note_selection::build_tx_plan::<FeeFlat>(
         &fvk,
-        last_height,
+        checkpoint_height,
+        &context.orchard_anchor,
         &utxos,
         &orders,
         &config,
@@ -75,8 +81,7 @@ pub fn sign_plan(coin: u8, account: u32, tx_plan: &TransactionPlan) -> anyhow::R
     }
 
     let keys = get_secret_keys(coin, account)?;
-    let context = TxBuilderContext::from_height(c.coin, tx_plan.height)?;
-    let tx = build_tx(c.chain.network(), &keys, &tx_plan, context, OsRng).unwrap();
+    let tx = build_tx(c.chain.network(), &keys, &tx_plan, OsRng)?;
     Ok(tx)
 }
 

@@ -50,6 +50,8 @@ void deallocate_str(char *s);
 
 void init_wallet(char *db_path);
 
+void migrate_db(char *db_path);
+
 void set_active(uint8_t active);
 
 void set_active_account(uint8_t coin, uint32_t id);

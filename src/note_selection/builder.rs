@@ -7,7 +7,7 @@ use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::Witness;
-use crate::{broadcast_tx, init_coin, set_active, set_coin_lwd_url, AccountData, CoinConfig};
+use crate::{broadcast_tx, init_coin, set_active, set_coin_lwd_url, AccountData, CoinConfig, Hash};
 use anyhow::anyhow;
 use jubjub::Fr;
 use orchard::builder::Builder as OrchardBuilder;
@@ -75,7 +75,6 @@ pub fn build_tx(
     network: &Network,
     skeys: &SecretKeys,
     plan: &TransactionPlan,
-    context: TxBuilderContext,
     mut rng: impl RngCore + CryptoRng + Clone,
 ) -> anyhow::Result<Vec<u8>> {
     let secp = Secp256k1::<All>::new();
@@ -100,8 +99,9 @@ pub fn build_tx(
     };
 
     let mut has_orchard = false;
-    let mut builder = Builder::new(*network, BlockHeight::from_u32(context.height));
-    let anchor: Anchor = orchard::tree::MerkleHashOrchard::from_bytes(&context.orchard_anchor)
+    let mut builder = Builder::new(*network, BlockHeight::from_u32(plan.height));
+    log::info!("ANCHOR {}", hex::encode(&plan.orchard_anchor));
+    let anchor: Anchor = orchard::tree::MerkleHashOrchard::from_bytes(&plan.orchard_anchor)
         .unwrap()
         .into();
     let mut orchard_builder = OrchardBuilder::new(Flags::from_parts(true, true), anchor);
@@ -204,7 +204,7 @@ pub fn build_tx(
             get_prover(),
             &mut ctx,
             &mut rng,
-            BlockHeight::from_u32(context.height),
+            BlockHeight::from_u32(plan.height),
             None,
         )
         .unwrap();
@@ -219,7 +219,7 @@ pub fn build_tx(
             TxVersion::Zip225,
             BranchId::Nu5,
             0,
-            BlockHeight::from_u32(context.height + EXPIRY_HEIGHT),
+            BlockHeight::from_u32(plan.height + EXPIRY_HEIGHT),
             transparent_bundle,
             None,
             sapling_bundle,
@@ -261,7 +261,7 @@ pub fn build_tx(
             TxVersion::Zip225,
             BranchId::Nu5,
             0,
-            BlockHeight::from_u32(context.height + EXPIRY_HEIGHT),
+            BlockHeight::from_u32(plan.height + EXPIRY_HEIGHT),
             transparent_bundle,
             None,
             sapling_bundle,
@@ -347,7 +347,9 @@ async fn dummy_test() {
     orders.push(Order::new(7, "uregtest1mxy5wq2n0xw57nuxa4lqpl358zw4vzyfgadsn5jungttmqcv6nx6cpx465dtpzjzw0vprjle4j4nqqzxtkuzm93regvgg4xce0un5ec6tedquc469zjhtdpkxz04kunqqyasv4rwvcweh3ue0ku0payn29stl2pwcrghyzscrrju9ar57rn36wgz74nmynwcyw27rjd8yk477l97ez8", 70000, MemoBytes::empty()));
 
     log::info!("Building tx plan");
-    let tx_plan = build_tx_plan::<FeeFlat>("", 0, &utxos, &mut orders, &config).unwrap();
+    let tx_plan =
+        build_tx_plan::<FeeFlat>("", 0, &[Hash::default(); 2], &utxos, &mut orders, &config)
+            .unwrap();
     log::info!("Plan: {}", serde_json::to_string(&tx_plan).unwrap());
 
     log::info!("Building tx");

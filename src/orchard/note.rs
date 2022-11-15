@@ -96,9 +96,13 @@ impl<N: Parameters> TrialDecrypter<N, OrchardDomain, OrchardViewKey, DecryptedOr
     fn spends(&self, vtx: &CompactTx) -> Vec<Nf> {
         vtx.actions
             .iter()
-            .map(|co| {
-                let nf: [u8; 32] = co.nullifier.clone().try_into().unwrap();
-                Nf(nf)
+            .filter_map(|co| {
+                if !co.nullifier.is_empty() {
+                    let nf: [u8; 32] = co.nullifier.clone().try_into().unwrap();
+                    Some(Nf(nf))
+                } else {
+                    None
+                }
             })
             .collect()
     }

@@ -68,6 +68,7 @@ pub fn decode_memo(
     recipient: &str,
     timestamp: u32,
     height: u32,
+    incoming: bool,
 ) -> ZMessage {
     let memo_lines: Vec<_> = memo.splitn(4, '\n').collect();
     let msg = if memo_lines[0] == "\u{1F6E1}MSG" {
@@ -83,6 +84,7 @@ pub fn decode_memo(
             body: memo_lines[3].to_string(),
             timestamp,
             height,
+            incoming,
         }
     } else {
         ZMessage {
@@ -93,6 +95,7 @@ pub fn decode_memo(
             body: memo.to_string(),
             timestamp,
             height,
+            incoming,
         }
     };
     msg

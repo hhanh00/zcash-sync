@@ -79,19 +79,22 @@ fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::
     let c = CoinConfig::get(coin);
     let (seed, sk, ivk, pa) = decode_key(coin, key, index)?;
     let db = c.db()?;
-    let (account, exists) =
-        db.store_account(name, seed.as_deref(), index, sk.as_deref(), &ivk, &pa)?;
-    if !exists {
-        if c.chain.has_transparent() {
-            db.create_taddr(account)?;
+    let account = db.get_account_id(&ivk)?;
+    let account = match account {
+        Some(account) => account,
+        None => {
+            let account =
+                db.store_account(name, seed.as_deref(), index, sk.as_deref(), &ivk, &pa)?;
+            if c.chain.has_transparent() {
+                db.create_taddr(account)?;
+            }
+            if c.chain.has_unified() {
+                db.create_orchard(account)?;
+            }
+            db.store_ua_settings(account, false, true, c.chain.has_unified())?;
+            account
         }
-        if c.chain.has_unified() {
-            db.create_orchard(account)?;
-        }
-        db.store_ua_settings(account, true, true, true)?;
-    } else {
-        db.store_ua_settings(account, false, true, false)?;
-    }
+    };
     Ok(account)
 }
 
@@ -319,13 +322,24 @@ pub fn get_unified_address(
     Ok(address)
 }
 
+fn get_sapling_address(coin: u8, id_account: u32) -> anyhow::Result<String> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let AccountData { address, .. } = db.get_account_info(id_account)?;
+    Ok(address)
+}
+
 pub fn get_address(coin: u8, id_account: u32, address_type: u8) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);
-    let t = address_type & 1 != 0;
-    let s = address_type & 2 != 0;
-    let o = address_type & 4 != 0;
+    let address = if c.chain.has_unified() {
+        let t = address_type & 1 != 0;
+        let s = address_type & 2 != 0;
+        let o = address_type & 4 != 0;
 
-    let address = get_unified_address(coin, id_account, t, s, o)?;
+        get_unified_address(coin, id_account, t, s, o)?
+    } else {
+        get_sapling_address(coin, id_account)?
+    };
     Ok(address)
 }
 

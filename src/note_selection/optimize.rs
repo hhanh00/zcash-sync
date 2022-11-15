@@ -3,6 +3,7 @@ use crate::note_selection::fee::FeeCalculator;
 use crate::note_selection::ua::decode;
 use crate::note_selection::TransactionBuilderError::TxTooComplex;
 use crate::note_selection::{TransactionBuilderError, MAX_ATTEMPTS};
+use crate::Hash;
 use anyhow::anyhow;
 use std::str::FromStr;
 use zcash_primitives::memo::{Memo, MemoBytes};
@@ -282,6 +283,7 @@ pub fn outputs_for_change(
 pub fn build_tx_plan<F: FeeCalculator>(
     fvk: &str,
     height: u32,
+    orchard_anchor: &Hash,
     utxos: &[UTXO],
     orders: &[Order],
     config: &TransactionBuilderConfig,
@@ -312,6 +314,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
             let tx_plan = TransactionPlan {
                 fvk: fvk.to_string(),
                 height,
+                orchard_anchor: orchard_anchor.clone(),
                 spends: notes,
                 outputs: fills,
                 net_chg,

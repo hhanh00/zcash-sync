@@ -1,4 +1,4 @@
-use crate::coinconfig::{init_coin, CoinConfig};
+use crate::coinconfig::{init_coin, migrate_coin, CoinConfig};
 use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
@@ -95,13 +95,24 @@ pub struct CResult<T> {
     error: *mut c_char,
 }
 
+const COIN_DBNAMES: &[&str] = &["zec.db", "yec.db"];
+
 #[no_mangle]
 pub unsafe extern "C" fn init_wallet(db_path: *mut c_char) {
     try_init_logger();
     from_c_str!(db_path);
-    let _ = init_coin(0, &format!("{}/zec-test.db", &db_path));
-    let _ = init_coin(1, &format!("{}/yec.db", &db_path));
-    let _ = init_coin(2, &format!("{}/arrr.db", &db_path));
+    for (coin, filename) in COIN_DBNAMES.iter().enumerate() {
+        let _ = init_coin(coin as u8, &format!("{}/{}", &db_path, filename));
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn migrate_db(db_path: *mut c_char) {
+    try_init_logger();
+    from_c_str!(db_path);
+    for (coin, filename) in COIN_DBNAMES.iter().enumerate() {
+        let _ = migrate_coin(coin as u8, &format!("{}/{}", &db_path, filename));
+    }
 }
 
 #[no_mangle]

@@ -109,7 +109,11 @@ impl From<&CompactSaplingOutput> for CompactOutputBytes {
 impl From<&CompactOrchardAction> for CompactOutputBytes {
     fn from(co: &CompactOrchardAction) -> Self {
         CompactOutputBytes {
-            nullifier: co.nullifier.clone().try_into().unwrap(),
+            nullifier: if co.nullifier.is_empty() {
+                [0u8; 32]
+            } else {
+                co.nullifier.clone().try_into().unwrap()
+            },
             epk: if co.ephemeral_key.is_empty() {
                 [0u8; 32]
             } else {

@@ -5,7 +5,7 @@ use serde::Serialize;
 use crate::chain::{download_chain, DecryptNode};
 use crate::transaction::{get_transaction_details, retrieve_tx_info, GetTransactionDetailRequest};
 use crate::{
-    connect_lightwalletd, CoinConfig, CompactBlock, CompactSaplingOutput, CompactTx,
+    connect_lightwalletd, ChainError, CoinConfig, CompactBlock, CompactSaplingOutput, CompactTx,
     DbAdapterBuilder,
 };
 
@@ -78,8 +78,35 @@ type OrchardSynchronizer = Synchronizer<
 
 pub async fn sync_async<'a>(
     coin: u8,
-    _chunk_size: u32,
-    get_tx: bool, // TODO
+    get_tx: bool,
+    target_height_offset: u32,
+    max_cost: u32,
+    progress_callback: AMProgressCallback, // TODO
+    cancel: &'static std::sync::Mutex<bool>,
+) -> anyhow::Result<()> {
+    let result = sync_async_inner(
+        coin,
+        get_tx,
+        target_height_offset,
+        max_cost,
+        progress_callback,
+        cancel,
+    )
+    .await;
+    if let Err(ref e) = result {
+        if let Some(ChainError::Reorg) = e.downcast_ref::<ChainError>() {
+            log::info!("Drop latest checkpoint");
+            let c = CoinConfig::get(coin);
+            let mut db = c.db()?;
+            db.drop_last_checkpoint()?;
+        }
+    }
+    result
+}
+
+async fn sync_async_inner<'a>(
+    coin: u8,
+    get_tx: bool,
     target_height_offset: u32,
     max_cost: u32,
     progress_callback: AMProgressCallback, // TODO
@@ -109,7 +136,7 @@ pub async fn sync_async<'a>(
 
     let mut height = start_height;
     let (blocks_tx, mut blocks_rx) = mpsc::channel::<Blocks>(1);
-    tokio::spawn(async move {
+    let downloader = tokio::spawn(async move {
         download_chain(
             &mut client,
             start_height,
@@ -174,7 +201,9 @@ pub async fn sync_async<'a>(
                     "orchard".to_string(),
                 );
                 synchronizer.initialize(height)?;
+                log::info!("Process orchard start");
                 progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
+                log::info!("Process orchard end");
             }
         }
 
@@ -184,6 +213,8 @@ pub async fn sync_async<'a>(
         let cb = progress_callback.lock().await;
         cb(progress.clone());
     }
+
+    downloader.await??;
 
     if get_tx {
         get_transaction_details(coin).await?;

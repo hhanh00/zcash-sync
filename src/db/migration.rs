@@ -34,7 +34,7 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn init_db(connection: &Connection, network: &Network) -> anyhow::Result<()> {
+pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyhow::Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS schema_version (
             id INTEGER PRIMARY KEY NOT NULL,
@@ -195,7 +195,9 @@ pub fn init_db(connection: &Connection, network: &Network) -> anyhow::Result<()>
             orchard BOOL NOT NULL)",
             [],
         )?;
-        upgrade_accounts(&connection, network)?;
+        if has_ua {
+            upgrade_accounts(&connection, network)?;
+        }
         connection.execute(
             "CREATE TABLE sapling_tree(
             height INTEGER PRIMARY KEY,
@@ -257,10 +259,15 @@ pub fn init_db(connection: &Connection, network: &Network) -> anyhow::Result<()>
             "CREATE INDEX IF NOT EXISTS i_orchard_witness ON orchard_witnesses(height)",
             [],
         )?;
+        connection.execute(
+            "ALTER TABLE messages ADD incoming BOOL NOT NULL DEFAULT (true)",
+            [],
+        )?;
     }
 
     if version != 5 {
         update_schema_version(connection, 5)?;
+        connection.cache_flush()?;
         log::info!("Database migrated");
     }
 

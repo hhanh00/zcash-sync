@@ -7,7 +7,7 @@ use lazycell::AtomicLazyCell;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tonic::transport::Channel;
-use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
+use zcash_params::coin::{get_coin_chain, get_coin_type, CoinChain, CoinType};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_proofs::prover::LocalTxProver;
 
@@ -56,6 +56,15 @@ pub fn get_coin_lwd_url(coin: u8) -> String {
 pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
     let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
     c.set_db_path(db_path)?;
+    c.migrate_db()?; // if the db was already migrated, this is a no-op
+    c.open_db()?;
+    Ok(())
+}
+
+/// Upgrade database schema for given coin and db path
+pub fn migrate_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
+    let chain = get_coin_chain(get_coin_type(coin));
+    DbAdapter::migrate_db(chain.network(), db_path, chain.has_unified())?;
     Ok(())
 }
 
@@ -90,7 +99,21 @@ impl CoinConfig {
 
     pub fn set_db_path(&mut self, db_path: &str) -> anyhow::Result<()> {
         self.db_path = Some(db_path.to_string());
-        let mut db = DbAdapter::new(self.coin_type, db_path)?;
+        Ok(())
+    }
+
+    pub fn migrate_db(&self) -> anyhow::Result<()> {
+        let network = self.chain.network();
+        DbAdapter::migrate_db(
+            network,
+            self.db_path.as_ref().unwrap(),
+            self.chain.has_unified(),
+        )?;
+        Ok(())
+    }
+
+    pub fn open_db(&mut self) -> anyhow::Result<()> {
+        let mut db = DbAdapter::new(self.coin_type, self.db_path.as_ref().unwrap())?;
         db.init_db()?;
         self.db = Some(Arc::new(Mutex::new(db)));
         Ok(())

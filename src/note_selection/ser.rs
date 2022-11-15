@@ -57,7 +57,7 @@ impl TransactionReport {
         let net_sapling = outs[1] as i64 - spends[1] as i64;
         let net_orchard = outs[2] as i64 - spends[2] as i64;
 
-        let privacy_level = if outs[0] != 0 && spends[0] != 0 {
+        let privacy_level = if outs[0] - changes[0] != 0 && spends[0] != 0 {
             0 // very low privacy: t2t
         } else if outs[0] != 0 || spends[0] != 0 {
             1 // low privacy: t2z or z2t

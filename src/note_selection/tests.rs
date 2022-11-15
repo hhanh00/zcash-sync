@@ -5,6 +5,7 @@ use crate::note_selection::build_tx_plan;
 use crate::note_selection::fee::{FeeCalculator, FeeZIP327};
 use crate::note_selection::optimize::{outputs_for_change, select_inputs};
 use crate::note_selection::ua::decode;
+use crate::Hash;
 use assert_matches::assert_matches;
 use serde::Serialize;
 use serde_json::Value;
@@ -13,6 +14,7 @@ use zcash_primitives::memo::MemoBytes;
 macro_rules! utxo {
     ($id:expr, $q:expr) => {
         UTXO {
+            id: $id,
             amount: $q * 1000,
             source: Source::Transparent {
                 txid: [0u8; 32],
@@ -25,6 +27,7 @@ macro_rules! utxo {
 macro_rules! sapling {
     ($id:expr, $q:expr) => {
         UTXO {
+            id: $id,
             amount: $q * 1000,
             source: Source::Sapling {
                 id_note: $id,
@@ -39,6 +42,7 @@ macro_rules! sapling {
 macro_rules! orchard {
     ($id:expr, $q:expr) => {
         UTXO {
+            id: $id,
             amount: $q * 1000,
             source: Source::Orchard {
                 id_note: $id,
@@ -731,6 +735,7 @@ fn test_tx_plan() {
     let tx_plan = build_tx_plan::<FeeZIP327>(
         "",
         0,
+        &[Hash::default(); 2],
         &utxos,
         &orders,
         &TransactionBuilderConfig {

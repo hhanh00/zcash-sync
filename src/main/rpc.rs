@@ -289,15 +289,17 @@ pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<Strin
             .iter()
             .map(|p| RecipientMemo::from_recipient(&from, p))
             .collect();
-        let txid = warp_api_ffi::api::payment_v2::build_sign_send_multi_payment(
+        let tx_plan = warp_api_ffi::api::payment_v2::build_tx_plan(
             c.coin,
             c.id_account,
             latest,
             &recipients,
             payment.confirmations,
-            Box::new(|_| {}),
         )
         .await?;
+        let txid =
+            warp_api_ffi::api::payment_v2::sign_and_broadcast(c.coin, c.id_account, &tx_plan)
+                .await?;
         Ok(txid)
     }
 }
@@ -350,8 +352,7 @@ pub async fn build_from_plan(tx_plan: Json<TransactionPlan>) -> Result<String, E
     }
 
     let keys = get_secret_keys(c.coin, c.id_account)?;
-    let context = TxBuilderContext::from_height(c.coin, tx_plan.height)?;
-    let tx = build_tx(c.chain.network(), &keys, &tx_plan, context, OsRng).unwrap();
+    let tx = build_tx(c.chain.network(), &keys, &tx_plan, OsRng).unwrap();
     let tx = hex::encode(&tx);
     Ok(tx)
 }

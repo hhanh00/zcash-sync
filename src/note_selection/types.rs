@@ -1,6 +1,7 @@
 use super::ser::MemoBytesProxy;
 use crate::note_selection::ua::decode;
 use crate::unified::orchard_as_unified;
+use crate::Hash;
 use orchard::Address;
 use serde::{Deserialize, Serialize};
 use serde_hex::{SerHex, Strict};
@@ -124,9 +125,12 @@ pub struct RecipientShort {
 }
 
 #[derive(Serialize, Deserialize, Default)]
+#[serde_as]
 pub struct TransactionPlan {
     pub fvk: String,
     pub height: u32,
+    #[serde(with = "SerHex::<Strict>")]
+    pub orchard_anchor: Hash,
     pub spends: Vec<UTXO>,
     pub outputs: Vec<Fill>,
     pub fee: u64,

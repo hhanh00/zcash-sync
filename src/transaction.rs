@@ -1,3 +1,4 @@
+use crate::api::recipient::decode_memo;
 use crate::contact::{Contact, ContactDecoder};
 use crate::unified::orchard_as_unified;
 use crate::{AccountData, CoinConfig, CompactTxStreamerClient, DbAdapter, Hash, TxFilter};
@@ -41,8 +42,10 @@ pub async fn get_transaction_details(coin: u8) -> anyhow::Result<()> {
         let db = db.lock().unwrap();
         let reqs = db.get_txid_without_memo()?;
         for req in reqs.iter() {
-            let decryption_keys = get_decryption_keys(network, req.account, &db)?;
-            keys.insert(req.account, decryption_keys);
+            if !keys.contains_key(&req.account) {
+                let decryption_keys = get_decryption_keys(network, req.account, &db)?;
+                keys.insert(req.account, decryption_keys);
+            }
         }
         reqs
         // Make sure we don't hold a mutex across await
@@ -50,15 +53,7 @@ pub async fn get_transaction_details(coin: u8) -> anyhow::Result<()> {
 
     let mut details = vec![];
     for req in reqs.iter() {
-        let tx_details = retrieve_tx_info(
-            network,
-            &mut client,
-            req.height,
-            req.id_tx,
-            &req.txid,
-            &keys[&req.account],
-        )
-        .await?;
+        let tx_details = retrieve_tx_info(network, &mut client, req, &keys[&req.account]).await?;
         log::info!("{:?}", tx_details);
         details.push(tx_details);
     }
@@ -69,6 +64,17 @@ pub async fn get_transaction_details(coin: u8) -> anyhow::Result<()> {
         db.update_transaction_with_memo(tx_details)?;
         for c in tx_details.contacts.iter() {
             db.store_contact(c, false)?;
+        }
+        let z_msg = decode_memo(
+            tx_details.id_tx,
+            &tx_details.memo,
+            &tx_details.address,
+            tx_details.timestamp,
+            tx_details.height,
+            tx_details.incoming,
+        );
+        if !z_msg.is_empty() {
+            db.store_message(tx_details.account, &z_msg)?;
         }
     }
 
@@ -103,14 +109,16 @@ pub struct DecryptionKeys {
 
 pub fn decode_transaction(
     network: &Network,
+    account: u32,
     height: u32,
+    timestamp: u32,
     id_tx: u32,
     tx: Transaction,
     decryption_keys: &DecryptionKeys,
 ) -> anyhow::Result<TransactionDetails> {
     let (sapling_ivk, sapling_ovk) = decryption_keys.sapling_keys.clone();
 
-    let height = BlockHeight::from_u32(height);
+    let block_height = BlockHeight::from_u32(height);
     let mut taddress: Option<String> = None;
     let mut zaddress: Option<String> = None;
     let mut oaddress: Option<String> = None;
@@ -120,6 +128,7 @@ pub fn decode_transaction(
 
     let mut tx_memo: Memo = Memo::Empty;
     let mut contacts = vec![];
+    let mut incoming = true;
 
     if let Some(transparent_bundle) = tx.transparent_bundle() {
         for output in transparent_bundle.vout.iter() {
@@ -138,7 +147,7 @@ pub fn decode_transaction(
         for output in sapling_bundle.shielded_outputs.iter() {
             let pivk = PreparedIncomingViewingKey::new(&sapling_ivk);
             if let Some((_note, pa, memo)) =
-                try_sapling_note_decryption(network, height, &pivk, output)
+                try_sapling_note_decryption(network, block_height, &pivk, output)
             {
                 let memo = Memo::try_from(memo)?;
                 if zaddress.is_none() {
@@ -152,7 +161,7 @@ pub fn decode_transaction(
                 }
             }
             if let Some((_note, pa, memo, ..)) =
-                try_sapling_output_recovery(network, height, &sapling_ovk, output)
+                try_sapling_output_recovery(network, block_height, &sapling_ovk, output)
             {
                 let _ = contact_decoder.add_memo(&memo); // ignore memo that is not for contacts, if we cannot decode it with ovk, we didn't make create this memo
                 zaddress = Some(encode_payment_address(
@@ -162,6 +171,7 @@ pub fn decode_transaction(
                 let memo = Memo::try_from(memo)?;
                 if memo != Memo::Empty {
                     tx_memo = memo;
+                    incoming = false;
                 }
             }
         }
@@ -208,9 +218,13 @@ pub fn decode_transaction(
         Memo::Arbitrary(_) => "Unrecognized".to_string(),
     };
     let tx_details = TransactionDetails {
+        account,
         id_tx,
         address,
+        height,
+        timestamp,
         memo,
+        incoming,
         contacts,
     };
 
@@ -243,13 +257,19 @@ fn get_decryption_keys(
 pub async fn retrieve_tx_info(
     network: &Network,
     client: &mut CompactTxStreamerClient<Channel>,
-    height: u32,
-    id_tx: u32,
-    txid: &Hash,
+    req: &GetTransactionDetailRequest,
     decryption_keys: &DecryptionKeys,
 ) -> anyhow::Result<TransactionDetails> {
-    let transaction = fetch_raw_transaction(network, client, height, txid).await?;
-    let tx_details = decode_transaction(network, height, id_tx, transaction, &decryption_keys)?;
+    let transaction = fetch_raw_transaction(network, client, req.height, &req.txid).await?;
+    let tx_details = decode_transaction(
+        network,
+        req.account,
+        req.height,
+        req.timestamp,
+        req.id_tx,
+        transaction,
+        &decryption_keys,
+    )?;
 
     Ok(tx_details)
 }
@@ -257,15 +277,20 @@ pub async fn retrieve_tx_info(
 pub struct GetTransactionDetailRequest {
     pub account: u32,
     pub height: u32,
+    pub timestamp: u32,
     pub id_tx: u32,
     pub txid: Hash,
 }
 
 #[derive(Serialize, Debug)]
 pub struct TransactionDetails {
+    pub account: u32,
     pub id_tx: u32,
+    pub height: u32,
+    pub timestamp: u32,
     pub address: String,
     pub memo: String,
+    pub incoming: bool,
     pub contacts: Vec<Contact>,
 }
 

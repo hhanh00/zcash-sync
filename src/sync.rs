@@ -85,24 +85,32 @@ impl<
     }
 
     pub fn process(&mut self, blocks: &[CompactBlock]) -> Result<usize> {
+        log::info!("=");
         if blocks.is_empty() {
             return Ok(0);
         }
+        log::info!("+1");
         let decrypter = self.decrypter.clone();
+        log::info!("+2");
         let decrypted_blocks: Vec<_> = blocks
             .par_iter()
             .map(|b| decrypter.decrypt_notes(b, &self.vks))
             .collect();
+        log::info!("+");
         let count_outputs: usize = decrypted_blocks
             .iter()
             .map(|b| b.count_outputs)
             .sum::<u32>() as usize;
+        log::info!("+");
 
         let mut db = self.db.build()?;
+        log::info!("+");
         self.warper.initialize(&self.tree, &self.witnesses);
+        log::info!("+");
         let db_tx = db.begin_transaction()?;
 
         // Detect new received notes
+        log::info!("+");
         let mut new_witnesses = vec![];
         for decb in decrypted_blocks.iter() {
             for dectx in decb.txs.iter() {
@@ -143,6 +151,7 @@ impl<
             }
             self.note_position += decb.count_outputs as usize;
         }
+        log::info!("+");
 
         // Detect spends and collect note commitments
         let mut new_cmx = vec![];
@@ -172,18 +181,24 @@ impl<
         }
 
         // Run blocks through warp sync
+        log::info!("+");
         self.warper.add_nodes(&mut new_cmx, &new_witnesses);
+        log::info!("+");
         let (updated_tree, updated_witnesses) = self.warper.finalize();
 
         // Store witnesses
+        log::info!("+");
         for w in updated_witnesses.iter() {
             DbAdapter::store_witness(w, height, w.id_note, &db_tx, &self.shielded_pool)?;
         }
+        log::info!("+");
         DbAdapter::store_tree(height, &updated_tree, &db_tx, &self.shielded_pool)?;
+        log::info!("+");
         self.tree = updated_tree;
         self.witnesses = updated_witnesses;
 
         db_tx.commit()?;
+        log::info!("+");
         Ok(count_outputs * self.vks.len())
     }
 }

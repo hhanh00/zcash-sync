@@ -3,7 +3,7 @@
 use crate::coinconfig::CoinConfig;
 use crate::scan::{AMProgressCallback, Progress};
 use crate::sync::CTree;
-use crate::{AccountData, BlockId, CompactTxStreamerClient, DbAdapter};
+use crate::{AccountData, BlockId, ChainError, CompactTxStreamerClient, DbAdapter};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
@@ -29,33 +29,14 @@ pub async fn coin_sync(
     cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
     let p_cb = Arc::new(Mutex::new(progress_callback));
-    coin_sync_impl(
-        coin,
-        get_tx,
-        DEFAULT_CHUNK_SIZE,
-        anchor_offset,
-        max_cost,
-        p_cb.clone(),
-        cancel,
-    )
-    .await?;
-    coin_sync_impl(
-        coin,
-        get_tx,
-        DEFAULT_CHUNK_SIZE,
-        0,
-        u32::MAX,
-        p_cb.clone(),
-        cancel,
-    )
-    .await?;
+    coin_sync_impl(coin, get_tx, anchor_offset, max_cost, p_cb.clone(), cancel).await?;
+    coin_sync_impl(coin, get_tx, 0, u32::MAX, p_cb.clone(), cancel).await?;
     Ok(())
 }
 
 async fn coin_sync_impl(
     coin: u8,
     get_tx: bool,
-    chunk_size: u32,
     target_height_offset: u32,
     max_cost: u32,
     progress_callback: AMProgressCallback,
@@ -63,15 +44,13 @@ async fn coin_sync_impl(
 ) -> anyhow::Result<()> {
     crate::scan::sync_async(
         coin,
-        chunk_size,
         get_tx,
         target_height_offset,
         max_cost,
         progress_callback,
         cancel,
     )
-    .await?;
-    Ok(())
+    .await
 }
 
 /// Return the latest block height
@@ -135,9 +114,21 @@ async fn fetch_and_store_tree_state(
         .get_tree_state(Request::new(block_id))
         .await?
         .into_inner();
-    let tree = CTree::read(&*hex::decode(&tree_state.sapling_tree)?)?; // retrieve orchard state and store it too
+    let sapling_tree = CTree::read(&*hex::decode(&tree_state.sapling_tree)?)?; // retrieve orchard state and store it too
+    let orchard_tree = if !tree_state.orchard_tree.is_empty() {
+        CTree::read(&*hex::decode(&tree_state.orchard_tree)?)? // retrieve orchard state and store it too
+    } else {
+        CTree::new()
+    };
     let db = c.db()?;
-    DbAdapter::store_block(&db.connection, height, &block.hash, block.time, &tree, None)?;
+    DbAdapter::store_block(
+        &db.connection,
+        height,
+        &block.hash,
+        block.time,
+        &sapling_tree,
+        &orchard_tree,
+    )?;
     Ok(())
 }
 

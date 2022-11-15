@@ -16,6 +16,7 @@ pub const MERKLE_CRH_PERSONALIZATION: &str = "z.cash:Orchard-MerkleCRH";
 
 lazy_static! {
     pub static ref ORCHARD_ROOTS: Vec<Hash> = {
+        log::info!("Initialize Orchard Hasher");
         let h = OrchardHasher::new();
         h.empty_roots(32)
     };
@@ -37,7 +38,7 @@ impl OrchardHasher {
         let mut acc = self.Q;
         let (S_x, S_y) = SINSEMILLA_S[depth as usize];
         let S_chunk = Affine::from_xy(S_x, S_y).unwrap();
-        acc = (acc + S_chunk) + acc; // TODO Bail if + gives point at infinity?
+        acc = (acc + S_chunk) + acc; // TODO Bail if + gives point at infinity? Shouldn't happen if data was validated
 
         // Shift right by 1 bit and overwrite the 256th bit of left
         let mut left = *left;
