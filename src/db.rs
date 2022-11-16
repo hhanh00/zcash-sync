@@ -694,6 +694,14 @@ impl DbAdapter {
                 params![min_height],
             )?;
             transaction.execute("DELETE FROM blocks WHERE height < ?1", params![min_height])?;
+            transaction.execute(
+                "DELETE FROM sapling_tree WHERE height < ?1",
+                params![min_height],
+            )?;
+            transaction.execute(
+                "DELETE FROM orchard_tree WHERE height < ?1",
+                params![min_height],
+            )?;
             transaction.commit()?;
         }
         log::debug!("-purge_old_witnesses");
