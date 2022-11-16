@@ -72,7 +72,7 @@ pub fn decode_memo(
     incoming: bool,
 ) -> ZMessage {
     let memo_lines: Vec<_> = memo.splitn(4, '\n').collect();
-    let msg = if memo_lines[0] == "\u{1F6E1}MSG" {
+    let msg = if memo_lines.len() == 4 && memo_lines[0] == "\u{1F6E1}MSG" {
         ZMessage {
             id_tx,
             sender: if memo_lines[1].is_empty() {
