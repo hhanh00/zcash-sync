@@ -16,7 +16,6 @@ pub const MERKLE_CRH_PERSONALIZATION: &str = "z.cash:Orchard-MerkleCRH";
 
 lazy_static! {
     pub static ref ORCHARD_ROOTS: Vec<Hash> = {
-        log::info!("Initialize Orchard Hasher");
         let h = OrchardHasher::new();
         h.empty_roots(32)
     };

@@ -100,7 +100,6 @@ pub fn build_tx(
 
     let mut has_orchard = false;
     let mut builder = Builder::new(*network, BlockHeight::from_u32(plan.height));
-    log::info!("ANCHOR {}", hex::encode(&plan.orchard_anchor));
     let anchor: Anchor = orchard::tree::MerkleHashOrchard::from_bytes(&plan.orchard_anchor)
         .unwrap()
         .into();
@@ -328,7 +327,7 @@ async fn dummy_test() {
     let context = TxBuilderContext::from_height(0, height).unwrap();
 
     log::info!("Getting available notes");
-    let utxos = fetch_utxos(0, 1, height, true, 0).await.unwrap();
+    let utxos = fetch_utxos(0, 1, height).await.unwrap();
     // let notes: Vec<_> = utxos.into_iter().filter(|utxo| utxo.source.pool() == Pool::Orchard).collect();
 
     log::info!("Preparing outputs");
@@ -348,12 +347,11 @@ async fn dummy_test() {
 
     log::info!("Building tx plan");
     let tx_plan =
-        build_tx_plan::<FeeFlat>("", 0, &[Hash::default(); 2], &utxos, &mut orders, &config)
-            .unwrap();
+        build_tx_plan::<FeeFlat>("", 0, &Hash::default(), &utxos, &mut orders, &config).unwrap();
     log::info!("Plan: {}", serde_json::to_string(&tx_plan).unwrap());
 
     log::info!("Building tx");
-    let tx = build_tx(c.chain.network(), &keys, &tx_plan, context, OsRng).unwrap();
+    let tx = build_tx(c.chain.network(), &keys, &tx_plan, OsRng).unwrap();
     println!("{}", hex::encode(&tx));
 }
 

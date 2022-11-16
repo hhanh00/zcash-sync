@@ -55,6 +55,7 @@ async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<
         c.id_account,
         last_height,
         &recipients,
+        1,
         anchor_offset,
     )
     .await?;

@@ -15,6 +15,8 @@ typedef void *DartPostCObjectFnType;
 
 #define QR_DATA_SIZE 256
 
+#define MAX_ATTEMPTS 10
+
 #define N 200000
 
 typedef struct CResult_u32 {
@@ -102,7 +104,7 @@ int64_t get_mempool_balance(void);
 
 struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t id_account);
 
-struct CResult_____c_char shield_taddr(uint8_t coin, uint32_t account);
+struct CResult_____c_char shield_taddr(uint8_t coin, uint32_t account, uint32_t confirmations);
 
 void scan_transparent_accounts(uint32_t gap_limit);
 

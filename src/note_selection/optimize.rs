@@ -101,7 +101,7 @@ pub fn allocate_funds(
     let mut t2 = sum - smax - omax;
     if t2 > 0 {
         if t2 > tmax {
-            return Err(TransactionBuilderError::NotEnoughFunds);
+            return Err(TransactionBuilderError::NotEnoughFunds((t2 - tmax) as u64));
         }
         // Not enough shielded notes. Use them all before using transparent notes
         s2 = smax;

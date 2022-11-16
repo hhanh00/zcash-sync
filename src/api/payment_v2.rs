@@ -4,12 +4,15 @@ use crate::api::sync::get_latest_height;
 pub use crate::broadcast_tx;
 use crate::note_selection::{FeeFlat, FeeZIP327, Order, TransactionReport};
 use crate::{
-    build_tx, fetch_utxos, get_secret_keys, AccountData, CoinConfig, TransactionBuilderConfig,
-    TransactionPlan, TxBuilderContext,
+    build_tx, fetch_utxos, get_secret_keys, note_selection, AccountData, CoinConfig, DbAdapter,
+    TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
+    MAX_ATTEMPTS,
 };
 use rand::rngs::OsRng;
 use std::cmp::min;
-use zcash_primitives::memo::MemoBytes;
+use std::slice;
+use std::str::FromStr;
+use zcash_primitives::memo::{Memo, MemoBytes, TextMemo};
 use zcash_primitives::transaction::builder::Progress;
 
 type PaymentProgressCallback = Box<dyn Fn(Progress) + Send + Sync>;
@@ -19,16 +22,15 @@ pub async fn build_tx_plan(
     account: u32,
     last_height: u32,
     recipients: &[RecipientMemo],
+    excluded_flags: u8,
     confirmations: u32,
-) -> anyhow::Result<TransactionPlan> {
+) -> note_selection::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let (fvk, checkpoint_height) = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
         let anchor_height = last_height.saturating_sub(confirmations);
-        let checkpoint_height = db
-            .get_checkpoint_height(anchor_height)?
-            .unwrap_or_else(|| db.sapling_activation_height()); // get the latest checkpoint before the requested anchor height
+        let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
         (fvk, checkpoint_height)
     };
     let change_address = get_unified_address(coin, account, true, true, true)?;
@@ -52,9 +54,7 @@ pub async fn build_tx_plan(
             id_order += 1;
         }
     }
-    let utxos = fetch_utxos(coin, account, checkpoint_height, true).await?;
-
-    log::info!("UTXO: {:?}", utxos);
+    let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;
 
     let config = TransactionBuilderConfig::new(&change_address);
     let tx_plan = crate::note_selection::build_tx_plan::<FeeFlat>(
@@ -101,12 +101,58 @@ pub async fn sign_and_broadcast(
     Ok(txid)
 }
 
+pub async fn build_max_tx(
+    coin: u8,
+    account: u32,
+    last_height: u32,
+    recipient: &RecipientMemo, // amount & max_amount per note are ignored
+    excluded_flags: u8,
+    confirmations: u32,
+) -> note_selection::Result<TransactionPlan> {
+    let mut recipient = recipient.clone();
+    let checkpoint_height = {
+        let c = CoinConfig::get(coin);
+        let db = c.db()?;
+        get_checkpoint_height(&db, last_height, confirmations)?
+    };
+    let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;
+    let available_funds: u64 = utxos.iter().map(|n| n.amount).sum();
+    recipient.amount = available_funds;
+    for _ in 0..MAX_ATTEMPTS {
+        // this will fail at least once because of the fees
+        let result = build_tx_plan(
+            coin,
+            account,
+            last_height,
+            slice::from_ref(&recipient),
+            excluded_flags,
+            confirmations,
+        )
+        .await;
+        match result {
+            Err(TransactionBuilderError::NotEnoughFunds(missing)) => {
+                recipient.amount -= missing; // reduce the amount and retry
+            }
+            _ => return result,
+        }
+    }
+    Err(TransactionBuilderError::TxTooComplex)
+}
+
 /// Make a transaction that shields the transparent balance
-pub async fn shield_taddr(coin: u8, account: u32) -> anyhow::Result<String> {
-    // let last_height = get_latest_height().await?;
-    // let tx_id = build_sign_send_multi_payment(coin, account, last_height, &[], 0, Box::new(|_| {})).await?;
-    // Ok(tx_id)
-    todo!()
+pub async fn shield_taddr(coin: u8, account: u32, confirmations: u32) -> anyhow::Result<String> {
+    let address = get_unified_address(coin, account, false, true, true)?; // get our own unified address
+    let recipient = RecipientMemo {
+        address,
+        amount: 0,
+        memo: Memo::from_str("Shield Transparent Balance")?,
+        max_amount_per_note: 0,
+    };
+    let last_height = get_latest_height().await?;
+    let tx_plan = build_max_tx(coin, account, last_height, &recipient, 2, confirmations).await?;
+    let tx_id = sign_and_broadcast(coin, account, &tx_plan).await?;
+    log::info!("TXID: {}", tx_id);
+    Ok(tx_id)
 }
 
 fn mark_spent(coin: u8, ids: &[u32]) -> anyhow::Result<()> {
@@ -114,4 +160,16 @@ fn mark_spent(coin: u8, ids: &[u32]) -> anyhow::Result<()> {
     let mut db = c.db()?;
     db.tx_mark_spend(ids)?;
     Ok(())
+}
+
+fn get_checkpoint_height(
+    db: &DbAdapter,
+    last_height: u32,
+    confirmations: u32,
+) -> anyhow::Result<u32> {
+    let anchor_height = last_height.saturating_sub(confirmations);
+    let checkpoint_height = db
+        .get_checkpoint_height(anchor_height)?
+        .unwrap_or_else(|| db.sapling_activation_height()); // get the latest checkpoint before the requested anchor height
+    Ok(checkpoint_height)
 }

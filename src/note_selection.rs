@@ -17,8 +17,8 @@ use zcash_primitives::memo::Memo;
 
 #[derive(Error, Debug)]
 pub enum TransactionBuilderError {
-    #[error("Not enough funds")]
-    NotEnoughFunds,
+    #[error("Not enough funds: Missing {0} zats")]
+    NotEnoughFunds(u64),
     #[error("Tx too complex")]
     TxTooComplex,
     #[error(transparent)]
@@ -35,7 +35,7 @@ mod types;
 mod ua;
 mod utxo;
 
-const MAX_ATTEMPTS: usize = 10;
+pub const MAX_ATTEMPTS: usize = 10;
 
 pub fn recipients_to_orders(recipients: &[Recipient]) -> Result<Vec<Order>> {
     let orders: Result<Vec<_>> = recipients

@@ -130,7 +130,7 @@ pub use zip32::KeyPack;
 
 pub use note_selection::{
     build_tx, build_tx_plan, fetch_utxos, get_secret_keys, TransactionBuilderConfig,
-    TransactionPlan, TxBuilderContext,
+    TransactionBuilderError, TransactionPlan, TxBuilderContext, MAX_ATTEMPTS,
 };
 pub use unified::{decode_unified_address, get_unified_address};
 

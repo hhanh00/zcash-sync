@@ -32,6 +32,8 @@ pub enum Error {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
+    TxBuilder(#[from] warp_api_ffi::TransactionBuilderError),
+    #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
 
@@ -252,6 +254,7 @@ pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<Transactio
         c.id_account,
         latest,
         &recipients,
+        0,
         payment.confirmations,
     )
     .await?;
@@ -294,6 +297,7 @@ pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<Strin
             c.id_account,
             latest,
             &recipients,
+            0,
             payment.confirmations,
         )
         .await?;
@@ -330,6 +334,7 @@ pub async fn get_tx_plan(
         account,
         last_height,
         &recipients,
+        0,
         confirmations,
     )
     .await?;

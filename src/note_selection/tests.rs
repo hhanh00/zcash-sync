@@ -596,7 +596,7 @@ fn test_neg_ua2ua() {
         },
         &PoolAllocation([10, 10, 10]),
     );
-    assert_matches!(r, Err(NotEnoughFunds))
+    assert_matches!(r, Err(NotEnoughFunds(_)))
 }
 
 #[test]

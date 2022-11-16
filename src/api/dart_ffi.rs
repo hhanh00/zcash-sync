@@ -390,8 +390,12 @@ pub async unsafe extern "C" fn get_taddr_balance(coin: u8, id_account: u32) -> C
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn shield_taddr(coin: u8, account: u32) -> CResult<*mut c_char> {
-    let res = crate::api::payment_v2::shield_taddr(coin, account).await;
+pub async unsafe extern "C" fn shield_taddr(
+    coin: u8,
+    account: u32,
+    confirmations: u32,
+) -> CResult<*mut c_char> {
+    let res = crate::api::payment_v2::shield_taddr(coin, account, confirmations).await;
     to_cresult_str(res)
 }
 
@@ -419,6 +423,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             account,
             last_height,
             &recipients,
+            0,
             anchor_offset,
         )
         .await?;
