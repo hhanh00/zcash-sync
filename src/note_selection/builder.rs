@@ -1,13 +1,10 @@
-use super::decode;
 use super::types::*;
 use crate::coinconfig::get_prover;
-use crate::note_selection::fee::FeeFlat;
-use crate::note_selection::{build_tx_plan, fetch_utxos};
 use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::Witness;
-use crate::{broadcast_tx, init_coin, set_active, set_coin_lwd_url, AccountData, CoinConfig, Hash};
+use crate::{AccountData, CoinConfig};
 use anyhow::anyhow;
 use jubjub::Fr;
 use orchard::builder::Builder as OrchardBuilder;
@@ -16,7 +13,6 @@ use orchard::keys::{FullViewingKey, Scope, SpendAuthorizingKey, SpendingKey};
 use orchard::note::Nullifier;
 use orchard::value::NoteValue;
 use orchard::{Address, Anchor, Bundle};
-use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
@@ -25,7 +21,6 @@ use std::str::FromStr;
 use zcash_client_backend::encoding::decode_extended_spending_key;
 use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::prover::TxProver;
 use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
@@ -292,7 +287,7 @@ pub fn get_secret_keys(coin: u8, account: u32) -> anyhow::Result<SecretKeys> {
 
     let orchard_sk = db
         .get_orchard(account)?
-        .map(|ob| SpendingKey::from_bytes(ob.sk).unwrap());
+        .and_then(|ob| ob.sk.map(|sk| SpendingKey::from_bytes(sk).unwrap()));
 
     let sk = SecretKeys {
         transparent: transparent_sk,
@@ -300,69 +295,4 @@ pub fn get_secret_keys(coin: u8, account: u32) -> anyhow::Result<SecretKeys> {
         orchard: orchard_sk,
     };
     Ok(sk)
-}
-
-#[tokio::test]
-async fn dummy_test() {
-    let _ = env_logger::try_init();
-    init_coin(0, "./zec.db").unwrap();
-    set_coin_lwd_url(0, "http://127.0.0.1:9067");
-
-    let c = CoinConfig::get(0);
-    log::info!("Start test");
-    let height = {
-        let db = c.db.as_ref().unwrap();
-        let db = db.lock().unwrap();
-        db.get_last_sync_height().unwrap().unwrap()
-    };
-    log::info!("Height {}", height);
-
-    const REGTEST_CHANGE: &str = "uregtest1mxy5wq2n0xw57nuxa4lqpl358zw4vzyfgadsn5jungttmqcv6nx6cpx465dtpzjzw0vprjle4j4nqqzxtkuzm93regvgg4xce0un5ec6tedquc469zjhtdpkxz04kunqqyasv4rwvcweh3ue0ku0payn29stl2pwcrghyzscrrju9ar57rn36wgz74nmynwcyw27rjd8yk477l97ez8";
-    let mut config = TransactionBuilderConfig::new(REGTEST_CHANGE);
-
-    log::info!("Getting signing keys");
-    let keys = get_secret_keys(0, 1).unwrap();
-
-    log::info!("Building signing context");
-    let context = TxBuilderContext::from_height(0, height).unwrap();
-
-    log::info!("Getting available notes");
-    let utxos = fetch_utxos(0, 1, height).await.unwrap();
-    // let notes: Vec<_> = utxos.into_iter().filter(|utxo| utxo.source.pool() == Pool::Orchard).collect();
-
-    log::info!("Preparing outputs");
-    let mut orders = vec![];
-    orders.push(Order::new(
-        1,
-        "tmWXoSBwPoCjJCNZjw4P7heoVMcT2Ronrqq",
-        10000,
-        MemoBytes::empty(),
-    ));
-    orders.push(Order::new(2, "zregtestsapling1qzy9wafd2axnenul6t6wav76dys6s8uatsq778mpmdvmx4k9myqxsd9m73aqdgc7gwnv53wga4j", 20000, MemoBytes::empty()));
-    orders.push(Order::new(3, "uregtest1mzt5lx5s5u8kczlfr82av97kjckmfjfuq8y9849h6cl9chhdekxsm6r9dklracflqwplrnfzm5rucp5txfdm04z5myrde8y3y5rayev8", 30000, MemoBytes::empty()));
-    orders.push(Order::new(4, "uregtest1yvucqfqnmq5ldc6fkvuudlsjhxg56hxph9ymmcnmpzpywd752ym8sr5l5d24wqn4enz3gakk6alf5hlpw2cjs3jjrcdae3nksrefyum5x400f9gs3ak9yllcr8czhrlnjufuuy7n5mh", 40000, MemoBytes::empty()));
-    orders.push(Order::new(5, "uregtest1wqgc0cm50a7a647qrdglgj62fl40q8njsrcfkt2mzlsmj979rdmsdwuysypc6ewxjxz0zc48kmm35jwx4q6c4fgqwkmmqyhwlep4n2hc0229vf6cahcnesr38y7gyzfx6pa8zg9jvv9", 50000, MemoBytes::empty()));
-    orders.push(Order::new(6, "uregtest1usu9eyxgqu48sa8lqug6ccjc7vcam3mt3a5t7jvyxj7pq5dgdtkjgkqzsyh9pfeav9970xddp2c9h5x44drwnz4f0zwc894k3vt380g6kfsg9j9fmnpljye9r56d94njsv40uaam392xvmky2v38dh3yhayz44z6xv402slujuhwy3mg", 60000, MemoBytes::empty()));
-    orders.push(Order::new(7, "uregtest1mxy5wq2n0xw57nuxa4lqpl358zw4vzyfgadsn5jungttmqcv6nx6cpx465dtpzjzw0vprjle4j4nqqzxtkuzm93regvgg4xce0un5ec6tedquc469zjhtdpkxz04kunqqyasv4rwvcweh3ue0ku0payn29stl2pwcrghyzscrrju9ar57rn36wgz74nmynwcyw27rjd8yk477l97ez8", 70000, MemoBytes::empty()));
-
-    log::info!("Building tx plan");
-    let tx_plan =
-        build_tx_plan::<FeeFlat>("", 0, &Hash::default(), &utxos, &mut orders, &config).unwrap();
-    log::info!("Plan: {}", serde_json::to_string(&tx_plan).unwrap());
-
-    log::info!("Building tx");
-    let tx = build_tx(c.chain.network(), &keys, &tx_plan, OsRng).unwrap();
-    println!("{}", hex::encode(&tx));
-}
-
-#[tokio::test]
-async fn submit_tx() {
-    let _ = env_logger::try_init();
-    init_coin(0, "./zec.db").unwrap();
-    set_coin_lwd_url(0, "http://127.0.0.1:9067");
-    set_active(0);
-    let tx = "";
-
-    let r = broadcast_tx(&hex::decode(tx).unwrap()).await.unwrap();
-    log::info!("{}", r);
 }

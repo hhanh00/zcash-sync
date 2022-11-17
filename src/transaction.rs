@@ -4,13 +4,11 @@ use crate::unified::orchard_as_unified;
 use crate::{AccountData, CoinConfig, CompactTxStreamerClient, DbAdapter, Hash, TxFilter};
 use orchard::keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope};
 use orchard::note_encryption::OrchardDomain;
-use orchard::value::ValueCommitment;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use tonic::transport::Channel;
 use tonic::Request;
-use zcash_address::{ToAddress, ZcashAddress};
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, encode_payment_address, encode_transparent_address,
 };

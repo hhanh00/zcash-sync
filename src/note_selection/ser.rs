@@ -1,5 +1,4 @@
 use crate::note_selection::types::{TransactionOutput, TransactionReport};
-use crate::note_selection::{Destination, Source};
 use crate::TransactionPlan;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

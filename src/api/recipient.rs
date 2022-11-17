@@ -1,6 +1,6 @@
 use crate::db::ZMessage;
 use crate::{AccountData, CoinConfig};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::str::FromStr;
 use zcash_primitives::memo::Memo;
 

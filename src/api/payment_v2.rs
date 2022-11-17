@@ -1,8 +1,8 @@
 use crate::api::account::get_unified_address;
-use crate::api::recipient::{RecipientMemo, RecipientShort};
+use crate::api::recipient::RecipientMemo;
 use crate::api::sync::get_latest_height;
 pub use crate::broadcast_tx;
-use crate::note_selection::{FeeFlat, FeeZIP327, Order, TransactionReport};
+use crate::note_selection::{FeeFlat, Order};
 use crate::{
     build_tx, fetch_utxos, get_secret_keys, note_selection, AccountData, CoinConfig, DbAdapter,
     TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
@@ -12,9 +12,10 @@ use rand::rngs::OsRng;
 use std::cmp::min;
 use std::slice;
 use std::str::FromStr;
-use zcash_primitives::memo::{Memo, MemoBytes, TextMemo};
+use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::transaction::builder::Progress;
 
+#[allow(dead_code)]
 type PaymentProgressCallback = Box<dyn Fn(Progress) + Send + Sync>;
 
 pub async fn build_tx_plan(
@@ -29,7 +30,6 @@ pub async fn build_tx_plan(
     let (fvk, checkpoint_height) = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
-        let anchor_height = last_height.saturating_sub(confirmations);
         let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
         (fvk, checkpoint_height)
     };

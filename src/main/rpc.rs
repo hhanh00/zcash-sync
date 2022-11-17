@@ -10,15 +10,13 @@ use rocket::response::Responder;
 use rocket::serde::{json::Json, Deserialize, Serialize};
 use rocket::{response, Request, Response, State};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Read};
 use std::sync::Mutex;
 use thiserror::Error;
 use warp_api_ffi::api::payment_uri::PaymentURI;
 use warp_api_ffi::api::recipient::{Recipient, RecipientMemo, RecipientShort};
 use warp_api_ffi::{
-    build_tx, get_best_server, get_secret_keys, AccountData, AccountInfo, AccountRec, CoinConfig,
-    KeyPack, RaptorQDrops, TransactionBuilderConfig, TransactionPlan, Tx, TxBuilderContext, TxRec,
+    build_tx, get_secret_keys, AccountData, AccountInfo, AccountRec, CoinConfig, KeyPack,
+    RaptorQDrops, TransactionPlan, TxRec,
 };
 
 lazy_static! {

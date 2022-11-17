@@ -10,7 +10,6 @@ use std::str::FromStr;
 pub use utxo::fetch_utxos;
 
 use crate::api::recipient::Recipient;
-use optimize::{allocate_funds, fill, group_orders, outputs_for_change, select_inputs, sum_utxos};
 use thiserror::Error;
 use ua::decode;
 use zcash_primitives::memo::Memo;
@@ -37,6 +36,7 @@ mod utxo;
 
 pub const MAX_ATTEMPTS: usize = 10;
 
+#[allow(dead_code)]
 pub fn recipients_to_orders(recipients: &[Recipient]) -> Result<Vec<Order>> {
     let orders: Result<Vec<_>> = recipients
         .iter()

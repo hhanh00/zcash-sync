@@ -204,6 +204,18 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn convert_to_watchonly(&self, id_account: u32) -> anyhow::Result<()> {
+        self.connection.execute(
+            "UPDATE accounts SET seed = NULL, sk = NULL WHERE id_account = ?1",
+            params![id_account],
+        )?;
+        self.connection.execute(
+            "UPDATE orchard_addrs SET sk = NULL WHERE account = ?1",
+            params![id_account],
+        )?;
+        Ok(())
+    }
+
     pub fn get_sapling_fvks(&self) -> anyhow::Result<Vec<SaplingViewKey>> {
         let mut statement = self
             .connection
@@ -318,17 +330,17 @@ impl DbAdapter {
         sapling_tree.write(&mut sapling_bb)?;
         connection.execute(
             "INSERT INTO blocks(height, hash, timestamp)
-        VALUES (?1, ?2, ?3)",
+        VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
             params![height, hash, timestamp],
         )?;
         connection.execute(
-            "INSERT INTO sapling_tree(height, tree) VALUES (?1, ?2)",
+            "INSERT INTO sapling_tree(height, tree) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
             params![height, &sapling_bb],
         )?;
         let mut orchard_bb: Vec<u8> = vec![];
         orchard_tree.write(&mut orchard_bb)?;
         connection.execute(
-            "INSERT INTO orchard_tree(height, tree) VALUES (?1, ?2)",
+            "INSERT INTO orchard_tree(height, tree) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
             params![height, &orchard_bb],
         )?;
         log::debug!("-block");
@@ -859,6 +871,14 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn store_orchard_fvk(&self, account: u32, fvk: &[u8; 96]) -> anyhow::Result<()> {
+        self.connection.execute(
+            "INSERT INTO orchard_addrs(account, sk, fvk) VALUES (?1, NULL, ?2) ON CONFLICT DO NOTHING",
+            params![account, fvk],
+        )?;
+        Ok(())
+    }
+
     pub fn find_account_by_fvk(&self, fvk: &str) -> anyhow::Result<Option<u32>> {
         let account = self
             .connection
@@ -881,10 +901,10 @@ impl DbAdapter {
                 "SELECT sk, fvk FROM orchard_addrs WHERE account = ?1",
                 params![account],
                 |row| {
-                    let sk: Vec<u8> = row.get(0)?;
+                    let sk: Option<Vec<u8>> = row.get(0)?;
                     let fvk: Vec<u8> = row.get(1)?;
                     Ok(OrchardKeyBytes {
-                        sk: sk.try_into().unwrap(),
+                        sk: sk.map(|sk| sk.try_into().unwrap()),
                         fvk: fvk.try_into().unwrap(),
                     })
                 },

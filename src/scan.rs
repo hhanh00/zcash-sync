@@ -3,7 +3,7 @@ use crate::db::AccountViewKey;
 use serde::Serialize;
 
 use crate::chain::{download_chain, DecryptNode};
-use crate::transaction::{get_transaction_details, retrieve_tx_info, GetTransactionDetailRequest};
+use crate::transaction::get_transaction_details;
 use crate::{
     connect_lightwalletd, ChainError, CoinConfig, CompactBlock, CompactSaplingOutput, CompactTx,
     DbAdapterBuilder,
@@ -222,12 +222,6 @@ async fn sync_async_inner<'a>(
     }
 
     Ok(())
-}
-
-pub async fn latest_height(ld_url: &str) -> anyhow::Result<u32> {
-    let mut client = connect_lightwalletd(ld_url).await?;
-    let height = get_latest_height(&mut client).await?;
-    Ok(height)
 }
 
 #[allow(dead_code)]

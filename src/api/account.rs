@@ -5,18 +5,23 @@
 use crate::coinconfig::CoinConfig;
 use crate::db::AccountData;
 use crate::key2::decode_key;
+use crate::orchard::OrchardKeyBytes;
 use crate::taddr::{derive_taddr, derive_tkeys};
-use crate::transaction::retrieve_tx_info;
 use crate::unified::UnifiedAddressType;
 use crate::zip32::derive_zip32;
-use crate::{connect_lightwalletd, AccountInfo, KeyPack};
+use crate::{AccountInfo, KeyPack};
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
+use orchard::keys::{FullViewingKey, Scope};
 use rand::rngs::OsRng;
 use rand::RngCore;
+use serde::Serialize;
 use std::fs::File;
 use std::io::BufReader;
+use zcash_address::unified::{Address as UA, Receiver};
+use zcash_address::{ToAddress, ZcashAddress};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
+use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::Parameters;
 
 /// Create a new account
@@ -77,7 +82,7 @@ pub fn new_sub_account(name: &str, index: Option<u32>, count: u32) -> anyhow::Re
 
 fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::Result<u32> {
     let c = CoinConfig::get(coin);
-    let (seed, sk, ivk, pa) = decode_key(coin, key, index)?;
+    let (seed, sk, ivk, pa, ofvk) = decode_key(coin, key, index)?;
     let db = c.db()?;
     let account = db.get_account_id(&ivk)?;
     let account = match account {
@@ -89,13 +94,64 @@ fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::
                 db.create_taddr(account)?;
             }
             if c.chain.has_unified() {
-                db.create_orchard(account)?;
+                match ofvk {
+                    Some(fvk) => {
+                        db.store_orchard_fvk(account, &fvk.to_bytes())?;
+                    }
+                    None => {
+                        db.create_orchard(account)?;
+                    }
+                }
             }
             db.store_ua_settings(account, false, true, c.chain.has_unified())?;
             account
         }
     };
     Ok(account)
+}
+
+pub fn convert_to_watchonly(coin: u8, id_account: u32) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    db.convert_to_watchonly(id_account)?;
+    Ok(())
+}
+
+pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<Backup> {
+    let c = CoinConfig::get(coin);
+    let network = c.chain.network();
+    let db = c.db()?;
+    let AccountData {
+        name,
+        seed,
+        sk,
+        fvk,
+        aindex,
+        ..
+    } = db.get_account_info(id_account)?;
+    let orchard_keys = db.get_orchard(id_account)?;
+    let fvk = match orchard_keys {
+        None => fvk,
+        Some(OrchardKeyBytes { fvk: ofvk, .. }) => {
+            // orchard sk is not serializable and must derived from seed
+            let sapling_efvk = decode_extended_full_viewing_key(
+                network.hrp_sapling_extended_full_viewing_key(),
+                &fvk,
+            )
+            .unwrap();
+            let sapling_dfvk = sapling_efvk.to_diversifiable_full_viewing_key();
+            let orchard_fvk = orchard::keys::FullViewingKey::from_bytes(&ofvk);
+            let ufvk = UnifiedFullViewingKey::new(Some(sapling_dfvk), orchard_fvk).unwrap();
+            ufvk.encode(network)
+        }
+    };
+    Ok(Backup {
+        name,
+        seed,
+        index: aindex,
+        sk,
+        ivk: fvk,
+    })
 }
 
 /// Update the transparent secret key for the given account from a derivation path
@@ -146,8 +202,26 @@ pub fn new_diversified_address() -> anyhow::Result<String> {
         .find_address(diversifier_index)
         .ok_or_else(|| anyhow::anyhow!("Cannot generate new address"))?;
     db.store_diversifier(c.id_account, &new_diversifier_index)?;
-    let pa = encode_payment_address(c.chain.network().hrp_sapling_payment_address(), &pa);
-    Ok(pa)
+
+    let orchard_keys = db.get_orchard(c.id_account)?;
+    let address = match orchard_keys {
+        Some(orchard_keys) => {
+            let orchard_fvk = FullViewingKey::from_bytes(&orchard_keys.fvk).unwrap();
+            let index = diversifier_index.0; // any sapling index is fine for orchard
+            let orchard_address = orchard_fvk.address_at(index, Scope::External);
+            let unified_address = UA(vec![
+                Receiver::Sapling(pa.to_bytes()),
+                Receiver::Orchard(orchard_address.to_raw_address_bytes()),
+            ]);
+            let address = ZcashAddress::from_unified(
+                c.chain.network().address_network().unwrap(),
+                unified_address,
+            );
+            address.encode()
+        }
+        None => encode_payment_address(c.chain.network().hrp_sapling_payment_address(), &pa),
+    };
+    Ok(address)
 }
 
 /// Retrieve the transparent balance for the current account from the LWD server
@@ -256,7 +330,7 @@ pub fn import_from_zwl(coin: u8, name: &str, data: &str) -> anyhow::Result<()> {
     let db = c.db()?;
     for (i, key) in sks.iter().enumerate() {
         let name = format!("{}-{}", name, i + 1);
-        let (seed, sk, ivk, pa) = decode_key(coin, key, 0)?;
+        let (seed, sk, ivk, pa, _ufvk) = decode_key(coin, key, 0)?;
         db.store_account(&name, seed.as_deref(), 0, sk.as_deref(), &ivk, &pa)?;
     }
     Ok(())
@@ -350,4 +424,13 @@ pub fn decode_unified_address(coin: u8, address: &str) -> anyhow::Result<String>
     let c = CoinConfig::get(coin);
     let res = crate::decode_unified_address(c.chain.network(), address)?;
     Ok(res.to_string())
+}
+
+#[derive(Serialize)]
+pub struct Backup {
+    name: String,
+    seed: Option<String>,
+    index: u32,
+    sk: Option<String>,
+    ivk: String,
 }

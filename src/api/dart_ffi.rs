@@ -176,6 +176,23 @@ pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32, count: u
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn convert_to_watchonly(coin: u8, id_account: u32) -> CResult<()> {
+    let res = crate::api::account::convert_to_watchonly(coin, id_account);
+    to_cresult(res)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_backup(coin: u8, id_account: u32) -> CResult<*mut c_char> {
+    let res = || {
+        let backup = crate::api::account::get_backup_package(coin, id_account)?;
+        let backup_str = serde_json::to_string(&backup)?;
+        Ok::<_, anyhow::Error>(backup_str)
+    };
+
+    to_cresult_str(res())
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn get_address(
     coin: u8,
     id_account: u32,
@@ -291,6 +308,7 @@ pub async unsafe extern "C" fn get_latest_height() -> CResult<u32> {
     to_cresult(height)
 }
 
+#[allow(dead_code)]
 fn report_progress(progress: Progress, port: i64) {
     if port != 0 {
         let progress = match progress.end() {
@@ -452,7 +470,7 @@ pub async unsafe extern "C" fn sign(
     coin: u8,
     account: u32,
     tx: *mut c_char,
-    port: i64,
+    _port: i64,
 ) -> CResult<*mut c_char> {
     from_c_str!(tx);
     let res = async {

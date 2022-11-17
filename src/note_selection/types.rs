@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use serde_hex::{SerHex, Strict};
 use serde_with::serde_as;
 use zcash_client_backend::encoding::{encode_payment_address, AddressCodec};
-use zcash_params::coin::CoinType::Zcash;
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::memo::MemoBytes;

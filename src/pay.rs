@@ -91,11 +91,13 @@ pub struct RecipientSummary {
     pub amount: u64,
 }
 
+#[allow(dead_code)]
 pub struct TxBuilder {
     pub tx: Tx,
     coin_type: CoinType,
 }
 
+#[allow(dead_code)]
 impl TxBuilder {
     pub fn new(coin_type: CoinType, height: u32) -> Self {
         TxBuilder {

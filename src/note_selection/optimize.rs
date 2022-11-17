@@ -5,8 +5,7 @@ use crate::note_selection::TransactionBuilderError::TxTooComplex;
 use crate::note_selection::{TransactionBuilderError, MAX_ATTEMPTS};
 use crate::Hash;
 use anyhow::anyhow;
-use std::str::FromStr;
-use zcash_primitives::memo::{Memo, MemoBytes};
+use zcash_primitives::memo::MemoBytes;
 
 pub fn sum_utxos(utxos: &[UTXO]) -> Result<PoolAllocation> {
     let mut pool = PoolAllocation::default();

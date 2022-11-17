@@ -62,6 +62,7 @@ pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
 }
 
 /// Upgrade database schema for given coin and db path
+/// Used from ywallet
 pub fn migrate_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
     let chain = get_coin_chain(get_coin_type(coin));
     DbAdapter::migrate_db(chain.network(), db_path, chain.has_unified())?;

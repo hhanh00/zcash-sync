@@ -3,7 +3,7 @@ use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use orchard::Address;
 
 pub struct OrchardKeyBytes {
-    pub sk: [u8; 32],
+    pub sk: Option<[u8; 32]>,
     pub fvk: [u8; 96],
 }
 
@@ -21,7 +21,7 @@ pub fn derive_orchard_keys(coin_type: u32, seed: &str, account_index: u32) -> Or
     let sk = SpendingKey::from_zip32_seed(seed.as_bytes(), coin_type, account_index).unwrap();
     let fvk = FullViewingKey::from(&sk);
     OrchardKeyBytes {
-        sk: sk.to_bytes().clone(),
+        sk: Some(sk.to_bytes().clone()),
         fvk: fvk.to_bytes(),
     }
 }

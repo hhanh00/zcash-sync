@@ -1,9 +1,11 @@
 use crate::coinconfig::CoinConfig;
+use anyhow::anyhow;
 use bip39::{Language, Mnemonic, Seed};
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key,
     encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address,
 };
+use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
 
@@ -11,26 +13,44 @@ pub fn decode_key(
     coin: u8,
     key: &str,
     index: u32,
-) -> anyhow::Result<(Option<String>, Option<String>, String, String)> {
+) -> anyhow::Result<(
+    Option<String>,
+    Option<String>,
+    String,
+    String,
+    Option<orchard::keys::FullViewingKey>,
+)> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
     let res = if let Ok(mnemonic) = Mnemonic::from_phrase(key, Language::English) {
         let (sk, ivk, pa) = derive_secret_key(network, &mnemonic, index)?;
-        Ok((Some(key.to_string()), Some(sk), ivk, pa))
+        Ok((Some(key.to_string()), Some(sk), ivk, pa, None))
     } else if let Ok(sk) =
         decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key)
     {
         let (ivk, pa) = derive_viewing_key(network, &sk)?;
-        Ok((None, Some(key.to_string()), ivk, pa))
+        Ok((None, Some(key.to_string()), ivk, pa, None))
     } else if let Ok(fvk) =
         decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
     {
         let pa = derive_address(network, &fvk)?;
-        Ok((None, None, key.to_string(), pa))
+        Ok((None, None, key.to_string(), pa, None))
+    } else if let Ok(ufvk) = UnifiedFullViewingKey::decode(network, key) {
+        let sapling_dfvk = ufvk
+            .sapling()
+            .ok_or(anyhow!("UFVK must contain a sapling key"))?;
+        let sapling_efvk =
+            ExtendedFullViewingKey::from_diversifiable_full_viewing_key(&sapling_dfvk);
+        let key = encode_extended_full_viewing_key(
+            network.hrp_sapling_extended_full_viewing_key(),
+            &sapling_efvk,
+        );
+        let pa = derive_address(network, &sapling_efvk)?;
+        let orchard_key = ufvk.orchard().cloned();
+        Ok((None, None, key, pa, orchard_key))
     } else {
         Err(anyhow::anyhow!("Not a valid key"))
     };
-    // TODO: Accept UA viewing key
     res
 }
 
@@ -48,6 +68,9 @@ pub fn is_valid_key(coin: u8, key: &str) -> i8 {
         .is_ok()
     {
         return 2;
+    }
+    if UnifiedFullViewingKey::decode(network, key).is_ok() {
+        return 3;
     }
     // TODO: Accept UA viewing key
     -1

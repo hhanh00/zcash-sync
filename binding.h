@@ -44,6 +44,11 @@ typedef struct CResult_u64 {
   char *error;
 } CResult_u64;
 
+typedef struct CResult {
+  char value; // dummy
+  char *error;
+} CResult;
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -67,6 +72,10 @@ void reset_app(void);
 struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t index);
 
 void new_sub_account(char *name, int32_t index, uint32_t count);
+
+CResult convert_to_watchonly(uint8_t coin, uint32_t id_account);
+
+struct CResult_____c_char get_backup(uint8_t coin, uint32_t id_account);
 
 struct CResult_____c_char get_address(uint8_t coin, uint32_t id_account, uint8_t ua_type);
 
@@ -115,7 +124,7 @@ struct CResult_____c_char prepare_multi_payment(uint8_t coin,
 
 struct CResult_____c_char transaction_report(uint8_t coin, char *plan);
 
-struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx, int64_t port);
+struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx, int64_t _port);
 
 struct CResult_____c_char sign_and_broadcast(uint8_t coin, uint32_t account, char *tx_plan);
 

@@ -3,11 +3,8 @@ use crate::db::ReceivedNote;
 use crate::sync::{
     CompactOutputBytes, DecryptedNote, Node, OutputPosition, TrialDecrypter, ViewKey,
 };
-use crate::{CompactTx, DbAdapterBuilder};
-use orchard::keys::Scope;
+use crate::CompactTx;
 use orchard::note_encryption::OrchardDomain;
-use zcash_note_encryption;
-use zcash_params::coin::CoinType;
 use zcash_primitives::consensus::{BlockHeight, Parameters};
 
 #[derive(Clone, Debug)]

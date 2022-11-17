@@ -49,12 +49,14 @@ macro_rules! accumulate_scalar {
     };
 }
 
+#[allow(dead_code)]
 pub fn pedersen_hash(depth: u8, left: &Hash, right: &Hash) -> Hash {
     let p = pedersen_hash_inner(depth, left, right);
 
     p.to_affine().get_u().to_repr()
 }
 
+#[allow(dead_code)]
 pub fn pedersen_hash_inner(depth: u8, left: &Hash, right: &Hash) -> ExtendedPoint {
     let mut result = ExtendedPoint::identity();
     let mut bitoffset = 0;
@@ -116,6 +118,7 @@ pub fn pedersen_hash_inner(depth: u8, left: &Hash, right: &Hash) -> ExtendedPoin
     result
 }
 
+#[allow(dead_code)]
 fn generator_multiplication(
     acc: &Fr,
     gens: &[ExtendedNielsPoint],
