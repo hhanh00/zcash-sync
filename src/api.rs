@@ -2,7 +2,6 @@ pub mod account;
 pub mod contact;
 pub mod fullbackup;
 pub mod historical_prices;
-pub mod mempool;
 pub mod message;
 pub mod recipient;
 // pub mod payment;

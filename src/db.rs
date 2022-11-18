@@ -4,11 +4,11 @@ use crate::note_selection::{Source, UTXO};
 use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
 use crate::prices::Quote;
 use crate::sapling::SaplingViewKey;
-use crate::sync;
 use crate::sync::tree::{CTree, TreeCheckpoint};
 use crate::taddr::{derive_tkeys, TBalance};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
+use crate::{sync, Hash};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
@@ -555,7 +555,7 @@ impl DbAdapter {
         &self,
         account: u32,
         unspent_only: bool,
-    ) -> anyhow::Result<HashMap<Vec<u8>, u64>> {
+    ) -> anyhow::Result<HashMap<Hash, u64>> {
         let mut sql = "SELECT value, nf FROM received_notes WHERE account = ?1".to_string();
         if unspent_only {
             sql += " AND (spent IS NULL OR spent = 0)";
@@ -564,9 +564,9 @@ impl DbAdapter {
         let nfs_res = statement.query_map(params![account], |row| {
             let amount: i64 = row.get(0)?;
             let nf: Vec<u8> = row.get(1)?;
-            Ok((amount, nf))
+            Ok((amount, nf.try_into().unwrap()))
         })?;
-        let mut nfs: HashMap<Vec<u8>, u64> = HashMap::new();
+        let mut nfs: HashMap<Hash, u64> = HashMap::new();
         for n in nfs_res {
             let n = n?;
             nfs.insert(n.1, n.0 as u64);
@@ -1369,8 +1369,7 @@ pub struct AccountData {
 
 #[cfg(test)]
 mod tests {
-    use crate::db::{DbAdapter, ReceivedNote, DEFAULT_DB_PATH};
-    use crate::sync::{CTree, Witness};
+    use crate::db::{DbAdapter, DEFAULT_DB_PATH};
     use zcash_params::coin::CoinType;
 
     #[test]

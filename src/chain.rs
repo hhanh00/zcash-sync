@@ -286,6 +286,7 @@ pub struct DecryptedNote {
     pub output_index: usize,
 }
 
+#[allow(dead_code)]
 pub fn to_output_description(co: &CompactSaplingOutput) -> CompactOutputDescription {
     let cmu: [u8; 32] = co.cmu.clone().try_into().unwrap();
     let cmu = bls12_381::Scalar::from_repr(cmu).unwrap();

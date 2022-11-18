@@ -13,6 +13,11 @@ typedef char bool;
 #endif
 typedef void *DartPostCObjectFnType;
 
+typedef struct CResult {
+  char value;
+  char *error;
+} CResult;
+
 #define QR_DATA_SIZE 256
 
 #define MAX_ATTEMPTS 10
@@ -34,20 +39,10 @@ typedef struct CResult_u8 {
   char *error;
 } CResult_u8;
 
-typedef struct CResult_i64 {
-  int64_t value;
-  char *error;
-} CResult_i64;
-
 typedef struct CResult_u64 {
   uint64_t value;
   char *error;
 } CResult_u64;
-
-typedef struct CResult {
-  char value; // dummy
-  char *error;
-} CResult;
 
 void dummy_export(void);
 
@@ -68,6 +63,10 @@ void set_coin_lwd_url(uint8_t coin, char *lwd_url);
 char *get_lwd_url(uint8_t coin);
 
 void reset_app(void);
+
+void mempool_run(int64_t port);
+
+void mempool_set_active(uint8_t coin, uint32_t id_account);
 
 struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t index);
 
@@ -104,12 +103,6 @@ void skip_to_last_height(uint8_t coin);
 struct CResult_u32 rewind_to(uint32_t height);
 
 void rescan_from(uint32_t height);
-
-struct CResult_i64 mempool_sync(void);
-
-void mempool_reset(void);
-
-int64_t get_mempool_balance(void);
 
 struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t id_account);
 

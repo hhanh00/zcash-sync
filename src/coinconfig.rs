@@ -1,5 +1,5 @@
 use crate::fountain::FountainCodes;
-use crate::mempool::MemPool;
+use crate::mempool::{MemPool, MemPoolRunner};
 use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter};
 use anyhow::anyhow;
 use lazy_static::lazy_static;
@@ -19,6 +19,8 @@ lazy_static! {
     ];
     pub static ref PROVER: AtomicLazyCell<LocalTxProver> = AtomicLazyCell::new();
     pub static ref RAPTORQ: Mutex<FountainCodes> = Mutex::new(FountainCodes::new());
+    pub static ref MEMPOOL: AtomicLazyCell<MemPool> = AtomicLazyCell::new();
+    pub static ref MEMPOOL_RUNNER: Mutex<MemPoolRunner> = Mutex::new(MemPoolRunner::new());
 }
 
 pub static ACTIVE_COIN: AtomicU8 = AtomicU8::new(0);
@@ -29,14 +31,11 @@ pub fn set_active(active: u8) {
 }
 
 /// Set the active account for a given coin
-pub fn set_active_account(coin: u8, id: u32) {
-    let mempool = {
-        let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
-        c.id_account = id;
-        c.mempool.clone()
-    };
-    let mut mempool = mempool.lock().unwrap();
-    let _ = mempool.clear();
+pub async fn set_active_account(coin: u8, id: u32) {
+    let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
+    c.id_account = id;
+    let mempool = MEMPOOL.borrow().unwrap();
+    mempool.set_active(coin, id).await;
 }
 
 /// Set the lightwalletd url for a given coin
@@ -77,7 +76,6 @@ pub struct CoinConfig {
     pub height: u32,
     pub lwd_url: Option<String>,
     pub db_path: Option<String>,
-    pub mempool: Arc<Mutex<MemPool>>,
     pub db: Option<Arc<Mutex<DbAdapter>>>,
     pub chain: &'static (dyn CoinChain + Send),
 }
@@ -93,7 +91,6 @@ impl CoinConfig {
             lwd_url: None,
             db_path: None,
             db: None,
-            mempool: Arc::new(Mutex::new(MemPool::new(coin))),
             chain,
         }
     }
@@ -135,10 +132,6 @@ impl CoinConfig {
         let coin = ACTIVE_COIN.load(Ordering::Acquire) as usize;
         let mut c = COIN_CONFIG[coin].lock().unwrap();
         c.height = height;
-    }
-
-    pub fn mempool(&self) -> MutexGuard<MemPool> {
-        self.mempool.lock().unwrap()
     }
 
     pub fn db(&self) -> anyhow::Result<MutexGuard<DbAdapter>> {

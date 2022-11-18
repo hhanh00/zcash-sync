@@ -735,7 +735,7 @@ fn test_tx_plan() {
     let tx_plan = build_tx_plan::<FeeZIP327>(
         "",
         0,
-        &[Hash::default(); 2],
+        &Hash::default(),
         &utxos,
         &orders,
         &TransactionBuilderConfig {

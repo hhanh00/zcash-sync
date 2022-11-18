@@ -1,4 +1,4 @@
-use crate::coinconfig::{init_coin, migrate_coin, CoinConfig};
+use crate::coinconfig::{init_coin, migrate_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
 use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
@@ -6,7 +6,6 @@ use android_logger::Config;
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use log::Level;
-use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::sync::Mutex;
@@ -16,10 +15,6 @@ use zcash_primitives::transaction::builder::Progress;
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
 const MAX_COINS: u8 = 3;
-
-lazy_static! {
-    static ref LAST_ERROR: Mutex<RefCell<String>> = Mutex::new(RefCell::new(String::new()));
-}
 
 #[no_mangle]
 pub unsafe extern "C" fn dummy_export() {}
@@ -121,8 +116,9 @@ pub unsafe extern "C" fn set_active(active: u8) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn set_active_account(coin: u8, id: u32) {
-    crate::coinconfig::set_active_account(coin, id);
+#[tokio::main]
+pub async unsafe extern "C" fn set_active_account(coin: u8, id: u32) {
+    crate::coinconfig::set_active_account(coin, id).await;
 }
 
 #[no_mangle]
@@ -146,6 +142,31 @@ pub unsafe extern "C" fn reset_app() {
         Ok(())
     };
     log_error(res())
+}
+
+#[no_mangle]
+#[tokio::main]
+pub async unsafe extern "C" fn mempool_run(port: i64) {
+    let mut mempool_runner = MEMPOOL_RUNNER.lock().unwrap();
+    let mempool = mempool_runner
+        .run(move |balance: i64| {
+            let mut balance = balance.into_dart();
+            if port != 0 {
+                if let Some(p) = POST_COBJ {
+                    p(port, &mut balance);
+                }
+            }
+        })
+        .await;
+    let _ = MEMPOOL.fill(mempool);
+    log::info!("end mempool_start");
+}
+
+#[no_mangle]
+#[tokio::main]
+pub async unsafe extern "C" fn mempool_set_active(coin: u8, id_account: u32) {
+    let mempool = MEMPOOL.borrow().unwrap();
+    mempool.set_active(coin, id_account).await;
 }
 
 #[no_mangle]
@@ -261,8 +282,6 @@ pub async unsafe extern "C" fn warp(
         .await;
         log::info!("Sync finished");
 
-        crate::api::mempool::scan().await?;
-
         match result {
             Ok(_) => Ok(0),
             Err(err) => {
@@ -372,27 +391,6 @@ pub async unsafe extern "C" fn rewind_to(height: u32) -> CResult<u32> {
 pub async unsafe extern "C" fn rescan_from(height: u32) {
     let res = crate::api::sync::rescan_from(height).await;
     log_error(res)
-}
-
-#[tokio::main]
-#[no_mangle]
-pub async unsafe extern "C" fn mempool_sync() -> CResult<i64> {
-    let res = crate::api::mempool::scan().await;
-    to_cresult(res)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn mempool_reset() {
-    let c = CoinConfig::get_active();
-    let mut mempool = c.mempool.lock().unwrap();
-    log_error(mempool.clear());
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn get_mempool_balance() -> i64 {
-    let c = CoinConfig::get_active();
-    let mempool = c.mempool.lock().unwrap();
-    mempool.get_unconfirmed_balance()
 }
 
 #[tokio::main]

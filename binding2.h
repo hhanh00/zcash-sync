@@ -12,3 +12,8 @@ typedef char bool;
 #endif
 #endif
 typedef void *DartPostCObjectFnType;
+
+typedef struct CResult {
+  char value;
+  char *error;
+} CResult;
