@@ -156,6 +156,7 @@ pub async fn run_mempool_loop<F: Fn(i64) + Send + Sync + 'static>(
             MemPoolMsg::Close(coin, id_account) => {
                 if coin == active_coin && id_account == active_account {
                     let _ = tx_mesg.send(MemPoolMsg::Subscribe(coin, id_account)).await;
+                    f(0);
                 }
             }
         }

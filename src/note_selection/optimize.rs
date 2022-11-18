@@ -108,14 +108,6 @@ pub fn allocate_funds(
         let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee);
         s1 = s2 - d_s - s0;
         o1 = o2 - d_o - o0;
-
-        if s1 < 0 {
-            s1 = 0;
-            o1 = x;
-        } else if o1 < 0 {
-            o1 = 0;
-            s1 = x;
-        }
     } else {
         t2 = 0;
         let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee);
@@ -148,11 +140,23 @@ pub fn allocate_funds(
         if s2 > smax {
             s2 = smax;
             o2 = sum - s2;
+            s1 = s2 - d_s - s0;
+            o1 = x - s1;
         }
         if o2 > omax {
             o2 = omax;
             s2 = sum - o2;
+            o1 = o2 - d_o - o0;
+            s1 = x - o1;
         }
+    }
+
+    if s1 < 0 {
+        s1 = 0;
+        o1 = x;
+    } else if o1 < 0 {
+        o1 = 0;
+        s1 = x;
     }
 
     assert!(s1 >= 0);
