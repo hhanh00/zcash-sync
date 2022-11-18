@@ -90,24 +90,24 @@ pub struct CResult<T> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<()> {
+pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<u8> {
     try_init_logger();
     from_c_str!(db_path);
-    to_cresult(init_coin(coin, &db_path))
+    to_cresult(init_coin(coin, &db_path).and_then(|()| Ok(0u8)))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<()> {
+pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<u8> {
     try_init_logger();
     from_c_str!(db_path);
-    to_cresult(crate::coinconfig::migrate_db(coin, &db_path))
+    to_cresult(crate::coinconfig::migrate_db(coin, &db_path).and_then(|()| Ok(0u8)))
 }
 
 #[no_mangle]
 #[tokio::main]
-pub async unsafe extern "C" fn migrate_data_db(coin: u8) -> CResult<()> {
+pub async unsafe extern "C" fn migrate_data_db(coin: u8) -> CResult<u8> {
     try_init_logger();
-    to_cresult(crate::coinconfig::migrate_data(coin).await)
+    to_cresult(crate::coinconfig::migrate_data(coin).await.and_then(|()| Ok(0u8)))
 }
 
 #[no_mangle]
@@ -197,9 +197,9 @@ pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32, count: u
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn convert_to_watchonly(coin: u8, id_account: u32) -> CResult<()> {
+pub unsafe extern "C" fn convert_to_watchonly(coin: u8, id_account: u32) -> CResult<u8> {
     let res = crate::api::account::convert_to_watchonly(coin, id_account);
-    to_cresult(res)
+    to_cresult(res.and_then(|()| Ok(0u8)))
 }
 
 #[no_mangle]

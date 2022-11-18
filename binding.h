@@ -13,16 +13,16 @@ typedef char bool;
 #endif
 typedef void *DartPostCObjectFnType;
 
-typedef struct CResult {
-  char value;
-  char *error;
-} CResult;
-
 #define QR_DATA_SIZE 256
 
 #define MAX_ATTEMPTS 10
 
 #define N 200000
+
+typedef struct CResult_u8 {
+  uint8_t value;
+  char *error;
+} CResult_u8;
 
 typedef struct CResult_u32 {
   uint32_t value;
@@ -33,11 +33,6 @@ typedef struct CResult_____c_char {
   char *value;
   char *error;
 } CResult_____c_char;
-
-typedef struct CResult_u8 {
-  uint8_t value;
-  char *error;
-} CResult_u8;
 
 typedef struct CResult_u64 {
   uint64_t value;
@@ -50,11 +45,11 @@ void dart_post_cobject(DartPostCObjectFnType ptr);
 
 void deallocate_str(char *s);
 
-CResult init_wallet(uint8_t coin, char *db_path);
+struct CResult_u8 init_wallet(uint8_t coin, char *db_path);
 
-CResult migrate_db(uint8_t coin, char *db_path);
+struct CResult_u8 migrate_db(uint8_t coin, char *db_path);
 
-CResult migrate_data_db(uint8_t coin);
+struct CResult_u8 migrate_data_db(uint8_t coin);
 
 void set_active(uint8_t active);
 
@@ -74,7 +69,7 @@ struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t ind
 
 void new_sub_account(char *name, int32_t index, uint32_t count);
 
-CResult convert_to_watchonly(uint8_t coin, uint32_t id_account);
+struct CResult_u8 convert_to_watchonly(uint8_t coin, uint32_t id_account);
 
 struct CResult_____c_char get_backup(uint8_t coin, uint32_t id_account);
 
