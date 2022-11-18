@@ -3,7 +3,6 @@ use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
-use anyhow::anyhow;
 use lazy_static::lazy_static;
 use log::Level;
 use std::ffi::{CStr, CString};
@@ -681,19 +680,9 @@ pub unsafe extern "C" fn get_tx_summary(tx: *mut c_char) -> CResult<*mut c_char>
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn get_best_server(
-    servers: *mut *mut c_char,
-    count: u32,
-) -> CResult<*mut c_char> {
-    let mut cservers = vec![];
-    for i in 0..count {
-        let ptr = *servers.offset(i as isize);
-        let s = CStr::from_ptr(ptr).to_string_lossy();
-        cservers.push(s.to_string());
-    }
-    let best_server = crate::get_best_server(&cservers)
-        .await
-        .ok_or(anyhow!("No server available"));
+pub async unsafe extern "C" fn get_best_server(servers: *mut c_char) -> CResult<*mut c_char> {
+    from_c_str!(servers);
+    let best_server = crate::get_best_server(&servers).await;
     to_cresult_str(best_server)
 }
 

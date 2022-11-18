@@ -161,7 +161,7 @@ struct CResult_____c_char merge_data(char *drop);
 
 struct CResult_____c_char get_tx_summary(char *tx);
 
-struct CResult_____c_char get_best_server(char **servers, uint32_t count);
+struct CResult_____c_char get_best_server(char *servers);
 
 void import_from_zwl(uint8_t coin, char *name, char *data);
 
