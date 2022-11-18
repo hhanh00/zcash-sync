@@ -62,9 +62,17 @@ pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
 
 /// Upgrade database schema for given coin and db path
 /// Used from ywallet
-pub fn migrate_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
+pub fn migrate_db(coin: u8, db_path: &str) -> anyhow::Result<()> {
     let chain = get_coin_chain(get_coin_type(coin));
     DbAdapter::migrate_db(chain.network(), db_path, chain.has_unified())?;
+    Ok(())
+}
+
+pub async fn migrate_data(coin: u8) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let mut client = c.connect_lwd().await?;
+    db.migrate_data(&mut client).await?;
     Ok(())
 }
 

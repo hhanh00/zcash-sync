@@ -8,7 +8,7 @@ use crate::sync::tree::{CTree, TreeCheckpoint};
 use crate::taddr::{derive_tkeys, TBalance};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
-use crate::{sync, Hash};
+use crate::{sync, BlockId, CompactTxStreamerClient, Hash};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use tonic::transport::Channel;
+use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_params::coin::{get_coin_chain, get_coin_id, CoinType};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
@@ -116,6 +118,39 @@ impl DbAdapter {
     pub fn migrate_db(network: &Network, db_path: &str, has_ua: bool) -> anyhow::Result<()> {
         let connection = Connection::open(db_path)?;
         migration::init_db(&connection, network, has_ua)?;
+        Ok(())
+    }
+
+    pub async fn migrate_data(
+        &self,
+        client: &mut CompactTxStreamerClient<Channel>,
+    ) -> anyhow::Result<()> {
+        let mut stmt = self.connection.prepare("select s.height from sapling_tree s LEFT JOIN orchard_tree o ON s.height = o.height WHERE o.height IS NULL")?;
+        let rows = stmt.query_map([], |row| {
+            let height: u32 = row.get(0)?;
+            Ok(height)
+        })?;
+        let mut trees = HashMap::new();
+        for r in rows {
+            trees.insert(r?, vec![]);
+        }
+        for (height, tree) in trees.iter_mut() {
+            let tree_state = client
+                .get_tree_state(Request::new(BlockId {
+                    height: *height as u64,
+                    hash: vec![],
+                }))
+                .await?
+                .into_inner();
+            let orchard_tree = hex::decode(&tree_state.orchard_tree).unwrap();
+            tree.extend(orchard_tree);
+        }
+        for (height, tree) in trees.iter() {
+            self.connection.execute(
+                "INSERT INTO orchard_tree(height, tree) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
+                params![height, tree],
+            )?;
+        }
         Ok(())
     }
 

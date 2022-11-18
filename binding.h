@@ -50,9 +50,11 @@ void dart_post_cobject(DartPostCObjectFnType ptr);
 
 void deallocate_str(char *s);
 
-void init_wallet(char *db_path);
+CResult init_wallet(uint8_t coin, char *db_path);
 
-void migrate_db(char *db_path);
+CResult migrate_db(uint8_t coin, char *db_path);
+
+CResult migrate_data_db(uint8_t coin);
 
 void set_active(uint8_t active);
 

@@ -34,6 +34,8 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
+const LATEST_VERSION: u32 = 5;
+
 pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyhow::Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS schema_version (
@@ -265,8 +267,8 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
         )?;
     }
 
-    if version != 5 {
-        update_schema_version(connection, 5)?;
+    if version != LATEST_VERSION {
+        update_schema_version(connection, LATEST_VERSION)?;
         connection.cache_flush()?;
         log::info!("Database migrated");
     }

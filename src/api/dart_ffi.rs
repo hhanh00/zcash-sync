@@ -1,4 +1,4 @@
-use crate::coinconfig::{init_coin, migrate_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
+use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
 use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
@@ -90,24 +90,25 @@ pub struct CResult<T> {
     error: *mut c_char,
 }
 
-const COIN_DBNAMES: &[&str] = &["zec.db", "yec.db"];
-
 #[no_mangle]
-pub unsafe extern "C" fn init_wallet(db_path: *mut c_char) {
+pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<()> {
     try_init_logger();
     from_c_str!(db_path);
-    for (coin, filename) in COIN_DBNAMES.iter().enumerate() {
-        let _ = init_coin(coin as u8, &format!("{}/{}", &db_path, filename));
-    }
+    to_cresult(init_coin(coin, &db_path))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn migrate_db(db_path: *mut c_char) {
+pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<()> {
     try_init_logger();
     from_c_str!(db_path);
-    for (coin, filename) in COIN_DBNAMES.iter().enumerate() {
-        let _ = migrate_coin(coin as u8, &format!("{}/{}", &db_path, filename));
-    }
+    to_cresult(crate::coinconfig::migrate_db(coin, &db_path))
+}
+
+#[no_mangle]
+#[tokio::main]
+pub async unsafe extern "C" fn migrate_data_db(coin: u8) -> CResult<()> {
+    try_init_logger();
+    to_cresult(crate::coinconfig::migrate_data(coin).await)
 }
 
 #[no_mangle]
