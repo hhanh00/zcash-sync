@@ -116,32 +116,32 @@ apple_metal = ["metal", "objc", "block"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
-rev = "849107a56e83f150c86405df733bf87ae589811d"
+rev = "e02e3a4628654f0b49f5cce17f868d03da04c683"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
+rev = "2cb26889d9384c7f43f1bd8417a5c088ae380323"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
+rev = "2cb26889d9384c7f43f1bd8417a5c088ae380323"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
+rev = "2cb26889d9384c7f43f1bd8417a5c088ae380323"
 
 [dependencies.zcash_address]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
+rev = "2cb26889d9384c7f43f1bd8417a5c088ae380323"
 
 [dependencies.zcash_encoding]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
+rev = "2cb26889d9384c7f43f1bd8417a5c088ae380323"
 
 [dependencies.zcash_note_encryption]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f546cf86f4ee7191c9b85c51af86ed9c36bb9eb0"
+rev = "2cb26889d9384c7f43f1bd8417a5c088ae380323"
 
 [build-dependencies]
 tonic-build = "0.7.2"
@@ -150,3 +150,7 @@ cbindgen = "0.19.0"
 [dev-dependencies]
 criterion = "0.3.4"
 
+# These patch overrides must be included in your workspace root Cargo.toml
+[patch.crates-io]
+zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "2cb26889d9384c7f43f1bd8417a5c088ae380323" }
+jubjub = { git = "https://github.com/hhanh00/jubjub.git", rev = "4a3edf3d242f368b5aa418ec659d01f191127cf3" }
