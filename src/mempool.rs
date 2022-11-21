@@ -135,18 +135,23 @@ pub async fn run_mempool_loop<F: Fn(i64) + Send + Sync + 'static>(
     log::info!("MEMPOOL run");
     let mut active_coin = 0;
     let mut active_account = 0;
+    let mut subscribed = false;
     while let Some(message) = rx_mesg.recv().await {
         match message {
             MemPoolMsg::Active(coin, id_account) => {
                 if coin != active_coin || id_account != active_account {
                     active_coin = coin;
                     active_account = id_account;
-                    let _ = tx_mesg.send(MemPoolMsg::Subscribe(coin, id_account)).await;
+                    subscribed = false;
+                    let _ = tx_mesg.send(MemPoolMsg::Subscribe(active_coin, active_account)).await;
                 }
             }
             MemPoolMsg::Subscribe(coin, id_account) => {
-                let mempool_handler = MemPoolHandler::new(coin, id_account, tx_mesg.clone());
-                mempool_handler.subscribe().await?;
+                if !subscribed {
+                    let mempool_handler = MemPoolHandler::new(coin, id_account, tx_mesg.clone());
+                    mempool_handler.subscribe().await?;
+                    subscribed = true;
+                }
             }
             MemPoolMsg::Balance(coin, id_account, balance) => {
                 if coin == active_coin && id_account == active_account {
@@ -155,7 +160,10 @@ pub async fn run_mempool_loop<F: Fn(i64) + Send + Sync + 'static>(
             }
             MemPoolMsg::Close(coin, id_account) => {
                 if coin == active_coin && id_account == active_account {
-                    let _ = tx_mesg.send(MemPoolMsg::Subscribe(coin, id_account)).await;
+                    subscribed = false;
+                    let _ = tx_mesg
+                        .send(MemPoolMsg::Subscribe(active_coin, active_account))
+                        .await;
                     f(0);
                 }
             }

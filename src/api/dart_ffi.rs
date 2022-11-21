@@ -107,7 +107,11 @@ pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<u
 #[tokio::main]
 pub async unsafe extern "C" fn migrate_data_db(coin: u8) -> CResult<u8> {
     try_init_logger();
-    to_cresult(crate::coinconfig::migrate_data(coin).await.and_then(|()| Ok(0u8)))
+    to_cresult(
+        crate::coinconfig::migrate_data(coin)
+            .await
+            .and_then(|()| Ok(0u8)),
+    )
 }
 
 #[no_mangle]
@@ -147,6 +151,7 @@ pub unsafe extern "C" fn reset_app() {
 #[no_mangle]
 #[tokio::main]
 pub async unsafe extern "C" fn mempool_run(port: i64) {
+    try_init_logger();
     let mut mempool_runner = MEMPOOL_RUNNER.lock().unwrap();
     let mempool = mempool_runner
         .run(move |balance: i64| {
