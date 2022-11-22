@@ -4,7 +4,6 @@ use crate::note_selection::ua::decode;
 use crate::note_selection::TransactionBuilderError::TxTooComplex;
 use crate::note_selection::{TransactionBuilderError, MAX_ATTEMPTS};
 use crate::Hash;
-use anyhow::anyhow;
 use zcash_primitives::memo::MemoBytes;
 
 pub fn sum_utxos(utxos: &[UTXO]) -> Result<PoolAllocation> {
@@ -266,18 +265,22 @@ pub fn outputs_for_change(
     let mut change_fills = vec![];
     for i in 0..3 {
         let destination = change_destinations[i];
-        if let Some(destination) = destination {
-            let change_fill = Fill {
-                id_order: None,
-                destination,
-                amount: change.0[i],
-                memo: MemoBytes::empty(),
-            };
-            if change_fill.amount != 0 {
-                change_fills.push(change_fill);
+        match destination {
+            Some(destination) => {
+                let change_fill = Fill {
+                    id_order: None,
+                    destination,
+                    amount: change.0[i],
+                    memo: MemoBytes::empty(),
+                };
+                if change_fill.amount != 0 {
+                    change_fills.push(change_fill);
+                }
             }
-        } else {
-            return Err(anyhow!("No change address").into());
+            None if change.0[i] == 0 => {}
+            None => {
+                return Err(anyhow::anyhow!("No change address").into());
+            }
         }
     }
     Ok(change_fills)
@@ -309,7 +312,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
 
         let (notes, change) = select_inputs(&utxos, &allocation)?;
         let change_destinations = decode(&config.change_address)?;
-        let change_outputs = outputs_for_change(&change_destinations, &change).unwrap();
+        let change_outputs = outputs_for_change(&change_destinations, &change)?;
         fills.extend(change_outputs);
 
         let updated_fee = F::calculate_fee(&notes, &fills);

@@ -1,4 +1,5 @@
 use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
+use crate::db::FullEncryptedBackup;
 use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
@@ -7,13 +8,14 @@ use lazy_static::lazy_static;
 use log::Level;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
+use std::path::Path;
 use std::sync::Mutex;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
-const MAX_COINS: u8 = 3;
+const MAX_COINS: u8 = 2;
 
 #[no_mangle]
 pub unsafe extern "C" fn dummy_export() {}
@@ -97,6 +99,13 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn create_db(db_path: *mut c_char) -> CResult<u8> {
+    try_init_logger();
+    from_c_str!(db_path);
+    to_cresult(crate::db::DbAdapter::create_db(&db_path).and_then(|()| Ok(0u8)))
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<u8> {
     try_init_logger();
     from_c_str!(db_path);
@@ -120,9 +129,8 @@ pub unsafe extern "C" fn set_active(active: u8) {
 }
 
 #[no_mangle]
-#[tokio::main]
-pub async unsafe extern "C" fn set_active_account(coin: u8, id: u32) {
-    crate::coinconfig::set_active_account(coin, id).await;
+pub unsafe extern "C" fn set_active_account(coin: u8, id: u32) {
+    crate::coinconfig::set_active_account(coin, id);
 }
 
 #[no_mangle]
@@ -168,10 +176,9 @@ pub async unsafe extern "C" fn mempool_run(port: i64) {
 }
 
 #[no_mangle]
-#[tokio::main]
-pub async unsafe extern "C" fn mempool_set_active(coin: u8, id_account: u32) {
+pub unsafe extern "C" fn mempool_set_active(coin: u8, id_account: u32) {
     let mempool = MEMPOOL.borrow().unwrap();
-    mempool.set_active(coin, id_account).await;
+    mempool.set_active(coin, id_account);
 }
 
 #[no_mangle]
@@ -642,6 +649,48 @@ pub unsafe extern "C" fn restore_full_backup(key: *mut c_char, backup: *mut c_ch
         for coin in 0..MAX_COINS {
             crate::api::fullbackup::restore_full_backup(coin, &accounts)?;
         }
+        Ok(())
+    };
+    log_error(res())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn generate_key() -> CResult<*mut c_char> {
+    let secret_key = FullEncryptedBackup::generate_key();
+    to_cresult_str(secret_key)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn zip_backup(key: *mut c_char, dst_dir: *mut c_char) -> CResult<u8> {
+    from_c_str!(key);
+    from_c_str!(dst_dir);
+    let res = || {
+        let mut backup = FullEncryptedBackup::new(&dst_dir);
+        for coin in 0..MAX_COINS {
+            let c = CoinConfig::get(coin);
+            let db = c.db().unwrap();
+            let db_path = Path::new(&db.db_path);
+            let db_name = db_path.file_name().unwrap().to_string_lossy();
+            backup.add(&db.connection, &db_name)?;
+        }
+        backup.close(&key)?;
+        Ok(0)
+    };
+    to_cresult(res())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn unzip_backup(
+    key: *mut c_char,
+    data_path: *mut c_char,
+    dst_dir: *mut c_char,
+) {
+    from_c_str!(key);
+    from_c_str!(data_path);
+    from_c_str!(dst_dir);
+    let res = || {
+        let backup = FullEncryptedBackup::new(&dst_dir);
+        backup.restore(&key, &data_path)?;
         Ok(())
     };
     log_error(res())

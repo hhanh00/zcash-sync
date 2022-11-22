@@ -47,6 +47,8 @@ void deallocate_str(char *s);
 
 struct CResult_u8 init_wallet(uint8_t coin, char *db_path);
 
+struct CResult_u8 create_db(char *db_path);
+
 struct CResult_u8 migrate_db(uint8_t coin, char *db_path);
 
 struct CResult_u8 migrate_data_db(uint8_t coin);
@@ -149,6 +151,12 @@ struct CResult_____c_char generate_random_enc_key(void);
 struct CResult_____c_char get_full_backup(char *key);
 
 void restore_full_backup(char *key, char *backup);
+
+struct CResult_____c_char generate_key(void);
+
+struct CResult_u8 zip_backup(char *key, char *dst_dir);
+
+void unzip_backup(char *key, char *data_path, char *dst_dir);
 
 struct CResult_____c_char split_data(uint32_t id, char *data);
 

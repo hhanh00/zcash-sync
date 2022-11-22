@@ -230,7 +230,7 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             rcm BLOB NOT NULL,
             nf BLOB NOT NULL UNIQUE,
             rho BLOB,
-            orchard BOOL NOT NULL DEFAULT (false),
+            orchard BOOL NOT NULL DEFAULT false,
             spent INTEGER,
             excluded BOOL,
             CONSTRAINT tx_output UNIQUE (tx, orchard, output_index))",
@@ -262,7 +262,7 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             [],
         )?;
         connection.execute(
-            "ALTER TABLE messages ADD incoming BOOL NOT NULL DEFAULT (true)",
+            "ALTER TABLE messages ADD incoming BOOL NOT NULL DEFAULT true",
             [],
         )?;
     }

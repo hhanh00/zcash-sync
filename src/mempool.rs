@@ -47,7 +47,10 @@ impl MemPoolHandler {
         }
     }
 
-    pub fn run(handler: MemPoolHandler, mut shutdown: tokio::sync::broadcast::Receiver<()>) -> anyhow::Result<()> {
+    pub fn run(
+        handler: MemPoolHandler,
+        mut shutdown: tokio::sync::broadcast::Receiver<()>,
+    ) -> anyhow::Result<()> {
         tokio::spawn(async move {
             let r = tokio::select! {
                 res = handler.event_loop() => {
@@ -58,7 +61,11 @@ impl MemPoolHandler {
                     Ok(())
                 }
             };
-            log::info!("MemPoolHandler ended {} {}", handler.coin, handler.id_account);
+            log::info!(
+                "MemPoolHandler ended {} {}",
+                handler.coin,
+                handler.id_account
+            );
             r
         });
         Ok(())
@@ -113,11 +120,12 @@ impl MemPool {
         MemPool { tx_mesg }
     }
 
-    pub async fn set_active(&self, coin: u8, id_account: u32) {
-        let _ = self
-            .tx_mesg
-            .send(MemPoolMsg::Active(coin, id_account))
-            .await;
+    pub fn set_active(&self, coin: u8, id_account: u32) {
+        if id_account != 0 {
+            let _ = self
+                .tx_mesg
+                .blocking_send(MemPoolMsg::Active(coin, id_account));
+        }
     }
 }
 
@@ -159,23 +167,22 @@ pub async fn run_mempool_loop<F: Fn(i64) + Send + Sync + 'static>(
         log::info!("{:?}", message);
         match message {
             MemPoolMsg::Active(coin, id_account) => {
-                match active_sub.take() {
-                    Some(ActiveSub {coin: active_coin, account: active_account, tx_shutdown}) => {
-                        if coin != active_coin || id_account != active_account {
-                            tx_shutdown.send(())?; // Close current connection
-                            let _ = tx_mesg.send(MemPoolMsg::Subscribe(coin, id_account)).await;
-                        }
-                        else { // same active account, just put it back
-                            active_sub = Some(ActiveSub {
-                                coin: active_coin,
-                                account: active_account,
-                                tx_shutdown
-                            });
-                        }
-                    }
-                    None => {
+                let active = active_sub.take();
+                if let Some(ActiveSub {
+                    coin: active_coin,
+                    account: active_account,
+                    ref tx_shutdown,
+                }) = active
+                {
+                    if coin != active_coin || id_account != active_account {
+                        tx_shutdown.send(())?; // Close current connection
                         let _ = tx_mesg.send(MemPoolMsg::Subscribe(coin, id_account)).await;
+                    } else {
+                        // same active account, just put it back
+                        active_sub = active;
                     }
+                } else {
+                    let _ = tx_mesg.send(MemPoolMsg::Subscribe(coin, id_account)).await;
                 }
             }
             MemPoolMsg::Subscribe(coin, id_account) => {
@@ -185,13 +192,18 @@ pub async fn run_mempool_loop<F: Fn(i64) + Send + Sync + 'static>(
                     active_sub = Some(ActiveSub {
                         coin,
                         account: id_account,
-                        tx_shutdown
+                        tx_shutdown,
                     });
                     MemPoolHandler::run(mempool_handler, rx_shutdown)?;
                 }
             }
             MemPoolMsg::Balance(coin, id_account, balance) => {
-                if let Some(ActiveSub { coin: active_coin, account: active_account, .. }) = active_sub.as_ref() {
+                if let Some(ActiveSub {
+                    coin: active_coin,
+                    account: active_account,
+                    ..
+                }) = active_sub.as_ref()
+                {
                     if coin == *active_coin && id_account == *active_account {
                         f(balance);
                     }
@@ -199,12 +211,19 @@ pub async fn run_mempool_loop<F: Fn(i64) + Send + Sync + 'static>(
             }
             MemPoolMsg::Close(coin, id_account) => {
                 let active = active_sub.take();
-                if let Some(ActiveSub { coin: active_coin, account: active_account , .. }) = active {
+                if let Some(ActiveSub {
+                    coin: active_coin,
+                    account: active_account,
+                    ..
+                }) = active
+                {
                     if coin == active_coin && id_account == active_account {
                         f(0);
                         let _ = tx_mesg
                             .send(MemPoolMsg::Subscribe(active_coin, active_account))
                             .await;
+                    } else {
+                        active_sub = active;
                     }
                 }
             }

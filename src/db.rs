@@ -11,7 +11,7 @@ use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CompactTxStreamerClient, Hash};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::HashMap;
@@ -25,7 +25,10 @@ use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
 
+mod backup;
 mod migration;
+
+pub use backup::FullEncryptedBackup;
 
 #[allow(dead_code)]
 pub const DEFAULT_DB_PATH: &str = "zec.db";
@@ -79,6 +82,7 @@ pub struct AccountViewKey {
 
 #[derive(Serialize, Deserialize)]
 pub struct AccountBackup {
+    pub version: u8,
     pub coin: u8,
     pub name: String,
     pub seed: Option<String>,
@@ -88,6 +92,8 @@ pub struct AccountBackup {
     pub z_addr: String,
     pub t_sk: Option<String>,
     pub t_addr: Option<String>,
+    pub o_sk: Option<String>,
+    pub o_fvk: Option<String>,
 }
 
 pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> anyhow::Error {
@@ -106,13 +112,18 @@ impl DbAdapterBuilder {
 impl DbAdapter {
     pub fn new(coin_type: CoinType, db_path: &str) -> anyhow::Result<DbAdapter> {
         let connection = Connection::open(db_path)?;
-        connection.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
-        connection.execute("PRAGMA synchronous = NORMAL", [])?;
         Ok(DbAdapter {
             coin_type,
             connection,
             db_path: db_path.to_owned(),
         })
+    }
+
+    pub fn create_db(db_path: &str) -> anyhow::Result<()> {
+        let connection = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_CREATE)?;
+        connection.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
+        connection.execute("PRAGMA synchronous = NORMAL", [])?;
+        Ok(())
     }
 
     pub fn migrate_db(network: &Network, db_path: &str, has_ua: bool) -> anyhow::Result<()> {
@@ -825,6 +836,8 @@ impl DbAdapter {
     }
 
     pub fn get_account_info(&self, account: u32) -> anyhow::Result<AccountData> {
+        assert_ne!(account, 0);
+        log::info!("get_account_info {} {}", self.db_path, account);
         let account_data = self
             .connection
             .query_row(
@@ -1076,7 +1089,9 @@ impl DbAdapter {
 
     pub fn get_full_backup(&self, coin: u8) -> anyhow::Result<Vec<AccountBackup>> {
         let mut statement = self.connection.prepare(
-            "SELECT name, seed, aindex, a.sk AS z_sk, ivk, a.address AS z_addr, t.sk as t_sk, t.address AS t_addr FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account")?;
+            "SELECT name, seed, aindex, a.sk AS z_sk, ivk, a.address AS z_addr, t.sk as t_sk, t.address AS t_addr, \
+            o.sk as o_sk, o.fvk as o_fvk \
+            FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account LEFT JOIN orchard_addrs o ON a.id_account = o.account")?;
         let rows = statement.query_map([], |r| {
             let name: String = r.get(0)?;
             let seed: Option<String> = r.get(1)?;
@@ -1086,7 +1101,12 @@ impl DbAdapter {
             let z_addr: String = r.get(5)?;
             let t_sk: Option<String> = r.get(6)?;
             let t_addr: Option<String> = r.get(7)?;
+            let o_sk: Option<Vec<u8>> = r.get(8)?;
+            let o_fvk: Option<Vec<u8>> = r.get(9)?;
+            let o_sk: Option<String> = o_sk.map(|v| hex::encode(v));
+            let o_fvk: Option<String> = o_fvk.map(|v| hex::encode(v));
             Ok(AccountBackup {
+                version: 2,
                 coin,
                 name,
                 seed,
@@ -1096,6 +1116,8 @@ impl DbAdapter {
                 z_addr,
                 t_sk,
                 t_addr,
+                o_sk,
+                o_fvk,
             })
         })?;
         let mut accounts: Vec<AccountBackup> = vec![];
@@ -1108,6 +1130,9 @@ impl DbAdapter {
     pub fn restore_full_backup(&self, accounts: &[AccountBackup]) -> anyhow::Result<()> {
         let coin = get_coin_id(self.coin_type);
         for a in accounts {
+            if a.version != 2 {
+                anyhow::bail!("Unsupported backup version")
+            }
             log::info!("{} {} {}", a.name, a.coin, coin);
             if a.coin == coin {
                 let do_insert = || {
@@ -1118,6 +1143,16 @@ impl DbAdapter {
                         self.connection.execute(
                             "INSERT INTO taddrs(account, sk, address) VALUES (?1,?2,?3)",
                             params![id_account, a.t_sk, t_addr],
+                        )?;
+                    }
+                    if let Some(o_fvk) = &a.o_fvk {
+                        self.connection.execute(
+                            "INSERT INTO orchard_addrs(account, sk, fvk) VALUES (?1,?2,?3)",
+                            params![
+                                id_account,
+                                a.o_sk.as_ref().map(|v| hex::decode(&v).unwrap()),
+                                hex::decode(&o_fvk).unwrap()
+                            ],
                         )?;
                     }
                     Ok::<_, anyhow::Error>(())
