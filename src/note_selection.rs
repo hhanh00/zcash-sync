@@ -11,6 +11,7 @@ pub use utxo::fetch_utxos;
 
 use crate::api::recipient::Recipient;
 use thiserror::Error;
+use zcash_primitives::consensus::Network;
 use ua::decode;
 use zcash_primitives::memo::Memo;
 
@@ -37,12 +38,12 @@ mod utxo;
 pub const MAX_ATTEMPTS: usize = 10;
 
 #[allow(dead_code)]
-pub fn recipients_to_orders(recipients: &[Recipient]) -> Result<Vec<Order>> {
+pub fn recipients_to_orders(network: &Network, recipients: &[Recipient]) -> Result<Vec<Order>> {
     let orders: Result<Vec<_>> = recipients
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            let destinations = decode(&r.address)?;
+            let destinations = decode(network, &r.address)?;
             Ok::<_, TransactionBuilderError>(Order {
                 id: i as u32,
                 destinations,

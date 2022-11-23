@@ -27,6 +27,7 @@ pub async fn build_tx_plan(
     confirmations: u32,
 ) -> note_selection::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
+    let network = c.chain.network();
     let (fvk, checkpoint_height) = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
@@ -48,7 +49,7 @@ pub async fn build_tx_plan(
         while amount > 0 {
             let a = min(amount, max_amount_per_note);
             let memo_bytes: MemoBytes = r.memo.clone().into();
-            let order = Order::new(id_order, &r.address, a, memo_bytes);
+            let order = Order::new(network, id_order, &r.address, a, memo_bytes);
             orders.push(order);
             amount -= a;
             id_order += 1;
@@ -58,6 +59,7 @@ pub async fn build_tx_plan(
 
     let config = TransactionBuilderConfig::new(&change_address);
     let tx_plan = crate::note_selection::build_tx_plan::<FeeFlat>(
+        network,
         &fvk,
         checkpoint_height,
         &context.orchard_anchor,

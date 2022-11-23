@@ -200,8 +200,8 @@ impl Destination {
 }
 
 impl Order {
-    pub fn new(id: u32, address: &str, amount: u64, memo: MemoBytes) -> Self {
-        let destinations = decode(address).unwrap();
+    pub fn new(network: &Network, id: u32, address: &str, amount: u64, memo: MemoBytes) -> Self {
+        let destinations = decode(network, address).unwrap();
         Order {
             id,
             destinations,

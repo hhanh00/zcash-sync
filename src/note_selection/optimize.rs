@@ -1,3 +1,4 @@
+use zcash_primitives::consensus::Network;
 use super::{types::*, Result};
 use crate::note_selection::fee::FeeCalculator;
 use crate::note_selection::ua::decode;
@@ -287,15 +288,17 @@ pub fn outputs_for_change(
 }
 
 pub fn build_tx_plan<F: FeeCalculator>(
+    network: &Network,
     fvk: &str,
     height: u32,
-    orchard_anchor: &Hash,
+    orchard_anchor: &Option<Hash>,
     utxos: &[UTXO],
     orders: &[Order],
     config: &TransactionBuilderConfig,
 ) -> Result<TransactionPlan> {
     let mut fee = 0;
 
+    println!("build_tx_plan");
     for _ in 0..MAX_ATTEMPTS {
         let balances = sum_utxos(utxos)?;
         let (groups, amounts) = group_orders(&orders, fee)?;
@@ -311,7 +314,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
         let mut fills = fill(&orders, &groups, &amounts, &allocation)?;
 
         let (notes, change) = select_inputs(&utxos, &allocation)?;
-        let change_destinations = decode(&config.change_address)?;
+        let change_destinations = decode(network, &config.change_address)?;
         let change_outputs = outputs_for_change(&change_destinations, &change)?;
         fills.extend(change_outputs);
 
@@ -320,7 +323,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
             let tx_plan = TransactionPlan {
                 fvk: fvk.to_string(),
                 height,
-                orchard_anchor: orchard_anchor.clone(),
+                orchard_anchor: orchard_anchor.unwrap_or(Hash::default()),
                 spends: notes,
                 outputs: fills,
                 net_chg,

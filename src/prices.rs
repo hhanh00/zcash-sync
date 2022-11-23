@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use crate::DbAdapter;
 use chrono::NaiveDateTime;
 use zcash_params::coin::get_coin_chain;
@@ -52,7 +53,10 @@ pub async fn fetch_historical_prices(
             let ts = p[0].as_i64().ok_or_else(json_error)? / 1000;
             let price = p[1].as_f64().ok_or_else(json_error)?;
             // rounded to daily
-            let date = NaiveDateTime::from_timestamp(ts, 0).date().and_hms(0, 0, 0);
+            let date = NaiveDateTime::from_timestamp_opt(ts, 0)
+                .ok_or(anyhow!("Invalid Date"))?
+                .date().and_hms_opt(0, 0, 0)
+                .ok_or(anyhow!("Invalid Date"))?;
             let timestamp = date.timestamp();
             if timestamp != prev_timestamp {
                 let quote = Quote { timestamp, price };

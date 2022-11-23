@@ -479,13 +479,13 @@ pub unsafe extern "C" fn transaction_report(coin: u8, plan: *mut c_char) -> CRes
 pub async unsafe extern "C" fn sign(
     coin: u8,
     account: u32,
-    tx: *mut c_char,
+    tx_plan: *mut c_char,
     _port: i64,
 ) -> CResult<*mut c_char> {
-    from_c_str!(tx);
+    from_c_str!(tx_plan);
     let res = async {
-        let tx: TransactionPlan = serde_json::from_str(&tx)?;
-        let raw_tx = crate::api::payment_v2::sign_plan(coin, account, &tx)?;
+        let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
+        let raw_tx = crate::api::payment_v2::sign_plan(coin, account, &tx_plan)?;
         let tx_str = base64::encode(&raw_tx);
         Ok::<_, anyhow::Error>(tx_str)
     };

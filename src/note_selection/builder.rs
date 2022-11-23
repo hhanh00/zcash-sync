@@ -26,8 +26,7 @@ use zcash_primitives::sapling::prover::TxProver;
 use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
 use zcash_primitives::transaction::builder::Builder;
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut};
-use zcash_primitives::transaction::sighash::SignableInput;
-use zcash_primitives::transaction::sighash_v5::v5_signature_hash;
+use zcash_primitives::transaction::sighash::{SignableInput, signature_hash};
 use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_primitives::transaction::{Transaction, TransactionData, TxVersion};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
@@ -41,7 +40,7 @@ pub struct SecretKeys {
 pub struct TxBuilderContext {
     pub height: u32,
     pub sapling_anchor: [u8; 32],
-    pub orchard_anchor: [u8; 32],
+    pub orchard_anchor: Option<[u8; 32]>,
 }
 
 impl TxBuilderContext {
@@ -52,9 +51,13 @@ impl TxBuilderContext {
         let TreeCheckpoint { tree, .. } = db.get_tree_by_name(height, "sapling")?;
         let hasher = SaplingHasher {};
         let sapling_anchor = tree.root(32, &SAPLING_ROOTS, &hasher);
-        let TreeCheckpoint { tree, .. } = db.get_tree_by_name(height, "orchard")?;
-        let hasher = OrchardHasher::new();
-        let orchard_anchor = tree.root(32, &ORCHARD_ROOTS, &hasher);
+
+        let orchard_anchor = if c.chain.has_unified() {
+            let TreeCheckpoint { tree, .. } = db.get_tree_by_name(height, "orchard")?;
+            let hasher = OrchardHasher::new();
+            Some(tree.root(32, &ORCHARD_ROOTS, &hasher))
+        }
+        else { None };
         let context = TxBuilderContext {
             height,
             sapling_anchor,
@@ -208,10 +211,13 @@ pub fn build_tx(
         orchard_bundle = Some(orchard_builder.build(rng.clone()).unwrap());
     }
 
+    let consensus_branch_id = BranchId::for_height(network, BlockHeight::from_u32(plan.height));
+    let version = TxVersion::suggested_for_branch(consensus_branch_id);
+
     let unauthed_tx: TransactionData<zcash_primitives::transaction::Unauthorized> =
         TransactionData::from_parts(
-            TxVersion::Zip225,
-            BranchId::Nu5,
+            version,
+            consensus_branch_id,
             0,
             BlockHeight::from_u32(plan.height + EXPIRY_HEIGHT),
             transparent_bundle,
@@ -221,8 +227,8 @@ pub fn build_tx(
         );
 
     let txid_parts = unauthed_tx.digest(TxIdDigester);
-    let sig_hash = v5_signature_hash(&unauthed_tx, &SignableInput::Shielded, &txid_parts);
-    let sig_hash: [u8; 32] = sig_hash.as_bytes().try_into().unwrap();
+    let sig_hash = signature_hash(&unauthed_tx, &SignableInput::Shielded, &txid_parts);
+    let sig_hash: [u8; 32] = sig_hash.as_ref().clone();
 
     let transparent_bundle = unauthed_tx
         .transparent_bundle()
@@ -252,8 +258,8 @@ pub fn build_tx(
 
     let tx_data: TransactionData<zcash_primitives::transaction::Authorized> =
         TransactionData::from_parts(
-            TxVersion::Zip225,
-            BranchId::Nu5,
+            version,
+            consensus_branch_id,
             0,
             BlockHeight::from_u32(plan.height + EXPIRY_HEIGHT),
             transparent_bundle,

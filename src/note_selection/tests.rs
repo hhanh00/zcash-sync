@@ -3,12 +3,12 @@ use super::types::*;
 use super::TransactionBuilderError::NotEnoughFunds;
 use crate::note_selection::build_tx_plan;
 use crate::note_selection::fee::{FeeCalculator, FeeZIP327};
-use crate::note_selection::optimize::{outputs_for_change, select_inputs};
-use crate::note_selection::ua::decode;
+use crate::note_selection::optimize::select_inputs;
 use crate::Hash;
 use assert_matches::assert_matches;
 use serde::Serialize;
 use serde_json::Value;
+use zcash_primitives::consensus::Network;
 use zcash_primitives::memo::MemoBytes;
 
 macro_rules! utxo {
@@ -690,14 +690,6 @@ fn test_select_utxo() {
 const CHANGE_ADDRESS: &str = "u1pncsxa8jt7aq37r8uvhjrgt7sv8a665hdw44rqa28cd9t6qqmktzwktw772nlle6skkkxwmtzxaan3slntqev03g70tzpky3c58hfgvfjkcky255cwqgfuzdjcktfl7pjalt5sl33se75pmga09etn9dplr98eq2g8cgmvgvx6jx2a2xhy39x96c6rumvlyt35whml87r064qdzw30e";
 
 #[test]
-fn test_change_fills() {
-    let _ = env_logger::try_init();
-    let destinations = decode(CHANGE_ADDRESS).unwrap();
-    let outputs = outputs_for_change(&destinations, &&PoolAllocation([0, 10000, 10000])).unwrap();
-    log::info!("{:?}", outputs);
-}
-
-#[test]
 fn test_fees() {
     let _ = env_logger::try_init();
     let utxos = utxos();
@@ -733,6 +725,7 @@ fn test_tx_plan() {
         tso!(7, 70),
     ];
     let tx_plan = build_tx_plan::<FeeZIP327>(
+        &Network::MainNetwork,
         "",
         0,
         &Hash::default(),
