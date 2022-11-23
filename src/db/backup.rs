@@ -1,4 +1,5 @@
 use age::secrecy::ExposeSecret;
+use serde::Serialize;
 use anyhow::anyhow;
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
@@ -24,9 +25,11 @@ impl FullEncryptedBackup {
         }
     }
 
-    pub fn generate_key() -> anyhow::Result<String> {
+    pub fn generate_key() -> anyhow::Result<AGEKeys> {
         let key = age::x25519::Identity::generate();
-        Ok(key.to_string().expose_secret().clone())
+        let sk = key.to_string().expose_secret().clone();
+        let pk = key.to_public().to_string();
+        Ok(AGEKeys { sk, pk })
     }
 
     pub fn add(&mut self, src: &Connection, db_name: &str) -> anyhow::Result<()> {
@@ -38,11 +41,10 @@ impl FullEncryptedBackup {
         Ok(())
     }
 
-    pub fn close(&self, cipher_key: &str) -> anyhow::Result<()> {
+    pub fn close(&self, pk: &str) -> anyhow::Result<()> {
         let data = self.make_zip()?;
-        let key =
-            age::x25519::Identity::from_str(cipher_key).map_err(|_| anyhow!("Invalid key"))?;
-        let pubkey = key.to_public();
+        let pubkey =
+            age::x25519::Recipient::from_str(pk).map_err(|e| anyhow!(e.to_string()))?;
 
         let mut encrypted_file = File::create(self.tmp_dir.join(YWALLET_BAK))?;
         let encryptor = age::Encryptor::with_recipients(vec![Box::new(pubkey)]).unwrap();
@@ -54,7 +56,7 @@ impl FullEncryptedBackup {
 
     pub fn restore(&self, cipher_key: &str, data_path: &str) -> anyhow::Result<()> {
         let key =
-            age::x25519::Identity::from_str(cipher_key).map_err(|_| anyhow!("Invalid key"))?;
+            age::x25519::Identity::from_str(cipher_key).map_err(|e| anyhow!(e.to_string()))?;
         let mut cipher_text = Vec::new();
         let mut f = File::open(data_path)?;
         f.read_to_end(&mut cipher_text)?;
@@ -99,4 +101,10 @@ impl FullEncryptedBackup {
         }
         Ok(())
     }
+}
+
+#[derive(Serialize)]
+pub struct AGEKeys {
+    pub sk: String,
+    pub pk: String,
 }

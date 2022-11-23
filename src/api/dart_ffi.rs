@@ -656,8 +656,12 @@ pub unsafe extern "C" fn restore_full_backup(key: *mut c_char, backup: *mut c_ch
 
 #[no_mangle]
 pub unsafe extern "C" fn generate_key() -> CResult<*mut c_char> {
-    let secret_key = FullEncryptedBackup::generate_key();
-    to_cresult_str(secret_key)
+    let res = || {
+        let secret_key = FullEncryptedBackup::generate_key()?;
+        let keys = serde_json::to_string(&secret_key)?;
+        Ok(keys)
+    };
+    to_cresult_str(res())
 }
 
 #[no_mangle]
