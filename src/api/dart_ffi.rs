@@ -621,40 +621,6 @@ pub unsafe extern "C" fn parse_payment_uri(uri: *mut c_char) -> CResult<*mut c_c
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn generate_random_enc_key() -> CResult<*mut c_char> {
-    to_cresult_str(crate::api::fullbackup::generate_random_enc_key())
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn get_full_backup(key: *mut c_char) -> CResult<*mut c_char> {
-    from_c_str!(key);
-    let res = || {
-        let mut accounts = vec![];
-        for coin in 0..MAX_COINS {
-            accounts.extend(crate::api::fullbackup::get_full_backup(coin)?);
-        }
-
-        let backup = crate::api::fullbackup::encrypt_backup(&accounts, &key)?;
-        Ok(backup)
-    };
-    to_cresult_str(res())
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn restore_full_backup(key: *mut c_char, backup: *mut c_char) {
-    from_c_str!(key);
-    from_c_str!(backup);
-    let res = || {
-        let accounts = crate::api::fullbackup::decrypt_backup(&key, &backup)?;
-        for coin in 0..MAX_COINS {
-            crate::api::fullbackup::restore_full_backup(coin, &accounts)?;
-        }
-        Ok(())
-    };
-    log_error(res())
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn generate_key() -> CResult<*mut c_char> {
     let res = || {
         let secret_key = FullEncryptedBackup::generate_key()?;
@@ -795,12 +761,4 @@ pub unsafe extern "C" fn has_gpu() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn use_gpu(v: bool) {
     crate::gpu::use_gpu(v)
-}
-
-#[tokio::main]
-#[no_mangle]
-pub async unsafe extern "C" fn import_sync_file(coin: u8, path: *mut c_char) {
-    from_c_str!(path);
-    let res = crate::api::account::import_sync_data(coin, &path).await;
-    log_error(res)
 }

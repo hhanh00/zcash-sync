@@ -119,7 +119,7 @@ pub use crate::chain::{connect_lightwalletd, get_best_server, ChainError};
 pub use crate::coinconfig::{
     init_coin, set_active, set_active_account, set_coin_lwd_url, CoinConfig, COIN_CONFIG,
 };
-pub use crate::db::{AccountData, AccountInfo, AccountRec, DbAdapter, DbAdapterBuilder, TxRec};
+pub use crate::db::{AccountData, AccountRec, DbAdapter, DbAdapterBuilder, TxRec};
 pub use crate::fountain::{FountainCodes, RaptorQDrops};
 // pub use crate::key::KeyHelpers;
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;

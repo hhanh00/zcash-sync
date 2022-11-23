@@ -175,7 +175,7 @@ pub async fn run_mempool_loop<F: Fn(i64) + Send + Sync + 'static>(
                 }) = active
                 {
                     if coin != active_coin || id_account != active_account {
-                        tx_shutdown.send(())?; // Close current connection
+                        let _ = tx_shutdown.send(()); // Close current connection
                         let _ = tx_mesg.send(MemPoolMsg::Subscribe(coin, id_account)).await;
                     } else {
                         // same active account, just put it back
@@ -194,7 +194,7 @@ pub async fn run_mempool_loop<F: Fn(i64) + Send + Sync + 'static>(
                         account: id_account,
                         tx_shutdown,
                     });
-                    MemPoolHandler::run(mempool_handler, rx_shutdown)?;
+                    let _ = MemPoolHandler::run(mempool_handler, rx_shutdown);
                 }
             }
             MemPoolMsg::Balance(coin, id_account, balance) => {

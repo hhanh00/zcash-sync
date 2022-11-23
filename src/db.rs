@@ -12,14 +12,13 @@ use crate::{sync, BlockId, CompactTxStreamerClient, Hash};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_params::coin::{get_coin_chain, get_coin_id, CoinType};
+use zcash_params::coin::{get_coin_chain, CoinType};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
@@ -78,22 +77,6 @@ pub struct AccountViewKey {
     pub fvk: ExtendedFullViewingKey,
     pub ivk: SaplingIvk,
     pub viewonly: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct AccountBackup {
-    pub version: u8,
-    pub coin: u8,
-    pub name: String,
-    pub seed: Option<String>,
-    pub index: u32,
-    pub z_sk: Option<String>,
-    pub ivk: String,
-    pub z_addr: String,
-    pub t_sk: Option<String>,
-    pub t_addr: Option<String>,
-    pub o_sk: Option<String>,
-    pub o_fvk: Option<String>,
 }
 
 pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> anyhow::Error {
@@ -1087,85 +1070,6 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn get_full_backup(&self, coin: u8) -> anyhow::Result<Vec<AccountBackup>> {
-        let mut statement = self.connection.prepare(
-            "SELECT name, seed, aindex, a.sk AS z_sk, ivk, a.address AS z_addr, t.sk as t_sk, t.address AS t_addr, \
-            o.sk as o_sk, o.fvk as o_fvk \
-            FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account LEFT JOIN orchard_addrs o ON a.id_account = o.account")?;
-        let rows = statement.query_map([], |r| {
-            let name: String = r.get(0)?;
-            let seed: Option<String> = r.get(1)?;
-            let index: u32 = r.get(2)?;
-            let z_sk: Option<String> = r.get(3)?;
-            let ivk: String = r.get(4)?;
-            let z_addr: String = r.get(5)?;
-            let t_sk: Option<String> = r.get(6)?;
-            let t_addr: Option<String> = r.get(7)?;
-            let o_sk: Option<Vec<u8>> = r.get(8)?;
-            let o_fvk: Option<Vec<u8>> = r.get(9)?;
-            let o_sk: Option<String> = o_sk.map(|v| hex::encode(v));
-            let o_fvk: Option<String> = o_fvk.map(|v| hex::encode(v));
-            Ok(AccountBackup {
-                version: 2,
-                coin,
-                name,
-                seed,
-                index,
-                z_sk,
-                ivk,
-                z_addr,
-                t_sk,
-                t_addr,
-                o_sk,
-                o_fvk,
-            })
-        })?;
-        let mut accounts: Vec<AccountBackup> = vec![];
-        for r in rows {
-            accounts.push(r?);
-        }
-        Ok(accounts)
-    }
-
-    pub fn restore_full_backup(&self, accounts: &[AccountBackup]) -> anyhow::Result<()> {
-        let coin = get_coin_id(self.coin_type);
-        for a in accounts {
-            if a.version != 2 {
-                anyhow::bail!("Unsupported backup version")
-            }
-            log::info!("{} {} {}", a.name, a.coin, coin);
-            if a.coin == coin {
-                let do_insert = || {
-                    self.connection.execute("INSERT INTO accounts(name, seed, aindex, sk, ivk, address) VALUES (?1,?2,?3,?4,?5,?6)",
-                                            params![a.name, a.seed, a.index, a.z_sk, a.ivk, a.z_addr])?;
-                    let id_account = self.connection.last_insert_rowid() as u32;
-                    if let Some(t_addr) = &a.t_addr {
-                        self.connection.execute(
-                            "INSERT INTO taddrs(account, sk, address) VALUES (?1,?2,?3)",
-                            params![id_account, a.t_sk, t_addr],
-                        )?;
-                    }
-                    if let Some(o_fvk) = &a.o_fvk {
-                        self.connection.execute(
-                            "INSERT INTO orchard_addrs(account, sk, fvk) VALUES (?1,?2,?3)",
-                            params![
-                                id_account,
-                                a.o_sk.as_ref().map(|v| hex::decode(&v).unwrap()),
-                                hex::decode(&o_fvk).unwrap()
-                            ],
-                        )?;
-                    }
-                    Ok::<_, anyhow::Error>(())
-                };
-                if let Err(e) = do_insert() {
-                    log::info!("{:?}", e);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn store_message(&self, account: u32, message: &ZMessage) -> anyhow::Result<()> {
         self.connection.execute("INSERT INTO messages(account, id_tx, sender, recipient, subject, body, timestamp, height, incoming, read) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
                                 params![account, message.id_tx, message.sender, message.recipient, message.subject, message.body, message.timestamp, message.height, message.incoming, false])?;
@@ -1279,65 +1183,6 @@ impl DbAdapter {
         Ok(reqs)
     }
 
-    pub fn import_from_syncdata(&mut self, account_info: &AccountInfo) -> anyhow::Result<Vec<u32>> {
-        // get id_account from fvk
-        // truncate received_notes, sapling_witnesses for account
-        // add new received_notes, sapling_witnesses
-        // add block
-        let id_account = self
-            .connection
-            .query_row(
-                "SELECT id_account FROM accounts WHERE ivk = ?1",
-                params![&account_info.fvk],
-                |row| {
-                    let id_account: u32 = row.get(0)?;
-                    Ok(id_account)
-                },
-            )
-            .map_err(wrap_query_no_rows("import_from_syncdata/id_account"))?;
-        self.connection.execute(
-            "DELETE FROM received_notes WHERE account = ?1",
-            params![id_account],
-        )?;
-        self.connection.execute(
-            "DELETE FROM transactions WHERE account = ?1",
-            params![id_account],
-        )?;
-        self.connection.execute(
-            "DELETE FROM messages WHERE account = ?1",
-            params![id_account],
-        )?;
-        let mut ids = vec![];
-        for tx in account_info.txs.iter() {
-            let mut tx_hash = hex::decode(&tx.hash)?;
-            tx_hash.reverse();
-            self.connection.execute("INSERT INTO transactions(account,txid,height,timestamp,value,address,memo,tx_index) VALUES (?1,?2,?3,?4,?5,'','',?6)",
-                                    params![id_account, &tx_hash, tx.height, tx.timestamp, tx.value, tx.index])?;
-            let id_tx = self.connection.last_insert_rowid() as u32;
-            ids.push(id_tx);
-            for n in tx.notes.iter() {
-                let spent = if n.spent == 0 { None } else { Some(n.spent) };
-                self.connection.execute("INSERT INTO received_notes(account,position,tx,height,output_index,diversifier,value,rcm,nf,spent,excluded) \
-                VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
-                                        params![id_account, n.position as i64, id_tx, n.height, n.output_index, hex::decode(&n.diversifier)?, n.value as i64,
-                                            hex::decode(&n.rcm)?, &n.nf, spent, false])?;
-                let id_note = self.connection.last_insert_rowid() as u32;
-                self.connection.execute(
-                    "INSERT INTO sapling_witnesses(note,height,witness) VALUES (?1,?2,?3) ON CONFLICT DO NOTHING",
-                    params![
-                        id_note,
-                        account_info.height,
-                        hex::decode(&n.witness).unwrap()
-                    ],
-                )?;
-            }
-        }
-        self.connection.execute("INSERT INTO blocks(height,hash,timestamp,sapling_tree) VALUES (?1,?2,?3,?4) ON CONFLICT(height) DO NOTHING",
-                                params![account_info.height, hex::decode(&account_info.hash)?, account_info.timestamp, hex::decode(&account_info.sapling_tree)?])?;
-        self.trim_to_height(account_info.height)?;
-        Ok(ids)
-    }
-
     fn network(&self) -> &'static Network {
         let chain = get_coin_chain(self.coin_type);
         chain.network()
@@ -1383,49 +1228,6 @@ pub struct AccountRec {
     id_account: u32,
     name: String,
     address: String,
-}
-
-#[serde_as]
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct PlainNote {
-    pub height: u32,
-    pub value: u64,
-    #[serde_as(as = "serde_with::hex::Hex")]
-    pub nf: Vec<u8>,
-    pub position: u64,
-    pub tx_index: u32,
-    pub output_index: u32,
-    pub spent: u32,
-    pub witness: String,
-    pub rcm: String,
-    pub diversifier: String,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct TxInfo {
-    pub height: u32,
-    pub timestamp: u32,
-    pub index: i64,
-    pub hash: String,
-    pub value: i64,
-    pub notes: Vec<PlainNote>,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct OutputInfo {
-    pub tx_index: u32,
-    pub index: u32,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct AccountInfo {
-    pub fvk: String,
-    pub height: u32,
-    pub balance: u64,
-    pub txs: Vec<TxInfo>,
-    pub hash: String,
-    pub timestamp: u32,
-    pub sapling_tree: String,
 }
 
 pub struct AccountData {

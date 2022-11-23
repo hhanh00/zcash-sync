@@ -1,8 +1,8 @@
 use age::secrecy::ExposeSecret;
-use serde::Serialize;
 use anyhow::anyhow;
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
+use serde::Serialize;
 use std::fs::File;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
@@ -43,8 +43,7 @@ impl FullEncryptedBackup {
 
     pub fn close(&self, pk: &str) -> anyhow::Result<()> {
         let data = self.make_zip()?;
-        let pubkey =
-            age::x25519::Recipient::from_str(pk).map_err(|e| anyhow!(e.to_string()))?;
+        let pubkey = age::x25519::Recipient::from_str(pk).map_err(|e| anyhow!(e.to_string()))?;
 
         let mut encrypted_file = File::create(self.tmp_dir.join(YWALLET_BAK))?;
         let encryptor = age::Encryptor::with_recipients(vec![Box::new(pubkey)]).unwrap();

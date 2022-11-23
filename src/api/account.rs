@@ -9,15 +9,13 @@ use crate::orchard::OrchardKeyBytes;
 use crate::taddr::{derive_taddr, derive_tkeys};
 use crate::unified::UnifiedAddressType;
 use crate::zip32::derive_zip32;
-use crate::{AccountInfo, KeyPack};
+use crate::KeyPack;
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
 use orchard::keys::{FullViewingKey, Scope};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::Serialize;
-use std::fs::File;
-use std::io::BufReader;
 use zcash_address::unified::{Address as UA, Receiver};
 use zcash_address::{ToAddress, ZcashAddress};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
@@ -355,20 +353,6 @@ pub fn derive_keys(
     let AccountData { seed, .. } = db.get_account_info(id_account)?;
     let seed = seed.unwrap();
     derive_zip32(c.chain.network(), &seed, account, external, address)
-}
-
-/// Import synchronization data obtained from external source
-/// # Arguments
-/// * `coin`: 0 for zcash, 1 for ycash
-/// * `file`: file that contains the synchronization data
-pub async fn import_sync_data(coin: u8, file: &str) -> anyhow::Result<()> {
-    let c = CoinConfig::get(coin);
-    let mut db = c.db()?;
-    let file = File::open(file)?;
-    let file = BufReader::new(file);
-    let account_info: AccountInfo = serde_json::from_reader(file)?;
-    db.import_from_syncdata(&account_info)?;
-    Ok(())
 }
 
 /// Get the Unified address

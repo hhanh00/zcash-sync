@@ -146,12 +146,6 @@ struct CResult_____c_char make_payment_uri(char *address, uint64_t amount, char 
 
 struct CResult_____c_char parse_payment_uri(char *uri);
 
-struct CResult_____c_char generate_random_enc_key(void);
-
-struct CResult_____c_char get_full_backup(char *key);
-
-void restore_full_backup(char *key, char *backup);
-
 struct CResult_____c_char generate_key(void);
 
 struct CResult_u8 zip_backup(char *key, char *dst_dir);
@@ -184,5 +178,3 @@ bool has_metal(void);
 bool has_gpu(void);
 
 void use_gpu(bool v);
-
-void import_sync_file(uint8_t coin, char *path);
