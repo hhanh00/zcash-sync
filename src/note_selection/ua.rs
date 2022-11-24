@@ -10,12 +10,15 @@ pub fn decode(network: &Network, address: &str) -> anyhow::Result<[Option<Destin
     if let Ok(data) = decode_payment_address(network.hrp_sapling_payment_address(), address) {
         let destination = Destination::Sapling(data.to_bytes());
         destinations[Pool::Sapling as usize] = Some(destination);
-    }
-    else if let Ok(Some(TransparentAddress::PublicKey(data))) = decode_transparent_address(&network.b58_pubkey_address_prefix(), &network.b58_script_address_prefix(), address) {
+    } else if let Ok(Some(TransparentAddress::PublicKey(data))) = decode_transparent_address(
+        &network.b58_pubkey_address_prefix(),
+        &network.b58_script_address_prefix(),
+        address,
+    ) {
         let destination = Destination::Transparent(data);
         destinations[Pool::Transparent as usize] = Some(destination);
-    }
-    else if let Ok(address) = ZcashAddress::try_from_encoded(address) {  // ZcashAddress only supports Zcash
+    } else if let Ok(address) = ZcashAddress::try_from_encoded(address) {
+        // ZcashAddress only supports Zcash
         match address.kind {
             AddressKind::Sprout(_) => {}
             AddressKind::Sapling(data) => {

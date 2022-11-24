@@ -1,10 +1,10 @@
-use zcash_primitives::consensus::Network;
 use super::{types::*, Result};
 use crate::note_selection::fee::FeeCalculator;
 use crate::note_selection::ua::decode;
 use crate::note_selection::TransactionBuilderError::TxTooComplex;
 use crate::note_selection::{TransactionBuilderError, MAX_ATTEMPTS};
 use crate::Hash;
+use zcash_primitives::consensus::Network;
 use zcash_primitives::memo::MemoBytes;
 
 pub fn sum_utxos(utxos: &[UTXO]) -> Result<PoolAllocation> {

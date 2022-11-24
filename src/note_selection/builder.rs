@@ -26,7 +26,7 @@ use zcash_primitives::sapling::prover::TxProver;
 use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
 use zcash_primitives::transaction::builder::Builder;
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut};
-use zcash_primitives::transaction::sighash::{SignableInput, signature_hash};
+use zcash_primitives::transaction::sighash::{signature_hash, SignableInput};
 use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_primitives::transaction::{Transaction, TransactionData, TxVersion};
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
@@ -56,8 +56,9 @@ impl TxBuilderContext {
             let TreeCheckpoint { tree, .. } = db.get_tree_by_name(height, "orchard")?;
             let hasher = OrchardHasher::new();
             Some(tree.root(32, &ORCHARD_ROOTS, &hasher))
-        }
-        else { None };
+        } else {
+            None
+        };
         let context = TxBuilderContext {
             height,
             sapling_anchor,

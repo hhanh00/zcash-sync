@@ -11,8 +11,8 @@ pub use utxo::fetch_utxos;
 
 use crate::api::recipient::Recipient;
 use thiserror::Error;
-use zcash_primitives::consensus::Network;
 use ua::decode;
+use zcash_primitives::consensus::Network;
 use zcash_primitives::memo::Memo;
 
 #[derive(Error, Debug)]
