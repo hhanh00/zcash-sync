@@ -173,10 +173,11 @@ pub fn decode_transaction(
                 }
             }
         }
-        contacts = contact_decoder.finalize()?;
+        contacts.extend(contact_decoder.finalize()?.into_iter());
     }
 
     if let Some(orchard_bundle) = tx.orchard_bundle() {
+        let mut contact_decoder = ContactDecoder::new(orchard_bundle.actions().len());
         if let Some((orchard_ivk, orchard_ovk)) = decryption_keys.orchard_keys.clone() {
             for action in orchard_bundle.actions().iter() {
                 let domain = OrchardDomain::for_action(action);
@@ -197,7 +198,9 @@ pub fn decode_transaction(
                     action.cv_net(),
                     &action.encrypted_note().out_ciphertext,
                 ) {
-                    let memo = Memo::try_from(MemoBytes::from_bytes(&memo)?)?;
+                    let memo_bytes = MemoBytes::from_bytes(&memo)?;
+                    let _ = contact_decoder.add_memo(&memo_bytes); // ignore memo that is not for contacts, if we cannot decode it with ovk, we didn't make create this memo
+                    let memo = Memo::try_from(memo_bytes)?;
                     oaddress = Some(orchard_as_unified(network, &pa).encode());
                     if memo != Memo::Empty {
                         tx_memo = memo;
@@ -205,6 +208,7 @@ pub fn decode_transaction(
                 }
             }
         }
+        contacts.extend(&mut contact_decoder.finalize()?.into_iter());
     }
 
     let address = zaddress.or(oaddress).or(taddress).unwrap_or(String::new());

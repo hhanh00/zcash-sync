@@ -46,13 +46,16 @@ pub async fn build_tx_plan(
         } else {
             r.max_amount_per_note
         };
-        while amount > 0 {
+        loop {
             let a = min(amount, max_amount_per_note);
             let memo_bytes: MemoBytes = r.memo.clone().into();
             let order = Order::new(network, id_order, &r.address, a, memo_bytes);
             orders.push(order);
             amount -= a;
             id_order += 1;
+            if amount == 0 {
+                break;
+            } // at least one note even when amount = 0
         }
     }
     let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;

@@ -20,7 +20,7 @@ pub struct RecipientShort {
     pub amount: u64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RecipientMemo {
     pub address: String,
     pub amount: u64,

@@ -298,7 +298,6 @@ pub fn build_tx_plan<F: FeeCalculator>(
 ) -> Result<TransactionPlan> {
     let mut fee = 0;
 
-    println!("build_tx_plan");
     for _ in 0..MAX_ATTEMPTS {
         let balances = sum_utxos(utxos)?;
         let (groups, amounts) = group_orders(&orders, fee)?;
