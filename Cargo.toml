@@ -55,6 +55,8 @@ tiny-bip39 = "0.8"
 rand = "0.8.4"
 rusqlite = { version = "0.27.0", features = ["bundled", "modern_sqlite", "backup"] }
 zip = "0.6"
+# Workaround for https://github.com/gyscos/zstd-rs/issues/177
+zstd-sys = "=2.0.1+zstd.1.5.2"
 age = "0.9"
 jubjub = "0.9.0"
 bls12_381 = "0.7"
