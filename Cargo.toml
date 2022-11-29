@@ -120,7 +120,7 @@ apple_metal = ["metal", "objc", "block"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
-rev = "0bd12ed1a3108d1a9b7ede794981764728f63e03"
+rev = "86bb1d12e0230c0bf40758fd7d57f3e4c104e36e"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
