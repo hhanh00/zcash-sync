@@ -16,7 +16,10 @@ pub async fn fetch_utxos(
     let db = coin.db.as_ref().unwrap();
     let db = db.lock().unwrap();
     if excluded_flags & 2 == 0 {
-        utxos.extend(db.get_unspent_received_notes(account, checkpoint_height)?);
+        utxos.extend(db.get_unspent_received_notes(account, checkpoint_height, false)?);
+    }
+    if excluded_flags & 4 == 0 {
+        utxos.extend(db.get_unspent_received_notes(account, checkpoint_height, true)?);
     }
     Ok(utxos)
 }

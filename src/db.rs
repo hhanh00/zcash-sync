@@ -633,14 +633,15 @@ impl DbAdapter {
         &self,
         account: u32,
         checkpoint_height: u32,
+        orchard: bool,
     ) -> anyhow::Result<Vec<UTXO>> {
         let mut notes = vec![];
 
         let mut statement = self.connection.prepare(
             "SELECT id_note, diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL AND account = ?2 AND rho IS NULL
-        AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = ?1
+        AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = ?1 AND r.orchard = ?3
         AND r.id_note = w.note")?;
-        let rows = statement.query_map(params![checkpoint_height, account], |row| {
+        let rows = statement.query_map(params![checkpoint_height, account, orchard], |row| {
             let id_note: u32 = row.get(0)?;
             let diversifier: Vec<u8> = row.get(1)?;
             let amount: i64 = row.get(2)?;

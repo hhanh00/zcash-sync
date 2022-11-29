@@ -34,7 +34,7 @@ pub async fn build_tx_plan(
         let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
         (fvk, checkpoint_height)
     };
-    let change_address = get_unified_address(coin, account, true, true, true)?;
+    let change_address = get_unified_address(coin, account, 7)?;
     let context = TxBuilderContext::from_height(coin, checkpoint_height)?;
 
     let mut orders = vec![];
@@ -144,17 +144,36 @@ pub async fn build_max_tx(
     Err(TransactionBuilderError::TxTooComplex)
 }
 
-/// Make a transaction that shields the transparent balance
-pub async fn shield_taddr(coin: u8, account: u32, confirmations: u32) -> anyhow::Result<String> {
-    let address = get_unified_address(coin, account, false, true, true)?; // get our own unified address
+pub enum AmountOrMax {
+    Amount(u64),
+    Max
+}
+
+pub async fn transfer_pools(coin: u8, account: u32, from_pool: u8, to_pool: u8, amount: AmountOrMax,
+    confirmations: u32) -> anyhow::Result<TransactionPlan> {
+    let address = get_unified_address(coin, account, to_pool)?; // get our own unified address
+    let a = match amount {
+        AmountOrMax::Amount(a) => a,
+        AmountOrMax::Max => 0,
+    };
     let recipient = RecipientMemo {
         address,
-        amount: 0,
+        amount: a,
         memo: Memo::from_str("Shield Transparent Balance")?,
         max_amount_per_note: 0,
     };
     let last_height = get_latest_height().await?;
-    let tx_plan = build_max_tx(coin, account, last_height, &recipient, 2, confirmations).await?;
+    let tx_plan = match amount {
+        AmountOrMax::Amount(_) => build_tx_plan(coin, account, last_height, slice::from_ref(&recipient),
+                                                !from_pool, confirmations).await?,
+        AmountOrMax::Max => build_max_tx(coin, account, last_height, &recipient, !from_pool, confirmations).await?,
+    };
+    Ok(tx_plan)
+}
+
+/// Make a transaction that shields the transparent balance
+pub async fn shield_taddr(coin: u8, account: u32, confirmations: u32) -> anyhow::Result<String> {
+    let tx_plan = transfer_pools(coin, account, 1, 6, AmountOrMax::Max, confirmations).await?;
     let tx_id = sign_and_broadcast(coin, account, &tx_plan).await?;
     log::info!("TXID: {}", tx_id);
     Ok(tx_id)

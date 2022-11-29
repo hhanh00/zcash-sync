@@ -105,6 +105,13 @@ void rescan_from(uint32_t height);
 
 struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t id_account);
 
+struct CResult_____c_char transfer_pools(uint8_t coin,
+                                         uint32_t account,
+                                         uint8_t from_pool,
+                                         uint8_t to_pool,
+                                         uint64_t amount,
+                                         uint32_t confirmations);
+
 struct CResult_____c_char shield_taddr(uint8_t coin, uint32_t account, uint32_t confirmations);
 
 void scan_transparent_accounts(uint32_t gap_limit);
@@ -116,7 +123,7 @@ struct CResult_____c_char prepare_multi_payment(uint8_t coin,
 
 struct CResult_____c_char transaction_report(uint8_t coin, char *plan);
 
-struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx, int64_t _port);
+struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx_plan, int64_t _port);
 
 struct CResult_____c_char sign_and_broadcast(uint8_t coin, uint32_t account, char *tx_plan);
 

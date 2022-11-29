@@ -12,6 +12,7 @@ use std::path::Path;
 use std::sync::Mutex;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
+use crate::api::payment_v2::AmountOrMax;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -414,6 +415,24 @@ pub async unsafe extern "C" fn get_taddr_balance(coin: u8, id_account: u32) -> C
         crate::api::account::get_taddr_balance(coin, id_account).await
     };
     to_cresult(res)
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn transfer_pools(
+    coin: u8,
+    account: u32,
+    from_pool: u8, to_pool: u8,
+    amount: u64,
+    confirmations: u32,
+) -> CResult<*mut c_char> {
+    let res = async move {
+        let tx_plan = crate::api::payment_v2::transfer_pools(coin, account, from_pool, to_pool,
+                                                             AmountOrMax::Amount(amount), confirmations).await?;
+        let tx_plan = serde_json::to_string(&tx_plan)?;
+        Ok::<_, anyhow::Error>(tx_plan)
+    };
+    to_cresult_str(res.await)
 }
 
 #[tokio::main]

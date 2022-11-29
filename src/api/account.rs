@@ -365,16 +365,14 @@ pub fn derive_keys(
 pub fn get_unified_address(
     coin: u8,
     id_account: u32,
-    t: bool,
-    s: bool,
-    o: bool,
+    address_type: u8,
 ) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
     let tpe = UnifiedAddressType {
-        transparent: t,
-        sapling: s,
-        orchard: o,
+        transparent: address_type & 1 != 0,
+        sapling: address_type & 2 != 0,
+        orchard: address_type & 4 != 0,
     };
     let address = crate::get_unified_address(c.chain.network(), &db, id_account, Some(tpe))?; // use ua settings
     Ok(address)
@@ -390,11 +388,7 @@ fn get_sapling_address(coin: u8, id_account: u32) -> anyhow::Result<String> {
 pub fn get_address(coin: u8, id_account: u32, address_type: u8) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);
     let address = if c.chain.has_unified() {
-        let t = address_type & 1 != 0;
-        let s = address_type & 2 != 0;
-        let o = address_type & 4 != 0;
-
-        get_unified_address(coin, id_account, t, s, o)?
+        get_unified_address(coin, id_account, address_type)?
     } else {
         get_sapling_address(coin, id_account)?
     };
