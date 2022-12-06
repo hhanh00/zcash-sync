@@ -29,18 +29,18 @@ pub struct RecipientMemo {
 }
 
 impl RecipientMemo {
-    pub fn from_recipient(from: &str, r: &Recipient) -> Self {
+    pub fn from_recipient(from: &str, r: &Recipient) -> anyhow::Result<Self> {
         let memo = if !r.reply_to && r.subject.is_empty() {
             r.memo.clone()
         } else {
             encode_memo(from, r.reply_to, &r.subject, &r.memo)
         };
-        RecipientMemo {
+        Ok(RecipientMemo {
             address: r.address.clone(),
             amount: r.amount,
-            memo: Memo::from_str(&memo).unwrap(),
+            memo: Memo::from_str(&memo)?,
             max_amount_per_note: r.max_amount_per_note,
-        }
+        })
     }
 }
 
@@ -107,9 +107,9 @@ pub fn parse_recipients(recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> 
     let c = CoinConfig::get_active();
     let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
     let recipients: Vec<Recipient> = serde_json::from_str(recipients)?;
-    let recipient_memos: Vec<_> = recipients
+    let recipient_memos: anyhow::Result<Vec<_>> = recipients
         .iter()
         .map(|r| RecipientMemo::from_recipient(&address, r))
         .collect();
-    Ok(recipient_memos)
+    recipient_memos
 }

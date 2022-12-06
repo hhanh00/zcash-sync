@@ -728,7 +728,7 @@ fn test_tx_plan() {
         &Network::MainNetwork,
         "",
         0,
-        None,
+        &None,
         &utxos,
         &orders,
         &TransactionBuilderConfig {

@@ -15,7 +15,7 @@ use thiserror::Error;
 use warp_api_ffi::api::payment_uri::PaymentURI;
 use warp_api_ffi::api::recipient::{Recipient, RecipientMemo, RecipientShort};
 use warp_api_ffi::{
-    build_tx, get_secret_keys, AccountData, AccountInfo, AccountRec, CoinConfig, KeyPack,
+    build_tx, get_secret_keys, AccountData, AccountRec, CoinConfig, KeyPack,
     RaptorQDrops, TransactionPlan, TxRec,
 };
 
@@ -104,7 +104,6 @@ async fn main() -> anyhow::Result<()> {
                 split_data,
                 merge_data,
                 derive_keys,
-                instant_sync,
                 get_tx_plan,
                 build_from_plan,
             ],
@@ -191,9 +190,7 @@ pub fn get_unified_address(t: u8, s: u8, o: u8) -> Result<String, Error> {
     let address = warp_api_ffi::api::account::get_unified_address(
         c.coin,
         c.id_account,
-        t != 0,
-        s != 0,
-        o != 0,
+        t & s << 1 & o << 2,
     )?;
     Ok(address)
 }
@@ -242,7 +239,7 @@ pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<Transactio
         let AccountData { address, .. } = db.get_account_info(c.id_account)?;
         address
     };
-    let recipients: Vec<_> = payment
+    let recipients: anyhow::Result<Vec<_>> = payment
         .recipients
         .iter()
         .map(|p| RecipientMemo::from_recipient(&from, p))
@@ -251,7 +248,7 @@ pub async fn create_offline_tx(payment: Json<Payment>) -> Result<Json<Transactio
         c.coin,
         c.id_account,
         latest,
-        &recipients,
+        &recipients?,
         0,
         payment.confirmations,
     )
@@ -285,7 +282,7 @@ pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<Strin
             let AccountData { address, .. } = db.get_account_info(c.id_account)?;
             address
         };
-        let recipients: Vec<_> = payment
+        let recipients: anyhow::Result<Vec<_>> = payment
             .recipients
             .iter()
             .map(|p| RecipientMemo::from_recipient(&from, p))
@@ -294,7 +291,7 @@ pub async fn pay(payment: Json<Payment>, config: &State<Config>) -> Result<Strin
             c.coin,
             c.id_account,
             latest,
-            &recipients,
+            &recipients?,
             0,
             payment.confirmations,
         )
@@ -411,27 +408,6 @@ pub fn derive_keys(
         address,
     )?;
     Ok(Json(result))
-}
-
-#[post("/instant_sync")]
-pub async fn instant_sync() -> Result<(), Error> {
-    let c = CoinConfig::get_active();
-    let fvk = {
-        let db = c.db()?;
-        let AccountData { fvk, .. } = db.get_account_info(c.id_account)?;
-        fvk
-    };
-    let client = reqwest::Client::new();
-    let response = client
-        .post(format!("https://zec.hanh00.fun/api/scan_fvk?fvk={}", fvk))
-        .send()
-        .await?;
-    // let r = response.text().await?;
-    // println!("{}", r);
-    let account_info: AccountInfo = response.json().await?;
-    let mut db = c.db().unwrap();
-    db.import_from_syncdata(&account_info)?;
-    Ok(())
 }
 
 #[derive(Deserialize)]
