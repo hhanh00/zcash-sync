@@ -637,61 +637,64 @@ impl DbAdapter {
     ) -> anyhow::Result<Vec<UTXO>> {
         let mut notes = vec![];
 
-        let mut statement = self.connection.prepare(
-            "SELECT id_note, diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL AND account = ?2 AND rho IS NULL
-        AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = ?1 AND r.orchard = ?3
-        AND r.id_note = w.note")?;
-        let rows = statement.query_map(params![checkpoint_height, account, orchard], |row| {
-            let id_note: u32 = row.get(0)?;
-            let diversifier: Vec<u8> = row.get(1)?;
-            let amount: i64 = row.get(2)?;
-            let rcm: Vec<u8> = row.get(3)?;
-            let witness: Vec<u8> = row.get(4)?;
-            let source = Source::Sapling {
-                id_note,
-                diversifier: diversifier.try_into().unwrap(),
-                rseed: rcm.try_into().unwrap(),
-                witness,
-            };
-            Ok(UTXO {
-                id: id_note,
-                source,
-                amount: amount as u64,
-            })
-        })?;
-        for r in rows {
-            let note = r?;
-            notes.push(note);
+        if !orchard {
+            let mut statement = self.connection.prepare(
+                "SELECT id_note, diversifier, value, rcm, witness FROM received_notes r, sapling_witnesses w WHERE spent IS NULL AND account = ?2 AND rho IS NULL
+                    AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = ?1
+                    AND r.id_note = w.note")?;
+            let rows = statement.query_map(params![checkpoint_height, account], |row| {
+                let id_note: u32 = row.get(0)?;
+                let diversifier: Vec<u8> = row.get(1)?;
+                let amount: i64 = row.get(2)?;
+                let rcm: Vec<u8> = row.get(3)?;
+                let witness: Vec<u8> = row.get(4)?;
+                let source = Source::Sapling {
+                    id_note,
+                    diversifier: diversifier.try_into().unwrap(),
+                    rseed: rcm.try_into().unwrap(),
+                    witness,
+                };
+                Ok(UTXO {
+                    id: id_note,
+                    source,
+                    amount: amount as u64,
+                })
+            })?;
+            for r in rows {
+                let note = r?;
+                notes.push(note);
+            }
         }
-
-        let mut statement = self.connection.prepare(
-            "SELECT id_note, diversifier, value, rcm, rho, witness FROM received_notes r, orchard_witnesses w WHERE spent IS NULL AND account = ?2 AND rho IS NOT NULL
-        AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = ?1
-        AND r.id_note = w.note")?;
-        let rows = statement.query_map(params![checkpoint_height, account], |row| {
-            let id_note: u32 = row.get(0)?;
-            let diversifier: Vec<u8> = row.get(1)?;
-            let amount: i64 = row.get(2)?;
-            let rcm: Vec<u8> = row.get(3)?;
-            let rho: Vec<u8> = row.get(4).unwrap();
-            let witness: Vec<u8> = row.get(5)?;
-            let source = Source::Orchard {
-                id_note,
-                diversifier: diversifier.try_into().unwrap(),
-                rseed: rcm.try_into().unwrap(),
-                rho: rho.try_into().unwrap(),
-                witness,
-            };
-            Ok(UTXO {
-                id: id_note,
-                source,
-                amount: amount as u64,
-            })
-        })?;
-        for r in rows {
-            let note = r?;
-            notes.push(note);
-        }
+        else {
+            let mut statement = self.connection.prepare(
+                "SELECT id_note, diversifier, value, rcm, rho, witness FROM received_notes r, orchard_witnesses w WHERE spent IS NULL AND account = ?2 AND rho IS NOT NULL
+                AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = ?1
+                AND r.id_note = w.note")?;
+            let rows = statement.query_map(params![checkpoint_height, account], |row| {
+                let id_note: u32 = row.get(0)?;
+                let diversifier: Vec<u8> = row.get(1)?;
+                let amount: i64 = row.get(2)?;
+                let rcm: Vec<u8> = row.get(3)?;
+                let rho: Vec<u8> = row.get(4).unwrap();
+                let witness: Vec<u8> = row.get(5)?;
+                let source = Source::Orchard {
+                    id_note,
+                    diversifier: diversifier.try_into().unwrap(),
+                    rseed: rcm.try_into().unwrap(),
+                    rho: rho.try_into().unwrap(),
+                    witness,
+                };
+                Ok(UTXO {
+                    id: id_note,
+                    source,
+                    amount: amount as u64,
+                })
+            })?;
+            for r in rows {
+                let note = r?;
+                notes.push(note);
+            }
+        };
 
         Ok(notes)
     }
