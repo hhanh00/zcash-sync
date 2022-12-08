@@ -150,7 +150,7 @@ pub enum AmountOrMax {
 }
 
 pub async fn transfer_pools(coin: u8, account: u32, from_pool: u8, to_pool: u8, amount: AmountOrMax,
-    memo: &str, confirmations: u32) -> anyhow::Result<TransactionPlan> {
+    memo: &str, split_amount: u64, confirmations: u32) -> anyhow::Result<TransactionPlan> {
     let address = get_unified_address(coin, account, to_pool)?; // get our own unified address
     let a = match amount {
         AmountOrMax::Amount(a) => a,
@@ -160,7 +160,7 @@ pub async fn transfer_pools(coin: u8, account: u32, from_pool: u8, to_pool: u8, 
         address,
         amount: a,
         memo: Memo::from_str(memo)?,
-        max_amount_per_note: 0,
+        max_amount_per_note: split_amount,
     };
     let last_height = get_latest_height().await?;
     let tx_plan = match amount {
@@ -173,7 +173,7 @@ pub async fn transfer_pools(coin: u8, account: u32, from_pool: u8, to_pool: u8, 
 
 /// Make a transaction that shields the transparent balance
 pub async fn shield_taddr(coin: u8, account: u32, confirmations: u32) -> anyhow::Result<String> {
-    let tx_plan = transfer_pools(coin, account, 1, 6, AmountOrMax::Max, "Shield Transparent Balance", confirmations).await?;
+    let tx_plan = transfer_pools(coin, account, 1, 6, AmountOrMax::Max, "Shield Transparent Balance", 0, confirmations).await?;
     let tx_id = sign_and_broadcast(coin, account, &tx_plan).await?;
     log::info!("TXID: {}", tx_id);
     Ok(tx_id)

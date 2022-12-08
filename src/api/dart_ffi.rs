@@ -425,13 +425,14 @@ pub async unsafe extern "C" fn transfer_pools(
     from_pool: u8, to_pool: u8,
     amount: u64,
     memo: *mut c_char,
+    split_amount: u64,
     confirmations: u32,
 ) -> CResult<*mut c_char> {
     from_c_str!(memo);
     let res = async move {
         let tx_plan = crate::api::payment_v2::transfer_pools(coin, account, from_pool, to_pool,
              AmountOrMax::Amount(amount),
-             &memo, confirmations).await?;
+             &memo, split_amount, confirmations).await?;
         let tx_plan = serde_json::to_string(&tx_plan)?;
         Ok::<_, anyhow::Error>(tx_plan)
     };

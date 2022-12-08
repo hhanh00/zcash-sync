@@ -111,6 +111,7 @@ struct CResult_____c_char transfer_pools(uint8_t coin,
                                          uint8_t to_pool,
                                          uint64_t amount,
                                          char *memo,
+                                         uint64_t split_amount,
                                          uint32_t confirmations);
 
 struct CResult_____c_char shield_taddr(uint8_t coin, uint32_t account, uint32_t confirmations);
