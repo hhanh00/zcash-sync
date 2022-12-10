@@ -34,9 +34,10 @@ pub fn group_orders(orders: &[Order], fee: u64) -> Result<(Vec<OrderInfo>, Order
                 group_type |= 1 << i;
             }
         }
+        let amount = order.amount(fee)?;
         order_info.push(OrderInfo {
             group_type,
-            amount: order.amount,
+            amount,
         });
     }
 
@@ -189,6 +190,7 @@ pub fn fill(
     order_infos: &[OrderInfo],
     amounts: &OrderGroupAmounts,
     allocation: &FundAllocation,
+    fee: u64
 ) -> Result<Vec<Fill>> {
     assert_eq!(orders.len(), order_infos.len());
     let mut fills = vec![];
@@ -202,7 +204,7 @@ pub fn fill(
                 let fill = Fill {
                     id_order: Some(order.id),
                     destination: order.destinations[ilog2(info.group_type)].unwrap(),
-                    amount: order.amount,
+                    amount: order.amount(fee)?,
                     memo: order.memo.clone(),
                 };
                 fills.push(fill);
@@ -211,13 +213,13 @@ pub fn fill(
                 let fill1 = Fill {
                     id_order: Some(order.id),
                     destination: order.destinations[1].unwrap(),
-                    amount: (order.amount as f64 * f).round() as u64,
+                    amount: (order.amount(fee)? as f64 * f).round() as u64,
                     memo: order.memo.clone(),
                 };
                 let fill2 = Fill {
                     id_order: Some(order.id),
                     destination: order.destinations[2].unwrap(),
-                    amount: order.amount - fill1.amount,
+                    amount: order.amount(fee)? - fill1.amount,
                     memo: order.memo.clone(),
                 };
                 if fill1.amount != 0 {
@@ -310,7 +312,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
         );
         let net_chg = [s0 + s1 - s2, o0 + o1 - o2];
 
-        let mut fills = fill(&orders, &groups, &amounts, &allocation)?;
+        let mut fills = fill(&orders, &groups, &amounts, &allocation, fee)?;
 
         let (notes, change) = select_inputs(&utxos, &allocation)?;
         let change_destinations = decode(network, &config.change_address)?;

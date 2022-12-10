@@ -28,6 +28,15 @@ pub async fn build_tx_plan(
 ) -> note_selection::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
+
+    let mut recipient_fee = false;
+    for r in recipients {
+        if r.fee_included {
+            if recipient_fee { return Err(TransactionBuilderError::DuplicateRecipientFee) }
+            recipient_fee = true;
+        }
+    }
+
     let (fvk, checkpoint_height) = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
@@ -49,7 +58,7 @@ pub async fn build_tx_plan(
         loop {
             let a = min(amount, max_amount_per_note);
             let memo_bytes: MemoBytes = r.memo.clone().into();
-            let order = Order::new(network, id_order, &r.address, a, memo_bytes);
+            let order = Order::new(network, id_order, &r.address, a, false, memo_bytes);
             orders.push(order);
             amount -= a;
             id_order += 1;
@@ -57,6 +66,7 @@ pub async fn build_tx_plan(
                 break;
             } // at least one note even when amount = 0
         }
+        orders.last_mut().unwrap().take_fee = r.fee_included;
     }
     let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;
 
@@ -144,36 +154,25 @@ pub async fn build_max_tx(
     Err(TransactionBuilderError::TxTooComplex)
 }
 
-pub enum AmountOrMax {
-    Amount(u64),
-    Max
-}
-
-pub async fn transfer_pools(coin: u8, account: u32, from_pool: u8, to_pool: u8, amount: AmountOrMax,
-    memo: &str, split_amount: u64, confirmations: u32) -> anyhow::Result<TransactionPlan> {
+pub async fn transfer_pools(coin: u8, account: u32, from_pool: u8, to_pool: u8, amount: u64,
+    fee_included: bool, memo: &str, split_amount: u64, confirmations: u32) -> anyhow::Result<TransactionPlan> {
     let address = get_unified_address(coin, account, to_pool)?; // get our own unified address
-    let a = match amount {
-        AmountOrMax::Amount(a) => a,
-        AmountOrMax::Max => 0,
-    };
     let recipient = RecipientMemo {
         address,
-        amount: a,
+        amount,
+        fee_included,
         memo: Memo::from_str(memo)?,
         max_amount_per_note: split_amount,
     };
     let last_height = get_latest_height().await?;
-    let tx_plan = match amount {
-        AmountOrMax::Amount(_) => build_tx_plan(coin, account, last_height, slice::from_ref(&recipient),
-                                                !from_pool, confirmations).await?,
-        AmountOrMax::Max => build_max_tx(coin, account, last_height, &recipient, !from_pool, confirmations).await?,
-    };
+    let tx_plan = build_tx_plan(coin, account, last_height, slice::from_ref(&recipient),
+                                !from_pool, confirmations).await?;
     Ok(tx_plan)
 }
 
 /// Make a transaction that shields the transparent balance
-pub async fn shield_taddr(coin: u8, account: u32, confirmations: u32) -> anyhow::Result<String> {
-    let tx_plan = transfer_pools(coin, account, 1, 6, AmountOrMax::Max, "Shield Transparent Balance", 0, confirmations).await?;
+pub async fn shield_taddr(coin: u8, account: u32, amount: u64, confirmations: u32) -> anyhow::Result<String> {
+    let tx_plan = transfer_pools(coin, account, 1, 6, amount, true, "Shield Transparent Balance", 0, confirmations).await?;
     let tx_id = sign_and_broadcast(coin, account, &tx_plan).await?;
     log::info!("TXID: {}", tx_id);
     Ok(tx_id)

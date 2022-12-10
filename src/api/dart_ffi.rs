@@ -12,7 +12,6 @@ use std::path::Path;
 use std::sync::Mutex;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
-use crate::api::payment_v2::AmountOrMax;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -424,6 +423,7 @@ pub async unsafe extern "C" fn transfer_pools(
     account: u32,
     from_pool: u8, to_pool: u8,
     amount: u64,
+    fee_included: bool,
     memo: *mut c_char,
     split_amount: u64,
     confirmations: u32,
@@ -431,7 +431,7 @@ pub async unsafe extern "C" fn transfer_pools(
     from_c_str!(memo);
     let res = async move {
         let tx_plan = crate::api::payment_v2::transfer_pools(coin, account, from_pool, to_pool,
-             AmountOrMax::Amount(amount),
+             amount, fee_included,
              &memo, split_amount, confirmations).await?;
         let tx_plan = serde_json::to_string(&tx_plan)?;
         Ok::<_, anyhow::Error>(tx_plan)
@@ -444,9 +444,10 @@ pub async unsafe extern "C" fn transfer_pools(
 pub async unsafe extern "C" fn shield_taddr(
     coin: u8,
     account: u32,
+    amount: u64,
     confirmations: u32,
 ) -> CResult<*mut c_char> {
-    let res = crate::api::payment_v2::shield_taddr(coin, account, confirmations).await;
+    let res = crate::api::payment_v2::shield_taddr(coin, account, amount, confirmations).await;
     to_cresult_str(res)
 }
 

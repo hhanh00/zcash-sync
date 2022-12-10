@@ -110,11 +110,15 @@ struct CResult_____c_char transfer_pools(uint8_t coin,
                                          uint8_t from_pool,
                                          uint8_t to_pool,
                                          uint64_t amount,
+                                         bool fee_included,
                                          char *memo,
                                          uint64_t split_amount,
                                          uint32_t confirmations);
 
-struct CResult_____c_char shield_taddr(uint8_t coin, uint32_t account, uint32_t confirmations);
+struct CResult_____c_char shield_taddr(uint8_t coin,
+                                       uint32_t account,
+                                       uint64_t amount,
+                                       uint32_t confirmations);
 
 void scan_transparent_accounts(uint32_t gap_limit);
 

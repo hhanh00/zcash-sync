@@ -1,7 +1,7 @@
 use super::ser::MemoBytesProxy;
 use crate::note_selection::ua::decode;
 use crate::unified::orchard_as_unified;
-use crate::Hash;
+use crate::{Hash, TransactionBuilderError};
 use orchard::Address;
 use serde::{Deserialize, Serialize};
 use serde_hex::{SerHex, Strict};
@@ -103,7 +103,8 @@ pub struct UTXO {
 pub struct Order {
     pub id: u32,
     pub destinations: [Option<Destination>; 3],
-    pub amount: u64,
+    pub raw_amount: u64,
+    pub take_fee: bool,
     #[serde(with = "MemoBytesProxy")]
     pub memo: MemoBytes,
 }
@@ -200,13 +201,24 @@ impl Destination {
 }
 
 impl Order {
-    pub fn new(network: &Network, id: u32, address: &str, amount: u64, memo: MemoBytes) -> Self {
+    pub fn new(network: &Network, id: u32, address: &str, amount: u64, take_fee: bool, memo: MemoBytes) -> Self {
         let destinations = decode(network, address).unwrap();
         Order {
             id,
             destinations,
-            amount,
+            raw_amount: amount,
+            take_fee,
             memo,
+        }
+    }
+
+    pub fn amount(&self, fee: u64) -> Result<u64, TransactionBuilderError> {
+        if self.take_fee {
+            if self.raw_amount < fee { return Err(TransactionBuilderError::RecipientCannotPayFee) }
+            Ok(self.raw_amount - fee)
+        }
+        else {
+            Ok(self.raw_amount)
         }
     }
 }

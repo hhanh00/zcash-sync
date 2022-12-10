@@ -8,6 +8,7 @@ use zcash_primitives::memo::Memo;
 pub struct Recipient {
     pub address: String,
     pub amount: u64,
+    pub fee_included: bool,
     pub reply_to: bool,
     pub subject: String,
     pub memo: String,
@@ -24,6 +25,7 @@ pub struct RecipientShort {
 pub struct RecipientMemo {
     pub address: String,
     pub amount: u64,
+    pub fee_included: bool,
     pub memo: Memo,
     pub max_amount_per_note: u64,
 }
@@ -38,6 +40,7 @@ impl RecipientMemo {
         Ok(RecipientMemo {
             address: r.address.clone(),
             amount: r.amount,
+            fee_included: r.fee_included,
             memo: Memo::from_str(&memo)?,
             max_amount_per_note: r.max_amount_per_note,
         })
@@ -49,6 +52,7 @@ impl From<RecipientShort> for RecipientMemo {
         RecipientMemo {
             address: r.address,
             amount: r.amount,
+            fee_included: false,
             memo: Memo::Empty,
             max_amount_per_note: 0,
         }

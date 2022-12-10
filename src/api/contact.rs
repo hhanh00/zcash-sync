@@ -45,6 +45,7 @@ async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<
         .map(|m| RecipientMemo {
             address: address.clone(),
             amount: 0,
+            fee_included: false,
             memo: m.clone(),
             max_amount_per_note: 0,
         })

@@ -19,6 +19,10 @@ use zcash_primitives::memo::Memo;
 pub enum TransactionBuilderError {
     #[error("Not enough funds: Missing {0} zats")]
     NotEnoughFunds(u64),
+    #[error("Only one recipient can pay for the fees")]
+    DuplicateRecipientFee,
+    #[error("Recipient amount too low for the fees")]
+    RecipientCannotPayFee,
     #[error("Tx too complex")]
     TxTooComplex,
     #[error(transparent)]
@@ -47,7 +51,8 @@ pub fn recipients_to_orders(network: &Network, recipients: &[Recipient]) -> Resu
             Ok::<_, TransactionBuilderError>(Order {
                 id: i as u32,
                 destinations,
-                amount: r.amount,
+                raw_amount: r.amount,
+                take_fee: r.fee_included, // Caller must make sure that at most one recipient pays for the fees
                 memo: Memo::from_str(&r.memo).unwrap().into(),
             })
         })
