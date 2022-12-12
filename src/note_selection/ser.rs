@@ -1,26 +1,23 @@
 use crate::note_selection::types::{TransactionOutput, TransactionReport};
 use crate::TransactionPlan;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::memo::MemoBytes;
 
 #[derive(Serialize, Deserialize)]
-#[serde_as]
 #[serde(remote = "MemoBytes")]
 pub struct MemoBytesProxy(
-    #[serde_as(as = "serde_with::hex::Hex")]
     #[serde(getter = "get_memo_bytes")]
-    pub Vec<u8>,
+    pub String,
 );
 
-fn get_memo_bytes(memo: &MemoBytes) -> Vec<u8> {
-    memo.as_slice().to_vec()
+fn get_memo_bytes(memo: &MemoBytes) -> String {
+    hex::encode(memo.as_slice())
 }
 
 impl From<MemoBytesProxy> for MemoBytes {
     fn from(p: MemoBytesProxy) -> MemoBytes {
-        MemoBytes::from_bytes(&p.0).unwrap()
+        MemoBytes::from_bytes(&hex::decode(&p.0).unwrap()).unwrap()
     }
 }
 
