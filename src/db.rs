@@ -103,7 +103,7 @@ impl DbAdapter {
     }
 
     pub fn create_db(db_path: &str) -> anyhow::Result<()> {
-        let connection = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_CREATE)?;
+        let connection = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE)?;
         connection.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         connection.execute("PRAGMA synchronous = NORMAL", [])?;
         Ok(())
