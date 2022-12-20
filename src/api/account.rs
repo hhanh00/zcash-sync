@@ -351,7 +351,7 @@ pub fn derive_keys(
     let c = CoinConfig::get(coin);
     let db = c.db()?;
     let AccountData { seed, .. } = db.get_account_info(id_account)?;
-    let seed = seed.unwrap();
+    let seed = seed.ok_or_else(|| anyhow!("Account has no seed"))?;
     derive_zip32(c.chain.network(), &seed, account, external, address)
 }
 
