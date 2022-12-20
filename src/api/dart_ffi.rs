@@ -320,8 +320,8 @@ pub unsafe extern "C" fn valid_address(coin: u8, address: *mut c_char) -> bool {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn new_diversified_address() -> CResult<*mut c_char> {
-    let res = || crate::api::account::new_diversified_address();
+pub unsafe extern "C" fn new_diversified_address(ua_type: u8) -> CResult<*mut c_char> {
+    let res = || crate::api::account::new_diversified_address(ua_type);
     to_cresult_str(res())
 }
 

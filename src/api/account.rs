@@ -185,7 +185,11 @@ pub fn import_transparent_secret_key(coin: u8, id_account: u32, sk: &str) -> any
 }
 
 /// Generate a new diversified address
-pub fn new_diversified_address() -> anyhow::Result<String> {
+pub fn new_diversified_address(ua_type: u8) -> anyhow::Result<String> {
+    let ua_type = ua_type & 6; // don't include transparent component
+    if ua_type == 0 {
+        anyhow::bail!("Must include a shielded receiver");
+    }
     let c = CoinConfig::get_active();
     let db = c.db()?;
     let AccountData { fvk, .. } = db.get_account_info(c.id_account)?;
@@ -202,23 +206,28 @@ pub fn new_diversified_address() -> anyhow::Result<String> {
     db.store_diversifier(c.id_account, &new_diversifier_index)?;
 
     let orchard_keys = db.get_orchard(c.id_account)?;
-    let address = match orchard_keys {
-        Some(orchard_keys) => {
-            let orchard_fvk = FullViewingKey::from_bytes(&orchard_keys.fvk).unwrap();
-            let index = diversifier_index.0; // any sapling index is fine for orchard
-            let orchard_address = orchard_fvk.address_at(index, Scope::External);
-            let unified_address = UA(vec![
-                Receiver::Sapling(pa.to_bytes()),
-                Receiver::Orchard(orchard_address.to_raw_address_bytes()),
-            ]);
-            let address = ZcashAddress::from_unified(
-                c.chain.network().address_network().unwrap(),
-                unified_address,
-            );
-            address.encode()
-        }
-        None => encode_payment_address(c.chain.network().hrp_sapling_payment_address(), &pa),
-    };
+    if ua_type == 2 || orchard_keys.is_none() { // sapling only
+        return Ok(encode_payment_address(c.chain.network().hrp_sapling_payment_address(), &pa));
+    }
+
+    let orchard_keys = orchard_keys.unwrap();
+    let mut receivers = vec![];
+    if ua_type & 2 != 0 {
+        receivers.push(Receiver::Sapling(pa.to_bytes()));
+    }
+    if ua_type & 4 != 0 {
+        let orchard_fvk = FullViewingKey::from_bytes(&orchard_keys.fvk).unwrap();
+        let index = diversifier_index.0; // any sapling index is fine for orchard
+        let orchard_address = orchard_fvk.address_at(index, Scope::External);
+        receivers.push(Receiver::Orchard(orchard_address.to_raw_address_bytes()));
+    }
+
+    let unified_address = UA(receivers);
+    let address = ZcashAddress::from_unified(
+        c.chain.network().address_network().unwrap(),
+        unified_address,
+    );
+    let address = address.encode();
     Ok(address)
 }
 
