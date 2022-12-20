@@ -15,6 +15,8 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::path::Path;
+use anyhow::anyhow;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -103,6 +105,9 @@ impl DbAdapter {
     }
 
     pub fn create_db(db_path: &str) -> anyhow::Result<()> {
+        let path = Path::new(db_path);
+        let directory = path.parent().ok_or(anyhow!("Invalid path"))?;
+        std::fs::create_dir_all(directory)?;
         let connection = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE)?;
         connection.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         connection.execute("PRAGMA synchronous = NORMAL", [])?;
