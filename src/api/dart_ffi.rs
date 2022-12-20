@@ -99,13 +99,6 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn create_db(db_path: *mut c_char) -> CResult<u8> {
-    try_init_logger();
-    from_c_str!(db_path);
-    to_cresult(crate::db::DbAdapter::create_db(&db_path).and_then(|()| Ok(0u8)))
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<u8> {
     try_init_logger();
     from_c_str!(db_path);

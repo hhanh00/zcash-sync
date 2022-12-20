@@ -47,8 +47,6 @@ void deallocate_str(char *s);
 
 struct CResult_u8 init_wallet(uint8_t coin, char *db_path);
 
-struct CResult_u8 create_db(char *db_path);
-
 struct CResult_u8 migrate_db(uint8_t coin, char *db_path);
 
 struct CResult_u8 migrate_data_db(uint8_t coin);

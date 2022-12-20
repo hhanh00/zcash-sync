@@ -11,12 +11,10 @@ use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CompactTxStreamerClient, Hash};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
-use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::path::Path;
-use anyhow::anyhow;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -104,18 +102,9 @@ impl DbAdapter {
         })
     }
 
-    pub fn create_db(db_path: &str) -> anyhow::Result<()> {
-        let path = Path::new(db_path);
-        let directory = path.parent().ok_or(anyhow!("Invalid path"))?;
-        std::fs::create_dir_all(directory)?;
-        let connection = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE)?;
-        connection.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
-        connection.execute("PRAGMA synchronous = NORMAL", [])?;
-        Ok(())
-    }
-
     pub fn migrate_db(network: &Network, db_path: &str, has_ua: bool) -> anyhow::Result<()> {
         let connection = Connection::open(db_path)?;
+        Self::set_wal(&connection, true)?;
         migration::init_db(&connection, network, has_ua)?;
         Ok(())
     }
@@ -153,9 +142,20 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn set_wal(connection: &Connection, v: bool) -> anyhow::Result<()> {
+        if v {
+            connection.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
+            connection.execute("PRAGMA synchronous = NORMAL", [])?;
+        }
+        else {
+            connection.query_row("PRAGMA journal_mode = OFF", [], |_| Ok(()))?;
+        }
+        Ok(())
+    }
+
     pub fn disable_wal(db_path: &str) -> anyhow::Result<()> {
         let connection = Connection::open(db_path)?;
-        connection.query_row("PRAGMA journal_mode = OFF", [], |_| Ok(()))?;
+        Self::set_wal(&connection, false)?;
         Ok(())
     }
 
