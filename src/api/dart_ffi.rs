@@ -754,13 +754,6 @@ pub unsafe extern "C" fn derive_zip32(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn disable_wal(db_path: *mut c_char) {
-    from_c_str!(db_path);
-    let res = crate::db::DbAdapter::disable_wal(&db_path);
-    log_error(res)
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn has_cuda() -> bool {
     crate::gpu::has_cuda()
 }

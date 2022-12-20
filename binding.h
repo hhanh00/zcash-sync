@@ -180,8 +180,6 @@ struct CResult_____c_char derive_zip32(uint8_t coin,
                                        bool has_address,
                                        uint32_t address);
 
-void disable_wal(char *db_path);
-
 bool has_cuda(void);
 
 bool has_metal(void);

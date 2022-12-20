@@ -104,7 +104,6 @@ impl DbAdapter {
 
     pub fn migrate_db(network: &Network, db_path: &str, has_ua: bool) -> anyhow::Result<()> {
         let connection = Connection::open(db_path)?;
-        Self::set_wal(&connection, true)?;
         migration::init_db(&connection, network, has_ua)?;
         Ok(())
     }
@@ -139,23 +138,6 @@ impl DbAdapter {
                 params![height, tree],
             )?;
         }
-        Ok(())
-    }
-
-    pub fn set_wal(connection: &Connection, v: bool) -> anyhow::Result<()> {
-        if v {
-            connection.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
-            connection.execute("PRAGMA synchronous = NORMAL", [])?;
-        }
-        else {
-            connection.query_row("PRAGMA journal_mode = OFF", [], |_| Ok(()))?;
-        }
-        Ok(())
-    }
-
-    pub fn disable_wal(db_path: &str) -> anyhow::Result<()> {
-        let connection = Connection::open(db_path)?;
-        Self::set_wal(&connection, false)?;
         Ok(())
     }
 
