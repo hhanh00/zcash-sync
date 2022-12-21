@@ -201,7 +201,14 @@ impl Destination {
 }
 
 impl Order {
-    pub fn new(network: &Network, id: u32, address: &str, amount: u64, take_fee: bool, memo: MemoBytes) -> Self {
+    pub fn new(
+        network: &Network,
+        id: u32,
+        address: &str,
+        amount: u64,
+        take_fee: bool,
+        memo: MemoBytes,
+    ) -> Self {
         let destinations = decode(network, address).unwrap();
         Order {
             id,
@@ -214,10 +221,11 @@ impl Order {
 
     pub fn amount(&self, fee: u64) -> Result<u64, TransactionBuilderError> {
         if self.take_fee {
-            if self.raw_amount < fee { return Err(TransactionBuilderError::RecipientCannotPayFee) }
+            if self.raw_amount < fee {
+                return Err(TransactionBuilderError::RecipientCannotPayFee);
+            }
             Ok(self.raw_amount - fee)
-        }
-        else {
+        } else {
             Ok(self.raw_amount)
         }
     }

@@ -1,7 +1,11 @@
 use crate::coinconfig::CoinConfig;
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic, Seed};
-use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address, decode_transparent_address, encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address};
+use zcash_client_backend::encoding::{
+    decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address,
+    decode_transparent_address, encode_extended_full_viewing_key, encode_extended_spending_key,
+    encode_payment_address,
+};
 use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
@@ -79,17 +83,15 @@ pub fn is_valid_address(coin: u8, address: &str) -> bool {
     let network = c.chain.network();
     if decode_payment_address(network.hrp_sapling_payment_address(), address).is_ok() {
         true
-    }
-    else if let Ok(Some(_)) = decode_transparent_address(
+    } else if let Ok(Some(_)) = decode_transparent_address(
         &network.b58_pubkey_address_prefix(),
         &network.b58_script_address_prefix(),
-        address) {
+        address,
+    ) {
         true
-    }
-    else if zcash_client_backend::address::RecipientAddress::decode(network, address).is_some() {
+    } else if zcash_client_backend::address::RecipientAddress::decode(network, address).is_some() {
         true
-    }
-    else {
+    } else {
         false
     }
 }

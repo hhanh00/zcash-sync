@@ -35,10 +35,7 @@ pub fn group_orders(orders: &[Order], fee: u64) -> Result<(Vec<OrderInfo>, Order
             }
         }
         let amount = order.amount(fee)?;
-        order_info.push(OrderInfo {
-            group_type,
-            amount,
-        });
+        order_info.push(OrderInfo { group_type, amount });
     }
 
     let mut t0 = 0u64;
@@ -190,7 +187,7 @@ pub fn fill(
     order_infos: &[OrderInfo],
     amounts: &OrderGroupAmounts,
     allocation: &FundAllocation,
-    fee: u64
+    fee: u64,
 ) -> Result<Vec<Fill>> {
     assert_eq!(orders.len(), order_infos.len());
     let mut fills = vec![];

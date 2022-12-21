@@ -6,10 +6,7 @@ use zcash_primitives::memo::MemoBytes;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "MemoBytes")]
-pub struct MemoBytesProxy(
-    #[serde(getter = "get_memo_bytes")]
-    pub String,
-);
+pub struct MemoBytesProxy(#[serde(getter = "get_memo_bytes")] pub String);
 
 fn get_memo_bytes(memo: &MemoBytes) -> String {
     hex::encode(memo.as_slice())

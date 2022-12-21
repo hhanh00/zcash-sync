@@ -15,8 +15,8 @@ use thiserror::Error;
 use warp_api_ffi::api::payment_uri::PaymentURI;
 use warp_api_ffi::api::recipient::{Recipient, RecipientMemo, RecipientShort};
 use warp_api_ffi::{
-    build_tx, get_secret_keys, AccountData, AccountRec, CoinConfig, KeyPack,
-    RaptorQDrops, TransactionPlan, TxRec,
+    build_tx, get_secret_keys, AccountData, AccountRec, CoinConfig, KeyPack, RaptorQDrops,
+    TransactionPlan, TxRec,
 };
 
 lazy_static! {
@@ -187,11 +187,8 @@ pub fn get_address() -> Result<String, Error> {
 #[get("/unified_address?<t>&<s>&<o>")]
 pub fn get_unified_address(t: u8, s: u8, o: u8) -> Result<String, Error> {
     let c = CoinConfig::get_active();
-    let address = warp_api_ffi::api::account::get_unified_address(
-        c.coin,
-        c.id_account,
-        t & s << 1 & o << 2,
-    )?;
+    let address =
+        warp_api_ffi::api::account::get_unified_address(c.coin, c.id_account, t & s << 1 & o << 2)?;
     Ok(address)
 }
 

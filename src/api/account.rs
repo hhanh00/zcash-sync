@@ -206,8 +206,12 @@ pub fn new_diversified_address(ua_type: u8) -> anyhow::Result<String> {
     db.store_diversifier(c.id_account, &new_diversifier_index)?;
 
     let orchard_keys = db.get_orchard(c.id_account)?;
-    if ua_type == 2 || orchard_keys.is_none() { // sapling only
-        return Ok(encode_payment_address(c.chain.network().hrp_sapling_payment_address(), &pa));
+    if ua_type == 2 || orchard_keys.is_none() {
+        // sapling only
+        return Ok(encode_payment_address(
+            c.chain.network().hrp_sapling_payment_address(),
+            &pa,
+        ));
     }
 
     let orchard_keys = orchard_keys.unwrap();
@@ -371,11 +375,7 @@ pub fn derive_keys(
 /// * t, s, o: include transparent, sapling, orchard receivers?
 ///
 /// The address depends on the UA settings and may include transparent, sapling & orchard receivers
-pub fn get_unified_address(
-    coin: u8,
-    id_account: u32,
-    address_type: u8,
-) -> anyhow::Result<String> {
+pub fn get_unified_address(coin: u8, id_account: u32, address_type: u8) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
     let tpe = UnifiedAddressType {

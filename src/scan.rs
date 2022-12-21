@@ -207,9 +207,8 @@ async fn sync_async_inner<'a>(
             }
         }
 
-        let mut db = db_builder.build()?;
+        let db = db_builder.build()?;
         db.store_block_timestamp(last_height, &last_hash, last_timestamp)?;
-        db.purge_old_witnesses(last_height - 500)?;
         height = last_height;
         let cb = progress_callback.lock().await;
         cb(progress.clone());
@@ -220,6 +219,8 @@ async fn sync_async_inner<'a>(
     if get_tx {
         get_transaction_details(coin).await?;
     }
+    let mut db = db_builder.build()?;
+    db.purge_old_witnesses(height)?;
 
     Ok(())
 }

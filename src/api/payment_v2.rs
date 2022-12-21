@@ -32,7 +32,9 @@ pub async fn build_tx_plan(
     let mut recipient_fee = false;
     for r in recipients {
         if r.fee_included {
-            if recipient_fee { return Err(TransactionBuilderError::DuplicateRecipientFee) }
+            if recipient_fee {
+                return Err(TransactionBuilderError::DuplicateRecipientFee);
+            }
             recipient_fee = true;
         }
     }
@@ -154,8 +156,17 @@ pub async fn build_max_tx(
     Err(TransactionBuilderError::TxTooComplex)
 }
 
-pub async fn transfer_pools(coin: u8, account: u32, from_pool: u8, to_pool: u8, amount: u64,
-    fee_included: bool, memo: &str, split_amount: u64, confirmations: u32) -> anyhow::Result<TransactionPlan> {
+pub async fn transfer_pools(
+    coin: u8,
+    account: u32,
+    from_pool: u8,
+    to_pool: u8,
+    amount: u64,
+    fee_included: bool,
+    memo: &str,
+    split_amount: u64,
+    confirmations: u32,
+) -> anyhow::Result<TransactionPlan> {
     let address = get_unified_address(coin, account, to_pool)?; // get our own unified address
     let recipient = RecipientMemo {
         address,
@@ -165,14 +176,37 @@ pub async fn transfer_pools(coin: u8, account: u32, from_pool: u8, to_pool: u8, 
         max_amount_per_note: split_amount,
     };
     let last_height = get_latest_height().await?;
-    let tx_plan = build_tx_plan(coin, account, last_height, slice::from_ref(&recipient),
-                                !from_pool, confirmations).await?;
+    let tx_plan = build_tx_plan(
+        coin,
+        account,
+        last_height,
+        slice::from_ref(&recipient),
+        !from_pool,
+        confirmations,
+    )
+    .await?;
     Ok(tx_plan)
 }
 
 /// Make a transaction that shields the transparent balance
-pub async fn shield_taddr(coin: u8, account: u32, amount: u64, confirmations: u32) -> anyhow::Result<String> {
-    let tx_plan = transfer_pools(coin, account, 1, 6, amount, true, "Shield Transparent Balance", 0, confirmations).await?;
+pub async fn shield_taddr(
+    coin: u8,
+    account: u32,
+    amount: u64,
+    confirmations: u32,
+) -> anyhow::Result<String> {
+    let tx_plan = transfer_pools(
+        coin,
+        account,
+        1,
+        6,
+        amount,
+        true,
+        "Shield Transparent Balance",
+        0,
+        confirmations,
+    )
+    .await?;
     let tx_id = sign_and_broadcast(coin, account, &tx_plan).await?;
     log::info!("TXID: {}", tx_id);
     Ok(tx_id)

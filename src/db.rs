@@ -651,8 +651,7 @@ impl DbAdapter {
                 let note = r?;
                 notes.push(note);
             }
-        }
-        else {
+        } else {
             let mut statement = self.connection.prepare(
                 "SELECT id_note, diversifier, value, rcm, rho, witness FROM received_notes r, orchard_witnesses w WHERE spent IS NULL AND account = ?2 AND rho IS NOT NULL
                 AND (r.excluded IS NULL OR NOT r.excluded) AND w.height = ?1
@@ -707,36 +706,54 @@ impl DbAdapter {
 
     pub fn purge_old_witnesses(&mut self, height: u32) -> anyhow::Result<()> {
         log::debug!("+purge_old_witnesses");
-        let min_height: Option<u32> = self.connection.query_row(
-            "SELECT MAX(height) FROM blocks WHERE height <= ?1",
-            params![height],
+        const BLOCKS_PER_HOUR: u32 = 60*60/75;
+        const BLOCKS_PER_DAY: u32 = 24*BLOCKS_PER_HOUR;
+        const BLOCKS_PER_MONTH: u32 = 30*BLOCKS_PER_DAY;
+        for i in 1..=24 { // 1 checkpoint per hour
+            self.prune_interval(height - i*BLOCKS_PER_HOUR, height - (i-1)*BLOCKS_PER_HOUR)?;
+        }
+        for i in 2..=30 { // 1 checkpoint per day
+            self.prune_interval(height - i*BLOCKS_PER_DAY, height - (i-1)*BLOCKS_PER_DAY)?;
+        }
+        for i in 2..=12 { // 1 checkpoint per 30 days
+            self.prune_interval(height - i*BLOCKS_PER_MONTH, height - (i-1)*BLOCKS_PER_MONTH)?;
+        }
+
+        log::debug!("-purge_old_witnesses");
+        Ok(())
+    }
+
+    // Only keep the oldest checkpoint in [low, high)
+    fn prune_interval(&mut self, low: u32, high: u32) -> anyhow::Result<()> {
+        log::info!("prune_interval {} {}", low, high);
+        let keep_height: Option<u32> = self.connection.query_row(
+            "SELECT MIN(height) FROM blocks WHERE height >= ?1 AND height < ?2",
+            params![low, high],
             |row| row.get(0),
         )?;
-
-        // Leave at least one sapling witness
-        if let Some(min_height) = min_height {
-            log::debug!("Purging witnesses older than {}", min_height);
+        if let Some(keep_height) = keep_height {
+            log::info!("keep {}", keep_height);
             let transaction = self.connection.transaction()?;
             transaction.execute(
-                "DELETE FROM sapling_witnesses WHERE height < ?1",
-                params![min_height],
+                "DELETE FROM sapling_witnesses WHERE height >= ?1 AND height < ?2 AND height != ?3",
+                params![low, high, keep_height],
             )?;
             transaction.execute(
-                "DELETE FROM orchard_witnesses WHERE height < ?1",
-                params![min_height],
+                "DELETE FROM orchard_witnesses WHERE height >= ?1 AND height < ?2 AND height != ?3",
+                params![low, high, keep_height],
             )?;
-            transaction.execute("DELETE FROM blocks WHERE height < ?1", params![min_height])?;
+            transaction.execute("DELETE FROM blocks WHERE height >= ?1 AND height < ?2 AND height != ?3",
+                params![low, high, keep_height])?;
             transaction.execute(
-                "DELETE FROM sapling_tree WHERE height < ?1",
-                params![min_height],
+                "DELETE FROM sapling_tree WHERE height >= ?1 AND height < ?2 AND height != ?3",
+                params![low, high, keep_height],
             )?;
             transaction.execute(
-                "DELETE FROM orchard_tree WHERE height < ?1",
-                params![min_height],
+                "DELETE FROM orchard_tree WHERE height >= ?1 AND height < ?2 AND height != ?3",
+                params![low, high, keep_height],
             )?;
             transaction.commit()?;
         }
-        log::debug!("-purge_old_witnesses");
         Ok(())
     }
 

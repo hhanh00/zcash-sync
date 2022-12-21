@@ -414,7 +414,8 @@ pub async unsafe extern "C" fn get_taddr_balance(coin: u8, id_account: u32) -> C
 pub async unsafe extern "C" fn transfer_pools(
     coin: u8,
     account: u32,
-    from_pool: u8, to_pool: u8,
+    from_pool: u8,
+    to_pool: u8,
     amount: u64,
     fee_included: bool,
     memo: *mut c_char,
@@ -423,9 +424,18 @@ pub async unsafe extern "C" fn transfer_pools(
 ) -> CResult<*mut c_char> {
     from_c_str!(memo);
     let res = async move {
-        let tx_plan = crate::api::payment_v2::transfer_pools(coin, account, from_pool, to_pool,
-             amount, fee_included,
-             &memo, split_amount, confirmations).await?;
+        let tx_plan = crate::api::payment_v2::transfer_pools(
+            coin,
+            account,
+            from_pool,
+            to_pool,
+            amount,
+            fee_included,
+            &memo,
+            split_amount,
+            confirmations,
+        )
+        .await?;
         let tx_plan = serde_json::to_string(&tx_plan)?;
         Ok::<_, anyhow::Error>(tx_plan)
     };
