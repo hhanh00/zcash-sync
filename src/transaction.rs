@@ -147,15 +147,18 @@ pub fn decode_transaction(
             if let Some((_note, pa, memo)) =
                 try_sapling_note_decryption(network, block_height, &pivk, output)
             {
-                let memo = Memo::try_from(memo)?;
+                let memo = Memo::try_from(memo);
                 if zaddress.is_none() {
                     zaddress = Some(encode_payment_address(
                         network.hrp_sapling_payment_address(),
                         &pa,
                     ));
                 }
-                if memo != Memo::Empty {
-                    tx_memo = memo;
+                match memo {
+                    Ok(memo) if memo != Memo::Empty => {
+                        tx_memo = memo;
+                    }
+                    _ => ()
                 }
             }
             if let Some((_note, pa, memo, ..)) =
@@ -166,10 +169,13 @@ pub fn decode_transaction(
                     network.hrp_sapling_payment_address(),
                     &pa,
                 ));
-                let memo = Memo::try_from(memo)?;
-                if memo != Memo::Empty {
-                    tx_memo = memo;
-                    incoming = false;
+                let memo = Memo::try_from(memo);
+                match memo {
+                    Ok(memo) if memo != Memo::Empty => {
+                        tx_memo = memo;
+                        incoming = false;
+                    }
+                    _ => ()
                 }
             }
         }
@@ -183,12 +189,15 @@ pub fn decode_transaction(
                 let domain = OrchardDomain::for_action(action);
                 if let Some((_note, pa, memo)) = try_note_decryption(&domain, &orchard_ivk, action)
                 {
-                    let memo = Memo::try_from(MemoBytes::from_bytes(&memo)?)?;
+                    let memo = Memo::try_from(MemoBytes::from_bytes(&memo)?);
                     if oaddress.is_none() {
                         oaddress = Some(orchard_as_unified(network, &pa).encode());
                     }
-                    if memo != Memo::Empty {
-                        tx_memo = memo;
+                    match memo {
+                        Ok(memo) if memo != Memo::Empty => {
+                            tx_memo = memo;
+                        }
+                        _ => ()
                     }
                 }
                 if let Some((_note, pa, memo, ..)) = try_output_recovery_with_ovk(
@@ -200,10 +209,14 @@ pub fn decode_transaction(
                 ) {
                     let memo_bytes = MemoBytes::from_bytes(&memo)?;
                     let _ = contact_decoder.add_memo(&memo_bytes); // ignore memo that is not for contacts, if we cannot decode it with ovk, we didn't make create this memo
-                    let memo = Memo::try_from(memo_bytes)?;
+                    let memo = Memo::try_from(memo_bytes);
                     oaddress = Some(orchard_as_unified(network, &pa).encode());
-                    if memo != Memo::Empty {
-                        tx_memo = memo;
+                    match memo {
+                        Ok(memo) if memo != Memo::Empty => {
+                            tx_memo = memo;
+                            incoming = false;
+                        }
+                        _ => ()
                     }
                 }
             }
