@@ -180,6 +180,10 @@ struct CResult_____c_char derive_zip32(uint8_t coin,
                                        bool has_address,
                                        uint32_t address);
 
+struct CResult_u32 save_send_template(uint8_t coin, char *template_);
+
+struct CResult_u8 delete_send_template(uint8_t coin, uint32_t id);
+
 bool has_cuda(void);
 
 bool has_metal(void);

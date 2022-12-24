@@ -12,6 +12,7 @@ use std::path::Path;
 use std::sync::Mutex;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
+use crate::template::SendTemplate;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -761,6 +762,30 @@ pub unsafe extern "C" fn derive_zip32(
         Ok(result)
     };
     to_cresult_str(res())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn save_send_template(coin: u8, template: *mut c_char) -> CResult<u32> {
+    from_c_str!(template);
+    let res = || {
+        let c = CoinConfig::get(coin);
+        let db = c.db()?;
+        let template: SendTemplate = serde_json::from_str(&template)?;
+        let id = db.store_template(&template)?;
+        Ok(id)
+    };
+    to_cresult(res())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn delete_send_template(coin: u8, id: u32) -> CResult<u8> {
+    let res = || {
+        let c = CoinConfig::get(coin);
+        let db = c.db()?;
+        db.delete_template(id)?;
+        Ok(0)
+    };
+    to_cresult(res())
 }
 
 #[no_mangle]

@@ -34,7 +34,7 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-const LATEST_VERSION: u32 = 5;
+const LATEST_VERSION: u32 = 6;
 
 pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyhow::Result<()> {
     connection.execute(
@@ -265,6 +265,21 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             "ALTER TABLE messages ADD incoming BOOL NOT NULL DEFAULT true",
             [],
         )?;
+    }
+
+    if version < 6 {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS send_templates (
+                id_send_template INTEGER PRIMARY KEY,
+                title TEXT NOT NULL,
+                address TEXT NOT NULL,
+                amount INTEGER NOT NULL,
+                fiat_amount DECIMAL NOT NULL,
+                fee_included BOOL NOT NULL,
+                fiat TEXT,
+                include_reply_to BOOL NOT NULL,
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL)", [])?;
     }
 
     if version != LATEST_VERSION {
