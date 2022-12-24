@@ -161,7 +161,7 @@ struct CResult_____c_char generate_key(void);
 
 struct CResult_u8 zip_backup(char *key, char *dst_dir);
 
-void unzip_backup(char *key, char *data_path, char *dst_dir);
+struct CResult_u8 unzip_backup(char *key, char *data_path, char *dst_dir);
 
 struct CResult_____c_char split_data(uint32_t id, char *data);
 

@@ -682,16 +682,16 @@ pub unsafe extern "C" fn unzip_backup(
     key: *mut c_char,
     data_path: *mut c_char,
     dst_dir: *mut c_char,
-) {
+) -> CResult<u8> {
     from_c_str!(key);
     from_c_str!(data_path);
     from_c_str!(dst_dir);
     let res = || {
         let backup = FullEncryptedBackup::new(&dst_dir);
         backup.restore(&key, &data_path)?;
-        Ok(())
+        Ok(0)
     };
-    log_error(res())
+    to_cresult(res())
 }
 
 #[no_mangle]
