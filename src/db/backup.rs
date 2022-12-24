@@ -36,7 +36,7 @@ impl FullEncryptedBackup {
         let dst_path = self.tmp_dir.join(db_name);
         let mut dst = Connection::open(&dst_path)?;
         let backup = Backup::new(src, &mut dst)?;
-        backup.run_to_completion(5, time::Duration::from_millis(250), None)?;
+        backup.run_to_completion(100, time::Duration::from_millis(250), None)?;
         self.db_names.push(db_name.to_string());
         Ok(())
     }
