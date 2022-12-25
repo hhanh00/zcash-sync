@@ -1,12 +1,13 @@
 //! Contact Address book
 
-use crate::api::payment_v2::{build_tx_plan, sign_and_broadcast};
+use crate::api::payment_v2::build_tx_plan;
 use crate::api::recipient::RecipientMemo;
 use crate::api::sync::get_latest_height;
 use crate::coinconfig::CoinConfig;
 use crate::contact::{serialize_contacts, Contact};
 use crate::db::AccountData;
 use zcash_primitives::memo::Memo;
+use crate::TransactionPlan;
 
 /// Store contact in the database
 /// # Arguments
@@ -28,15 +29,15 @@ pub fn store_contact(id: u32, name: &str, address: &str, dirty: bool) -> anyhow:
 /// Save the new/modified contacts to the blockchain
 /// # Arguments
 /// * `anchor_offset`: minimum confirmations required for note selection
-pub async fn commit_unsaved_contacts(anchor_offset: u32) -> anyhow::Result<String> {
+pub async fn commit_unsaved_contacts(anchor_offset: u32) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get_active();
     let contacts = c.db()?.get_unsaved_contacts()?;
     let memos = serialize_contacts(&contacts)?;
-    let tx_id = save_contacts_tx(&memos, anchor_offset).await?;
-    Ok(tx_id)
+    let tx_plan = save_contacts_tx(&memos, anchor_offset).await?;
+    Ok(tx_plan)
 }
 
-async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<String> {
+async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get_active();
     let last_height = get_latest_height().await?;
     let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
@@ -60,6 +61,5 @@ async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<
         anchor_offset,
     )
     .await?;
-    let tx_id = sign_and_broadcast(c.coin, c.id_account, &tx_plan).await?;
-    Ok(tx_id)
+    Ok(tx_plan)
 }

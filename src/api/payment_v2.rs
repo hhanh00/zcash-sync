@@ -194,7 +194,7 @@ pub async fn shield_taddr(
     account: u32,
     amount: u64,
     confirmations: u32,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<TransactionPlan> {
     let tx_plan = transfer_pools(
         coin,
         account,
@@ -207,9 +207,7 @@ pub async fn shield_taddr(
         confirmations,
     )
     .await?;
-    let tx_id = sign_and_broadcast(coin, account, &tx_plan).await?;
-    log::info!("TXID: {}", tx_id);
-    Ok(tx_id)
+    Ok(tx_plan)
 }
 
 fn mark_spent(coin: u8, ids: &[u32]) -> anyhow::Result<()> {

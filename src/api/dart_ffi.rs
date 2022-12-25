@@ -451,8 +451,12 @@ pub async unsafe extern "C" fn shield_taddr(
     amount: u64,
     confirmations: u32,
 ) -> CResult<*mut c_char> {
-    let res = crate::api::payment_v2::shield_taddr(coin, account, amount, confirmations).await;
-    to_cresult_str(res)
+    let res = async move {
+        let tx_plan = crate::api::payment_v2::shield_taddr(coin, account, amount, confirmations).await?;
+        let tx_plan_json = serde_json::to_string(&tx_plan)?;
+        Ok(tx_plan_json)
+    };
+    to_cresult_str(res.await)
 }
 
 #[tokio::main]
@@ -591,8 +595,12 @@ pub unsafe extern "C" fn store_contact(
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn commit_unsaved_contacts(anchor_offset: u32) -> CResult<*mut c_char> {
-    let res = crate::api::contact::commit_unsaved_contacts(anchor_offset).await;
-    to_cresult_str(res)
+    let res = async move {
+        let tx_plan = crate::api::contact::commit_unsaved_contacts(anchor_offset).await?;
+        let tx_plan_json = serde_json::to_string(&tx_plan)?;
+        Ok(tx_plan_json)
+    };
+    to_cresult_str(res.await)
 }
 
 #[no_mangle]
