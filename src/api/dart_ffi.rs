@@ -1,7 +1,7 @@
 use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
 use crate::db::FullEncryptedBackup;
 use crate::note_selection::TransactionReport;
-use crate::{ChainError, TransactionPlan, Tx};
+use crate::{ChainError, DbAdapter, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use lazy_static::lazy_static;
@@ -9,7 +9,8 @@ use log::Level;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
+use rusqlite::Connection;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
 use crate::template::SendTemplate;
@@ -41,12 +42,14 @@ fn to_cresult<T>(res: Result<T, anyhow::Error>) -> CResult<T> {
     match res {
         Ok(v) => CResult {
             value: v,
+            len: 0,
             error: std::ptr::null_mut::<c_char>(),
         },
         Err(e) => {
             log::error!("{}", e);
             CResult {
                 value: unsafe { std::mem::zeroed() },
+                len: 0,
                 error: to_c_str(e),
             }
         }
@@ -64,9 +67,37 @@ fn log_error(res: Result<(), anyhow::Error>) {
     }
 }
 
+fn to_cresult_bytes(res: Result<Vec<u8>, anyhow::Error>) -> CResult<*const u8> {
+    match res {
+        Ok(v) => {
+            let ptr = v.as_ptr();
+            let len = v.len();
+            std::mem::forget(v);
+            CResult {
+                value: ptr,
+                len: len as u32,
+                error: std::ptr::null_mut::<c_char>(),
+            }
+        },
+        Err(e) => {
+            log::error!("{}", e);
+            CResult {
+                value: unsafe { std::mem::zeroed() },
+                len: 0,
+                error: to_c_str(e.to_string()),
+            }
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn deallocate_str(s: *mut c_char) {
     let _ = CString::from_raw(s);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn deallocate_bytes(ptr: *mut u8, len: u32) {
+    drop(Vec::from_raw_parts(ptr, len as usize, len as usize));
 }
 
 fn try_init_logger() {
@@ -90,6 +121,7 @@ fn try_init_logger() {
 pub struct CResult<T> {
     value: T,
     error: *mut c_char,
+    pub len: u32,
 }
 
 #[no_mangle]
@@ -794,6 +826,86 @@ pub unsafe extern "C" fn delete_send_template(coin: u8, id: u32) -> CResult<u8> 
         Ok(0)
     };
     to_cresult(res())
+}
+
+fn with_account<T, F: Fn(u8, u32, &Connection) -> anyhow::Result<T>>(coin: u8, id: u32, f: F) -> anyhow::Result<T> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let connection = &db.connection;
+    f(coin, id, connection)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
+    let res = |coin: u8, id: u32, connection: &Connection| {
+        let accounts = crate::db::read::get_account_list(connection)?;
+        Ok(accounts)
+    };
+    to_cresult_bytes(with_account(coin, 0, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_available_account_id(coin: u8, id: u32) -> CResult<u32> {
+    let res = |coin: u8, id: u32, connection: &Connection| {
+        let new_id = crate::db::read::get_available_account_id(connection, id)?;
+        Ok(new_id)
+    };
+    to_cresult(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_t_addr(coin: u8, id: u32) -> CResult<*mut c_char> {
+    let res = |coin: u8, id: u32, connection: &Connection| {
+        let address = crate::db::read::get_t_addr(connection, id)?;
+        Ok(address)
+    };
+    to_cresult_str(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_sk(coin: u8, id: u32) -> CResult<*mut c_char> {
+    let res = |coin: u8, id: u32, connection: &Connection| {
+        let sk = crate::db::read::get_sk(connection, id)?;
+        Ok(sk)
+    };
+    to_cresult_str(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn update_account_name(coin: u8, id: u32, name: *mut c_char) -> CResult<u8> {
+    from_c_str!(name);
+    let res = |coin: u8, id: u32, connection: &Connection| {
+        crate::db::read::update_account_name(connection, id, &name)?;
+        Ok(0)
+    };
+    to_cresult(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_balances(coin: u8, id: u32, confirmed_height: u32) -> CResult<*const u8> {
+    let res = |coin: u8, id: u32, connection: &Connection| {
+        let data = crate::db::read::get_balances(connection, id, confirmed_height)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
+    let res = |coin: u8, _id: u32, connection: &Connection| {
+        let data = crate::db::read::get_db_height(connection)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, 0, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_notes(coin: u8, id: u32) -> CResult<*const u8> {
+    let res = |coin: u8, id: u32, connection: &Connection| {
+        let data = crate::db::read::get_notes(connection, id)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, id, res))
 }
 
 #[no_mangle]

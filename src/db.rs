@@ -26,6 +26,8 @@ use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
 
 mod backup;
 mod migration;
+pub mod data_generated;
+pub mod read;
 
 pub use backup::FullEncryptedBackup;
 use crate::template::SendTemplate;

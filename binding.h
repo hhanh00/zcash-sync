@@ -1,4 +1,3 @@
-#ifndef __APPLE__
 typedef char int8_t;
 typedef unsigned char uint8_t;
 typedef short int uint16_t;
@@ -10,8 +9,8 @@ typedef long int uint32_t;
 #ifndef __cplusplus
 typedef char bool;
 #endif
-#endif
 typedef void *DartPostCObjectFnType;
+
 
 #define QR_DATA_SIZE 256
 
@@ -22,28 +21,98 @@ typedef void *DartPostCObjectFnType;
 typedef struct CResult_u8 {
   uint8_t value;
   char *error;
+  uint32_t len;
 } CResult_u8;
 
 typedef struct CResult_u32 {
   uint32_t value;
   char *error;
+  uint32_t len;
 } CResult_u32;
 
 typedef struct CResult_____c_char {
   char *value;
   char *error;
+  uint32_t len;
 } CResult_____c_char;
 
 typedef struct CResult_u64 {
   uint64_t value;
   char *error;
+  uint32_t len;
 } CResult_u64;
+
+typedef struct CResult______u8 {
+  const uint8_t *value;
+  char *error;
+  uint32_t len;
+} CResult______u8;
+
+#define Account_VT_ID 4
+
+#define Account_VT_NAME 6
+
+#define Account_VT_BALANCE 8
+
+#define AccountVec_VT_ACCOUNTS 4
+
+#define Balance_VT_SHIELDED 4
+
+#define Balance_VT_UNCONFIRMED_SPENT 6
+
+#define Balance_VT_UNDER_CONFIRMED 10
+
+#define Balance_VT_EXCLUDED 12
+
+#define Balance_VT_SAPLING 14
+
+#define Balance_VT_ORCHARD 16
+
+#define Height_VT_HEIGHT 4
+
+#define Height_VT_TIMESTAMP 6
+
+#define ShieldedNote_VT_VALUE 8
+
+#define ShieldedNote_VT_SPENT 16
+
+#define ShieldedNoteVec_VT_NOTES 4
+
+#define AdressbookEntry_VT_ID_ADDRESS 4
+
+#define AdressbookEntry_VT_ADDRESS 8
+
+#define Addressbook_VT_CONTACTS 6
+
+#define AccountBalance_VT_COIN 4
+
+#define AccountBalance_VT_ID_ACCOUNT 6
+
+#define AccountBalance_VT_TBALANCE 12
+
+#define ZMessage_VT_TX_ID 6
+
+#define ZMessage_VT_INCOMING 8
+
+#define ZMessage_VT_SENDER 10
+
+#define ZMessage_VT_RECIPIENT 12
+
+#define ZMessage_VT_SUBJECT 14
+
+#define ZMessage_VT_BODY 16
+
+#define ZMessage_VT_READ 22
+
+#define ZMessages_VT_MESSAGES 4
 
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
 
 void deallocate_str(char *s);
+
+void deallocate_bytes(uint8_t *ptr, uint32_t len);
 
 struct CResult_u8 init_wallet(uint8_t coin, char *db_path);
 
@@ -183,6 +252,22 @@ struct CResult_____c_char derive_zip32(uint8_t coin,
 struct CResult_u32 save_send_template(uint8_t coin, char *template_);
 
 struct CResult_u8 delete_send_template(uint8_t coin, uint32_t id);
+
+struct CResult______u8 get_account_list(uint8_t coin);
+
+struct CResult_u32 get_available_account_id(uint8_t coin, uint32_t id);
+
+struct CResult_____c_char get_t_addr(uint8_t coin, uint32_t id);
+
+struct CResult_____c_char get_sk(uint8_t coin, uint32_t id);
+
+struct CResult_u8 update_account_name(uint8_t coin, uint32_t id, char *name);
+
+struct CResult______u8 get_balances(uint8_t coin, uint32_t id, uint32_t confirmed_height);
+
+struct CResult______u8 get_db_height(uint8_t coin);
+
+struct CResult______u8 get_notes(uint8_t coin, uint32_t id);
 
 bool has_cuda(void);
 
