@@ -2,7 +2,7 @@ use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
 use crate::db::data_generated::fb::SendTemplate;
 use crate::db::FullEncryptedBackup;
 use crate::note_selection::TransactionReport;
-use crate::{ChainError, DbAdapter, TransactionPlan, Tx};
+use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use lazy_static::lazy_static;
@@ -11,7 +11,7 @@ use rusqlite::Connection;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::Mutex;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
 
@@ -807,7 +807,6 @@ pub unsafe extern "C" fn derive_zip32(
 
 fn with_account<T, F: Fn(&Connection) -> anyhow::Result<T>>(
     coin: u8,
-    id: u32,
     f: F,
 ) -> anyhow::Result<T> {
     let c = CoinConfig::get(coin);
@@ -822,7 +821,7 @@ pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
         let accounts = crate::db::read::get_account_list(connection)?;
         Ok(accounts)
     };
-    to_cresult_bytes(with_account(coin, 0, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -831,7 +830,7 @@ pub unsafe extern "C" fn get_available_account_id(coin: u8, id: u32) -> CResult<
         let new_id = crate::db::read::get_available_account_id(connection, id)?;
         Ok(new_id)
     };
-    to_cresult(with_account(coin, id, res))
+    to_cresult(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -840,7 +839,7 @@ pub unsafe extern "C" fn get_t_addr(coin: u8, id: u32) -> CResult<*mut c_char> {
         let address = crate::db::read::get_t_addr(connection, id)?;
         Ok(address)
     };
-    to_cresult_str(with_account(coin, id, res))
+    to_cresult_str(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -849,7 +848,7 @@ pub unsafe extern "C" fn get_sk(coin: u8, id: u32) -> CResult<*mut c_char> {
         let sk = crate::db::read::get_sk(connection, id)?;
         Ok(sk)
     };
-    to_cresult_str(with_account(coin, id, res))
+    to_cresult_str(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -859,7 +858,7 @@ pub unsafe extern "C" fn update_account_name(coin: u8, id: u32, name: *mut c_cha
         crate::db::read::update_account_name(connection, id, &name)?;
         Ok(0)
     };
-    to_cresult(with_account(coin, id, res))
+    to_cresult(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -872,7 +871,7 @@ pub unsafe extern "C" fn get_balances(
         let data = crate::db::read::get_balances(connection, id, confirmed_height)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, id, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -881,7 +880,7 @@ pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
         let data = crate::db::read::get_db_height(connection)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, 0, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -890,7 +889,7 @@ pub unsafe extern "C" fn get_notes(coin: u8, id: u32) -> CResult<*const u8> {
         let data = crate::db::read::get_notes(connection, id)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, id, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -899,7 +898,7 @@ pub unsafe extern "C" fn get_txs(coin: u8, id: u32) -> CResult<*const u8> {
         let data = crate::db::read::get_txs(connection, id)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, id, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -908,7 +907,7 @@ pub unsafe extern "C" fn get_messages(coin: u8, id: u32) -> CResult<*const u8> {
         let data = crate::db::read::get_messages(connection, id)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, id, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -923,7 +922,7 @@ pub unsafe extern "C" fn get_prev_next_message(
         let data = crate::db::read::get_prev_next_message(connection, &subject, height, id)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, id, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -932,7 +931,7 @@ pub unsafe extern "C" fn get_templates(coin: u8) -> CResult<*const u8> {
         let data = crate::db::read::get_templates(connection)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, 0, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -965,7 +964,7 @@ pub unsafe extern "C" fn get_contacts(coin: u8) -> CResult<*const u8> {
         let data = crate::db::read::get_contacts(connection)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, 0, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -974,7 +973,7 @@ pub unsafe extern "C" fn get_pnl_txs(coin: u8, id: u32, timestamp: u32) -> CResu
         let data = crate::db::read::get_pnl_txs(connection, id, timestamp)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, id, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -988,7 +987,7 @@ pub unsafe extern "C" fn get_historical_prices(
         let data = crate::db::read::get_historical_prices(connection, timestamp, &currency)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, 0, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -997,7 +996,7 @@ pub unsafe extern "C" fn get_spendings(coin: u8, id: u32, timestamp: u32) -> CRe
         let data = crate::db::read::get_spendings(connection, id, timestamp)?;
         Ok(data)
     };
-    to_cresult_bytes(with_account(coin, id, res))
+    to_cresult_bytes(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -1006,7 +1005,7 @@ pub unsafe extern "C" fn update_excluded(coin: u8, id: u32, excluded: bool) -> C
         crate::db::read::update_excluded(connection, id, excluded)?;
         Ok(0)
     };
-    to_cresult(with_account(coin, id, res))
+    to_cresult(with_account(coin, res))
 }
 
 #[no_mangle]
@@ -1015,7 +1014,7 @@ pub unsafe extern "C" fn invert_excluded(coin: u8, id: u32) -> CResult<u8> {
         crate::db::read::invert_excluded(connection, id)?;
         Ok(0)
     };
-    to_cresult(with_account(coin, id, res))
+    to_cresult(with_account(coin, res))
 }
 
 #[no_mangle]

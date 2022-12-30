@@ -1,14 +1,6 @@
 use crate::db::data_generated::fb::*;
-use crate::DbAdapter;
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
-
-pub fn has_account(connection: &Connection) -> Result<bool> {
-    let res = connection
-        .query_row("SELECT 1 FROM accounts", [], |_| Ok(()))
-        .optional()?;
-    Ok(res.is_some())
-}
 
 pub fn get_account_list(connection: &Connection) -> Result<Vec<u8>> {
     let mut builder = flatbuffers::FlatBufferBuilder::new();

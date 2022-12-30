@@ -5,7 +5,7 @@ use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
 use crate::prices::Quote;
 use crate::sapling::SaplingViewKey;
 use crate::sync::tree::{CTree, TreeCheckpoint};
-use crate::taddr::{derive_tkeys, TBalance};
+use crate::taddr::derive_tkeys;
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CompactTxStreamerClient, Hash};
