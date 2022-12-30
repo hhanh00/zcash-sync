@@ -9,14 +9,14 @@ use crate::taddr::{derive_tkeys, TBalance};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CompactTxStreamerClient, Hash};
+use anyhow::anyhow;
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
-use rusqlite::{params, Connection, OptionalExtension, Transaction, OpenFlags};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::Path;
-use anyhow::anyhow;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -108,9 +108,15 @@ impl DbAdapter {
     }
 
     pub fn migrate_db(network: &Network, db_path: &str, has_ua: bool) -> anyhow::Result<()> {
-        let dir = Path::new(db_path).parent().ok_or(anyhow!("Invalid db path"))?;
+        let dir = Path::new(db_path)
+            .parent()
+            .ok_or(anyhow!("Invalid db path"))?;
         std::fs::create_dir_all(dir)?;
-        let connection = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE)?;
+        let connection = Connection::open_with_flags(
+            db_path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+        )?;
+        connection.query_row("PRAGMA journal_mode=wal", [], |_| { Ok(()) })?;
         migration::init_db(&connection, network, has_ua)?;
         Ok(())
     }
