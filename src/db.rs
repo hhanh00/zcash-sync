@@ -1102,25 +1102,7 @@ impl DbAdapter {
         )?;
         Ok(())
     }
-
-    pub fn store_t_scan(&self, addresses: &[TBalance]) -> anyhow::Result<()> {
-        self.connection.execute(
-            "CREATE TABLE IF NOT EXISTS taddr_scan(\
-            id INTEGER NOT NULL PRIMARY KEY,
-            address TEXT NOT NULL,
-            value INTEGER NOT NULL,
-            aindex INTEGER NOT NULL)",
-            [],
-        )?;
-        for addr in addresses.iter() {
-            self.connection.execute(
-                "INSERT INTO taddr_scan(address, value, aindex) VALUES (?1, ?2, ?3)",
-                params![addr.address, addr.balance, addr.index],
-            )?;
-        }
-        Ok(())
-    }
-
+    
     pub fn get_accounts(&self) -> anyhow::Result<Vec<AccountRec>> {
         let mut s = self
             .connection

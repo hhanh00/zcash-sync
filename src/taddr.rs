@@ -49,7 +49,7 @@ pub async fn scan_transparent_accounts(
     network: &Network,
     client: &mut CompactTxStreamerClient<Channel>,
     gap_limit: usize,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<TBalance>> {
     let c = CoinConfig::get_active();
     let mut addresses = vec![];
     let db = c.db()?;
@@ -77,8 +77,7 @@ pub async fn scan_transparent_accounts(
             aindex += 1;
         }
     }
-    db.store_t_scan(&addresses)?;
-    Ok(())
+    Ok(addresses)
 }
 
 pub fn derive_tkeys(

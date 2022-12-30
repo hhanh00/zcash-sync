@@ -132,6 +132,8 @@ typedef struct CResult______u8 {
 
 #define Spending_VT_RECIPIENT 4
 
+#define AddressBalance_VT_INDEX 4
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -213,7 +215,7 @@ struct CResult_____c_char shield_taddr(uint8_t coin,
                                        uint64_t amount,
                                        uint32_t confirmations);
 
-void scan_transparent_accounts(uint32_t gap_limit);
+struct CResult______u8 scan_transparent_accounts(uint32_t gap_limit);
 
 struct CResult_____c_char prepare_multi_payment(uint8_t coin,
                                                 uint32_t account,
@@ -310,12 +312,13 @@ struct CResult______u8 get_contacts(uint8_t coin);
 
 struct CResult______u8 get_pnl_txs(uint8_t coin, uint32_t id, uint32_t timestamp);
 
-struct CResult______u8 get_historical_prices(uint8_t coin,
-                                             uint32_t id,
-                                             uint32_t timestamp,
-                                             char *currency);
+struct CResult______u8 get_historical_prices(uint8_t coin, uint32_t timestamp, char *currency);
 
 struct CResult______u8 get_spendings(uint8_t coin, uint32_t id, uint32_t timestamp);
+
+struct CResult_u8 update_excluded(uint8_t coin, uint32_t id, bool excluded);
+
+struct CResult_u8 invert_excluded(uint8_t coin, uint32_t id);
 
 bool has_cuda(void);
 

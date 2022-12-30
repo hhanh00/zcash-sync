@@ -493,9 +493,9 @@ pub async unsafe extern "C" fn shield_taddr(
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn scan_transparent_accounts(gap_limit: u32) {
+pub async unsafe extern "C" fn scan_transparent_accounts(gap_limit: u32) -> CResult<*const u8> {
     let res = crate::api::account::scan_transparent_accounts(gap_limit as usize).await;
-    log_error(res)
+    to_cresult_bytes(res)
 }
 
 #[tokio::main]
@@ -964,7 +964,7 @@ pub unsafe extern "C" fn get_pnl_txs(coin: u8, id: u32, timestamp: u32) -> CResu
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_historical_prices(coin: u8, id: u32, timestamp: u32, currency: *mut c_char) -> CResult<*const u8> {
+pub unsafe extern "C" fn get_historical_prices(coin: u8, timestamp: u32, currency: *mut c_char) -> CResult<*const u8> {
     from_c_str!(currency);
     let res = |connection: &Connection| {
         let data = crate::db::read::get_historical_prices(connection, timestamp, &currency)?;
@@ -980,6 +980,24 @@ pub unsafe extern "C" fn get_spendings(coin: u8, id: u32, timestamp: u32) -> CRe
         Ok(data)
     };
     to_cresult_bytes(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn update_excluded(coin: u8, id: u32, excluded: bool) -> CResult<u8> {
+    let res = |connection: &Connection| {
+        crate::db::read::update_excluded(connection, id, excluded)?;
+        Ok(0)
+    };
+    to_cresult(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn invert_excluded(coin: u8, id: u32) -> CResult<u8> {
+    let res = |connection: &Connection| {
+        crate::db::read::invert_excluded(connection, id)?;
+        Ok(0)
+    };
+    to_cresult(with_account(coin, id, res))
 }
 
 #[no_mangle]

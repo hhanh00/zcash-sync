@@ -458,7 +458,19 @@ pub fn get_spendings(connection: &Connection, id: u32, timestamp: u32) -> Result
     let data = builder.finished_data().to_vec();
     Ok(data)
 }
+
+pub fn update_excluded(connection: &Connection, id: u32, excluded: bool) -> Result<()> {
+    connection.execute("UPDATE received_notes SET excluded = ?2 WHERE id_note = ?1", params![id, excluded])?;
+    Ok(())
+}
+
+pub fn invert_excluded(connection: &Connection, id: u32) -> Result<()> {
+    connection.execute("UPDATE received_notes SET excluded = NOT(COALESCE(excluded, 0)) WHERE account = ?1", [id])?;
+    Ok(())
+}
+
 /*
+        ,
 
         "SELECT timestamp, value FROM transactions WHERE account = ?1 AND timestamp >= ?2 ORDER BY timestamp DESC",
 

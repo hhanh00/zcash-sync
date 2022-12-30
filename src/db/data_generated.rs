@@ -3853,5 +3853,311 @@ impl SpendingVecT {
     })
   }
 }
+pub enum AddressBalanceOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct AddressBalance<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for AddressBalance<'a> {
+  type Inner = AddressBalance<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> AddressBalance<'a> {
+  pub const VT_INDEX: flatbuffers::VOffsetT = 4;
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 6;
+  pub const VT_BALANCE: flatbuffers::VOffsetT = 8;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    AddressBalance { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args AddressBalanceArgs<'args>
+  ) -> flatbuffers::WIPOffset<AddressBalance<'bldr>> {
+    let mut builder = AddressBalanceBuilder::new(_fbb);
+    builder.add_balance(args.balance);
+    if let Some(x) = args.address { builder.add_address(x); }
+    builder.add_index(args.index);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> AddressBalanceT {
+    let index = self.index();
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    let balance = self.balance();
+    AddressBalanceT {
+      index,
+      address,
+      balance,
+    }
+  }
+
+  #[inline]
+  pub fn index(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(AddressBalance::VT_INDEX, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AddressBalance::VT_ADDRESS, None)}
+  }
+  #[inline]
+  pub fn balance(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(AddressBalance::VT_BALANCE, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for AddressBalance<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("index", Self::VT_INDEX, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .visit_field::<u64>("balance", Self::VT_BALANCE, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct AddressBalanceArgs<'a> {
+    pub index: u32,
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub balance: u64,
+}
+impl<'a> Default for AddressBalanceArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    AddressBalanceArgs {
+      index: 0,
+      address: None,
+      balance: 0,
+    }
+  }
+}
+
+pub struct AddressBalanceBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> AddressBalanceBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_index(&mut self, index: u32) {
+    self.fbb_.push_slot::<u32>(AddressBalance::VT_INDEX, index, 0);
+  }
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AddressBalance::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn add_balance(&mut self, balance: u64) {
+    self.fbb_.push_slot::<u64>(AddressBalance::VT_BALANCE, balance, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> AddressBalanceBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    AddressBalanceBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<AddressBalance<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for AddressBalance<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("AddressBalance");
+      ds.field("index", &self.index());
+      ds.field("address", &self.address());
+      ds.field("balance", &self.balance());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct AddressBalanceT {
+  pub index: u32,
+  pub address: Option<String>,
+  pub balance: u64,
+}
+impl Default for AddressBalanceT {
+  fn default() -> Self {
+    Self {
+      index: 0,
+      address: None,
+      balance: 0,
+    }
+  }
+}
+impl AddressBalanceT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<AddressBalance<'b>> {
+    let index = self.index;
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let balance = self.balance;
+    AddressBalance::create(_fbb, &AddressBalanceArgs{
+      index,
+      address,
+      balance,
+    })
+  }
+}
+pub enum AddressBalanceVecOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct AddressBalanceVec<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for AddressBalanceVec<'a> {
+  type Inner = AddressBalanceVec<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> AddressBalanceVec<'a> {
+  pub const VT_VALUES: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    AddressBalanceVec { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args AddressBalanceVecArgs<'args>
+  ) -> flatbuffers::WIPOffset<AddressBalanceVec<'bldr>> {
+    let mut builder = AddressBalanceVecBuilder::new(_fbb);
+    if let Some(x) = args.values { builder.add_values(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> AddressBalanceVecT {
+    let values = self.values().map(|x| {
+      x.iter().map(|t| t.unpack()).collect()
+    });
+    AddressBalanceVecT {
+      values,
+    }
+  }
+
+  #[inline]
+  pub fn values(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<AddressBalance<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<AddressBalance>>>>(AddressBalanceVec::VT_VALUES, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for AddressBalanceVec<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<AddressBalance>>>>("values", Self::VT_VALUES, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct AddressBalanceVecArgs<'a> {
+    pub values: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<AddressBalance<'a>>>>>,
+}
+impl<'a> Default for AddressBalanceVecArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    AddressBalanceVecArgs {
+      values: None,
+    }
+  }
+}
+
+pub struct AddressBalanceVecBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> AddressBalanceVecBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_values(&mut self, values: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<AddressBalance<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AddressBalanceVec::VT_VALUES, values);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> AddressBalanceVecBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    AddressBalanceVecBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<AddressBalanceVec<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for AddressBalanceVec<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("AddressBalanceVec");
+      ds.field("values", &self.values());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct AddressBalanceVecT {
+  pub values: Option<Vec<AddressBalanceT>>,
+}
+impl Default for AddressBalanceVecT {
+  fn default() -> Self {
+    Self {
+      values: None,
+    }
+  }
+}
+impl AddressBalanceVecT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<AddressBalanceVec<'b>> {
+    let values = self.values.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();_fbb.create_vector(&w)
+    });
+    AddressBalanceVec::create(_fbb, &AddressBalanceVecArgs{
+      values,
+    })
+  }
+}
 }  // pub mod fb
 
