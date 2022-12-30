@@ -13,7 +13,7 @@ use std::sync::{Mutex, MutexGuard};
 use rusqlite::Connection;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
-use crate::template::SendTemplate;
+use crate::db::data_generated::fb::SendTemplate;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -804,13 +804,130 @@ pub unsafe extern "C" fn derive_zip32(
     to_cresult_str(res())
 }
 
+fn with_account<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, id: u32, f: F) -> anyhow::Result<T> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let connection = &db.connection;
+    f(connection)
+}
+
 #[no_mangle]
-pub unsafe extern "C" fn save_send_template(coin: u8, template: *mut c_char) -> CResult<u32> {
-    from_c_str!(template);
+pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let accounts = crate::db::read::get_account_list(connection)?;
+        Ok(accounts)
+    };
+    to_cresult_bytes(with_account(coin, 0, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_available_account_id(coin: u8, id: u32) -> CResult<u32> {
+    let res = |connection: &Connection| {
+        let new_id = crate::db::read::get_available_account_id(connection, id)?;
+        Ok(new_id)
+    };
+    to_cresult(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_t_addr(coin: u8, id: u32) -> CResult<*mut c_char> {
+    let res = |connection: &Connection| {
+        let address = crate::db::read::get_t_addr(connection, id)?;
+        Ok(address)
+    };
+    to_cresult_str(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_sk(coin: u8, id: u32) -> CResult<*mut c_char> {
+    let res = |connection: &Connection| {
+        let sk = crate::db::read::get_sk(connection, id)?;
+        Ok(sk)
+    };
+    to_cresult_str(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn update_account_name(coin: u8, id: u32, name: *mut c_char) -> CResult<u8> {
+    from_c_str!(name);
+    let res = |connection: &Connection| {
+        crate::db::read::update_account_name(connection, id, &name)?;
+        Ok(0)
+    };
+    to_cresult(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_balances(coin: u8, id: u32, confirmed_height: u32) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_balances(connection, id, confirmed_height)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_db_height(connection)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, 0, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_notes(coin: u8, id: u32) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_notes(connection, id)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_txs(coin: u8, id: u32) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_txs(connection, id)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_messages(coin: u8, id: u32) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_messages(connection, id)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_prev_next_message(coin: u8, id: u32, subject: *mut c_char, height: u32) -> CResult<*const u8> {
+    from_c_str!(subject);
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_prev_next_message(connection, &subject, height, id)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, id, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_templates(coin: u8) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_templates(connection)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, 0, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn save_send_template(coin: u8, template: *mut u8, len: u64) -> CResult<u32> {
+    let template: Vec<u8> = Vec::from_raw_parts(template, len as usize, len as usize);
     let res = || {
         let c = CoinConfig::get(coin);
         let db = c.db()?;
-        let template: SendTemplate = serde_json::from_str(&template)?;
+        let template = flatbuffers::root::<SendTemplate>(&template)?;
         let id = db.store_template(&template)?;
         Ok(id)
     };
@@ -828,81 +945,38 @@ pub unsafe extern "C" fn delete_send_template(coin: u8, id: u32) -> CResult<u8> 
     to_cresult(res())
 }
 
-fn with_account<T, F: Fn(u8, u32, &Connection) -> anyhow::Result<T>>(coin: u8, id: u32, f: F) -> anyhow::Result<T> {
-    let c = CoinConfig::get(coin);
-    let db = c.db()?;
-    let connection = &db.connection;
-    f(coin, id, connection)
-}
-
 #[no_mangle]
-pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
-    let res = |coin: u8, id: u32, connection: &Connection| {
-        let accounts = crate::db::read::get_account_list(connection)?;
-        Ok(accounts)
+pub unsafe extern "C" fn get_contacts(coin: u8) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_contacts(connection)?;
+        Ok(data)
     };
     to_cresult_bytes(with_account(coin, 0, res))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_available_account_id(coin: u8, id: u32) -> CResult<u32> {
-    let res = |coin: u8, id: u32, connection: &Connection| {
-        let new_id = crate::db::read::get_available_account_id(connection, id)?;
-        Ok(new_id)
-    };
-    to_cresult(with_account(coin, id, res))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn get_t_addr(coin: u8, id: u32) -> CResult<*mut c_char> {
-    let res = |coin: u8, id: u32, connection: &Connection| {
-        let address = crate::db::read::get_t_addr(connection, id)?;
-        Ok(address)
-    };
-    to_cresult_str(with_account(coin, id, res))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn get_sk(coin: u8, id: u32) -> CResult<*mut c_char> {
-    let res = |coin: u8, id: u32, connection: &Connection| {
-        let sk = crate::db::read::get_sk(connection, id)?;
-        Ok(sk)
-    };
-    to_cresult_str(with_account(coin, id, res))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn update_account_name(coin: u8, id: u32, name: *mut c_char) -> CResult<u8> {
-    from_c_str!(name);
-    let res = |coin: u8, id: u32, connection: &Connection| {
-        crate::db::read::update_account_name(connection, id, &name)?;
-        Ok(0)
-    };
-    to_cresult(with_account(coin, id, res))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn get_balances(coin: u8, id: u32, confirmed_height: u32) -> CResult<*const u8> {
-    let res = |coin: u8, id: u32, connection: &Connection| {
-        let data = crate::db::read::get_balances(connection, id, confirmed_height)?;
+pub unsafe extern "C" fn get_pnl_txs(coin: u8, id: u32, timestamp: u32) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_pnl_txs(connection, id, timestamp)?;
         Ok(data)
     };
     to_cresult_bytes(with_account(coin, id, res))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
-    let res = |coin: u8, _id: u32, connection: &Connection| {
-        let data = crate::db::read::get_db_height(connection)?;
+pub unsafe extern "C" fn get_historical_prices(coin: u8, id: u32, timestamp: u32, currency: *mut c_char) -> CResult<*const u8> {
+    from_c_str!(currency);
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_historical_prices(connection, timestamp, &currency)?;
         Ok(data)
     };
     to_cresult_bytes(with_account(coin, 0, res))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_notes(coin: u8, id: u32) -> CResult<*const u8> {
-    let res = |coin: u8, id: u32, connection: &Connection| {
-        let data = crate::db::read::get_notes(connection, id)?;
+pub unsafe extern "C" fn get_spendings(coin: u8, id: u32, timestamp: u32) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_spendings(connection, id, timestamp)?;
         Ok(data)
     };
     to_cresult_bytes(with_account(coin, id, res))

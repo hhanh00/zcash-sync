@@ -78,33 +78,59 @@ typedef struct CResult______u8 {
 
 #define ShieldedNoteVec_VT_NOTES 4
 
-#define AdressbookEntry_VT_ID_ADDRESS 4
+#define ShieldedTx_VT_TX_ID 6
 
-#define AdressbookEntry_VT_ADDRESS 8
+#define ShieldedTx_VT_SHORT_TX_ID 10
 
-#define Addressbook_VT_CONTACTS 6
+#define ShieldedTx_VT_ADDRESS 18
 
-#define AccountBalance_VT_COIN 4
+#define ShieldedTx_VT_MEMO 20
 
-#define AccountBalance_VT_ID_ACCOUNT 6
+#define ShieldedTxVec_VT_TXS 4
 
-#define AccountBalance_VT_TBALANCE 12
+#define Message_VT_ID_MSG 4
 
-#define ZMessage_VT_TX_ID 6
+#define Message_VT_ID_TX 6
 
-#define ZMessage_VT_INCOMING 8
+#define Message_VT_FROM 12
 
-#define ZMessage_VT_SENDER 10
+#define Message_VT_TO 14
 
-#define ZMessage_VT_RECIPIENT 12
+#define Message_VT_SUBJECT 16
 
-#define ZMessage_VT_SUBJECT 14
+#define Message_VT_BODY 18
 
-#define ZMessage_VT_BODY 16
+#define Message_VT_READ 20
 
-#define ZMessage_VT_READ 22
+#define Message_VT_INCOMING 22
 
-#define ZMessages_VT_MESSAGES 4
+#define MessageVec_VT_MESSAGES 4
+
+#define PrevNext_VT_PREV 4
+
+#define PrevNext_VT_NEXT 6
+
+#define SendTemplate_VT_TITLE 6
+
+#define SendTemplate_VT_AMOUNT 10
+
+#define SendTemplate_VT_FIAT_AMOUNT 12
+
+#define SendTemplate_VT_FEE_INCLUDED 14
+
+#define SendTemplate_VT_FIAT 16
+
+#define SendTemplate_VT_INCLUDE_REPLY_TO 18
+
+#define SendTemplateVec_VT_TEMPLATES 4
+
+#define ContactVec_VT_CONTACTS 4
+
+#define TxTimeValueVec_VT_VALUES 4
+
+#define Quote_VT_PRICE 6
+
+#define Spending_VT_RECIPIENT 4
 
 void dummy_export(void);
 
@@ -249,10 +275,6 @@ struct CResult_____c_char derive_zip32(uint8_t coin,
                                        bool has_address,
                                        uint32_t address);
 
-struct CResult_u32 save_send_template(uint8_t coin, char *template_);
-
-struct CResult_u8 delete_send_template(uint8_t coin, uint32_t id);
-
 struct CResult______u8 get_account_list(uint8_t coin);
 
 struct CResult_u32 get_available_account_id(uint8_t coin, uint32_t id);
@@ -268,6 +290,32 @@ struct CResult______u8 get_balances(uint8_t coin, uint32_t id, uint32_t confirme
 struct CResult______u8 get_db_height(uint8_t coin);
 
 struct CResult______u8 get_notes(uint8_t coin, uint32_t id);
+
+struct CResult______u8 get_txs(uint8_t coin, uint32_t id);
+
+struct CResult______u8 get_messages(uint8_t coin, uint32_t id);
+
+struct CResult______u8 get_prev_next_message(uint8_t coin,
+                                             uint32_t id,
+                                             char *subject,
+                                             uint32_t height);
+
+struct CResult______u8 get_templates(uint8_t coin);
+
+struct CResult_u32 save_send_template(uint8_t coin, uint8_t *template_, uint64_t len);
+
+struct CResult_u8 delete_send_template(uint8_t coin, uint32_t id);
+
+struct CResult______u8 get_contacts(uint8_t coin);
+
+struct CResult______u8 get_pnl_txs(uint8_t coin, uint32_t id, uint32_t timestamp);
+
+struct CResult______u8 get_historical_prices(uint8_t coin,
+                                             uint32_t id,
+                                             uint32_t timestamp,
+                                             char *currency);
+
+struct CResult______u8 get_spendings(uint8_t coin, uint32_t id, uint32_t timestamp);
 
 bool has_cuda(void);
 

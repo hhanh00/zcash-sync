@@ -100,7 +100,6 @@ mod zip32;
 // mod wallet;
 /// accounts, sync, payments, etc.
 pub mod api;
-pub mod template;
 
 #[cfg(feature = "ledger")]
 mod ledger;

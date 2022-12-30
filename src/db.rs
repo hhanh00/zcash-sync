@@ -30,7 +30,7 @@ pub mod data_generated;
 pub mod read;
 
 pub use backup::FullEncryptedBackup;
-use crate::template::SendTemplate;
+use crate::db::data_generated::fb::SendTemplate;
 
 #[allow(dead_code)]
 pub const DEFAULT_DB_PATH: &str = "zec.db";
@@ -1195,21 +1195,21 @@ impl DbAdapter {
     }
 
     pub fn store_template(&self, t: &SendTemplate) -> anyhow::Result<u32> {
-        let id = if t.id == 0 {
+        let id = if t.id() == 0 {
             self.connection.execute("INSERT INTO \
                 send_templates(title, address, amount, fiat_amount, fee_included, fiat, include_reply_to, subject, body) \
                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
-                params![t.title, t.address, t.amount, t.fiat_amount, t.fee_included, t.fiat,
-                t.memo.include_reply_to, t.memo.subject, t.memo.body])?;
+                params![t.title().unwrap(), t.address().unwrap(), t.amount(), t.fiat_amount(), t.fee_included(), t.fiat().unwrap(),
+                t.include_reply_to(), t.subject().unwrap(), t.body().unwrap()])?;
             self.connection.last_insert_rowid() as u32
         }
         else {
             self.connection.execute("UPDATE send_templates SET \
                 title=?1, address=?2, amount=?3, fiat_amount=?4, fee_included=?5, fiat=?6, include_reply_to=?7, subject=?8, body=?9 \
                 WHERE id_send_template=?10",
-                params![t.title, t.address, t.amount, t.fiat_amount, t.fee_included, t.fiat,
-                t.memo.include_reply_to, t.memo.subject, t.memo.body, t.id])?;
-            t.id
+                params![t.title().unwrap(), t.address().unwrap(), t.amount(), t.fiat_amount(), t.fee_included(), t.fiat().unwrap(),
+                t.include_reply_to(), t.subject().unwrap(), t.body().unwrap(), t.id()])?;
+            t.id()
         };
         Ok(id)
     }
