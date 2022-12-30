@@ -1,4 +1,5 @@
 use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
+use crate::db::data_generated::fb::SendTemplate;
 use crate::db::FullEncryptedBackup;
 use crate::note_selection::TransactionReport;
 use crate::{ChainError, DbAdapter, TransactionPlan, Tx};
@@ -6,14 +7,13 @@ use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use lazy_static::lazy_static;
 use log::Level;
+use rusqlite::Connection;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
-use rusqlite::Connection;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
-use crate::db::data_generated::fb::SendTemplate;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -78,7 +78,7 @@ fn to_cresult_bytes(res: Result<Vec<u8>, anyhow::Error>) -> CResult<*const u8> {
                 len: len as u32,
                 error: std::ptr::null_mut::<c_char>(),
             }
-        },
+        }
         Err(e) => {
             log::error!("{}", e);
             CResult {
@@ -484,7 +484,8 @@ pub async unsafe extern "C" fn shield_taddr(
     confirmations: u32,
 ) -> CResult<*mut c_char> {
     let res = async move {
-        let tx_plan = crate::api::payment_v2::shield_taddr(coin, account, amount, confirmations).await?;
+        let tx_plan =
+            crate::api::payment_v2::shield_taddr(coin, account, amount, confirmations).await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };
@@ -804,7 +805,11 @@ pub unsafe extern "C" fn derive_zip32(
     to_cresult_str(res())
 }
 
-fn with_account<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, id: u32, f: F) -> anyhow::Result<T> {
+fn with_account<T, F: Fn(&Connection) -> anyhow::Result<T>>(
+    coin: u8,
+    id: u32,
+    f: F,
+) -> anyhow::Result<T> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
     let connection = &db.connection;
@@ -858,7 +863,11 @@ pub unsafe extern "C" fn update_account_name(coin: u8, id: u32, name: *mut c_cha
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_balances(coin: u8, id: u32, confirmed_height: u32) -> CResult<*const u8> {
+pub unsafe extern "C" fn get_balances(
+    coin: u8,
+    id: u32,
+    confirmed_height: u32,
+) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let data = crate::db::read::get_balances(connection, id, confirmed_height)?;
         Ok(data)
@@ -903,7 +912,12 @@ pub unsafe extern "C" fn get_messages(coin: u8, id: u32) -> CResult<*const u8> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_prev_next_message(coin: u8, id: u32, subject: *mut c_char, height: u32) -> CResult<*const u8> {
+pub unsafe extern "C" fn get_prev_next_message(
+    coin: u8,
+    id: u32,
+    subject: *mut c_char,
+    height: u32,
+) -> CResult<*const u8> {
     from_c_str!(subject);
     let res = |connection: &Connection| {
         let data = crate::db::read::get_prev_next_message(connection, &subject, height, id)?;
@@ -964,7 +978,11 @@ pub unsafe extern "C" fn get_pnl_txs(coin: u8, id: u32, timestamp: u32) -> CResu
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_historical_prices(coin: u8, timestamp: u32, currency: *mut c_char) -> CResult<*const u8> {
+pub unsafe extern "C" fn get_historical_prices(
+    coin: u8,
+    timestamp: u32,
+    currency: *mut c_char,
+) -> CResult<*const u8> {
     from_c_str!(currency);
     let res = |connection: &Connection| {
         let data = crate::db::read::get_historical_prices(connection, timestamp, &currency)?;

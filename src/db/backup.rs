@@ -60,13 +60,15 @@ impl FullEncryptedBackup {
         let mut f = File::open(data_path)?;
         f.read_to_end(&mut cipher_text)?;
 
-        let decryptor = match age::Decryptor::new(&*cipher_text).map_err(|_| anyhow!("Decryption Error"))? {
-            age::Decryptor::Recipients(d) => d,
-            _ => unreachable!(),
-        };
+        let decryptor =
+            match age::Decryptor::new(&*cipher_text).map_err(|_| anyhow!("Decryption Error"))? {
+                age::Decryptor::Recipients(d) => d,
+                _ => unreachable!(),
+            };
 
         let mut plain_text = vec![];
-        let mut reader = decryptor.decrypt(iter::once(&key as &dyn age::Identity))
+        let mut reader = decryptor
+            .decrypt(iter::once(&key as &dyn age::Identity))
             .map_err(|_| anyhow!("Decryption Error"))?;
         reader.read_to_end(&mut plain_text)?;
 

@@ -6,8 +6,8 @@ use crate::api::sync::get_latest_height;
 use crate::coinconfig::CoinConfig;
 use crate::contact::{serialize_contacts, Contact};
 use crate::db::AccountData;
-use zcash_primitives::memo::Memo;
 use crate::TransactionPlan;
+use zcash_primitives::memo::Memo;
 
 /// Store contact in the database
 /// # Arguments

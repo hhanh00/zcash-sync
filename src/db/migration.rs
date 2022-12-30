@@ -279,7 +279,9 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
                 fiat TEXT,
                 include_reply_to BOOL NOT NULL,
                 subject TEXT NOT NULL,
-                body TEXT NOT NULL)", [])?;
+                body TEXT NOT NULL)",
+            [],
+        )?;
     }
 
     if version != LATEST_VERSION {

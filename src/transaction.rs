@@ -158,7 +158,7 @@ pub fn decode_transaction(
                     Ok(memo) if memo != Memo::Empty => {
                         tx_memo = memo;
                     }
-                    _ => ()
+                    _ => (),
                 }
             }
             if let Some((_note, pa, memo, ..)) =
@@ -175,7 +175,7 @@ pub fn decode_transaction(
                         tx_memo = memo;
                         incoming = false;
                     }
-                    _ => ()
+                    _ => (),
                 }
             }
         }
@@ -197,7 +197,7 @@ pub fn decode_transaction(
                         Ok(memo) if memo != Memo::Empty => {
                             tx_memo = memo;
                         }
-                        _ => ()
+                        _ => (),
                     }
                 }
                 if let Some((_note, pa, memo, ..)) = try_output_recovery_with_ovk(
@@ -216,7 +216,7 @@ pub fn decode_transaction(
                             tx_memo = memo;
                             incoming = false;
                         }
-                        _ => ()
+                        _ => (),
                     }
                 }
             }

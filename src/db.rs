@@ -11,10 +11,12 @@ use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CompactTxStreamerClient, Hash};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OptionalExtension, Transaction, OpenFlags};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::path::Path;
+use anyhow::anyhow;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -25,12 +27,12 @@ use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
 use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
 
 mod backup;
-mod migration;
 pub mod data_generated;
+mod migration;
 pub mod read;
 
-pub use backup::FullEncryptedBackup;
 use crate::db::data_generated::fb::SendTemplate;
+pub use backup::FullEncryptedBackup;
 
 #[allow(dead_code)]
 pub const DEFAULT_DB_PATH: &str = "zec.db";
@@ -106,7 +108,9 @@ impl DbAdapter {
     }
 
     pub fn migrate_db(network: &Network, db_path: &str, has_ua: bool) -> anyhow::Result<()> {
-        let connection = Connection::open(db_path)?;
+        let dir = Path::new(db_path).parent().ok_or(anyhow!("Invalid db path"))?;
+        std::fs::create_dir_all(dir)?;
+        let connection = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE)?;
         migration::init_db(&connection, network, has_ua)?;
         Ok(())
     }
@@ -709,17 +713,29 @@ impl DbAdapter {
 
     pub fn purge_old_witnesses(&mut self, height: u32) -> anyhow::Result<()> {
         log::debug!("+purge_old_witnesses");
-        const BLOCKS_PER_HOUR: u32 = 60*60/75;
-        const BLOCKS_PER_DAY: u32 = 24*BLOCKS_PER_HOUR;
-        const BLOCKS_PER_MONTH: u32 = 30*BLOCKS_PER_DAY;
-        for i in 1..=24 { // 1 checkpoint per hour
-            self.prune_interval(height - i*BLOCKS_PER_HOUR, height - (i-1)*BLOCKS_PER_HOUR)?;
+        const BLOCKS_PER_HOUR: u32 = 60 * 60 / 75;
+        const BLOCKS_PER_DAY: u32 = 24 * BLOCKS_PER_HOUR;
+        const BLOCKS_PER_MONTH: u32 = 30 * BLOCKS_PER_DAY;
+        for i in 1..=24 {
+            // 1 checkpoint per hour
+            self.prune_interval(
+                height - i * BLOCKS_PER_HOUR,
+                height - (i - 1) * BLOCKS_PER_HOUR,
+            )?;
         }
-        for i in 2..=30 { // 1 checkpoint per day
-            self.prune_interval(height - i*BLOCKS_PER_DAY, height - (i-1)*BLOCKS_PER_DAY)?;
+        for i in 2..=30 {
+            // 1 checkpoint per day
+            self.prune_interval(
+                height - i * BLOCKS_PER_DAY,
+                height - (i - 1) * BLOCKS_PER_DAY,
+            )?;
         }
-        for i in 2..=12 { // 1 checkpoint per 30 days
-            self.prune_interval(height - i*BLOCKS_PER_MONTH, height - (i-1)*BLOCKS_PER_MONTH)?;
+        for i in 2..=12 {
+            // 1 checkpoint per 30 days
+            self.prune_interval(
+                height - i * BLOCKS_PER_MONTH,
+                height - (i - 1) * BLOCKS_PER_MONTH,
+            )?;
         }
 
         log::debug!("-purge_old_witnesses");
@@ -745,8 +761,10 @@ impl DbAdapter {
                 "DELETE FROM orchard_witnesses WHERE height >= ?1 AND height < ?2 AND height != ?3",
                 params![low, high, keep_height],
             )?;
-            transaction.execute("DELETE FROM blocks WHERE height >= ?1 AND height < ?2 AND height != ?3",
-                params![low, high, keep_height])?;
+            transaction.execute(
+                "DELETE FROM blocks WHERE height >= ?1 AND height < ?2 AND height != ?3",
+                params![low, high, keep_height],
+            )?;
             transaction.execute(
                 "DELETE FROM sapling_tree WHERE height >= ?1 AND height < ?2 AND height != ?3",
                 params![low, high, keep_height],
@@ -1102,7 +1120,7 @@ impl DbAdapter {
         )?;
         Ok(())
     }
-    
+
     pub fn get_accounts(&self) -> anyhow::Result<Vec<AccountRec>> {
         let mut s = self
             .connection
@@ -1181,11 +1199,10 @@ impl DbAdapter {
             self.connection.execute("INSERT INTO \
                 send_templates(title, address, amount, fiat_amount, fee_included, fiat, include_reply_to, subject, body) \
                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
-                params![t.title().unwrap(), t.address().unwrap(), t.amount(), t.fiat_amount(), t.fee_included(), t.fiat().unwrap(),
+                params![t.title().unwrap(), t.address().unwrap(), t.amount(), t.fiat_amount(), t.fee_included(), t.fiat(),
                 t.include_reply_to(), t.subject().unwrap(), t.body().unwrap()])?;
             self.connection.last_insert_rowid() as u32
-        }
-        else {
+        } else {
             self.connection.execute("UPDATE send_templates SET \
                 title=?1, address=?2, amount=?3, fiat_amount=?4, fee_included=?5, fiat=?6, include_reply_to=?7, subject=?8, body=?9 \
                 WHERE id_send_template=?10",
@@ -1197,8 +1214,10 @@ impl DbAdapter {
     }
 
     pub fn delete_template(&self, id: u32) -> anyhow::Result<()> {
-        self.connection.execute("DELETE FROM send_templates WHERE id_send_template=?1",
-        params![id])?;
+        self.connection.execute(
+            "DELETE FROM send_templates WHERE id_send_template=?1",
+            params![id],
+        )?;
         Ok(())
     }
 

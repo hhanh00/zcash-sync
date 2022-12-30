@@ -3,6 +3,9 @@
 // Account creation
 
 use crate::coinconfig::CoinConfig;
+use crate::db::data_generated::fb::{
+    AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs,
+};
 use crate::db::AccountData;
 use crate::key2::decode_key;
 use crate::orchard::OrchardKeyBytes;
@@ -21,7 +24,6 @@ use zcash_address::{ToAddress, ZcashAddress};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
 use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::Parameters;
-use crate::db::data_generated::fb::{AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs};
 
 /// Create a new account
 /// # Arguments
@@ -264,22 +266,29 @@ pub async fn get_taddr_balance(coin: u8, id_account: u32) -> anyhow::Result<u64>
 pub async fn scan_transparent_accounts(gap_limit: usize) -> anyhow::Result<Vec<u8>> {
     let c = CoinConfig::get_active();
     let mut client = c.connect_lwd().await?;
-    let addresses = crate::taddr::scan_transparent_accounts(c.chain.network(), &mut client, gap_limit).await?;
+    let addresses =
+        crate::taddr::scan_transparent_accounts(c.chain.network(), &mut client, gap_limit).await?;
     let mut builder = flatbuffers::FlatBufferBuilder::new();
     let mut addrs = vec![];
     for a in addresses {
         let address = builder.create_string(&a.address);
-        let ab = AddressBalance::create(&mut builder, &AddressBalanceArgs {
-            index: a.index,
-            address: Some(address),
-            balance: a.balance,
-        });
+        let ab = AddressBalance::create(
+            &mut builder,
+            &AddressBalanceArgs {
+                index: a.index,
+                address: Some(address),
+                balance: a.balance,
+            },
+        );
         addrs.push(ab);
     }
     let addrs = builder.create_vector(&addrs);
-    let addrs = AddressBalanceVec::create(&mut builder, &AddressBalanceVecArgs {
-        values: Some(addrs)
-    });
+    let addrs = AddressBalanceVec::create(
+        &mut builder,
+        &AddressBalanceVecArgs {
+            values: Some(addrs),
+        },
+    );
     builder.finish(addrs, None);
     let data = builder.finished_data().to_vec();
     Ok(data)
