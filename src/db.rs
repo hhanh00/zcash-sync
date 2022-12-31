@@ -8,7 +8,7 @@ use crate::sync::tree::{CTree, TreeCheckpoint};
 use crate::taddr::derive_tkeys;
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
-use crate::{sync, BlockId, CompactTxStreamerClient, Hash};
+use crate::{sync, BlockId, CompactTxStreamerClient, Hash, CoinConfig};
 use anyhow::anyhow;
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
@@ -17,6 +17,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::Path;
+use once_cell::unsync::OnceCell;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -116,15 +117,16 @@ impl DbAdapter {
             db_path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
         )?;
-        connection.query_row("PRAGMA journal_mode=wal", [], |_| { Ok(()) })?;
+        connection.query_row("PRAGMA journal_mode=wal", [], |_| Ok(()))?;
         migration::init_db(&connection, network, has_ua)?;
         Ok(())
     }
 
     pub async fn migrate_data(
         &self,
-        client: &mut CompactTxStreamerClient<Channel>,
+        coin: u8,
     ) -> anyhow::Result<()> {
+        let mut client: Option<CompactTxStreamerClient<Channel>> = None;
         let mut stmt = self.connection.prepare("select s.height from sapling_tree s LEFT JOIN orchard_tree o ON s.height = o.height WHERE o.height IS NULL")?;
         let rows = stmt.query_map([], |row| {
             let height: u32 = row.get(0)?;
@@ -135,6 +137,11 @@ impl DbAdapter {
             trees.insert(r?, vec![]);
         }
         for (height, tree) in trees.iter_mut() {
+            if client.is_none() {
+                let cc = CoinConfig::get(coin);
+                client = Some(cc.connect_lwd().await?);
+            }
+            let client = client.as_mut().unwrap();
             let tree_state = client
                 .get_tree_state(Request::new(BlockId {
                     height: *height as u64,

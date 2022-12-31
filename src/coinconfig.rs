@@ -71,8 +71,7 @@ pub fn migrate_db(coin: u8, db_path: &str) -> anyhow::Result<()> {
 pub async fn migrate_data(coin: u8) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
-    let mut client = c.connect_lwd().await?;
-    db.migrate_data(&mut client).await?;
+    db.migrate_data(coin).await?;
     Ok(())
 }
 
