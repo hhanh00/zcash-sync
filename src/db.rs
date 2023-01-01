@@ -8,7 +8,7 @@ use crate::sync::tree::{CTree, TreeCheckpoint};
 use crate::taddr::derive_tkeys;
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
-use crate::{sync, BlockId, CompactTxStreamerClient, Hash, CoinConfig};
+use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Hash};
 use anyhow::anyhow;
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
@@ -17,7 +17,6 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::Path;
-use once_cell::unsync::OnceCell;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -122,10 +121,7 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub async fn migrate_data(
-        &self,
-        coin: u8,
-    ) -> anyhow::Result<()> {
+    pub async fn migrate_data(&self, coin: u8) -> anyhow::Result<()> {
         let mut client: Option<CompactTxStreamerClient<Channel>> = None;
         let mut stmt = self.connection.prepare("select s.height from sapling_tree s LEFT JOIN orchard_tree o ON s.height = o.height WHERE o.height IS NULL")?;
         let rows = stmt.query_map([], |row| {
