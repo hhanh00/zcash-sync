@@ -1215,7 +1215,7 @@ impl DbAdapter {
             self.connection.execute("UPDATE send_templates SET \
                 title=?1, address=?2, amount=?3, fiat_amount=?4, fee_included=?5, fiat=?6, include_reply_to=?7, subject=?8, body=?9 \
                 WHERE id_send_template=?10",
-                params![t.title().unwrap(), t.address().unwrap(), t.amount(), t.fiat_amount(), t.fee_included(), t.fiat().unwrap(),
+                params![t.title().unwrap(), t.address().unwrap(), t.amount(), t.fiat_amount(), t.fee_included(), t.fiat(),
                 t.include_reply_to(), t.subject().unwrap(), t.body().unwrap(), t.id()])?;
             t.id()
         };
