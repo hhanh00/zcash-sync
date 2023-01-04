@@ -38,6 +38,33 @@ pub fn get_account_list(connection: &Connection) -> Result<Vec<u8>> {
     Ok(data)
 }
 
+pub fn get_active_account(connection: &Connection) -> Result<u32> {
+    let id = connection
+        .query_row(
+            "SELECT value FROM properties WHERE name = 'account'",
+            [],
+            |row| {
+                let value: String = row.get(0)?;
+                let value: u32 = value.parse().unwrap();
+                Ok(value)
+            },
+        )
+        .optional()?
+        .unwrap_or(0);
+    let id = get_available_account_id(connection, id)?;
+    set_active_account(connection, id)?;
+    Ok(id)
+}
+
+pub fn set_active_account(connection: &Connection, id: u32) -> Result<()> {
+    connection.execute(
+        "INSERT INTO properties(name, value) VALUES ('account',?1) \
+    ON CONFLICT (name) DO UPDATE SET value = excluded.value",
+        [id],
+    )?;
+    Ok(())
+}
+
 pub fn get_available_account_id(connection: &Connection, id: u32) -> Result<u32> {
     let r = connection
         .query_row("SELECT 1 FROM accounts WHERE id_account = ?1", [id], |_| {
@@ -57,15 +84,17 @@ pub fn get_available_account_id(connection: &Connection, id: u32) -> Result<u32>
 }
 
 pub fn get_t_addr(connection: &Connection, id: u32) -> Result<String> {
-    let address = connection.query_row(
-        "SELECT address FROM taddrs WHERE account = ?1",
-        [id],
-        |row| {
-            let address: String = row.get(0)?;
-            Ok(address)
-        },
-    )?;
-    Ok(address)
+    let address = connection
+        .query_row(
+            "SELECT address FROM taddrs WHERE account = ?1",
+            [id],
+            |row| {
+                let address: String = row.get(0)?;
+                Ok(address)
+            },
+        )
+        .optional()?;
+    Ok(address.unwrap_or(String::new()))
 }
 
 pub fn get_sk(connection: &Connection, id: u32) -> Result<String> {

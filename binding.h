@@ -152,8 +152,6 @@ struct CResult_u8 migrate_data_db(uint8_t coin);
 
 void set_active(uint8_t active);
 
-void set_active_account(uint8_t coin, uint32_t id);
-
 void set_coin_lwd_url(uint8_t coin, char *lwd_url);
 
 char *get_lwd_url(uint8_t coin);
@@ -281,7 +279,9 @@ struct CResult_____c_char derive_zip32(uint8_t coin,
 
 struct CResult______u8 get_account_list(uint8_t coin);
 
-struct CResult_u32 get_available_account_id(uint8_t coin, uint32_t id);
+struct CResult_u32 get_active_account(uint8_t coin);
+
+struct CResult_u8 set_active_account(uint8_t coin, uint32_t id);
 
 struct CResult_____c_char get_t_addr(uint8_t coin, uint32_t id);
 

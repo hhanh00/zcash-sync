@@ -34,7 +34,7 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-const LATEST_VERSION: u32 = 6;
+const LATEST_VERSION: u32 = 7;
 
 pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyhow::Result<()> {
     connection.execute(
@@ -280,6 +280,15 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
                 include_reply_to BOOL NOT NULL,
                 subject TEXT NOT NULL,
                 body TEXT NOT NULL)",
+            [],
+        )?;
+    }
+
+    if version < 7 {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS properties (
+                name TEXT PRIMARY KEY,
+                value TEXT NOT NULL)",
             [],
         )?;
     }

@@ -155,11 +155,6 @@ pub unsafe extern "C" fn set_active(active: u8) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn set_active_account(coin: u8, id: u32) {
-    crate::coinconfig::set_active_account(coin, id);
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn set_coin_lwd_url(coin: u8, lwd_url: *mut c_char) {
     from_c_str!(lwd_url);
     crate::coinconfig::set_coin_lwd_url(coin, &lwd_url);
@@ -805,10 +800,7 @@ pub unsafe extern "C" fn derive_zip32(
     to_cresult_str(res())
 }
 
-fn with_account<T, F: Fn(&Connection) -> anyhow::Result<T>>(
-    coin: u8,
-    f: F,
-) -> anyhow::Result<T> {
+fn with_account<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, f: F) -> anyhow::Result<T> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
     let connection = &db.connection;
@@ -825,10 +817,20 @@ pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_available_account_id(coin: u8, id: u32) -> CResult<u32> {
+pub unsafe extern "C" fn get_active_account(coin: u8) -> CResult<u32> {
     let res = |connection: &Connection| {
-        let new_id = crate::db::read::get_available_account_id(connection, id)?;
+        let new_id = crate::db::read::get_active_account(connection)?;
         Ok(new_id)
+    };
+    to_cresult(with_account(coin, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn set_active_account(coin: u8, id: u32) -> CResult<u8> {
+    let res = |connection: &Connection| {
+        crate::coinconfig::set_active_account(coin, id);
+        crate::db::read::set_active_account(connection, id)?;
+        Ok(0)
     };
     to_cresult(with_account(coin, res))
 }
