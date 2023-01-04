@@ -753,14 +753,14 @@ impl DbAdapter {
 
     // Only keep the oldest checkpoint in [low, high)
     fn prune_interval(&mut self, low: u32, high: u32) -> anyhow::Result<()> {
-        log::info!("prune_interval {} {}", low, high);
+        log::debug!("prune_interval {} {}", low, high);
         let keep_height: Option<u32> = self.connection.query_row(
             "SELECT MIN(height) FROM blocks WHERE height >= ?1 AND height < ?2",
             params![low, high],
             |row| row.get(0),
         )?;
         if let Some(keep_height) = keep_height {
-            log::info!("keep {}", keep_height);
+            log::info!("keep checkpoint {}", keep_height);
             let transaction = self.connection.transaction()?;
             transaction.execute(
                 "DELETE FROM sapling_witnesses WHERE height >= ?1 AND height < ?2 AND height != ?3",
