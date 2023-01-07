@@ -1020,6 +1020,15 @@ pub unsafe extern "C" fn invert_excluded(coin: u8, id: u32) -> CResult<u8> {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn get_checkpoints(coin: u8) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let data = crate::db::read::get_checkpoints(connection)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_account(coin, res))
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn has_cuda() -> bool {
     crate::gpu::has_cuda()
 }

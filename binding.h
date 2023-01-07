@@ -322,6 +322,8 @@ struct CResult_u8 update_excluded(uint8_t coin, uint32_t id, bool excluded);
 
 struct CResult_u8 invert_excluded(uint8_t coin, uint32_t id);
 
+struct CResult______u8 get_checkpoints(uint8_t coin);
+
 bool has_cuda(void);
 
 bool has_metal(void);

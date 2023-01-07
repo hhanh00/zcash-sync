@@ -603,64 +603,28 @@ pub fn invert_excluded(connection: &Connection, id: u32) -> Result<()> {
     Ok(())
 }
 
-/*
-       ,
+pub fn get_checkpoints(connection: &Connection) -> Result<Vec<u8>> {
+    let mut builder = flatbuffers::FlatBufferBuilder::new();
+    let mut stmt = connection.prepare("SELECT height, timestamp FROM blocks ORDER by height")?;
+    let rows = stmt.query_map([], |row| {
+        let height: u32 = row.get(0)?;
+        let timestamp: u32 = row.get(1)?;
 
-       "SELECT timestamp, value FROM transactions WHERE account = ?1 AND timestamp >= ?2 ORDER BY timestamp DESC",
-
-   final List<Map> res = await db.rawQuery(
-       "SELECT SUM(value) as v, t.address, c.name FROM transactions t LEFT JOIN contacts c ON t.address = c.address "
-           "WHERE account = ?1 AND timestamp >= ?2 AND value < 0 GROUP BY t.address ORDER BY v ASC LIMIT 5",
-       [accountId, range.start ~/ 1000]);
-   final spendings = res.map((row) {
-     final address = row['address'] ?? "";
-     final value = -row['v'] / ZECUNIT;
-     final contact = row['name'];
-     return Spending(address, value, contact);
-   }).toList();
-
-
-       "SELECT timestamp, price FROM historical_prices WHERE timestamp >= ?2 AND currency = ?1",
-
-
-   final List<Map> res1 = await db.rawQuery(
-       "SELECT timestamp, value FROM transactions WHERE timestamp >= ?2 AND account = ?1",
-       [accountId, range.start ~/ 1000]);
-
-
-   List<Map> res = await db.rawQuery(
-       "SELECT id, name, address FROM contacts WHERE address <> '' ORDER BY name");
-   for (var c in res) {
-     final contact = Contact(c['id'], c['name'], c['address']);
-     contacts.add(contact);
-   }
-
-
- Future<int?> getPrevMessage(String subject, int height, int account) async {
-   final id = await Sqflite.firstIntValue(await db.rawQuery(
-       "SELECT MAX(id) FROM messages WHERE subject = ?1 AND height < ?2 and account = ?3",
-       [subject, height, account]));
-   return id;
- }
-
- Future<int?> getNextMessage(String subject, int height, int account) async {
-   final id = await Sqflite.firstIntValue(await db.rawQuery(
-       "SELECT MIN(id) FROM messages WHERE subject = ?1 AND height > ?2 and account = ?3",
-       [subject, height, account]));
-   return id;
- }
-
-
-     final id = row['id'];
-     final txId = row['id_tx'] ?? 0;
-     final timestamp = DateTime.fromMillisecondsSinceEpoch(row['timestamp'] * 1000);
-     final height = row['height'];
-     final sender = row['sender'];
-     final from = row['scontact'] ?? row['saccount'] ?? sender;
-     final recipient = row['recipient'];
-     final to = row['rcontact'] ?? row['raccount'] ?? recipient;
-     final subject = row['subject'];
-     final body = row['body'];
-     final read = row['read'] == 1;
-     final incoming = row['incoming'] == 1;
-*/
+        let checkpoint = Checkpoint::create(&mut builder, &CheckpointArgs { height, timestamp });
+        Ok(checkpoint)
+    })?;
+    let mut checkpoints = vec![];
+    for r in rows {
+        checkpoints.push(r?);
+    }
+    let checkpoints = builder.create_vector(&checkpoints);
+    let checkpoints = CheckpointVec::create(
+        &mut builder,
+        &CheckpointVecArgs {
+            values: Some(checkpoints),
+        },
+    );
+    builder.finish(checkpoints, None);
+    let data = builder.finished_data().to_vec();
+    Ok(data)
+}
