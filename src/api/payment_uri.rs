@@ -1,10 +1,10 @@
 //! encode and decode Payment URI
 
 use crate::coinconfig::CoinConfig;
+use crate::key2::decode_address;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::str::FromStr;
-use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
 use zcash_primitives::memo::Memo;
 use zcash_primitives::transaction::components::Amount;
@@ -14,10 +14,14 @@ use zcash_primitives::transaction::components::Amount;
 /// * `address`: recipient address
 /// * `amount`: amount in zats
 /// * `memo`: memo text
-pub fn make_payment_uri(address: &str, amount: u64, memo: &str) -> anyhow::Result<String> {
-    let c = CoinConfig::get_active();
-    let addr = RecipientAddress::decode(c.chain.network(), address)
-        .ok_or_else(|| anyhow::anyhow!("Invalid address"))?;
+pub fn make_payment_uri(
+    coin: u8,
+    address: &str,
+    amount: u64,
+    memo: &str,
+) -> anyhow::Result<String> {
+    let c = CoinConfig::get(coin);
+    let addr = decode_address(coin, address).ok_or_else(|| anyhow::anyhow!("Invalid address"))?;
     let payment = Payment {
         recipient_address: addr,
         amount: Amount::from_u64(amount).map_err(|_| anyhow::anyhow!("Invalid amount"))?,

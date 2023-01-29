@@ -250,7 +250,10 @@ void truncate_sync_data(void);
 
 void delete_account(uint8_t coin, uint32_t account);
 
-struct CResult_____c_char make_payment_uri(char *address, uint64_t amount, char *memo);
+struct CResult_____c_char make_payment_uri(uint8_t coin,
+                                           char *address,
+                                           uint64_t amount,
+                                           char *memo);
 
 struct CResult_____c_char parse_payment_uri(char *uri);
 

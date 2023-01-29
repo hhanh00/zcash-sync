@@ -344,7 +344,7 @@ pub unsafe extern "C" fn is_valid_key(coin: u8, key: *mut c_char) -> i8 {
 #[no_mangle]
 pub unsafe extern "C" fn valid_address(coin: u8, address: *mut c_char) -> bool {
     from_c_str!(address);
-    crate::key2::is_valid_address(coin, &address)
+    crate::key2::decode_address(coin, &address).is_some()
 }
 
 #[no_mangle]
@@ -663,13 +663,14 @@ pub unsafe extern "C" fn delete_account(coin: u8, account: u32) {
 
 #[no_mangle]
 pub unsafe extern "C" fn make_payment_uri(
+    coin: u8,
     address: *mut c_char,
     amount: u64,
     memo: *mut c_char,
 ) -> CResult<*mut c_char> {
     from_c_str!(memo);
     from_c_str!(address);
-    let res = crate::api::payment_uri::make_payment_uri(&address, amount, &memo);
+    let res = crate::api::payment_uri::make_payment_uri(coin, &address, amount, &memo);
     to_cresult_str(res)
 }
 
