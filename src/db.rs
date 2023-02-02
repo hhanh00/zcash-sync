@@ -725,7 +725,8 @@ impl DbAdapter {
         const BLOCKS_PER_HOUR: u32 = 60 * 60 / 75;
         const BLOCKS_PER_DAY: u32 = 24 * BLOCKS_PER_HOUR;
         const BLOCKS_PER_MONTH: u32 = 30 * BLOCKS_PER_DAY;
-        for i in 1..=24 {
+        // Keep the last hour
+        for i in 2..=24 {
             // 1 checkpoint per hour
             self.prune_interval(
                 height - i * BLOCKS_PER_HOUR,
