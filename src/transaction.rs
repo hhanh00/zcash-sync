@@ -117,28 +117,13 @@ pub fn decode_transaction(
     let (sapling_ivk, sapling_ovk) = decryption_keys.sapling_keys.clone();
 
     let block_height = BlockHeight::from_u32(height);
-    let mut taddress: Option<String> = None;
-    let mut zaddress: Option<String> = None;
-    let mut oaddress: Option<String> = None;
+    let mut address: Option<String> = None;
 
     let tx = tx.into_data();
-    // log::info!("{:?}", tx);
 
     let mut tx_memo: Memo = Memo::Empty;
     let mut contacts = vec![];
     let mut incoming = true;
-
-    if let Some(transparent_bundle) = tx.transparent_bundle() {
-        for output in transparent_bundle.vout.iter() {
-            if let Some(taddr) = output.recipient_address() {
-                taddress = Some(encode_transparent_address(
-                    &network.b58_pubkey_address_prefix(),
-                    &network.b58_script_address_prefix(),
-                    &taddr,
-                ));
-            }
-        }
-    }
 
     if let Some(sapling_bundle) = tx.sapling_bundle() {
         let mut contact_decoder = ContactDecoder::new(sapling_bundle.shielded_outputs.len());
@@ -148,15 +133,16 @@ pub fn decode_transaction(
                 try_sapling_note_decryption(network, block_height, &pivk, output)
             {
                 let memo = Memo::try_from(memo);
-                if zaddress.is_none() {
-                    zaddress = Some(encode_payment_address(
-                        network.hrp_sapling_payment_address(),
-                        &pa,
-                    ));
-                }
                 match memo {
                     Ok(memo) if memo != Memo::Empty => {
                         tx_memo = memo;
+                        if address.is_none() {
+                            address = Some(encode_payment_address(
+                                network.hrp_sapling_payment_address(),
+                                &pa,
+                            ));
+                            incoming = true;
+                        }
                     }
                     _ => (),
                 }
@@ -165,15 +151,17 @@ pub fn decode_transaction(
                 try_sapling_output_recovery(network, block_height, &sapling_ovk, output)
             {
                 let _ = contact_decoder.add_memo(&memo); // ignore memo that is not for contacts, if we cannot decode it with ovk, we didn't make create this memo
-                zaddress = Some(encode_payment_address(
-                    network.hrp_sapling_payment_address(),
-                    &pa,
-                ));
                 let memo = Memo::try_from(memo);
                 match memo {
                     Ok(memo) if memo != Memo::Empty => {
                         tx_memo = memo;
-                        incoming = false;
+                        if address.is_none() {
+                            address = Some(encode_payment_address(
+                                network.hrp_sapling_payment_address(),
+                                &pa,
+                            ));
+                            incoming = false;
+                        }
                     }
                     _ => (),
                 }
@@ -182,49 +170,69 @@ pub fn decode_transaction(
         contacts.extend(contact_decoder.finalize()?.into_iter());
     }
 
-    if let Some(orchard_bundle) = tx.orchard_bundle() {
-        let mut contact_decoder = ContactDecoder::new(orchard_bundle.actions().len());
-        if let Some((orchard_ivk, orchard_ovk)) = decryption_keys.orchard_keys.clone() {
-            for action in orchard_bundle.actions().iter() {
-                let domain = OrchardDomain::for_action(action);
-                if let Some((_note, pa, memo)) = try_note_decryption(&domain, &orchard_ivk, action)
-                {
-                    let memo = Memo::try_from(MemoBytes::from_bytes(&memo)?);
-                    if oaddress.is_none() {
-                        oaddress = Some(orchard_as_unified(network, &pa).encode());
-                    }
-                    match memo {
-                        Ok(memo) if memo != Memo::Empty => {
-                            tx_memo = memo;
+    if address.is_none() {
+        if let Some(orchard_bundle) = tx.orchard_bundle() {
+            let mut contact_decoder = ContactDecoder::new(orchard_bundle.actions().len());
+            if let Some((orchard_ivk, orchard_ovk)) = decryption_keys.orchard_keys.clone() {
+                for action in orchard_bundle.actions().iter() {
+                    let domain = OrchardDomain::for_action(action);
+                    if let Some((_note, pa, memo)) =
+                        try_note_decryption(&domain, &orchard_ivk, action)
+                    {
+                        let memo = Memo::try_from(MemoBytes::from_bytes(&memo)?);
+                        match memo {
+                            Ok(memo) if memo != Memo::Empty => {
+                                tx_memo = memo;
+                                if address.is_none() {
+                                    address = Some(orchard_as_unified(network, &pa).encode());
+                                    incoming = true;
+                                }
+                            }
+                            _ => (),
                         }
-                        _ => (),
                     }
-                }
-                if let Some((_note, pa, memo, ..)) = try_output_recovery_with_ovk(
-                    &domain,
-                    &orchard_ovk,
-                    action,
-                    action.cv_net(),
-                    &action.encrypted_note().out_ciphertext,
-                ) {
-                    let memo_bytes = MemoBytes::from_bytes(&memo)?;
-                    let _ = contact_decoder.add_memo(&memo_bytes); // ignore memo that is not for contacts, if we cannot decode it with ovk, we didn't make create this memo
-                    let memo = Memo::try_from(memo_bytes);
-                    oaddress = Some(orchard_as_unified(network, &pa).encode());
-                    match memo {
-                        Ok(memo) if memo != Memo::Empty => {
-                            tx_memo = memo;
-                            incoming = false;
+                    if let Some((_note, pa, memo, ..)) = try_output_recovery_with_ovk(
+                        &domain,
+                        &orchard_ovk,
+                        action,
+                        action.cv_net(),
+                        &action.encrypted_note().out_ciphertext,
+                    ) {
+                        let memo_bytes = MemoBytes::from_bytes(&memo)?;
+                        let _ = contact_decoder.add_memo(&memo_bytes); // ignore memo that is not for contacts, if we cannot decode it with ovk, we didn't make create this memo
+                        let memo = Memo::try_from(memo_bytes);
+                        match memo {
+                            Ok(memo) if memo != Memo::Empty => {
+                                tx_memo = memo;
+                                if address.is_none() {
+                                    address = Some(orchard_as_unified(network, &pa).encode());
+                                    incoming = false;
+                                }
+                            }
+                            _ => (),
                         }
-                        _ => (),
                     }
                 }
             }
+            contacts.extend(&mut contact_decoder.finalize()?.into_iter());
         }
-        contacts.extend(&mut contact_decoder.finalize()?.into_iter());
     }
 
-    let address = zaddress.or(oaddress).or(taddress).unwrap_or(String::new());
+    if address.is_none() {
+        if let Some(transparent_bundle) = tx.transparent_bundle() {
+            for output in transparent_bundle.vout.iter() {
+                if let Some(taddr) = output.recipient_address() {
+                    address = Some(encode_transparent_address(
+                        &network.b58_pubkey_address_prefix(),
+                        &network.b58_script_address_prefix(),
+                        &taddr,
+                    ));
+                }
+            }
+        }
+    }
+
+    let address = address.unwrap_or(String::new());
 
     let memo = match tx_memo {
         Memo::Empty => "".to_string(),
