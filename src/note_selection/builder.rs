@@ -68,8 +68,6 @@ impl TxBuilderContext {
     }
 }
 
-const EXPIRY_HEIGHT: u32 = 50;
-
 pub fn build_tx(
     network: &Network,
     skeys: &SecretKeys,
@@ -98,7 +96,7 @@ pub fn build_tx(
     };
 
     let mut has_orchard = false;
-    let mut builder = Builder::new(*network, BlockHeight::from_u32(plan.height));
+    let mut builder = Builder::new(*network, BlockHeight::from_u32(plan.anchor_height));
     let anchor: Anchor = orchard::tree::MerkleHashOrchard::from_bytes(&plan.orchard_anchor)
         .unwrap()
         .into();
@@ -202,7 +200,7 @@ pub fn build_tx(
             get_prover(),
             &mut ctx,
             &mut rng,
-            BlockHeight::from_u32(plan.height),
+            BlockHeight::from_u32(plan.anchor_height),
             None,
         )
         .unwrap();
@@ -212,7 +210,8 @@ pub fn build_tx(
         orchard_bundle = Some(orchard_builder.build(rng.clone()).unwrap());
     }
 
-    let consensus_branch_id = BranchId::for_height(network, BlockHeight::from_u32(plan.height));
+    let consensus_branch_id =
+        BranchId::for_height(network, BlockHeight::from_u32(plan.anchor_height));
     let version = TxVersion::suggested_for_branch(consensus_branch_id);
 
     let unauthed_tx: TransactionData<zcash_primitives::transaction::Unauthorized> =
@@ -220,7 +219,7 @@ pub fn build_tx(
             version,
             consensus_branch_id,
             0,
-            BlockHeight::from_u32(plan.height + EXPIRY_HEIGHT),
+            BlockHeight::from_u32(plan.expiry_height),
             transparent_bundle,
             None,
             sapling_bundle,
@@ -262,7 +261,7 @@ pub fn build_tx(
             version,
             consensus_branch_id,
             0,
-            BlockHeight::from_u32(plan.height + EXPIRY_HEIGHT),
+            BlockHeight::from_u32(plan.expiry_height),
             transparent_bundle,
             None,
             sapling_bundle,

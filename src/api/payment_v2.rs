@@ -18,6 +18,8 @@ use zcash_primitives::transaction::builder::Progress;
 #[allow(dead_code)]
 type PaymentProgressCallback = Box<dyn Fn(Progress) + Send + Sync>;
 
+const EXPIRY_HEIGHT_OFFSET: u32 = 50;
+
 pub async fn build_tx_plan(
     coin: u8,
     account: u32,
@@ -39,11 +41,12 @@ pub async fn build_tx_plan(
         }
     }
 
-    let (fvk, checkpoint_height) = {
+    let (fvk, checkpoint_height, expiry_height) = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
         let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
-        (fvk, checkpoint_height)
+        let latest_height = get_latest_height().await?;
+        (fvk, checkpoint_height, latest_height + EXPIRY_HEIGHT_OFFSET)
     };
     let change_address = get_unified_address(coin, account, 7)?;
     let context = TxBuilderContext::from_height(coin, checkpoint_height)?;
@@ -77,6 +80,7 @@ pub async fn build_tx_plan(
         network,
         &fvk,
         checkpoint_height,
+        expiry_height,
         &context.orchard_anchor,
         &utxos,
         &orders,

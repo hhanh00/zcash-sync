@@ -128,7 +128,8 @@ pub struct RecipientShort {
 #[serde_as]
 pub struct TransactionPlan {
     pub fvk: String,
-    pub height: u32,
+    pub anchor_height: u32,
+    pub expiry_height: u32,
     #[serde(with = "SerHex::<Strict>")]
     pub orchard_anchor: Hash,
     pub spends: Vec<UTXO>,
