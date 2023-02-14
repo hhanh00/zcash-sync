@@ -1,9 +1,13 @@
 use crate::coinconfig::CoinConfig;
 use crate::db::AccountData;
-use crate::{AddressList, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply};
+use crate::{
+    AddressList, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply,
+    TransparentAddressBlockFilter,
+};
 use anyhow::anyhow;
 use base58check::FromBase58Check;
 use bip39::{Language, Mnemonic, Seed};
+use futures::StreamExt;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
@@ -26,6 +30,22 @@ pub async fn get_taddr_balance(
         .await?
         .into_inner();
     Ok(rep.value_zat as u64)
+}
+
+pub async fn get_taddr_tx_count(
+    client: &mut CompactTxStreamerClient<Channel>,
+    address: &str,
+) -> anyhow::Result<u32> {
+    let req = TransparentAddressBlockFilter {
+        address: address.to_string(),
+        range: None,
+    };
+    let rep = client
+        .get_taddress_txids(Request::new(req))
+        .await?
+        .into_inner();
+    let count = rep.count().await;
+    Ok(count as u32)
 }
 
 pub async fn get_utxos(
@@ -72,7 +92,12 @@ pub async fn scan_transparent_accounts(
                 });
                 gap = 0;
             } else {
-                gap += 1;
+                let tx_count = get_taddr_tx_count(client, &address).await?;
+                if tx_count != 0 {
+                    gap = 0;
+                } else {
+                    gap += 1;
+                }
             }
             aindex += 1;
         }
