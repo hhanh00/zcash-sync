@@ -164,8 +164,8 @@ pub fn build_tx(
     for output in plan.outputs.iter() {
         let value = Amount::from_u64(output.amount).unwrap();
         match &output.destination {
-            Destination::Transparent(addr) => {
-                let transparent_address = TransparentAddress::PublicKey(*addr);
+            Destination::Transparent(_addr) => {
+                let transparent_address = output.destination.transparent();
                 builder.add_transparent_output(&transparent_address, value)?;
             }
             Destination::Sapling(addr) => {

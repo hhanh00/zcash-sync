@@ -57,16 +57,46 @@ pub enum Source {
 #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 #[serde_as]
 pub enum Destination {
-    Transparent(#[serde(with = "SerHex::<Strict>")] [u8; 20]), // MD5
+    Transparent(#[serde(with = "SerHex::<Strict>")] [u8; 21]), // t1/t3 + Hash
     Sapling(#[serde(with = "SerHex::<Strict>")] [u8; 43]),     // Diversifier + Jubjub Point
     Orchard(#[serde(with = "SerHex::<Strict>")] [u8; 43]),     // Diviersifer + Pallas Point
 }
 
 impl Destination {
-    pub fn address(&self, network: &Network) -> String {
+    pub fn from_transparent(ta: &TransparentAddress) -> Self {
+        let mut d = [0u8; 21];
+        match ta {
+            TransparentAddress::PublicKey(data) => {
+                d[0] = 0;
+                d[1..21].copy_from_slice(&*data);
+            }
+            TransparentAddress::Script(data) => {
+                d[0] = 1;
+                d[1..21].copy_from_slice(&*data);
+            }
+        }
+        Destination::Transparent(d)
+    }
+
+    pub fn transparent(&self) -> TransparentAddress {
         match self {
             Destination::Transparent(data) => {
-                let ta = TransparentAddress::PublicKey(data.clone());
+                let hash: [u8; 20] = data[1..21].try_into().unwrap();
+                let ta = if data[0] == 0 {
+                    TransparentAddress::PublicKey(hash)
+                } else {
+                    TransparentAddress::Script(hash)
+                };
+                ta
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn address(&self, network: &Network) -> String {
+        match self {
+            Destination::Transparent(_data) => {
+                let ta = self.transparent();
                 ta.encode(network)
             }
             Destination::Sapling(data) => {
