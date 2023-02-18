@@ -207,7 +207,7 @@ pub fn build_tx(
 
     let mut orchard_bundle: Option<Bundle<_, Amount>> = None;
     if has_orchard {
-        orchard_bundle = Some(orchard_builder.build(rng.clone()).unwrap());
+        orchard_bundle = Some(orchard_builder.build(&mut rng).unwrap());
     }
 
     let consensus_branch_id =
@@ -249,10 +249,10 @@ pub fn build_tx(
     let orchard_bundle = unauthed_tx.orchard_bundle().map(|ob| {
         let proven = ob
             .clone()
-            .create_proof(get_proving_key(), rng.clone())
+            .create_proof(get_proving_key(), &mut rng)
             .unwrap();
         proven
-            .apply_signatures(rng.clone(), sig_hash, &orchard_signing_keys)
+            .apply_signatures(&mut rng, sig_hash, &orchard_signing_keys)
             .unwrap()
     });
 
