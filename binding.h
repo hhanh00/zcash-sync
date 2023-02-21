@@ -14,6 +14,8 @@ typedef char bool;
 typedef void *DartPostCObjectFnType;
 
 
+#define EXPIRY_HEIGHT_OFFSET 50
+
 #define QR_DATA_SIZE 256
 
 #define MAX_ATTEMPTS 10
@@ -229,6 +231,13 @@ struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx_plan, in
 struct CResult_____c_char sign_and_broadcast(uint8_t coin, uint32_t account, char *tx_plan);
 
 struct CResult_____c_char broadcast_tx(char *tx_str);
+
+bool is_valid_tkey(char *sk);
+
+struct CResult_____c_char sweep_tkey(uint32_t last_height,
+                                     char *sk,
+                                     uint8_t pool,
+                                     uint32_t confirmations);
 
 struct CResult_u32 get_activation_date(void);
 

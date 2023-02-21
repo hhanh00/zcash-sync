@@ -33,7 +33,7 @@ use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 
 pub struct SecretKeys {
     pub transparent: Option<SecretKey>,
-    pub sapling: ExtendedSpendingKey,
+    pub sapling: Option<ExtendedSpendingKey>,
     pub orchard: Option<SpendingKey>,
 }
 
@@ -82,8 +82,11 @@ pub fn build_tx(
         TransparentAddress::PublicKey(pub_key.into())
     });
 
-    let sapling_fvk = ExtendedFullViewingKey::from(&skeys.sapling);
-    let sapling_ovk = sapling_fvk.fvk.ovk;
+    let sapling_fvk = skeys
+        .sapling
+        .as_ref()
+        .map(|sk| ExtendedFullViewingKey::from(sk));
+    let sapling_ovk = sapling_fvk.as_ref().map(|efvk| efvk.fvk.ovk.clone());
 
     let okeys = skeys.orchard.map(|sk| {
         let orchard_fvk = FullViewingKey::from(&sk);
@@ -120,12 +123,23 @@ pub fn build_tx(
                 ..
             } => {
                 let diversifier = Diversifier(*diversifier);
-                let sapling_address = sapling_fvk.fvk.vk.to_payment_address(diversifier).unwrap();
+                let sapling_address = sapling_fvk
+                    .as_ref()
+                    .ok_or(anyhow!("No sapling key"))?
+                    .fvk
+                    .vk
+                    .to_payment_address(diversifier)
+                    .unwrap();
                 let rseed = Rseed::BeforeZip212(Fr::from_bytes(rseed).unwrap());
                 let note = sapling_address.create_note(spend.amount, rseed).unwrap();
                 let witness = IncrementalWitness::<Node>::read(witness.as_slice())?;
                 let merkle_path = witness.path().unwrap();
-                builder.add_sapling_spend(skeys.sapling.clone(), diversifier, note, merkle_path)?;
+                builder.add_sapling_spend(
+                    skeys.sapling.clone().ok_or(anyhow!("No Sapling Key"))?,
+                    diversifier,
+                    note,
+                    merkle_path,
+                )?;
             }
             Source::Orchard {
                 id_note,
@@ -171,7 +185,7 @@ pub fn build_tx(
             Destination::Sapling(addr) => {
                 let sapling_address = PaymentAddress::from_bytes(addr).unwrap();
                 builder.add_sapling_output(
-                    Some(sapling_ovk),
+                    sapling_ovk,
                     sapling_address,
                     value,
                     output.memo.clone(),
@@ -297,7 +311,7 @@ pub fn get_secret_keys(coin: u8, account: u32) -> anyhow::Result<SecretKeys> {
 
     let sk = SecretKeys {
         transparent: transparent_sk,
-        sapling: sapling_sk,
+        sapling: Some(sapling_sk),
         orchard: orchard_sk,
     };
     Ok(sk)

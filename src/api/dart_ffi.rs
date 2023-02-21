@@ -581,6 +581,25 @@ pub async unsafe extern "C" fn broadcast_tx(tx_str: *mut c_char) -> CResult<*mut
     to_cresult_str(res.await)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn is_valid_tkey(sk: *mut c_char) -> bool {
+    from_c_str!(sk);
+    crate::taddr::parse_seckey(&sk).is_ok()
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn sweep_tkey(
+    last_height: u32,
+    sk: *mut c_char,
+    pool: u8,
+    confirmations: u32,
+) -> CResult<*mut c_char> {
+    from_c_str!(sk);
+    let txid = crate::taddr::sweep_tkey(last_height, &sk, pool, confirmations).await;
+    to_cresult_str(txid)
+}
+
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn get_activation_date() -> CResult<u32> {

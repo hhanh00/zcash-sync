@@ -2,6 +2,7 @@ use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
 use crate::scan::Blocks;
+use crate::DbAdapter;
 use ff::PrimeField;
 use futures::{future, FutureExt};
 use rand::prelude::SliceRandom;
@@ -603,4 +604,18 @@ pub async fn get_best_server(servers: &str) -> anyhow::Result<String> {
 #[derive(Deserialize)]
 struct Servers {
     urls: Vec<String>,
+}
+
+pub const EXPIRY_HEIGHT_OFFSET: u32 = 50;
+
+pub fn get_checkpoint_height(
+    db: &DbAdapter,
+    last_height: u32,
+    confirmations: u32,
+) -> anyhow::Result<u32> {
+    let anchor_height = last_height.saturating_sub(confirmations);
+    let checkpoint_height = db
+        .get_checkpoint_height(anchor_height)?
+        .unwrap_or_else(|| db.sapling_activation_height()); // get the latest checkpoint before the requested anchor height
+    Ok(checkpoint_height)
 }

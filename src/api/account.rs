@@ -182,7 +182,7 @@ pub fn import_transparent_key(coin: u8, id_account: u32, path: &str) -> anyhow::
 pub fn import_transparent_secret_key(coin: u8, id_account: u32, sk: &str) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
-    let (sk, addr) = derive_taddr(c.chain.network(), sk)?;
+    let (_, addr) = derive_taddr(c.chain.network(), sk)?;
     db.store_transparent_key(id_account, &sk, &addr)?;
     Ok(())
 }

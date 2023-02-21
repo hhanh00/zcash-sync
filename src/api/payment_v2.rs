@@ -2,9 +2,10 @@ use crate::api::account::get_unified_address;
 use crate::api::recipient::RecipientMemo;
 use crate::api::sync::get_latest_height;
 pub use crate::broadcast_tx;
-use crate::note_selection::{FeeFlat, Order};
+use crate::chain::{get_checkpoint_height, EXPIRY_HEIGHT_OFFSET};
+use crate::note_selection::{FeeFlat, Order, UTXO};
 use crate::{
-    build_tx, fetch_utxos, get_secret_keys, note_selection, AccountData, CoinConfig, DbAdapter,
+    build_tx, fetch_utxos, get_secret_keys, note_selection, AccountData, CoinConfig,
     TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
     MAX_ATTEMPTS,
 };
@@ -18,15 +19,13 @@ use zcash_primitives::transaction::builder::Progress;
 #[allow(dead_code)]
 type PaymentProgressCallback = Box<dyn Fn(Progress) + Send + Sync>;
 
-const EXPIRY_HEIGHT_OFFSET: u32 = 50;
-
-pub async fn build_tx_plan(
+pub async fn build_tx_plan_with_utxos(
     coin: u8,
     account: u32,
-    last_height: u32,
+    checkpoint_height: u32,
+    expiry_height: u32,
     recipients: &[RecipientMemo],
-    excluded_flags: u8,
-    confirmations: u32,
+    utxos: &[UTXO],
 ) -> note_selection::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
@@ -41,12 +40,10 @@ pub async fn build_tx_plan(
         }
     }
 
-    let (fvk, checkpoint_height, expiry_height) = {
+    let fvk = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
-        let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
-        let latest_height = get_latest_height().await?;
-        (fvk, checkpoint_height, latest_height + EXPIRY_HEIGHT_OFFSET)
+        fvk
     };
     let change_address = get_unified_address(coin, account, 7)?;
     let context = TxBuilderContext::from_height(coin, checkpoint_height)?;
@@ -73,10 +70,9 @@ pub async fn build_tx_plan(
         }
         orders.last_mut().unwrap().take_fee = r.fee_included;
     }
-    let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;
 
     let config = TransactionBuilderConfig::new(&change_address);
-    let tx_plan = crate::note_selection::build_tx_plan::<FeeFlat>(
+    let tx_plan = note_selection::build_tx_plan::<FeeFlat>(
         network,
         &fvk,
         checkpoint_height,
@@ -86,6 +82,34 @@ pub async fn build_tx_plan(
         &orders,
         &config,
     )?;
+    Ok(tx_plan)
+}
+
+pub async fn build_tx_plan(
+    coin: u8,
+    account: u32,
+    last_height: u32,
+    recipients: &[RecipientMemo],
+    excluded_flags: u8,
+    confirmations: u32,
+) -> note_selection::Result<TransactionPlan> {
+    let (checkpoint_height, expiry_height) = {
+        let c = CoinConfig::get(coin);
+        let db = c.db()?;
+        let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
+        let latest_height = get_latest_height().await?;
+        (checkpoint_height, latest_height + EXPIRY_HEIGHT_OFFSET)
+    };
+    let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;
+    let tx_plan = build_tx_plan_with_utxos(
+        coin,
+        account,
+        checkpoint_height,
+        expiry_height,
+        recipients,
+        &utxos,
+    )
+    .await?;
     Ok(tx_plan)
 }
 
@@ -219,16 +243,4 @@ fn mark_spent(coin: u8, ids: &[u32]) -> anyhow::Result<()> {
     let mut db = c.db()?;
     db.tx_mark_spend(ids)?;
     Ok(())
-}
-
-fn get_checkpoint_height(
-    db: &DbAdapter,
-    last_height: u32,
-    confirmations: u32,
-) -> anyhow::Result<u32> {
-    let anchor_height = last_height.saturating_sub(confirmations);
-    let checkpoint_height = db
-        .get_checkpoint_height(anchor_height)?
-        .unwrap_or_else(|| db.sapling_activation_height()); // get the latest checkpoint before the requested anchor height
-    Ok(checkpoint_height)
 }

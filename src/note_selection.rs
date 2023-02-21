@@ -3,7 +3,7 @@ pub use crate::note_selection::types::{
     TransactionReport, UTXO,
 };
 pub use crate::note_selection::TransactionBuilderError::TxTooComplex;
-pub use builder::{build_tx, get_secret_keys, TxBuilderContext};
+pub use builder::{build_tx, get_secret_keys, SecretKeys, TxBuilderContext};
 pub use fee::{FeeCalculator, FeeFlat, FeeZIP327};
 pub use optimize::build_tx_plan;
 use std::str::FromStr;

@@ -33,7 +33,7 @@ async fn get_transparent_utxos(coin: u8, account: u32) -> anyhow::Result<Vec<UTX
     };
     if let Some(taddr) = taddr {
         let mut client = coin.connect_lwd().await?;
-        let utxos = crate::taddr::get_utxos(&mut client, &taddr, account).await?;
+        let utxos = crate::taddr::get_utxos(&mut client, &taddr).await?;
         let utxos: Vec<_> = utxos
             .iter()
             .map(|utxo| {

@@ -1,13 +1,20 @@
+use crate::api::payment_v2::build_tx_plan_with_utxos;
+use crate::api::recipient::RecipientMemo;
+use crate::chain::{get_checkpoint_height, EXPIRY_HEIGHT_OFFSET};
 use crate::coinconfig::CoinConfig;
 use crate::db::AccountData;
+use crate::note_selection::{SecretKeys, Source, UTXO};
+use crate::unified::orchard_as_unified;
 use crate::{
-    AddressList, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply,
-    TransparentAddressBlockFilter,
+    broadcast_tx, build_tx, AddressList, CompactTxStreamerClient, GetAddressUtxosArg,
+    GetAddressUtxosReply, TransparentAddressBlockFilter,
 };
 use anyhow::anyhow;
 use base58check::FromBase58Check;
 use bip39::{Language, Mnemonic, Seed};
+use core::slice;
 use futures::StreamExt;
+use rand::rngs::OsRng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
@@ -17,6 +24,7 @@ use tonic::Request;
 use zcash_client_backend::encoding::encode_transparent_address;
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
+use zcash_primitives::memo::Memo;
 
 pub async fn get_taddr_balance(
     client: &mut CompactTxStreamerClient<Channel>,
@@ -51,7 +59,6 @@ pub async fn get_taddr_tx_count(
 pub async fn get_utxos(
     client: &mut CompactTxStreamerClient<Channel>,
     t_address: &str,
-    _account: u32,
 ) -> anyhow::Result<Vec<GetAddressUtxosReply>> {
     let req = GetAddressUtxosArg {
         addresses: vec![t_address.to_string()],
@@ -118,12 +125,17 @@ pub fn derive_tkeys(
     derive_from_secretkey(network, &secret_key)
 }
 
-pub fn derive_taddr(network: &Network, key: &str) -> anyhow::Result<(String, String)> {
+pub fn parse_seckey(key: &str) -> anyhow::Result<SecretKey> {
     let (_, sk) = key.from_base58check().map_err(|_| anyhow!("Invalid key"))?;
     let sk = &sk[0..sk.len() - 1]; // remove compressed pub key marker
-    log::info!("sk {}", hex::encode(&sk));
     let secret_key = SecretKey::from_slice(&sk)?;
-    derive_from_secretkey(network, &secret_key)
+    Ok(secret_key)
+}
+
+pub fn derive_taddr(network: &Network, key: &str) -> anyhow::Result<(SecretKey, String)> {
+    let secret_key = parse_seckey(key)?;
+    let (_, addr) = derive_from_secretkey(network, &secret_key)?;
+    Ok((secret_key, addr))
 }
 
 pub fn derive_from_secretkey(
@@ -142,6 +154,84 @@ pub fn derive_from_secretkey(
     );
     let sk = sk.display_secret().to_string();
     Ok((sk, address))
+}
+
+pub async fn sweep_tkey(
+    last_height: u32,
+    sk: &str,
+    pool: u8,
+    confirmations: u32,
+) -> anyhow::Result<String> {
+    let c = CoinConfig::get_active();
+    let network = c.chain.network();
+    let (seckey, from_address) = derive_taddr(network, sk)?;
+
+    let (checkpoint_height, to_address) = {
+        let db = c.db().unwrap();
+        let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
+
+        let to_address = match pool {
+            0 => db.get_taddr(c.id_account)?,
+            1 => {
+                let AccountData { address, .. } = db.get_account_info(c.id_account)?;
+                Some(address)
+            }
+            2 => {
+                let okeys = db.get_orchard(c.id_account)?;
+                okeys.map(|okeys| {
+                    let address = okeys.get_address(0);
+                    orchard_as_unified(network, &address).encode()
+                })
+            }
+            _ => unreachable!(),
+        };
+        let to_address = to_address.ok_or(anyhow!("Account has no address of this type"))?;
+        (checkpoint_height, to_address)
+    };
+
+    let mut client = c.connect_lwd().await?;
+    let utxos = get_utxos(&mut client, &from_address).await?;
+    let balance = utxos.iter().map(|utxo| utxo.value_zat).sum::<i64>();
+    println!("balance {}", balance);
+    let utxos: Vec<_> = utxos
+        .iter()
+        .enumerate()
+        .map(|(i, utxo)| UTXO {
+            id: i as u32,
+            source: Source::Transparent {
+                txid: utxo.txid.clone().try_into().unwrap(),
+                index: utxo.index as u32,
+            },
+            amount: utxo.value_zat as u64,
+        })
+        .collect();
+    let recipient = RecipientMemo {
+        address: to_address,
+        amount: balance as u64,
+        fee_included: true,
+        memo: Memo::default(),
+        max_amount_per_note: 0,
+    };
+    println!("build_tx_plan_with_utxos");
+    let tx_plan = build_tx_plan_with_utxos(
+        c.coin,
+        c.id_account,
+        checkpoint_height,
+        last_height + EXPIRY_HEIGHT_OFFSET,
+        slice::from_ref(&recipient),
+        &utxos,
+    )
+    .await?;
+    let skeys = SecretKeys {
+        transparent: Some(seckey),
+        sapling: None,
+        orchard: None,
+    };
+    println!("build_tx");
+    let tx = build_tx(network, &skeys, &tx_plan, OsRng)?;
+    println!("broadcast_tx");
+    let txid = broadcast_tx(&tx).await?;
+    Ok(txid)
 }
 
 pub struct TBalance {
