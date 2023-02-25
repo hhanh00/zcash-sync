@@ -5,7 +5,7 @@ use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
 use crate::prices::Quote;
 use crate::sapling::SaplingViewKey;
 use crate::sync::tree::{CTree, TreeCheckpoint};
-use crate::taddr::derive_tkeys;
+use crate::taddr::{derive_tkeys, TransparentTxInfo};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Hash};
@@ -486,6 +486,14 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn store_transparent_tx(
+        _account: u32,
+        _tx: &TransparentTxInfo,
+        _db_tx: &Transaction,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+
     pub fn add_value(id_tx: u32, value: i64, db_tx: &Transaction) -> anyhow::Result<()> {
         db_tx.execute(
             "UPDATE transactions SET value = value + ?2 WHERE id_tx = ?1",
@@ -823,38 +831,6 @@ impl DbAdapter {
         }
 
         Ok(contacts)
-    }
-
-    pub fn get_diversifier(&self, account: u32) -> anyhow::Result<DiversifierIndex> {
-        let diversifier_index = self
-            .connection
-            .query_row(
-                "SELECT diversifier_index FROM diversifiers WHERE account = ?1",
-                params![account],
-                |row| {
-                    let d: Vec<u8> = row.get(0)?;
-                    let mut div = [0u8; 11];
-                    div.copy_from_slice(&d);
-                    Ok(div)
-                },
-            )
-            .optional()?
-            .unwrap_or([0u8; 11]);
-        Ok(DiversifierIndex(diversifier_index))
-    }
-
-    pub fn store_diversifier(
-        &self,
-        account: u32,
-        diversifier_index: &DiversifierIndex,
-    ) -> anyhow::Result<()> {
-        let diversifier_bytes = diversifier_index.0.to_vec();
-        self.connection.execute(
-            "INSERT INTO diversifiers(account, diversifier_index) VALUES (?1, ?2) ON CONFLICT \
-            (account) DO UPDATE SET diversifier_index = excluded.diversifier_index",
-            params![account, diversifier_bytes],
-        )?;
-        Ok(())
     }
 
     pub fn get_account_info(&self, account: u32) -> anyhow::Result<AccountData> {

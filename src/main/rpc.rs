@@ -356,7 +356,7 @@ pub async fn build_from_plan(tx_plan: Json<TransactionPlan>) -> Result<String, E
 
 #[get("/new_diversified_address")]
 pub fn new_diversified_address() -> Result<String, Error> {
-    let address = warp_api_ffi::api::account::new_diversified_address()?;
+    let address = warp_api_ffi::api::account::get_diversified_address()?;
     Ok(address)
 }
 

@@ -6,8 +6,8 @@ use crate::db::AccountData;
 use crate::note_selection::{SecretKeys, Source, UTXO};
 use crate::unified::orchard_as_unified;
 use crate::{
-    broadcast_tx, build_tx, AddressList, CompactTxStreamerClient, GetAddressUtxosArg,
-    GetAddressUtxosReply, TransparentAddressBlockFilter,
+    broadcast_tx, build_tx, AddressList, BlockId, CompactTxStreamerClient, GetAddressUtxosArg,
+    GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
 };
 use anyhow::anyhow;
 use base58check::FromBase58Check;
@@ -18,13 +18,17 @@ use rand::rngs::OsRng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
+use std::collections::HashMap;
 use tiny_hderive::bip32::ExtendedPrivKey;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::encode_transparent_address;
+use zcash_params::coin::get_branch;
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::memo::Memo;
+use zcash_primitives::transaction::components::OutPoint;
+use zcash_primitives::transaction::Transaction;
 
 pub async fn get_taddr_balance(
     client: &mut CompactTxStreamerClient<Channel>,
@@ -38,6 +42,99 @@ pub async fn get_taddr_balance(
         .await?
         .into_inner();
     Ok(rep.value_zat as u64)
+}
+
+pub struct TransparentTxInfo {
+    pub txid: Hash,
+    pub height: u32,
+    pub timestamp: u32,
+    pub inputs: Vec<OutPoint>,
+    pub in_value: u64,
+    pub out_value: u64,
+}
+
+/* With the current LWD API, this function performs poorly because
+the server does not return tx timestamp, height and value
+ */
+#[allow(unused)]
+pub async fn get_ttx_history(
+    network: &Network,
+    client: &mut CompactTxStreamerClient<Channel>,
+    address: &str,
+) -> anyhow::Result<Vec<TransparentTxInfo>> {
+    let mut rep = client
+        .get_taddress_txids(Request::new(TransparentAddressBlockFilter {
+            address: address.to_string(),
+            range: None,
+        }))
+        .await?
+        .into_inner();
+    let mut heights: HashMap<u32, u32> = HashMap::new();
+    let mut txs = vec![];
+    while let Some(raw_tx) = rep.message().await? {
+        let height = raw_tx.height as u32;
+        heights.insert(height, 0);
+        let consensus_branch_id = get_branch(network, height);
+        let tx = Transaction::read(&*raw_tx.data, consensus_branch_id)?;
+        let txid = tx.txid();
+        let tx_data = tx.into_data();
+        let mut inputs = vec![];
+        if let Some(transparent_bundle) = tx_data.transparent_bundle() {
+            for vin in transparent_bundle.vin.iter() {
+                inputs.push(vin.prevout.clone());
+            }
+            let out_value = transparent_bundle
+                .vout
+                .iter()
+                .map(|vout| i64::from(vout.value))
+                .sum::<i64>() as u64;
+            txs.push(TransparentTxInfo {
+                txid: txid.as_ref().clone(),
+                height,
+                timestamp: 0,
+                inputs,
+                in_value: 0,
+                out_value,
+            });
+        }
+    }
+
+    for (h, timestamp) in heights.iter_mut() {
+        let block = client
+            .get_block(Request::new(BlockId {
+                height: *h as u64,
+                hash: vec![],
+            }))
+            .await?
+            .into_inner();
+        *timestamp = block.time;
+    }
+
+    for tx in txs.iter_mut() {
+        let mut in_value = 0;
+        for input in tx.inputs.iter() {
+            let raw_tx = client
+                .get_transaction(Request::new(TxFilter {
+                    block: None,
+                    index: 0,
+                    hash: input.hash().to_vec(),
+                }))
+                .await?
+                .into_inner();
+            let consensus_branch_id = get_branch(network, raw_tx.height as u32);
+            let tx = Transaction::read(&*raw_tx.data, consensus_branch_id)?;
+            let tx_data = tx.into_data();
+            let transparent_bundle = tx_data
+                .transparent_bundle()
+                .ok_or(anyhow!("No transparent bundle"))?;
+            let value = i64::from(transparent_bundle.vout[input.n() as usize].value);
+            in_value += value;
+        }
+        tx.timestamp = heights[&tx.height];
+        tx.in_value = in_value as u64;
+        tx.inputs.clear();
+    }
+    Ok(txs)
 }
 
 pub async fn get_taddr_tx_count(

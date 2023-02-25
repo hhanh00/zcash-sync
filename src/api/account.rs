@@ -24,6 +24,7 @@ use zcash_address::{ToAddress, ZcashAddress};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
 use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::Parameters;
+use zcash_primitives::zip32::DiversifierIndex;
 
 /// Create a new account
 /// # Arguments
@@ -188,7 +189,7 @@ pub fn import_transparent_secret_key(coin: u8, id_account: u32, sk: &str) -> any
 }
 
 /// Generate a new diversified address
-pub fn new_diversified_address(ua_type: u8) -> anyhow::Result<String> {
+pub fn get_diversified_address(ua_type: u8, time: u32) -> anyhow::Result<String> {
     let ua_type = ua_type & 6; // don't include transparent component
     if ua_type == 0 {
         anyhow::bail!("Must include a shielded receiver");
@@ -201,12 +202,12 @@ pub fn new_diversified_address(ua_type: u8) -> anyhow::Result<String> {
         &fvk,
     )
     .map_err(|_| anyhow!("Bech32 Decode Error"))?;
-    let mut diversifier_index = db.get_diversifier(c.id_account)?;
-    diversifier_index.increment().unwrap();
-    let (new_diversifier_index, pa) = fvk
+    let mut di = [0u8; 11];
+    di[4..8].copy_from_slice(&time.to_le_bytes());
+    let diversifier_index = DiversifierIndex(di);
+    let (_, pa) = fvk
         .find_address(diversifier_index)
         .ok_or_else(|| anyhow::anyhow!("Cannot generate new address"))?;
-    db.store_diversifier(c.id_account, &new_diversifier_index)?;
 
     let orchard_keys = db.get_orchard(c.id_account)?;
     if ua_type == 2 || orchard_keys.is_none() {

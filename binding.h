@@ -190,7 +190,7 @@ int8_t is_valid_key(uint8_t coin, char *key);
 
 bool valid_address(uint8_t coin, char *address);
 
-struct CResult_____c_char new_diversified_address(uint8_t ua_type);
+struct CResult_____c_char get_diversified_address(uint8_t ua_type, uint32_t time);
 
 struct CResult_u32 get_latest_height(void);
 
