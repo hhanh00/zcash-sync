@@ -112,58 +112,57 @@ pub fn decode_transaction(
     timestamp: u32,
     id_tx: u32,
     tx: Transaction,
+    incoming: bool,
     decryption_keys: &DecryptionKeys,
 ) -> anyhow::Result<TransactionDetails> {
     let (sapling_ivk, sapling_ovk) = decryption_keys.sapling_keys.clone();
 
     let block_height = BlockHeight::from_u32(height);
     let mut address: Option<String> = None;
+    let mut change_address = None;
 
     let tx = tx.into_data();
 
     let mut tx_memo: Memo = Memo::Empty;
     let mut contacts = vec![];
-    let mut incoming = true;
 
     if let Some(sapling_bundle) = tx.sapling_bundle() {
         let mut contact_decoder = ContactDecoder::new(sapling_bundle.shielded_outputs.len());
         for output in sapling_bundle.shielded_outputs.iter() {
+            let mut incoming = false;
+            let mut outgoing = false;
+            let mut temp_address = String::new();
             let pivk = PreparedIncomingViewingKey::new(&sapling_ivk);
             if let Some((_note, pa, memo)) =
                 try_sapling_note_decryption(network, block_height, &pivk, output)
             {
-                let memo = Memo::try_from(memo);
-                match memo {
-                    Ok(memo) if memo != Memo::Empty => {
+                if let Ok(memo) = Memo::try_from(memo) {
+                    if memo != Memo::Empty {
                         tx_memo = memo;
-                        if address.is_none() {
-                            address = Some(encode_payment_address(
-                                network.hrp_sapling_payment_address(),
-                                &pa,
-                            ));
-                            incoming = true;
-                        }
                     }
-                    _ => (),
                 }
+                temp_address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
+                incoming = true;
             }
             if let Some((_note, pa, memo, ..)) =
                 try_sapling_output_recovery(network, block_height, &sapling_ovk, output)
             {
                 let _ = contact_decoder.add_memo(&memo); // ignore memo that is not for contacts, if we cannot decode it with ovk, we didn't make create this memo
-                let memo = Memo::try_from(memo);
-                match memo {
-                    Ok(memo) if memo != Memo::Empty => {
+                if let Ok(memo) = Memo::try_from(memo) {
+                    if memo != Memo::Empty {
                         tx_memo = memo;
-                        if address.is_none() {
-                            address = Some(encode_payment_address(
-                                network.hrp_sapling_payment_address(),
-                                &pa,
-                            ));
-                            incoming = false;
-                        }
                     }
-                    _ => (),
+                }
+                temp_address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
+                outgoing = true;
+            }
+
+            if incoming || outgoing {
+                if incoming && outgoing {
+                    // if we made incoming output, it is either a self-transfer or change
+                    change_address = Some(temp_address);
+                } else {
+                    address.get_or_insert(temp_address);
                 }
             }
         }
@@ -175,21 +174,20 @@ pub fn decode_transaction(
             let mut contact_decoder = ContactDecoder::new(orchard_bundle.actions().len());
             if let Some((orchard_ivk, orchard_ovk)) = decryption_keys.orchard_keys.clone() {
                 for action in orchard_bundle.actions().iter() {
+                    let mut incoming = false;
+                    let mut outgoing = false;
+                    let mut temp_address = String::new();
                     let domain = OrchardDomain::for_action(action);
                     if let Some((_note, pa, memo)) =
                         try_note_decryption(&domain, &orchard_ivk, action)
                     {
-                        let memo = Memo::try_from(MemoBytes::from_bytes(&memo)?);
-                        match memo {
-                            Ok(memo) if memo != Memo::Empty => {
+                        if let Ok(memo) = Memo::try_from(MemoBytes::from_bytes(&memo)?) {
+                            if memo != Memo::Empty {
                                 tx_memo = memo;
-                                if address.is_none() {
-                                    address = Some(orchard_as_unified(network, &pa).encode());
-                                    incoming = true;
-                                }
                             }
-                            _ => (),
                         }
+                        temp_address = orchard_as_unified(network, &pa).encode();
+                        incoming = true;
                     }
                     if let Some((_note, pa, memo, ..)) = try_output_recovery_with_ovk(
                         &domain,
@@ -200,16 +198,19 @@ pub fn decode_transaction(
                     ) {
                         let memo_bytes = MemoBytes::from_bytes(&memo)?;
                         let _ = contact_decoder.add_memo(&memo_bytes); // ignore memo that is not for contacts, if we cannot decode it with ovk, we didn't make create this memo
-                        let memo = Memo::try_from(memo_bytes);
-                        match memo {
-                            Ok(memo) if memo != Memo::Empty => {
+                        if let Ok(memo) = Memo::try_from(memo_bytes) {
+                            if memo != Memo::Empty {
                                 tx_memo = memo;
-                                if address.is_none() {
-                                    address = Some(orchard_as_unified(network, &pa).encode());
-                                    incoming = false;
-                                }
                             }
-                            _ => (),
+                        }
+                        temp_address = orchard_as_unified(network, &pa).encode();
+                        outgoing = true;
+                    }
+                    if incoming || outgoing {
+                        if incoming && outgoing {
+                            change_address = Some(temp_address);
+                        } else {
+                            address.get_or_insert(temp_address);
                         }
                     }
                 }
@@ -230,6 +231,10 @@ pub fn decode_transaction(
                 }
             }
         }
+    }
+
+    if address.is_none() {
+        address = change_address; // use if we didn't find any other address
     }
 
     let address = address.unwrap_or(String::new());
@@ -291,6 +296,7 @@ pub async fn retrieve_tx_info(
         req.timestamp,
         req.id_tx,
         transaction,
+        req.value >= 0,
         &decryption_keys,
     )?;
 
@@ -303,6 +309,7 @@ pub struct GetTransactionDetailRequest {
     pub timestamp: u32,
     pub id_tx: u32,
     pub txid: Hash,
+    pub value: i64,
 }
 
 #[derive(Serialize, Debug)]

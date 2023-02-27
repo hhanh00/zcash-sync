@@ -24,7 +24,7 @@ use zcash_params::coin::{get_coin_chain, CoinType};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
-use zcash_primitives::zip32::{DiversifierIndex, ExtendedFullViewingKey};
+use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 mod backup;
 pub mod data_generated;
@@ -1157,7 +1157,7 @@ impl DbAdapter {
 
     pub fn get_txid_without_memo(&self) -> anyhow::Result<Vec<GetTransactionDetailRequest>> {
         let mut stmt = self.connection.prepare(
-            "SELECT account, id_tx, height, timestamp, txid FROM transactions WHERE memo IS NULL",
+            "SELECT account, id_tx, height, timestamp, txid, value FROM transactions WHERE memo IS NULL",
         )?;
         let rows = stmt.query_map([], |row| {
             let account: u32 = row.get(0)?;
@@ -1165,12 +1165,14 @@ impl DbAdapter {
             let height: u32 = row.get(2)?;
             let timestamp: u32 = row.get(3)?;
             let txid: Vec<u8> = row.get(4)?;
+            let value: i64 = row.get(5)?;
             Ok(GetTransactionDetailRequest {
                 account,
                 id_tx,
                 height,
                 timestamp,
                 txid: txid.try_into().unwrap(),
+                value,
             })
         })?;
         let mut reqs = vec![];
