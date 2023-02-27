@@ -820,6 +820,15 @@ pub unsafe extern "C" fn derive_zip32(
     to_cresult_str(res())
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn clear_tx_details(coin: u8, account: u32) -> CResult<u8> {
+    let res = |connection: &Connection| {
+        crate::DbAdapter::clear_tx_details(connection, account)?;
+        Ok(0)
+    };
+    to_cresult(with_account(coin, res))
+}
+
 fn with_account<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, f: F) -> anyhow::Result<T> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;

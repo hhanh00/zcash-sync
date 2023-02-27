@@ -1107,6 +1107,14 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn clear_tx_details(connection: &Connection, account: u32) -> anyhow::Result<()> {
+        connection.execute(
+            "UPDATE transactions SET address = NULL, memo = NULL WHERE account = ?1",
+            [account],
+        )?;
+        Ok(())
+    }
+
     pub fn get_accounts(&self) -> anyhow::Result<Vec<AccountRec>> {
         let mut s = self
             .connection

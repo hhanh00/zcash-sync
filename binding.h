@@ -289,6 +289,8 @@ struct CResult_____c_char derive_zip32(uint8_t coin,
                                        bool has_address,
                                        uint32_t address);
 
+struct CResult_u8 clear_tx_details(uint8_t coin, uint32_t account);
+
 struct CResult______u8 get_account_list(uint8_t coin);
 
 struct CResult_u32 get_active_account(uint8_t coin);
