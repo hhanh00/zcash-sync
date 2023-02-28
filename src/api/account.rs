@@ -4,7 +4,8 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::{
-    AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs,
+    AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs, Backup,
+    BackupArgs,
 };
 use crate::db::AccountData;
 use crate::key2::decode_key;
@@ -119,7 +120,8 @@ pub fn convert_to_watchonly(coin: u8, id_account: u32) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<Backup> {
+pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<Vec<u8>> {
+    let mut builder = flatbuffers::FlatBufferBuilder::new();
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
     let db = c.db()?;
@@ -131,29 +133,36 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<Backup> {
         aindex,
         ..
     } = db.get_account_info(id_account)?;
+    let name = builder.create_string(&name);
+    let seed = seed.map(|seed| builder.create_string(&seed));
+    let sk = sk.map(|sk| builder.create_string(&sk));
     let orchard_keys = db.get_orchard(id_account)?;
-    let fvk = match orchard_keys {
-        None => fvk,
-        Some(OrchardKeyBytes { fvk: ofvk, .. }) => {
-            // orchard sk is not serializable and must derived from seed
-            let sapling_efvk = decode_extended_full_viewing_key(
-                network.hrp_sapling_extended_full_viewing_key(),
-                &fvk,
-            )
-            .unwrap();
-            let sapling_dfvk = sapling_efvk.to_diversifiable_full_viewing_key();
-            let orchard_fvk = orchard::keys::FullViewingKey::from_bytes(&ofvk);
-            let ufvk = UnifiedFullViewingKey::new(Some(sapling_dfvk), orchard_fvk).unwrap();
-            ufvk.encode(network)
-        }
-    };
-    Ok(Backup {
-        name,
-        seed,
-        index: aindex,
-        sk,
-        ivk: fvk,
-    })
+    let uvk = orchard_keys.map(|OrchardKeyBytes { fvk: ofvk, .. }| {
+        // orchard sk is not serializable and must derived from seed
+        let sapling_efvk =
+            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
+                .unwrap();
+        let sapling_dfvk = sapling_efvk.to_diversifiable_full_viewing_key();
+        let orchard_fvk = orchard::keys::FullViewingKey::from_bytes(&ofvk);
+        let ufvk = UnifiedFullViewingKey::new(Some(sapling_dfvk), orchard_fvk).unwrap();
+        let ufvk = ufvk.encode(network);
+        builder.create_string(&ufvk)
+    });
+    let fvk = builder.create_string(&fvk);
+    let backup = Backup::create(
+        &mut builder,
+        &BackupArgs {
+            name: Some(name),
+            seed,
+            index: aindex,
+            sk,
+            fvk: Some(fvk),
+            uvk,
+        },
+    );
+    builder.finish(backup, None);
+    let data = builder.finished_data().to_vec();
+    Ok(data)
 }
 
 /// Update the transparent secret key for the given account from a derivation path
@@ -439,13 +448,4 @@ pub fn decode_unified_address(coin: u8, address: &str) -> anyhow::Result<String>
     let c = CoinConfig::get(coin);
     let res = crate::decode_unified_address(c.chain.network(), address)?;
     Ok(res.to_string())
-}
-
-#[derive(Serialize)]
-pub struct Backup {
-    name: String,
-    seed: Option<String>,
-    index: u32,
-    sk: Option<String>,
-    ivk: String,
 }

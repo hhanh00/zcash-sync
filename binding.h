@@ -34,6 +34,12 @@ typedef struct CResult_u32 {
   uint32_t len;
 } CResult_u32;
 
+typedef struct CResult______u8 {
+  const uint8_t *value;
+  char *error;
+  uint32_t len;
+} CResult______u8;
+
 typedef struct CResult_____c_char {
   char *value;
   char *error;
@@ -45,12 +51,6 @@ typedef struct CResult_u64 {
   char *error;
   uint32_t len;
 } CResult_u64;
-
-typedef struct CResult______u8 {
-  const uint8_t *value;
-  char *error;
-  uint32_t len;
-} CResult______u8;
 
 #define Account_VT_ID 4
 
@@ -138,6 +138,14 @@ typedef struct CResult______u8 {
 
 #define AddressBalance_VT_INDEX 4
 
+#define Backup_VT_SEED 6
+
+#define Backup_VT_SK 10
+
+#define Backup_VT_FVK 12
+
+#define Backup_VT_UVK 14
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -170,7 +178,7 @@ void new_sub_account(char *name, int32_t index, uint32_t count);
 
 struct CResult_u8 convert_to_watchonly(uint8_t coin, uint32_t id_account);
 
-struct CResult_____c_char get_backup(uint8_t coin, uint32_t id_account);
+struct CResult______u8 get_backup(uint8_t coin, uint32_t id_account);
 
 struct CResult_____c_char get_address(uint8_t coin, uint32_t id_account, uint8_t ua_type);
 

@@ -4438,5 +4438,266 @@ impl CheckpointVecT {
     })
   }
 }
+pub enum BackupOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Backup<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Backup<'a> {
+  type Inner = Backup<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Backup<'a> {
+  pub const VT_NAME: flatbuffers::VOffsetT = 4;
+  pub const VT_SEED: flatbuffers::VOffsetT = 6;
+  pub const VT_INDEX: flatbuffers::VOffsetT = 8;
+  pub const VT_SK: flatbuffers::VOffsetT = 10;
+  pub const VT_FVK: flatbuffers::VOffsetT = 12;
+  pub const VT_UVK: flatbuffers::VOffsetT = 14;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Backup { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args BackupArgs<'args>
+  ) -> flatbuffers::WIPOffset<Backup<'bldr>> {
+    let mut builder = BackupBuilder::new(_fbb);
+    if let Some(x) = args.uvk { builder.add_uvk(x); }
+    if let Some(x) = args.fvk { builder.add_fvk(x); }
+    if let Some(x) = args.sk { builder.add_sk(x); }
+    builder.add_index(args.index);
+    if let Some(x) = args.seed { builder.add_seed(x); }
+    if let Some(x) = args.name { builder.add_name(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> BackupT {
+    let name = self.name().map(|x| {
+      x.to_string()
+    });
+    let seed = self.seed().map(|x| {
+      x.to_string()
+    });
+    let index = self.index();
+    let sk = self.sk().map(|x| {
+      x.to_string()
+    });
+    let fvk = self.fvk().map(|x| {
+      x.to_string()
+    });
+    let uvk = self.uvk().map(|x| {
+      x.to_string()
+    });
+    BackupT {
+      name,
+      seed,
+      index,
+      sk,
+      fvk,
+      uvk,
+    }
+  }
+
+  #[inline]
+  pub fn name(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Backup::VT_NAME, None)}
+  }
+  #[inline]
+  pub fn seed(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Backup::VT_SEED, None)}
+  }
+  #[inline]
+  pub fn index(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Backup::VT_INDEX, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn sk(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Backup::VT_SK, None)}
+  }
+  #[inline]
+  pub fn fvk(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Backup::VT_FVK, None)}
+  }
+  #[inline]
+  pub fn uvk(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Backup::VT_UVK, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for Backup<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("seed", Self::VT_SEED, false)?
+     .visit_field::<u32>("index", Self::VT_INDEX, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("sk", Self::VT_SK, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("fvk", Self::VT_FVK, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("uvk", Self::VT_UVK, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct BackupArgs<'a> {
+    pub name: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub seed: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub index: u32,
+    pub sk: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub fvk: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub uvk: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for BackupArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    BackupArgs {
+      name: None,
+      seed: None,
+      index: 0,
+      sk: None,
+      fvk: None,
+      uvk: None,
+    }
+  }
+}
+
+pub struct BackupBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> BackupBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_NAME, name);
+  }
+  #[inline]
+  pub fn add_seed(&mut self, seed: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_SEED, seed);
+  }
+  #[inline]
+  pub fn add_index(&mut self, index: u32) {
+    self.fbb_.push_slot::<u32>(Backup::VT_INDEX, index, 0);
+  }
+  #[inline]
+  pub fn add_sk(&mut self, sk: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_SK, sk);
+  }
+  #[inline]
+  pub fn add_fvk(&mut self, fvk: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_FVK, fvk);
+  }
+  #[inline]
+  pub fn add_uvk(&mut self, uvk: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_UVK, uvk);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> BackupBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    BackupBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Backup<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Backup<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Backup");
+      ds.field("name", &self.name());
+      ds.field("seed", &self.seed());
+      ds.field("index", &self.index());
+      ds.field("sk", &self.sk());
+      ds.field("fvk", &self.fvk());
+      ds.field("uvk", &self.uvk());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct BackupT {
+  pub name: Option<String>,
+  pub seed: Option<String>,
+  pub index: u32,
+  pub sk: Option<String>,
+  pub fvk: Option<String>,
+  pub uvk: Option<String>,
+}
+impl Default for BackupT {
+  fn default() -> Self {
+    Self {
+      name: None,
+      seed: None,
+      index: 0,
+      sk: None,
+      fvk: None,
+      uvk: None,
+    }
+  }
+}
+impl BackupT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<Backup<'b>> {
+    let name = self.name.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let seed = self.seed.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let index = self.index;
+    let sk = self.sk.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let fvk = self.fvk.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let uvk = self.uvk.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    Backup::create(_fbb, &BackupArgs{
+      name,
+      seed,
+      index,
+      sk,
+      fvk,
+      uvk,
+    })
+  }
+}
 }  // pub mod fb
 

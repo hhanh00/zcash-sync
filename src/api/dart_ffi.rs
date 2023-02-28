@@ -236,14 +236,13 @@ pub unsafe extern "C" fn convert_to_watchonly(coin: u8, id_account: u32) -> CRes
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_backup(coin: u8, id_account: u32) -> CResult<*mut c_char> {
+pub unsafe extern "C" fn get_backup(coin: u8, id_account: u32) -> CResult<*const u8> {
     let res = || {
-        let backup = crate::api::account::get_backup_package(coin, id_account)?;
-        let backup_str = serde_json::to_string(&backup)?;
-        Ok::<_, anyhow::Error>(backup_str)
+        let backup_bytes = crate::api::account::get_backup_package(coin, id_account)?;
+        Ok::<_, anyhow::Error>(backup_bytes)
     };
 
-    to_cresult_str(res())
+    to_cresult_bytes(res())
 }
 
 #[no_mangle]
