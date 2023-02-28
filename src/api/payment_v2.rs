@@ -13,6 +13,8 @@ use rand::rngs::OsRng;
 use std::cmp::min;
 use std::slice;
 use std::str::FromStr;
+use zcash_client_backend::encoding::decode_extended_full_viewing_key;
+use zcash_primitives::consensus::Parameters;
 use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::transaction::builder::Progress;
 
@@ -115,13 +117,24 @@ pub async fn build_tx_plan(
 
 pub fn sign_plan(coin: u8, account: u32, tx_plan: &TransactionPlan) -> anyhow::Result<Vec<u8>> {
     let c = CoinConfig::get(coin);
+    let network = c.chain.network();
     let fvk = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
         fvk
     };
+    let fvk =
+        decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
+            .unwrap()
+            .to_diversifiable_full_viewing_key();
+    let tx_plan_fvk = decode_extended_full_viewing_key(
+        network.hrp_sapling_extended_full_viewing_key(),
+        &tx_plan.fvk,
+    )
+    .unwrap()
+    .to_diversifiable_full_viewing_key();
 
-    if fvk != tx_plan.fvk {
+    if fvk.to_bytes() != tx_plan_fvk.to_bytes() {
         return Err(anyhow::anyhow!("Account does not match transaction"));
     }
 
