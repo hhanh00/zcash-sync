@@ -166,6 +166,7 @@ impl DbAdapter {
 
     pub fn init_db(&mut self) -> anyhow::Result<()> {
         self.delete_incomplete_scan()?;
+        self.delete_orphan_transactions()?;
         Ok(())
     }
 
@@ -1084,6 +1085,12 @@ impl DbAdapter {
         )?;
         self.connection
             .execute("DELETE FROM messages WHERE account = ?1", params![account])?;
+        Ok(())
+    }
+
+    pub fn delete_orphan_transactions(&self) -> anyhow::Result<()> {
+        self.connection.execute("DELETE FROM transactions WHERE id_tx IN (SELECT tx.id_tx FROM transactions tx LEFT JOIN accounts a ON tx.account = a.id_account WHERE a.id_account IS NULL)",
+            [])?;
         Ok(())
     }
 
