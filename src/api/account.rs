@@ -5,7 +5,7 @@
 use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::{
     AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs, Backup,
-    BackupArgs,
+    BackupArgs, BackupT,
 };
 use crate::db::AccountData;
 use crate::key2::decode_key;
@@ -120,8 +120,7 @@ pub fn convert_to_watchonly(coin: u8, id_account: u32) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
     let db = c.db()?;
@@ -133,9 +132,6 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<Vec<u8>> 
         aindex,
         ..
     } = db.get_account_info(id_account)?;
-    let name = builder.create_string(&name);
-    let seed = seed.map(|seed| builder.create_string(&seed));
-    let sk = sk.map(|sk| builder.create_string(&sk));
     let orchard_keys = db.get_orchard(id_account)?;
     let uvk = orchard_keys.map(|OrchardKeyBytes { fvk: ofvk, .. }| {
         // orchard sk is not serializable and must derived from seed
@@ -145,24 +141,17 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<Vec<u8>> 
         let sapling_dfvk = sapling_efvk.to_diversifiable_full_viewing_key();
         let orchard_fvk = orchard::keys::FullViewingKey::from_bytes(&ofvk);
         let ufvk = UnifiedFullViewingKey::new(Some(sapling_dfvk), orchard_fvk).unwrap();
-        let ufvk = ufvk.encode(network);
-        builder.create_string(&ufvk)
+        ufvk.encode(network)
     });
-    let fvk = builder.create_string(&fvk);
-    let backup = Backup::create(
-        &mut builder,
-        &BackupArgs {
-            name: Some(name),
-            seed,
-            index: aindex,
-            sk,
-            fvk: Some(fvk),
-            uvk,
-        },
-    );
-    builder.finish(backup, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let backup = BackupT {
+        name: Some(name),
+        seed,
+        index: aindex,
+        sk,
+        fvk: Some(fvk),
+        uvk,
+    };
+    Ok(backup)
 }
 
 /// Update the transparent secret key for the given account from a derivation path

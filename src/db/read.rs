@@ -243,8 +243,7 @@ pub fn get_notes(connection: &Connection, id: u32) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-pub fn get_txs(connection: &Connection, id: u32) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_txs(connection: &Connection, id: u32) -> Result<ShieldedTxVecT> {
     let mut stmt = connection.prepare(
         "SELECT id_tx, txid, height, timestamp, t.address, c.name AS cname, a.name AS aname, value, memo FROM transactions t \
         LEFT JOIN contacts c ON t.address = c.address \
@@ -260,42 +259,29 @@ pub fn get_txs(connection: &Connection, id: u32) -> Result<Vec<u8>> {
         let timestamp: u32 = row.get("timestamp")?;
         let contact_name: Option<String> = row.get("cname")?;
         let account_name: Option<String> = row.get("aname")?;
-        let name = contact_name.or(account_name).unwrap_or(String::new());
+        let name = contact_name.or(account_name);
         let value: i64 = row.get("value")?;
         let address: Option<String> = row.get("address")?;
         let memo: Option<String> = row.get("memo")?;
-        let address = address.unwrap_or(String::new());
-        let memo = memo.unwrap_or(String::new());
-        let tx_id = builder.create_string(&tx_id);
-        let short_tx_id = builder.create_string(&short_tx_id);
-        let name = builder.create_string(&name);
-        let address = builder.create_string(&address);
-        let memo = builder.create_string(&memo);
-        let tx = ShieldedTx::create(
-            &mut builder,
-            &ShieldedTxArgs {
-                id: id_tx,
-                height,
-                tx_id: Some(tx_id),
-                short_tx_id: Some(short_tx_id),
-                timestamp,
-                name: Some(name),
-                value: value as u64,
-                address: Some(address),
-                memo: Some(memo),
-            },
-        );
+        let tx = ShieldedTxT {
+            id: id_tx,
+            height,
+            tx_id: Some(tx_id),
+            short_tx_id: Some(short_tx_id),
+            timestamp,
+            name,
+            value: value as u64,
+            address,
+            memo,
+        };
         Ok(tx)
     })?;
     let mut txs = vec![];
     for r in rows {
         txs.push(r?);
     }
-    let txs = builder.create_vector(&txs);
-    let txs = ShieldedTxVec::create(&mut builder, &ShieldedTxVecArgs { txs: Some(txs) });
-    builder.finish(txs, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let txs = ShieldedTxVecT { txs: Some(txs) };
+    Ok(txs)
 }
 
 pub fn get_messages(connection: &Connection, id: u32) -> Result<Vec<u8>> {

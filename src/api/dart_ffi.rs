@@ -5,6 +5,7 @@ use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
+use flatbuffers::FlatBufferBuilder;
 use lazy_static::lazy_static;
 use log::Level;
 use rusqlite::Connection;
@@ -238,8 +239,11 @@ pub unsafe extern "C" fn convert_to_watchonly(coin: u8, id_account: u32) -> CRes
 #[no_mangle]
 pub unsafe extern "C" fn get_backup(coin: u8, id_account: u32) -> CResult<*const u8> {
     let res = || {
-        let backup_bytes = crate::api::account::get_backup_package(coin, id_account)?;
-        Ok::<_, anyhow::Error>(backup_bytes)
+        let mut builder = FlatBufferBuilder::new();
+        let backup = crate::api::account::get_backup_package(coin, id_account)?;
+        let backup_bytes = backup.pack(&mut builder);
+        builder.finish(backup_bytes, None);
+        Ok::<_, anyhow::Error>(builder.finished_data().to_vec())
     };
 
     to_cresult_bytes(res())
@@ -925,8 +929,11 @@ pub unsafe extern "C" fn get_notes(coin: u8, id: u32) -> CResult<*const u8> {
 #[no_mangle]
 pub unsafe extern "C" fn get_txs(coin: u8, id: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
-        let data = crate::db::read::get_txs(connection, id)?;
-        Ok(data)
+        let shielded_txs = crate::db::read::get_txs(connection, id)?;
+        let mut builder = FlatBufferBuilder::new();
+        let shielded_txs = shielded_txs.pack(&mut builder);
+        builder.finish(shielded_txs, None);
+        Ok(builder.finished_data().to_vec())
     };
     to_cresult_bytes(with_account(coin, res))
 }
