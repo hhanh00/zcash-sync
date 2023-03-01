@@ -122,37 +122,39 @@ impl DbAdapter {
     }
 
     pub async fn migrate_data(&self, coin: u8) -> anyhow::Result<()> {
-        let mut client: Option<CompactTxStreamerClient<Channel>> = None;
-        let mut stmt = self.connection.prepare("select s.height from sapling_tree s LEFT JOIN orchard_tree o ON s.height = o.height WHERE o.height IS NULL")?;
-        let rows = stmt.query_map([], |row| {
-            let height: u32 = row.get(0)?;
-            Ok(height)
-        })?;
-        let mut trees = HashMap::new();
-        for r in rows {
-            trees.insert(r?, vec![]);
-        }
-        for (height, tree) in trees.iter_mut() {
-            if client.is_none() {
-                let cc = CoinConfig::get(coin);
-                client = Some(cc.connect_lwd().await?);
+        let cc = CoinConfig::get(coin);
+        if cc.chain.has_unified() {
+            let mut client: Option<CompactTxStreamerClient<Channel>> = None;
+            let mut stmt = self.connection.prepare("select s.height from sapling_tree s LEFT JOIN orchard_tree o ON s.height = o.height WHERE o.height IS NULL")?;
+            let rows = stmt.query_map([], |row| {
+                let height: u32 = row.get(0)?;
+                Ok(height)
+            })?;
+            let mut trees = HashMap::new();
+            for r in rows {
+                trees.insert(r?, vec![]);
             }
-            let client = client.as_mut().unwrap();
-            let tree_state = client
-                .get_tree_state(Request::new(BlockId {
-                    height: *height as u64,
-                    hash: vec![],
-                }))
-                .await?
-                .into_inner();
-            let orchard_tree = hex::decode(&tree_state.orchard_tree).unwrap();
-            tree.extend(orchard_tree);
-        }
-        for (height, tree) in trees.iter() {
-            self.connection.execute(
-                "INSERT INTO orchard_tree(height, tree) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
-                params![height, tree],
-            )?;
+            for (height, tree) in trees.iter_mut() {
+                if client.is_none() {
+                    client = Some(cc.connect_lwd().await?);
+                }
+                let client = client.as_mut().unwrap();
+                let tree_state = client
+                    .get_tree_state(Request::new(BlockId {
+                        height: *height as u64,
+                        hash: vec![],
+                    }))
+                    .await?
+                    .into_inner();
+                let orchard_tree = hex::decode(&tree_state.orchard_tree).unwrap();
+                tree.extend(orchard_tree);
+            }
+            for (height, tree) in trees.iter() {
+                self.connection.execute(
+                    "INSERT INTO orchard_tree(height, tree) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
+                    params![height, tree],
+                )?;
+            }
         }
         Ok(())
     }
