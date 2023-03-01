@@ -4,8 +4,7 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::{
-    AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs, Backup,
-    BackupArgs, BackupT,
+    AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs, BackupT,
 };
 use crate::db::AccountData;
 use crate::key2::decode_key;

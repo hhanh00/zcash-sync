@@ -354,15 +354,17 @@ pub async fn build_from_plan(tx_plan: Json<TransactionPlan>) -> Result<String, E
     Ok(tx)
 }
 
-#[get("/new_diversified_address")]
-pub fn new_diversified_address() -> Result<String, Error> {
-    let address = warp_api_ffi::api::account::get_diversified_address()?;
+#[get("/new_diversified_address?<ua_type>&<time>")]
+pub fn new_diversified_address(ua_type: u8, time: u32) -> Result<String, Error> {
+    let address = warp_api_ffi::api::account::get_diversified_address(ua_type, time)?;
     Ok(address)
 }
 
 #[post("/make_payment_uri", data = "<payment>")]
 pub fn make_payment_uri(payment: Json<PaymentURI>) -> Result<String, Error> {
+    let c = CoinConfig::get_active();
     let uri = warp_api_ffi::api::payment_uri::make_payment_uri(
+        c.coin,
         &payment.address,
         payment.amount,
         &payment.memo,
