@@ -27,10 +27,12 @@ use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 mod backup;
+pub mod cipher;
 pub mod data_generated;
 mod migration;
 pub mod read;
 
+use crate::db::cipher::set_db_passwd;
 use crate::db::data_generated::fb::SendTemplate;
 pub use backup::FullEncryptedBackup;
 
@@ -41,6 +43,7 @@ pub const DEFAULT_DB_PATH: &str = "zec.db";
 pub struct DbAdapterBuilder {
     pub coin_type: CoinType,
     pub db_path: String,
+    pub passwd: String,
 }
 
 pub struct DbAdapter {
@@ -93,13 +96,14 @@ pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> any
 
 impl DbAdapterBuilder {
     pub fn build(&self) -> anyhow::Result<DbAdapter> {
-        DbAdapter::new(self.coin_type, &self.db_path)
+        DbAdapter::new(self.coin_type, &self.db_path, &self.passwd)
     }
 }
 
 impl DbAdapter {
-    pub fn new(coin_type: CoinType, db_path: &str) -> anyhow::Result<DbAdapter> {
+    pub fn new(coin_type: CoinType, db_path: &str, passwd: &str) -> anyhow::Result<DbAdapter> {
         let connection = Connection::open(db_path)?;
+        set_db_passwd(&connection, passwd)?;
         Ok(DbAdapter {
             coin_type,
             connection,
@@ -107,7 +111,12 @@ impl DbAdapter {
         })
     }
 
-    pub fn migrate_db(network: &Network, db_path: &str, has_ua: bool) -> anyhow::Result<()> {
+    pub fn migrate_db(
+        network: &Network,
+        db_path: &str,
+        passwd: &str,
+        has_ua: bool,
+    ) -> anyhow::Result<()> {
         let dir = Path::new(db_path)
             .parent()
             .ok_or(anyhow!("Invalid db path"))?;
@@ -116,6 +125,7 @@ impl DbAdapter {
             db_path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
         )?;
+        set_db_passwd(&connection, passwd)?;
         connection.query_row("PRAGMA journal_mode=wal", [], |_| Ok(()))?;
         migration::init_db(&connection, network, has_ua)?;
         Ok(())
@@ -573,7 +583,7 @@ impl DbAdapter {
 
         match tree {
             Some(tree) => {
-                let tree = sync::CTree::read(&*tree)?;
+                let tree = CTree::read(&*tree)?;
                 let mut statement = self.connection.prepare(
                     &format!("SELECT id_note, witness FROM {}_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND (n.spent IS NULL OR n.spent = 0)", shielded_pool))?;
                 let ws = statement.query_map(params![height], |row| {
@@ -1289,7 +1299,7 @@ mod tests {
 
     #[test]
     fn test_balance() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
+        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, "").unwrap();
         let balance = db.get_balance(1).unwrap();
         println!("{}", balance);
     }

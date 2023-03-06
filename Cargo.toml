@@ -116,8 +116,7 @@ rpc = ["rocket", "dotenv"]
 nodejs = ["node-bindgen"]
 cuda = ["rustacuda", "rustacuda_core"]
 apple_metal = ["metal", "objc", "block"]
-
-# librustzcash synced to 2781e8514533ea9f31e00465ee984036e3fa493c
+sqlcipher = ["rusqlite/bundled-sqlcipher"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"

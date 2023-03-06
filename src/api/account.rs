@@ -18,7 +18,6 @@ use bip39::{Language, Mnemonic};
 use orchard::keys::{FullViewingKey, Scope};
 use rand::rngs::OsRng;
 use rand::RngCore;
-use serde::Serialize;
 use zcash_address::unified::{Address as UA, Receiver};
 use zcash_address::{ToAddress, ZcashAddress};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};

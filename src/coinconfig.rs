@@ -7,7 +7,7 @@ use lazycell::AtomicLazyCell;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tonic::transport::Channel;
-use zcash_params::coin::{get_coin_chain, get_coin_type, CoinChain, CoinType};
+use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_proofs::prover::LocalTxProver;
 
@@ -52,6 +52,12 @@ pub fn get_coin_lwd_url(coin: u8) -> String {
     c.lwd_url.clone().unwrap_or_default()
 }
 
+/// Set the db passwd
+pub fn set_coin_passwd(coin: u8, passwd: &str) {
+    let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
+    c.passwd = passwd.to_string();
+}
+
 /// Initialize a coin with a database path
 pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
     let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
@@ -64,8 +70,9 @@ pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
 /// Upgrade database schema for given coin and db path
 /// Used from ywallet
 pub fn migrate_db(coin: u8, db_path: &str) -> anyhow::Result<()> {
-    let chain = get_coin_chain(get_coin_type(coin));
-    DbAdapter::migrate_db(chain.network(), db_path, chain.has_unified())?;
+    let c = CoinConfig::get(coin);
+    let chain = c.chain;
+    DbAdapter::migrate_db(chain.network(), db_path, &c.passwd, chain.has_unified())?;
     Ok(())
 }
 
@@ -83,6 +90,7 @@ pub struct CoinConfig {
     pub id_account: u32,
     pub height: u32,
     pub lwd_url: Option<String>,
+    pub passwd: String,
     pub db_path: Option<String>,
     pub db: Option<Arc<Mutex<DbAdapter>>>,
     pub chain: &'static (dyn CoinChain + Send),
@@ -97,6 +105,7 @@ impl CoinConfig {
             id_account: 0,
             height: 0,
             lwd_url: None,
+            passwd: String::new(),
             db_path: None,
             db: None,
             chain,
@@ -113,13 +122,14 @@ impl CoinConfig {
         DbAdapter::migrate_db(
             network,
             self.db_path.as_ref().unwrap(),
+            &self.passwd,
             self.chain.has_unified(),
         )?;
         Ok(())
     }
 
     pub fn open_db(&mut self) -> anyhow::Result<()> {
-        let mut db = DbAdapter::new(self.coin_type, self.db_path.as_ref().unwrap())?;
+        let mut db = DbAdapter::new(self.coin_type, self.db_path.as_ref().unwrap(), &self.passwd)?;
         db.init_db()?;
         self.db = Some(Arc::new(Mutex::new(db)));
         Ok(())

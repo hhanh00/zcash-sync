@@ -52,6 +52,12 @@ typedef struct CResult_u64 {
   uint32_t len;
 } CResult_u64;
 
+typedef struct CResult_bool {
+  bool value;
+  char *error;
+  uint32_t len;
+} CResult_bool;
+
 #define Account_VT_ID 4
 
 #define Account_VT_NAME 6
@@ -165,6 +171,8 @@ void set_active(uint8_t active);
 void set_coin_lwd_url(uint8_t coin, char *lwd_url);
 
 char *get_lwd_url(uint8_t coin);
+
+void set_coin_passwd(uint8_t coin, char *passwd);
 
 void reset_app(void);
 
@@ -345,6 +353,10 @@ struct CResult_u8 update_excluded(uint8_t coin, uint32_t id, bool excluded);
 struct CResult_u8 invert_excluded(uint8_t coin, uint32_t id);
 
 struct CResult______u8 get_checkpoints(uint8_t coin);
+
+struct CResult_bool decrypt_db(char *db_path, char *passwd);
+
+struct CResult_u8 clone_db_with_passwd(uint8_t coin, char *temp_path, char *passwd);
 
 bool has_cuda(void);
 
