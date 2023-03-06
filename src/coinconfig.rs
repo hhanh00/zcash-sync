@@ -34,8 +34,9 @@ pub fn set_active(active: u8) {
 pub fn set_active_account(coin: u8, id: u32) {
     let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
     c.id_account = id;
-    let mempool = MEMPOOL.borrow().unwrap();
-    mempool.set_active(coin, id);
+    if let Some(mempool) = MEMPOOL.borrow() {
+        mempool.set_active(coin, id);
+    }
 }
 
 /// Set the lightwalletd url for a given coin

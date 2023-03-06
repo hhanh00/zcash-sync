@@ -157,5 +157,5 @@ criterion = "0.3.4"
 
 #These patch overrides must be included in your workspace root Cargo.toml
 #[patch.crates-io]
-#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "2cb26889d9384c7f43f1bd8417a5c088ae380323" }
+#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "ad4a1c61fdaf04ac4fb884976ad175196e695264" }
 #jubjub = { git = "https://github.com/hhanh00/jubjub.git", rev = "4a3edf3d242f368b5aa418ec659d01f191127cf3" }
