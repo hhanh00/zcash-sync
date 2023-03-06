@@ -1,3 +1,4 @@
+use crate::key2::split_key;
 use bip39::{Language, Mnemonic, Seed};
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use orchard::Address;
@@ -16,8 +17,9 @@ impl OrchardKeyBytes {
 }
 
 pub fn derive_orchard_keys(coin_type: u32, seed: &str, account_index: u32) -> OrchardKeyBytes {
-    let mnemonic = Mnemonic::from_phrase(seed, Language::English).unwrap();
-    let seed = Seed::new(&mnemonic, "");
+    let (phrase, password) = split_key(seed);
+    let mnemonic = Mnemonic::from_phrase(&phrase, Language::English).unwrap();
+    let seed = Seed::new(&mnemonic, &password);
     let sk = SpendingKey::from_zip32_seed(seed.as_bytes(), coin_type, account_index).unwrap();
     let fvk = FullViewingKey::from(&sk);
     OrchardKeyBytes {

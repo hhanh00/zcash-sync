@@ -10,6 +10,20 @@ use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
 
+pub fn split_key(key: &str) -> (String, String) {
+    let words: Vec<_> = key.split_whitespace().collect();
+    let len = words.len();
+    let (phrase, password) = if len % 3 == 1 {
+        // extra word
+        let phrase = words[0..len - 1].join(" ");
+        let password = words[len - 1].to_string();
+        (phrase, password)
+    } else {
+        (key.to_string(), String::new())
+    };
+    (phrase, password)
+}
+
 pub fn decode_key(
     coin: u8,
     key: &str,
@@ -23,8 +37,9 @@ pub fn decode_key(
 )> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
-    let res = if let Ok(mnemonic) = Mnemonic::from_phrase(key, Language::English) {
-        let (sk, ivk, pa) = derive_secret_key(network, &mnemonic, index)?;
+    let (phrase, password) = split_key(key);
+    let res = if let Ok(mnemonic) = Mnemonic::from_phrase(&phrase, Language::English) {
+        let (sk, ivk, pa) = derive_secret_key(network, &mnemonic, &password, index)?;
         Ok((Some(key.to_string()), Some(sk), ivk, pa, None))
     } else if let Ok(sk) =
         decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key)
@@ -59,7 +74,8 @@ pub fn decode_key(
 pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
-    if Mnemonic::from_phrase(key, Language::English).is_ok() {
+    let (phrase, _password) = split_key(key);
+    if Mnemonic::from_phrase(&phrase, Language::English).is_ok() {
         return 0;
     }
     if decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key).is_ok() {
@@ -80,15 +96,16 @@ pub fn is_valid_key(coin: u8, key: &str) -> i8 {
 pub fn decode_address(coin: u8, address: &str) -> Option<RecipientAddress> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
-    zcash_client_backend::address::RecipientAddress::decode(network, address)
+    RecipientAddress::decode(network, address)
 }
 
 fn derive_secret_key(
     network: &Network,
     mnemonic: &Mnemonic,
+    password: &str,
     index: u32,
 ) -> anyhow::Result<(String, String, String)> {
-    let seed = Seed::new(mnemonic, "");
+    let seed = Seed::new(mnemonic, password);
     let master = ExtendedSpendingKey::master(seed.as_bytes());
     let path = [
         ChildIndex::Hardened(32),

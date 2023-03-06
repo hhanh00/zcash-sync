@@ -1,3 +1,4 @@
+use crate::key2::split_key;
 use anyhow::anyhow;
 use base58check::ToBase58Check;
 use bip39::{Language, Mnemonic, Seed};
@@ -28,8 +29,9 @@ pub fn derive_zip32(
     external: u32,
     address_index: Option<u32>,
 ) -> anyhow::Result<KeyPack> {
-    let mnemonic = Mnemonic::from_phrase(phrase, Language::English)?;
-    let seed = Seed::new(&mnemonic, "");
+    let (phrase, password) = split_key(phrase);
+    let mnemonic = Mnemonic::from_phrase(&phrase, Language::English)?;
+    let seed = Seed::new(&mnemonic, &password);
     let master = ExtendedSpendingKey::master(seed.as_bytes());
     let mut z_path = vec![
         ChildIndex::Hardened(32),

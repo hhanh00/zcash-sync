@@ -3,6 +3,7 @@ use crate::api::recipient::RecipientMemo;
 use crate::chain::{get_checkpoint_height, EXPIRY_HEIGHT_OFFSET};
 use crate::coinconfig::CoinConfig;
 use crate::db::AccountData;
+use crate::key2::split_key;
 use crate::note_selection::{SecretKeys, Source, UTXO};
 use crate::unified::orchard_as_unified;
 use crate::{
@@ -214,8 +215,9 @@ pub fn derive_tkeys(
     phrase: &str,
     path: &str,
 ) -> anyhow::Result<(String, String)> {
-    let mnemonic = Mnemonic::from_phrase(phrase, Language::English)?;
-    let seed = Seed::new(&mnemonic, "");
+    let (phrase, password) = split_key(phrase);
+    let mnemonic = Mnemonic::from_phrase(&phrase, Language::English)?;
+    let seed = Seed::new(&mnemonic, &password);
     let ext = ExtendedPrivKey::derive(seed.as_bytes(), path)
         .map_err(|_| anyhow!("Invalid derivation path"))?;
     let secret_key = SecretKey::from_slice(&ext.secret())?;
