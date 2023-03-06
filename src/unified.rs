@@ -11,6 +11,7 @@ use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::sapling::PaymentAddress;
 
+#[derive(Debug)]
 pub struct UnifiedAddressType {
     pub transparent: bool,
     pub sapling: bool,
@@ -47,15 +48,22 @@ pub fn get_unified_address(
     account: u32,
     tpe: Option<UnifiedAddressType>,
 ) -> anyhow::Result<String> {
-    let tpe = tpe
+    let mut tpe = tpe
         .ok_or(anyhow!(""))
         .or_else(|_| db.get_ua_settings(account))?;
+    if db.get_taddr(account)?.is_none() {
+        tpe.transparent = false;
+    }
+    if db.get_orchard(account)?.is_none() {
+        tpe.orchard = false;
+    }
+    if !tpe.sapling && !tpe.orchard {
+        // UA cannot be t-only
+        tpe.sapling = true;
+        tpe.orchard = true;
+    }
 
     let address = match (tpe.transparent, tpe.sapling, tpe.orchard) {
-        (true, false, false) => {
-            let address = db.get_taddr(account)?.ok_or(anyhow!("Missing t-addr"))?;
-            return Ok(address);
-        }
         (false, true, false) => {
             let AccountData { address, .. } = db.get_account_info(account)?;
             return Ok(address);
@@ -89,6 +97,7 @@ pub fn get_unified_address(
                 }
             }
 
+            assert!(!rcvs.is_empty());
             let addresses = unified::Address(rcvs);
             ZcashAddress::from_unified(network.address_network().unwrap(), addresses)
         }
