@@ -116,7 +116,7 @@ rpc = ["rocket", "dotenv"]
 nodejs = ["node-bindgen"]
 cuda = ["rustacuda", "rustacuda_core"]
 apple_metal = ["metal", "objc", "block"]
-sqlcipher = ["rusqlite/bundled-sqlcipher"]
+sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
