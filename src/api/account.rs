@@ -25,6 +25,12 @@ use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::zip32::DiversifierIndex;
 
+pub fn check_account(coin: u8, account: u32) -> bool {
+    let c = CoinConfig::get(coin);
+    let db = c.db().unwrap();
+    db.get_account_info(account).is_ok()
+}
+
 /// Create a new account
 /// # Arguments
 ///
