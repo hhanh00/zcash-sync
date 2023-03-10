@@ -1,6 +1,5 @@
 use crate::chain::get_latest_height;
 use crate::db::AccountViewKey;
-use serde::Serialize;
 
 use crate::chain::{download_chain, DecryptNode};
 use crate::transaction::get_transaction_details;
@@ -41,7 +40,7 @@ impl std::fmt::Debug for Blocks {
     }
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct Progress {
     pub height: u32,
     pub trial_decryptions: u64,

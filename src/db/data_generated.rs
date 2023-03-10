@@ -4699,5 +4699,594 @@ impl BackupT {
     })
   }
 }
+pub enum RaptorQDropsOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct RaptorQDrops<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for RaptorQDrops<'a> {
+  type Inner = RaptorQDrops<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> RaptorQDrops<'a> {
+  pub const VT_DROPS: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    RaptorQDrops { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args RaptorQDropsArgs<'args>
+  ) -> flatbuffers::WIPOffset<RaptorQDrops<'bldr>> {
+    let mut builder = RaptorQDropsBuilder::new(_fbb);
+    if let Some(x) = args.drops { builder.add_drops(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> RaptorQDropsT {
+    let drops = self.drops().map(|x| {
+      x.iter().map(|s| s.to_string()).collect()
+    });
+    RaptorQDropsT {
+      drops,
+    }
+  }
+
+  #[inline]
+  pub fn drops(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>>>(RaptorQDrops::VT_DROPS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for RaptorQDrops<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<&'_ str>>>>("drops", Self::VT_DROPS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct RaptorQDropsArgs<'a> {
+    pub drops: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>>>,
+}
+impl<'a> Default for RaptorQDropsArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    RaptorQDropsArgs {
+      drops: None,
+    }
+  }
+}
+
+pub struct RaptorQDropsBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> RaptorQDropsBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_drops(&mut self, drops: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<&'b  str>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(RaptorQDrops::VT_DROPS, drops);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> RaptorQDropsBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    RaptorQDropsBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<RaptorQDrops<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for RaptorQDrops<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("RaptorQDrops");
+      ds.field("drops", &self.drops());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RaptorQDropsT {
+  pub drops: Option<Vec<String>>,
+}
+impl Default for RaptorQDropsT {
+  fn default() -> Self {
+    Self {
+      drops: None,
+    }
+  }
+}
+impl RaptorQDropsT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<RaptorQDrops<'b>> {
+    let drops = self.drops.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|s| _fbb.create_string(s)).collect();_fbb.create_vector(&w)
+    });
+    RaptorQDrops::create(_fbb, &RaptorQDropsArgs{
+      drops,
+    })
+  }
+}
+pub enum AGEKeysOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct AGEKeys<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for AGEKeys<'a> {
+  type Inner = AGEKeys<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> AGEKeys<'a> {
+  pub const VT_SK: flatbuffers::VOffsetT = 4;
+  pub const VT_PK: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    AGEKeys { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args AGEKeysArgs<'args>
+  ) -> flatbuffers::WIPOffset<AGEKeys<'bldr>> {
+    let mut builder = AGEKeysBuilder::new(_fbb);
+    if let Some(x) = args.pk { builder.add_pk(x); }
+    if let Some(x) = args.sk { builder.add_sk(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> AGEKeysT {
+    let sk = self.sk().map(|x| {
+      x.to_string()
+    });
+    let pk = self.pk().map(|x| {
+      x.to_string()
+    });
+    AGEKeysT {
+      sk,
+      pk,
+    }
+  }
+
+  #[inline]
+  pub fn sk(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AGEKeys::VT_SK, None)}
+  }
+  #[inline]
+  pub fn pk(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AGEKeys::VT_PK, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for AGEKeys<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("sk", Self::VT_SK, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("pk", Self::VT_PK, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct AGEKeysArgs<'a> {
+    pub sk: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub pk: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for AGEKeysArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    AGEKeysArgs {
+      sk: None,
+      pk: None,
+    }
+  }
+}
+
+pub struct AGEKeysBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> AGEKeysBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_sk(&mut self, sk: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AGEKeys::VT_SK, sk);
+  }
+  #[inline]
+  pub fn add_pk(&mut self, pk: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AGEKeys::VT_PK, pk);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> AGEKeysBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    AGEKeysBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<AGEKeys<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for AGEKeys<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("AGEKeys");
+      ds.field("sk", &self.sk());
+      ds.field("pk", &self.pk());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct AGEKeysT {
+  pub sk: Option<String>,
+  pub pk: Option<String>,
+}
+impl Default for AGEKeysT {
+  fn default() -> Self {
+    Self {
+      sk: None,
+      pk: None,
+    }
+  }
+}
+impl AGEKeysT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<AGEKeys<'b>> {
+    let sk = self.sk.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let pk = self.pk.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    AGEKeys::create(_fbb, &AGEKeysArgs{
+      sk,
+      pk,
+    })
+  }
+}
+pub enum ServersOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Servers<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Servers<'a> {
+  type Inner = Servers<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Servers<'a> {
+  pub const VT_URLS: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Servers { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args ServersArgs<'args>
+  ) -> flatbuffers::WIPOffset<Servers<'bldr>> {
+    let mut builder = ServersBuilder::new(_fbb);
+    if let Some(x) = args.urls { builder.add_urls(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> ServersT {
+    let urls = self.urls().map(|x| {
+      x.iter().map(|s| s.to_string()).collect()
+    });
+    ServersT {
+      urls,
+    }
+  }
+
+  #[inline]
+  pub fn urls(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>>>(Servers::VT_URLS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for Servers<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<&'_ str>>>>("urls", Self::VT_URLS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct ServersArgs<'a> {
+    pub urls: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>>>,
+}
+impl<'a> Default for ServersArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    ServersArgs {
+      urls: None,
+    }
+  }
+}
+
+pub struct ServersBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> ServersBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_urls(&mut self, urls: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<&'b  str>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Servers::VT_URLS, urls);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> ServersBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    ServersBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Servers<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Servers<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Servers");
+      ds.field("urls", &self.urls());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServersT {
+  pub urls: Option<Vec<String>>,
+}
+impl Default for ServersT {
+  fn default() -> Self {
+    Self {
+      urls: None,
+    }
+  }
+}
+impl ServersT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<Servers<'b>> {
+    let urls = self.urls.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|s| _fbb.create_string(s)).collect();_fbb.create_vector(&w)
+    });
+    Servers::create(_fbb, &ServersArgs{
+      urls,
+    })
+  }
+}
+pub enum ProgressOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Progress<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Progress<'a> {
+  type Inner = Progress<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Progress<'a> {
+  pub const VT_HEIGHT: flatbuffers::VOffsetT = 4;
+  pub const VT_TRIAL_DECRYPTIONS: flatbuffers::VOffsetT = 6;
+  pub const VT_DOWNLOADED: flatbuffers::VOffsetT = 8;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Progress { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args ProgressArgs
+  ) -> flatbuffers::WIPOffset<Progress<'bldr>> {
+    let mut builder = ProgressBuilder::new(_fbb);
+    builder.add_downloaded(args.downloaded);
+    builder.add_trial_decryptions(args.trial_decryptions);
+    builder.add_height(args.height);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> ProgressT {
+    let height = self.height();
+    let trial_decryptions = self.trial_decryptions();
+    let downloaded = self.downloaded();
+    ProgressT {
+      height,
+      trial_decryptions,
+      downloaded,
+    }
+  }
+
+  #[inline]
+  pub fn height(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Progress::VT_HEIGHT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn trial_decryptions(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(Progress::VT_TRIAL_DECRYPTIONS, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn downloaded(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(Progress::VT_DOWNLOADED, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for Progress<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
+     .visit_field::<u64>("trial_decryptions", Self::VT_TRIAL_DECRYPTIONS, false)?
+     .visit_field::<u64>("downloaded", Self::VT_DOWNLOADED, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct ProgressArgs {
+    pub height: u32,
+    pub trial_decryptions: u64,
+    pub downloaded: u64,
+}
+impl<'a> Default for ProgressArgs {
+  #[inline]
+  fn default() -> Self {
+    ProgressArgs {
+      height: 0,
+      trial_decryptions: 0,
+      downloaded: 0,
+    }
+  }
+}
+
+pub struct ProgressBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> ProgressBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_height(&mut self, height: u32) {
+    self.fbb_.push_slot::<u32>(Progress::VT_HEIGHT, height, 0);
+  }
+  #[inline]
+  pub fn add_trial_decryptions(&mut self, trial_decryptions: u64) {
+    self.fbb_.push_slot::<u64>(Progress::VT_TRIAL_DECRYPTIONS, trial_decryptions, 0);
+  }
+  #[inline]
+  pub fn add_downloaded(&mut self, downloaded: u64) {
+    self.fbb_.push_slot::<u64>(Progress::VT_DOWNLOADED, downloaded, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> ProgressBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    ProgressBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Progress<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Progress<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Progress");
+      ds.field("height", &self.height());
+      ds.field("trial_decryptions", &self.trial_decryptions());
+      ds.field("downloaded", &self.downloaded());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProgressT {
+  pub height: u32,
+  pub trial_decryptions: u64,
+  pub downloaded: u64,
+}
+impl Default for ProgressT {
+  fn default() -> Self {
+    Self {
+      height: 0,
+      trial_decryptions: 0,
+      downloaded: 0,
+    }
+  }
+}
+impl ProgressT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<Progress<'b>> {
+    let height = self.height;
+    let trial_decryptions = self.trial_decryptions;
+    let downloaded = self.downloaded;
+    Progress::create(_fbb, &ProgressArgs{
+      height,
+      trial_decryptions,
+      downloaded,
+    })
+  }
+}
 }  // pub mod fb
 

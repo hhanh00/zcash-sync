@@ -1,3 +1,4 @@
+use crate::db::data_generated::fb::Servers as fbServers;
 use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
@@ -8,7 +9,6 @@ use futures::{future, FutureExt};
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
 use rayon::prelude::*;
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
@@ -582,10 +582,10 @@ async fn get_height(server: String) -> Option<(String, u32)> {
 
 /// Return the URL of the best server given a list of servers
 /// The best server is the one that has the highest height
-pub async fn get_best_server(servers: &str) -> anyhow::Result<String> {
-    let servers: Servers = serde_json::from_str(servers)?;
+pub async fn get_best_server(servers: fbServers<'_>) -> anyhow::Result<String> {
     let mut server_heights = vec![];
-    for s in servers.urls.iter() {
+    let urls = servers.urls().unwrap();
+    for s in urls.iter() {
         let server_height =
             tokio::spawn(timeout(Duration::from_secs(1), get_height(s.to_string()))).boxed();
         server_heights.push(server_height);
@@ -599,11 +599,6 @@ pub async fn get_best_server(servers: &str) -> anyhow::Result<String> {
         .max_by_key(|(_, h)| *h)
         .map(|x| x.0)
         .ok_or(anyhow::anyhow!("No Lightwalletd"))
-}
-
-#[derive(Deserialize)]
-struct Servers {
-    urls: Vec<String>,
 }
 
 pub const EXPIRY_HEIGHT_OFFSET: u32 = 50;

@@ -152,6 +152,16 @@ typedef struct CResult_bool {
 
 #define Backup_VT_UVK 14
 
+#define RaptorQDrops_VT_DROPS 4
+
+#define AGEKeys_VT_PK 6
+
+#define Servers_VT_URLS 4
+
+#define Progress_VT_TRIAL_DECRYPTIONS 6
+
+#define Progress_VT_DOWNLOADED 8
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -284,19 +294,19 @@ struct CResult_____c_char make_payment_uri(uint8_t coin,
 
 struct CResult_____c_char parse_payment_uri(char *uri);
 
-struct CResult_____c_char generate_key(void);
+struct CResult______u8 generate_key(void);
 
 struct CResult_u8 zip_backup(char *key, char *dst_dir);
 
 struct CResult_u8 unzip_backup(char *key, char *data_path, char *dst_dir);
 
-struct CResult_____c_char split_data(uint32_t id, char *data);
+struct CResult______u8 split_data(uint32_t id, char *data);
 
 struct CResult_____c_char merge_data(char *drop);
 
 struct CResult_____c_char get_tx_summary(char *tx);
 
-struct CResult_____c_char get_best_server(char *servers);
+struct CResult_____c_char get_best_server(uint8_t *servers, uint64_t len);
 
 void import_from_zwl(uint8_t coin, char *name, char *data);
 

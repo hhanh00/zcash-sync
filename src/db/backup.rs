@@ -1,8 +1,8 @@
+use crate::db::data_generated::fb::AGEKeysT;
 use age::secrecy::ExposeSecret;
 use anyhow::anyhow;
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
-use serde::Serialize;
 use std::fs::File;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
@@ -25,11 +25,14 @@ impl FullEncryptedBackup {
         }
     }
 
-    pub fn generate_key() -> anyhow::Result<AGEKeys> {
+    pub fn generate_key() -> anyhow::Result<AGEKeysT> {
         let key = age::x25519::Identity::generate();
         let sk = key.to_string().expose_secret().clone();
         let pk = key.to_public().to_string();
-        Ok(AGEKeys { sk, pk })
+        Ok(AGEKeysT {
+            sk: Some(sk),
+            pk: Some(pk),
+        })
     }
 
     pub fn add(&mut self, src: &Connection, db_name: &str) -> anyhow::Result<()> {
@@ -103,10 +106,4 @@ impl FullEncryptedBackup {
         }
         Ok(())
     }
-}
-
-#[derive(Serialize)]
-pub struct AGEKeys {
-    pub sk: String,
-    pub pk: String,
 }

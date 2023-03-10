@@ -1,5 +1,5 @@
 use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
-use crate::db::data_generated::fb::SendTemplate;
+use crate::db::data_generated::fb::{ProgressT, SendTemplate, Servers};
 use crate::db::FullEncryptedBackup;
 use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
@@ -312,7 +312,16 @@ pub async unsafe extern "C" fn warp(
             anchor_offset,
             max_cost,
             move |progress| {
-                let mut progress = serde_json::to_string(&progress).unwrap().into_dart();
+                let progress = ProgressT {
+                    height: progress.height,
+                    trial_decryptions: progress.trial_decryptions,
+                    downloaded: progress.downloaded as u64,
+                };
+                let mut builder = FlatBufferBuilder::new();
+                let root = progress.pack(&mut builder);
+                builder.finish(root, None);
+                let v = builder.finished_data().to_vec();
+                let mut progress = v.into_dart();
                 if port != 0 {
                     if let Some(p) = POST_COBJ {
                         p(port, &mut progress);
@@ -719,13 +728,15 @@ pub unsafe extern "C" fn parse_payment_uri(uri: *mut c_char) -> CResult<*mut c_c
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn generate_key() -> CResult<*mut c_char> {
+pub unsafe extern "C" fn generate_key() -> CResult<*const u8> {
     let res = || {
         let secret_key = FullEncryptedBackup::generate_key()?;
-        let keys = serde_json::to_string(&secret_key)?;
-        Ok(keys)
+        let mut builder = FlatBufferBuilder::new();
+        let root = secret_key.pack(&mut builder);
+        builder.finish(root, None);
+        Ok(builder.finished_data().to_vec())
     };
-    to_cresult_str(res())
+    to_cresult_bytes(res())
 }
 
 #[no_mangle]
@@ -765,14 +776,16 @@ pub unsafe extern "C" fn unzip_backup(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn split_data(id: u32, data: *mut c_char) -> CResult<*mut c_char> {
+pub unsafe extern "C" fn split_data(id: u32, data: *mut c_char) -> CResult<*const u8> {
     from_c_str!(data);
     let res = || {
         let res = crate::fountain::FountainCodes::encode_into_drops(id, &base64::decode(&*data)?)?;
-        let output = serde_json::to_string(&res)?;
-        Ok(output)
+        let mut builder = FlatBufferBuilder::new();
+        let res = res.pack(&mut builder);
+        builder.finish(res, None);
+        Ok(builder.finished_data().to_vec())
     };
-    to_cresult_str(res())
+    to_cresult_bytes(res())
 }
 
 #[no_mangle]
@@ -802,10 +815,14 @@ pub unsafe extern "C" fn get_tx_summary(tx: *mut c_char) -> CResult<*mut c_char>
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn get_best_server(servers: *mut c_char) -> CResult<*mut c_char> {
-    from_c_str!(servers);
-    let best_server = crate::get_best_server(&servers).await;
-    to_cresult_str(best_server)
+pub async unsafe extern "C" fn get_best_server(servers: *mut u8, len: u64) -> CResult<*mut c_char> {
+    let servers: Vec<u8> = Vec::from_raw_parts(servers, len as usize, len as usize);
+    let res = async {
+        let servers = flatbuffers::root::<Servers>(&servers)?;
+        let best_server = crate::get_best_server(servers).await?;
+        Ok(best_server)
+    };
+    to_cresult_str(res.await)
 }
 
 #[no_mangle]

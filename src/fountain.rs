@@ -1,4 +1,5 @@
 use crate::coinconfig::RAPTORQ;
+use crate::db::data_generated::fb::RaptorQDropsT;
 use blake2b_simd::Params;
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use raptorq::{Decoder, Encoder, EncodingPacket, ObjectTransmissionInformation};
@@ -26,7 +27,7 @@ impl FountainCodes {
         }
     }
 
-    pub fn encode_into_drops(id: u32, data: &[u8]) -> anyhow::Result<RaptorQDrops> {
+    pub fn encode_into_drops(id: u32, data: &[u8]) -> anyhow::Result<RaptorQDropsT> {
         let total_length = data.len() as u32;
         let encoder = Encoder::with_defaults(data, QR_DATA_SIZE);
         let drops: Vec<_> = encoder
@@ -43,7 +44,7 @@ impl FountainCodes {
                 base64::encode(&result)
             })
             .collect();
-        Ok(RaptorQDrops { drops })
+        Ok(RaptorQDropsT { drops: Some(drops) })
     }
 
     pub fn put_drop(&mut self, drop: &str) -> anyhow::Result<Option<Vec<u8>>> {
