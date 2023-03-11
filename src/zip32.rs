@@ -1,10 +1,10 @@
+use crate::db::data_generated::fb::KeyPackT;
 use crate::key2::split_key;
 use anyhow::anyhow;
 use base58check::ToBase58Check;
 use bip39::{Language, Mnemonic, Seed};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
-use serde::Serialize;
 use sha2::Sha256;
 use tiny_hderive::bip32::ExtendedPrivKey;
 use zcash_client_backend::encoding::{
@@ -14,21 +14,13 @@ use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::zip32::{ChildIndex, ExtendedSpendingKey};
 
-#[derive(Serialize)]
-pub struct KeyPack {
-    pub t_addr: String,
-    pub t_key: String,
-    pub z_addr: String,
-    pub z_key: String,
-}
-
 pub fn derive_zip32(
     network: &Network,
     phrase: &str,
     account_index: u32,
     external: u32,
     address_index: Option<u32>,
-) -> anyhow::Result<KeyPack> {
+) -> anyhow::Result<KeyPackT> {
     let (phrase, password) = split_key(phrase);
     let mnemonic = Mnemonic::from_phrase(&phrase, Language::English)?;
     let seed = Seed::new(&mnemonic, &password);
@@ -71,10 +63,10 @@ pub fn derive_zip32(
     sk.push(0x01);
     let t_key = sk.to_base58check(0x80);
 
-    Ok(KeyPack {
-        z_key,
-        z_addr,
-        t_key,
-        t_addr,
+    Ok(KeyPackT {
+        z_key: Some(z_key),
+        z_addr: Some(z_addr),
+        t_key: Some(t_key),
+        t_addr: Some(t_addr),
     })
 }

@@ -9,7 +9,7 @@ pub use optimize::build_tx_plan;
 use std::str::FromStr;
 pub use utxo::fetch_utxos;
 
-use crate::api::recipient::Recipient;
+use crate::db::data_generated::fb::Recipient;
 use thiserror::Error;
 use ua::decode;
 use zcash_primitives::consensus::Network;
@@ -47,13 +47,13 @@ pub fn recipients_to_orders(network: &Network, recipients: &[Recipient]) -> Resu
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            let destinations = decode(network, &r.address)?;
+            let destinations = decode(network, r.address().unwrap())?;
             Ok::<_, TransactionBuilderError>(Order {
                 id: i as u32,
                 destinations,
-                raw_amount: r.amount,
-                take_fee: r.fee_included, // Caller must make sure that at most one recipient pays for the fees
-                memo: Memo::from_str(&r.memo).unwrap().into(),
+                raw_amount: r.amount(),
+                take_fee: r.fee_included(), // Caller must make sure that at most one recipient pays for the fees
+                memo: Memo::from_str(r.memo().unwrap()).unwrap().into(),
             })
         })
         .collect();

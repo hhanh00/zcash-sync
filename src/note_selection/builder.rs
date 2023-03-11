@@ -29,7 +29,7 @@ use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut};
 use zcash_primitives::transaction::sighash::{signature_hash, SignableInput};
 use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_primitives::transaction::{Transaction, TransactionData, TxVersion};
-use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+use zcash_primitives::zip32::ExtendedSpendingKey;
 
 pub struct SecretKeys {
     pub transparent: Option<SecretKey>,
@@ -85,7 +85,7 @@ pub fn build_tx(
     let sapling_fvk = skeys
         .sapling
         .as_ref()
-        .map(|sk| ExtendedFullViewingKey::from(sk));
+        .map(|sk| sk.to_extended_full_viewing_key());
     let sapling_ovk = sapling_fvk.as_ref().map(|efvk| efvk.fvk.ovk.clone());
 
     let okeys = skeys.orchard.map(|sk| {
@@ -114,7 +114,9 @@ pub fn build_tx(
                         .ok_or(anyhow!("No transparent key"))
                         .map(|ta| ta.script())?,
                 };
-                builder.add_transparent_input(skeys.transparent.unwrap(), utxo, coin)?;
+                builder
+                    .add_transparent_input(skeys.transparent.unwrap(), utxo, coin)
+                    .map_err(|e| anyhow!(e.to_string()))?;
             }
             Source::Sapling {
                 diversifier,
@@ -131,15 +133,17 @@ pub fn build_tx(
                     .to_payment_address(diversifier)
                     .unwrap();
                 let rseed = Rseed::BeforeZip212(Fr::from_bytes(rseed).unwrap());
-                let note = sapling_address.create_note(spend.amount, rseed).unwrap();
+                let note = sapling_address.create_note(spend.amount, rseed);
                 let witness = IncrementalWitness::<Node>::read(witness.as_slice())?;
                 let merkle_path = witness.path().unwrap();
-                builder.add_sapling_spend(
-                    skeys.sapling.clone().ok_or(anyhow!("No Sapling Key"))?,
-                    diversifier,
-                    note,
-                    merkle_path,
-                )?;
+                builder
+                    .add_sapling_spend(
+                        skeys.sapling.clone().ok_or(anyhow!("No Sapling Key"))?,
+                        diversifier,
+                        note,
+                        merkle_path,
+                    )
+                    .map_err(|e| anyhow!(e.to_string()))?;
             }
             Source::Orchard {
                 id_note,
@@ -180,16 +184,15 @@ pub fn build_tx(
         match &output.destination {
             Destination::Transparent(_addr) => {
                 let transparent_address = output.destination.transparent();
-                builder.add_transparent_output(&transparent_address, value)?;
+                builder
+                    .add_transparent_output(&transparent_address, value)
+                    .map_err(|e| anyhow!(e.to_string()))?;
             }
             Destination::Sapling(addr) => {
                 let sapling_address = PaymentAddress::from_bytes(addr).unwrap();
-                builder.add_sapling_output(
-                    sapling_ovk,
-                    sapling_address,
-                    value,
-                    output.memo.clone(),
-                )?;
+                builder
+                    .add_sapling_output(sapling_ovk, sapling_address, value, output.memo.clone())
+                    .map_err(|e| anyhow!(e.to_string()))?;
             }
             Destination::Orchard(addr) => {
                 has_orchard = true;

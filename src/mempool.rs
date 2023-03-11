@@ -271,7 +271,7 @@ impl MemPoolImpl {
                     &self.pivk,
                     co,
                 ) {
-                    balance += note.value as i64; // value is incoming
+                    balance += note.value().inner() as i64; // value is incoming
                 }
             }
         }

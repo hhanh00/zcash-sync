@@ -1,19 +1,9 @@
+use crate::db::data_generated::fb::{Recipient, Recipients};
 use crate::db::ZMessage;
 use crate::{AccountData, CoinConfig};
 use serde::Deserialize;
 use std::str::FromStr;
 use zcash_primitives::memo::Memo;
-
-#[derive(Deserialize)]
-pub struct Recipient {
-    pub address: String,
-    pub amount: u64,
-    pub fee_included: bool,
-    pub reply_to: bool,
-    pub subject: String,
-    pub memo: String,
-    pub max_amount_per_note: u64,
-}
 
 #[derive(Clone, Deserialize)]
 pub struct RecipientShort {
@@ -32,17 +22,17 @@ pub struct RecipientMemo {
 
 impl RecipientMemo {
     pub fn from_recipient(from: &str, r: &Recipient) -> anyhow::Result<Self> {
-        let memo = if !r.reply_to && r.subject.is_empty() {
-            r.memo.clone()
+        let memo = if !r.reply_to() && r.subject().as_ref().unwrap().is_empty() {
+            r.memo().unwrap().to_string()
         } else {
-            encode_memo(from, r.reply_to, &r.subject, &r.memo)
+            encode_memo(from, r.reply_to(), r.subject().unwrap(), r.memo().unwrap())
         };
         Ok(RecipientMemo {
-            address: r.address.clone(),
-            amount: r.amount,
-            fee_included: r.fee_included,
+            address: r.address().unwrap().to_string(),
+            amount: r.amount(),
+            fee_included: r.fee_included(),
             memo: Memo::from_str(&memo)?,
-            max_amount_per_note: r.max_amount_per_note,
+            max_amount_per_note: r.max_amount_per_note(),
         })
     }
 }
@@ -107,13 +97,13 @@ pub fn decode_memo(
 }
 
 /// Parse a json document that contains a list of recipients
-pub fn parse_recipients(recipients: &str) -> anyhow::Result<Vec<RecipientMemo>> {
+pub fn parse_recipients(recipients: &Recipients) -> anyhow::Result<Vec<RecipientMemo>> {
     let c = CoinConfig::get_active();
     let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
-    let recipients: Vec<Recipient> = serde_json::from_str(recipients)?;
+    let recipients = recipients.values().unwrap();
     let recipient_memos: anyhow::Result<Vec<_>> = recipients
         .iter()
-        .map(|r| RecipientMemo::from_recipient(&address, r))
+        .map(|r| RecipientMemo::from_recipient(&address, &r))
         .collect();
     recipient_memos
 }

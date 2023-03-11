@@ -1,4 +1,5 @@
-use crate::note_selection::types::{TransactionOutput, TransactionReport};
+use crate::db::data_generated::fb::{TxOutputT, TxReportT};
+use crate::note_selection::types::TransactionReport;
 use crate::TransactionPlan;
 use serde::{Deserialize, Serialize};
 use zcash_primitives::consensus::Network;
@@ -19,7 +20,7 @@ impl From<MemoBytesProxy> for MemoBytes {
 }
 
 impl TransactionReport {
-    pub fn from_plan(network: &Network, p: TransactionPlan) -> Self {
+    pub fn from_plan(network: &Network, p: TransactionPlan) -> TxReportT {
         let mut spends = [0; 3];
         let mut outs = [0; 3];
         let mut changes = [0; 3];
@@ -38,9 +39,9 @@ impl TransactionReport {
             .outputs
             .iter()
             .filter_map(|o| {
-                o.id_order.map(|id| TransactionOutput {
+                o.id_order.map(|id| TxOutputT {
                     id,
-                    address: o.destination.address(network),
+                    address: Some(o.destination.address(network)),
                     amount: o.amount,
                     pool: o.destination.pool() as u8,
                 })
@@ -60,8 +61,8 @@ impl TransactionReport {
             3
         };
 
-        let report = TransactionReport {
-            outputs,
+        let report = TxReportT {
+            outputs: Some(outputs),
             transparent: spends[0] - changes[0],
             sapling: spends[1] - changes[1],
             orchard: spends[2] - changes[2],

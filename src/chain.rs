@@ -25,6 +25,7 @@ use zcash_note_encryption::batch::try_compact_note_decryption;
 use zcash_note_encryption::{Domain, EphemeralKeyBytes, ShieldedOutput, COMPACT_NOTE_SIZE};
 use zcash_primitives::consensus::{BlockHeight, Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
+use zcash_primitives::sapling::note::ExtractedNoteCommitment;
 use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
 use zcash_primitives::sapling::{Node, Note, PaymentAddress};
 use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
@@ -291,13 +292,12 @@ pub struct DecryptedNote {
 #[allow(dead_code)]
 pub fn to_output_description(co: &CompactSaplingOutput) -> CompactOutputDescription {
     let cmu: [u8; 32] = co.cmu.clone().try_into().unwrap();
-    let cmu = bls12_381::Scalar::from_repr(cmu).unwrap();
     let epk: [u8; 32] = co.epk.clone().try_into().unwrap();
     let enc_ciphertext: [u8; 52] = co.ciphertext.clone().try_into().unwrap();
 
     CompactOutputDescription {
         ephemeral_key: EphemeralKeyBytes::from(epk),
-        cmu,
+        cmu: ExtractedNoteCommitment::from_bytes(&cmu).unwrap(),
         enc_ciphertext,
     }
 }

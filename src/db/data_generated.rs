@@ -5288,5 +5288,1395 @@ impl ProgressT {
     })
   }
 }
+pub enum KeyPackOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct KeyPack<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for KeyPack<'a> {
+  type Inner = KeyPack<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> KeyPack<'a> {
+  pub const VT_T_ADDR: flatbuffers::VOffsetT = 4;
+  pub const VT_T_KEY: flatbuffers::VOffsetT = 6;
+  pub const VT_Z_ADDR: flatbuffers::VOffsetT = 8;
+  pub const VT_Z_KEY: flatbuffers::VOffsetT = 10;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    KeyPack { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args KeyPackArgs<'args>
+  ) -> flatbuffers::WIPOffset<KeyPack<'bldr>> {
+    let mut builder = KeyPackBuilder::new(_fbb);
+    if let Some(x) = args.z_key { builder.add_z_key(x); }
+    if let Some(x) = args.z_addr { builder.add_z_addr(x); }
+    if let Some(x) = args.t_key { builder.add_t_key(x); }
+    if let Some(x) = args.t_addr { builder.add_t_addr(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> KeyPackT {
+    let t_addr = self.t_addr().map(|x| {
+      x.to_string()
+    });
+    let t_key = self.t_key().map(|x| {
+      x.to_string()
+    });
+    let z_addr = self.z_addr().map(|x| {
+      x.to_string()
+    });
+    let z_key = self.z_key().map(|x| {
+      x.to_string()
+    });
+    KeyPackT {
+      t_addr,
+      t_key,
+      z_addr,
+      z_key,
+    }
+  }
+
+  #[inline]
+  pub fn t_addr(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(KeyPack::VT_T_ADDR, None)}
+  }
+  #[inline]
+  pub fn t_key(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(KeyPack::VT_T_KEY, None)}
+  }
+  #[inline]
+  pub fn z_addr(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(KeyPack::VT_Z_ADDR, None)}
+  }
+  #[inline]
+  pub fn z_key(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(KeyPack::VT_Z_KEY, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for KeyPack<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("t_addr", Self::VT_T_ADDR, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("t_key", Self::VT_T_KEY, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("z_addr", Self::VT_Z_ADDR, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("z_key", Self::VT_Z_KEY, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct KeyPackArgs<'a> {
+    pub t_addr: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub t_key: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub z_addr: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub z_key: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for KeyPackArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    KeyPackArgs {
+      t_addr: None,
+      t_key: None,
+      z_addr: None,
+      z_key: None,
+    }
+  }
+}
+
+pub struct KeyPackBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> KeyPackBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_t_addr(&mut self, t_addr: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(KeyPack::VT_T_ADDR, t_addr);
+  }
+  #[inline]
+  pub fn add_t_key(&mut self, t_key: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(KeyPack::VT_T_KEY, t_key);
+  }
+  #[inline]
+  pub fn add_z_addr(&mut self, z_addr: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(KeyPack::VT_Z_ADDR, z_addr);
+  }
+  #[inline]
+  pub fn add_z_key(&mut self, z_key: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(KeyPack::VT_Z_KEY, z_key);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> KeyPackBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    KeyPackBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<KeyPack<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for KeyPack<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("KeyPack");
+      ds.field("t_addr", &self.t_addr());
+      ds.field("t_key", &self.t_key());
+      ds.field("z_addr", &self.z_addr());
+      ds.field("z_key", &self.z_key());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeyPackT {
+  pub t_addr: Option<String>,
+  pub t_key: Option<String>,
+  pub z_addr: Option<String>,
+  pub z_key: Option<String>,
+}
+impl Default for KeyPackT {
+  fn default() -> Self {
+    Self {
+      t_addr: None,
+      t_key: None,
+      z_addr: None,
+      z_key: None,
+    }
+  }
+}
+impl KeyPackT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<KeyPack<'b>> {
+    let t_addr = self.t_addr.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let t_key = self.t_key.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let z_addr = self.z_addr.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let z_key = self.z_key.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    KeyPack::create(_fbb, &KeyPackArgs{
+      t_addr,
+      t_key,
+      z_addr,
+      z_key,
+    })
+  }
+}
+pub enum RecipientOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Recipient<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Recipient<'a> {
+  type Inner = Recipient<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Recipient<'a> {
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 4;
+  pub const VT_AMOUNT: flatbuffers::VOffsetT = 6;
+  pub const VT_FEE_INCLUDED: flatbuffers::VOffsetT = 8;
+  pub const VT_REPLY_TO: flatbuffers::VOffsetT = 10;
+  pub const VT_SUBJECT: flatbuffers::VOffsetT = 12;
+  pub const VT_MEMO: flatbuffers::VOffsetT = 14;
+  pub const VT_MAX_AMOUNT_PER_NOTE: flatbuffers::VOffsetT = 16;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Recipient { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args RecipientArgs<'args>
+  ) -> flatbuffers::WIPOffset<Recipient<'bldr>> {
+    let mut builder = RecipientBuilder::new(_fbb);
+    builder.add_max_amount_per_note(args.max_amount_per_note);
+    builder.add_amount(args.amount);
+    if let Some(x) = args.memo { builder.add_memo(x); }
+    if let Some(x) = args.subject { builder.add_subject(x); }
+    if let Some(x) = args.address { builder.add_address(x); }
+    builder.add_reply_to(args.reply_to);
+    builder.add_fee_included(args.fee_included);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> RecipientT {
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    let amount = self.amount();
+    let fee_included = self.fee_included();
+    let reply_to = self.reply_to();
+    let subject = self.subject().map(|x| {
+      x.to_string()
+    });
+    let memo = self.memo().map(|x| {
+      x.to_string()
+    });
+    let max_amount_per_note = self.max_amount_per_note();
+    RecipientT {
+      address,
+      amount,
+      fee_included,
+      reply_to,
+      subject,
+      memo,
+      max_amount_per_note,
+    }
+  }
+
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Recipient::VT_ADDRESS, None)}
+  }
+  #[inline]
+  pub fn amount(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(Recipient::VT_AMOUNT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn fee_included(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(Recipient::VT_FEE_INCLUDED, Some(false)).unwrap()}
+  }
+  #[inline]
+  pub fn reply_to(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(Recipient::VT_REPLY_TO, Some(false)).unwrap()}
+  }
+  #[inline]
+  pub fn subject(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Recipient::VT_SUBJECT, None)}
+  }
+  #[inline]
+  pub fn memo(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Recipient::VT_MEMO, None)}
+  }
+  #[inline]
+  pub fn max_amount_per_note(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(Recipient::VT_MAX_AMOUNT_PER_NOTE, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for Recipient<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
+     .visit_field::<bool>("fee_included", Self::VT_FEE_INCLUDED, false)?
+     .visit_field::<bool>("reply_to", Self::VT_REPLY_TO, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("subject", Self::VT_SUBJECT, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("memo", Self::VT_MEMO, false)?
+     .visit_field::<u64>("max_amount_per_note", Self::VT_MAX_AMOUNT_PER_NOTE, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct RecipientArgs<'a> {
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub amount: u64,
+    pub fee_included: bool,
+    pub reply_to: bool,
+    pub subject: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub memo: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub max_amount_per_note: u64,
+}
+impl<'a> Default for RecipientArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    RecipientArgs {
+      address: None,
+      amount: 0,
+      fee_included: false,
+      reply_to: false,
+      subject: None,
+      memo: None,
+      max_amount_per_note: 0,
+    }
+  }
+}
+
+pub struct RecipientBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> RecipientBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Recipient::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn add_amount(&mut self, amount: u64) {
+    self.fbb_.push_slot::<u64>(Recipient::VT_AMOUNT, amount, 0);
+  }
+  #[inline]
+  pub fn add_fee_included(&mut self, fee_included: bool) {
+    self.fbb_.push_slot::<bool>(Recipient::VT_FEE_INCLUDED, fee_included, false);
+  }
+  #[inline]
+  pub fn add_reply_to(&mut self, reply_to: bool) {
+    self.fbb_.push_slot::<bool>(Recipient::VT_REPLY_TO, reply_to, false);
+  }
+  #[inline]
+  pub fn add_subject(&mut self, subject: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Recipient::VT_SUBJECT, subject);
+  }
+  #[inline]
+  pub fn add_memo(&mut self, memo: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Recipient::VT_MEMO, memo);
+  }
+  #[inline]
+  pub fn add_max_amount_per_note(&mut self, max_amount_per_note: u64) {
+    self.fbb_.push_slot::<u64>(Recipient::VT_MAX_AMOUNT_PER_NOTE, max_amount_per_note, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> RecipientBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    RecipientBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Recipient<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Recipient<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Recipient");
+      ds.field("address", &self.address());
+      ds.field("amount", &self.amount());
+      ds.field("fee_included", &self.fee_included());
+      ds.field("reply_to", &self.reply_to());
+      ds.field("subject", &self.subject());
+      ds.field("memo", &self.memo());
+      ds.field("max_amount_per_note", &self.max_amount_per_note());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecipientT {
+  pub address: Option<String>,
+  pub amount: u64,
+  pub fee_included: bool,
+  pub reply_to: bool,
+  pub subject: Option<String>,
+  pub memo: Option<String>,
+  pub max_amount_per_note: u64,
+}
+impl Default for RecipientT {
+  fn default() -> Self {
+    Self {
+      address: None,
+      amount: 0,
+      fee_included: false,
+      reply_to: false,
+      subject: None,
+      memo: None,
+      max_amount_per_note: 0,
+    }
+  }
+}
+impl RecipientT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<Recipient<'b>> {
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let amount = self.amount;
+    let fee_included = self.fee_included;
+    let reply_to = self.reply_to;
+    let subject = self.subject.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let memo = self.memo.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let max_amount_per_note = self.max_amount_per_note;
+    Recipient::create(_fbb, &RecipientArgs{
+      address,
+      amount,
+      fee_included,
+      reply_to,
+      subject,
+      memo,
+      max_amount_per_note,
+    })
+  }
+}
+pub enum RecipientsOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Recipients<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Recipients<'a> {
+  type Inner = Recipients<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Recipients<'a> {
+  pub const VT_VALUES: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Recipients { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args RecipientsArgs<'args>
+  ) -> flatbuffers::WIPOffset<Recipients<'bldr>> {
+    let mut builder = RecipientsBuilder::new(_fbb);
+    if let Some(x) = args.values { builder.add_values(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> RecipientsT {
+    let values = self.values().map(|x| {
+      x.iter().map(|t| t.unpack()).collect()
+    });
+    RecipientsT {
+      values,
+    }
+  }
+
+  #[inline]
+  pub fn values(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Recipient<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Recipient>>>>(Recipients::VT_VALUES, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for Recipients<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<Recipient>>>>("values", Self::VT_VALUES, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct RecipientsArgs<'a> {
+    pub values: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Recipient<'a>>>>>,
+}
+impl<'a> Default for RecipientsArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    RecipientsArgs {
+      values: None,
+    }
+  }
+}
+
+pub struct RecipientsBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> RecipientsBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_values(&mut self, values: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<Recipient<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Recipients::VT_VALUES, values);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> RecipientsBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    RecipientsBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Recipients<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Recipients<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Recipients");
+      ds.field("values", &self.values());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecipientsT {
+  pub values: Option<Vec<RecipientT>>,
+}
+impl Default for RecipientsT {
+  fn default() -> Self {
+    Self {
+      values: None,
+    }
+  }
+}
+impl RecipientsT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<Recipients<'b>> {
+    let values = self.values.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();_fbb.create_vector(&w)
+    });
+    Recipients::create(_fbb, &RecipientsArgs{
+      values,
+    })
+  }
+}
+pub enum RecipientSummaryOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct RecipientSummary<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for RecipientSummary<'a> {
+  type Inner = RecipientSummary<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> RecipientSummary<'a> {
+  pub const VT_AMOUNT: flatbuffers::VOffsetT = 4;
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    RecipientSummary { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args RecipientSummaryArgs<'args>
+  ) -> flatbuffers::WIPOffset<RecipientSummary<'bldr>> {
+    let mut builder = RecipientSummaryBuilder::new(_fbb);
+    builder.add_amount(args.amount);
+    if let Some(x) = args.address { builder.add_address(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> RecipientSummaryT {
+    let amount = self.amount();
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    RecipientSummaryT {
+      amount,
+      address,
+    }
+  }
+
+  #[inline]
+  pub fn amount(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(RecipientSummary::VT_AMOUNT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(RecipientSummary::VT_ADDRESS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for RecipientSummary<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct RecipientSummaryArgs<'a> {
+    pub amount: u64,
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for RecipientSummaryArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    RecipientSummaryArgs {
+      amount: 0,
+      address: None,
+    }
+  }
+}
+
+pub struct RecipientSummaryBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> RecipientSummaryBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_amount(&mut self, amount: u64) {
+    self.fbb_.push_slot::<u64>(RecipientSummary::VT_AMOUNT, amount, 0);
+  }
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(RecipientSummary::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> RecipientSummaryBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    RecipientSummaryBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<RecipientSummary<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for RecipientSummary<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("RecipientSummary");
+      ds.field("amount", &self.amount());
+      ds.field("address", &self.address());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecipientSummaryT {
+  pub amount: u64,
+  pub address: Option<String>,
+}
+impl Default for RecipientSummaryT {
+  fn default() -> Self {
+    Self {
+      amount: 0,
+      address: None,
+    }
+  }
+}
+impl RecipientSummaryT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<RecipientSummary<'b>> {
+    let amount = self.amount;
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    RecipientSummary::create(_fbb, &RecipientSummaryArgs{
+      amount,
+      address,
+    })
+  }
+}
+pub enum UnsignedTxSummaryOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct UnsignedTxSummary<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for UnsignedTxSummary<'a> {
+  type Inner = UnsignedTxSummary<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> UnsignedTxSummary<'a> {
+  pub const VT_RECIPIENTS: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    UnsignedTxSummary { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args UnsignedTxSummaryArgs<'args>
+  ) -> flatbuffers::WIPOffset<UnsignedTxSummary<'bldr>> {
+    let mut builder = UnsignedTxSummaryBuilder::new(_fbb);
+    if let Some(x) = args.recipients { builder.add_recipients(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> UnsignedTxSummaryT {
+    let recipients = self.recipients().map(|x| {
+      x.iter().map(|t| t.unpack()).collect()
+    });
+    UnsignedTxSummaryT {
+      recipients,
+    }
+  }
+
+  #[inline]
+  pub fn recipients(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<RecipientSummary<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<RecipientSummary>>>>(UnsignedTxSummary::VT_RECIPIENTS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for UnsignedTxSummary<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<RecipientSummary>>>>("recipients", Self::VT_RECIPIENTS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct UnsignedTxSummaryArgs<'a> {
+    pub recipients: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<RecipientSummary<'a>>>>>,
+}
+impl<'a> Default for UnsignedTxSummaryArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    UnsignedTxSummaryArgs {
+      recipients: None,
+    }
+  }
+}
+
+pub struct UnsignedTxSummaryBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> UnsignedTxSummaryBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_recipients(&mut self, recipients: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<RecipientSummary<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(UnsignedTxSummary::VT_RECIPIENTS, recipients);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> UnsignedTxSummaryBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    UnsignedTxSummaryBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<UnsignedTxSummary<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for UnsignedTxSummary<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("UnsignedTxSummary");
+      ds.field("recipients", &self.recipients());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnsignedTxSummaryT {
+  pub recipients: Option<Vec<RecipientSummaryT>>,
+}
+impl Default for UnsignedTxSummaryT {
+  fn default() -> Self {
+    Self {
+      recipients: None,
+    }
+  }
+}
+impl UnsignedTxSummaryT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<UnsignedTxSummary<'b>> {
+    let recipients = self.recipients.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();_fbb.create_vector(&w)
+    });
+    UnsignedTxSummary::create(_fbb, &UnsignedTxSummaryArgs{
+      recipients,
+    })
+  }
+}
+pub enum TxOutputOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct TxOutput<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for TxOutput<'a> {
+  type Inner = TxOutput<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> TxOutput<'a> {
+  pub const VT_ID: flatbuffers::VOffsetT = 4;
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 6;
+  pub const VT_AMOUNT: flatbuffers::VOffsetT = 8;
+  pub const VT_POOL: flatbuffers::VOffsetT = 10;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    TxOutput { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args TxOutputArgs<'args>
+  ) -> flatbuffers::WIPOffset<TxOutput<'bldr>> {
+    let mut builder = TxOutputBuilder::new(_fbb);
+    builder.add_amount(args.amount);
+    if let Some(x) = args.address { builder.add_address(x); }
+    builder.add_id(args.id);
+    builder.add_pool(args.pool);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> TxOutputT {
+    let id = self.id();
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    let amount = self.amount();
+    let pool = self.pool();
+    TxOutputT {
+      id,
+      address,
+      amount,
+      pool,
+    }
+  }
+
+  #[inline]
+  pub fn id(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(TxOutput::VT_ID, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(TxOutput::VT_ADDRESS, None)}
+  }
+  #[inline]
+  pub fn amount(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(TxOutput::VT_AMOUNT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn pool(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(TxOutput::VT_POOL, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for TxOutput<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("id", Self::VT_ID, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
+     .visit_field::<u8>("pool", Self::VT_POOL, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct TxOutputArgs<'a> {
+    pub id: u32,
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub amount: u64,
+    pub pool: u8,
+}
+impl<'a> Default for TxOutputArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    TxOutputArgs {
+      id: 0,
+      address: None,
+      amount: 0,
+      pool: 0,
+    }
+  }
+}
+
+pub struct TxOutputBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> TxOutputBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_id(&mut self, id: u32) {
+    self.fbb_.push_slot::<u32>(TxOutput::VT_ID, id, 0);
+  }
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TxOutput::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn add_amount(&mut self, amount: u64) {
+    self.fbb_.push_slot::<u64>(TxOutput::VT_AMOUNT, amount, 0);
+  }
+  #[inline]
+  pub fn add_pool(&mut self, pool: u8) {
+    self.fbb_.push_slot::<u8>(TxOutput::VT_POOL, pool, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> TxOutputBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    TxOutputBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<TxOutput<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for TxOutput<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("TxOutput");
+      ds.field("id", &self.id());
+      ds.field("address", &self.address());
+      ds.field("amount", &self.amount());
+      ds.field("pool", &self.pool());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct TxOutputT {
+  pub id: u32,
+  pub address: Option<String>,
+  pub amount: u64,
+  pub pool: u8,
+}
+impl Default for TxOutputT {
+  fn default() -> Self {
+    Self {
+      id: 0,
+      address: None,
+      amount: 0,
+      pool: 0,
+    }
+  }
+}
+impl TxOutputT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<TxOutput<'b>> {
+    let id = self.id;
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let amount = self.amount;
+    let pool = self.pool;
+    TxOutput::create(_fbb, &TxOutputArgs{
+      id,
+      address,
+      amount,
+      pool,
+    })
+  }
+}
+pub enum TxReportOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct TxReport<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for TxReport<'a> {
+  type Inner = TxReport<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> TxReport<'a> {
+  pub const VT_OUTPUTS: flatbuffers::VOffsetT = 4;
+  pub const VT_TRANSPARENT: flatbuffers::VOffsetT = 6;
+  pub const VT_SAPLING: flatbuffers::VOffsetT = 8;
+  pub const VT_ORCHARD: flatbuffers::VOffsetT = 10;
+  pub const VT_NET_SAPLING: flatbuffers::VOffsetT = 12;
+  pub const VT_NET_ORCHARD: flatbuffers::VOffsetT = 14;
+  pub const VT_FEE: flatbuffers::VOffsetT = 16;
+  pub const VT_PRIVACY_LEVEL: flatbuffers::VOffsetT = 18;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    TxReport { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args TxReportArgs<'args>
+  ) -> flatbuffers::WIPOffset<TxReport<'bldr>> {
+    let mut builder = TxReportBuilder::new(_fbb);
+    builder.add_fee(args.fee);
+    builder.add_net_orchard(args.net_orchard);
+    builder.add_net_sapling(args.net_sapling);
+    builder.add_orchard(args.orchard);
+    builder.add_sapling(args.sapling);
+    builder.add_transparent(args.transparent);
+    if let Some(x) = args.outputs { builder.add_outputs(x); }
+    builder.add_privacy_level(args.privacy_level);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> TxReportT {
+    let outputs = self.outputs().map(|x| {
+      x.iter().map(|t| t.unpack()).collect()
+    });
+    let transparent = self.transparent();
+    let sapling = self.sapling();
+    let orchard = self.orchard();
+    let net_sapling = self.net_sapling();
+    let net_orchard = self.net_orchard();
+    let fee = self.fee();
+    let privacy_level = self.privacy_level();
+    TxReportT {
+      outputs,
+      transparent,
+      sapling,
+      orchard,
+      net_sapling,
+      net_orchard,
+      fee,
+      privacy_level,
+    }
+  }
+
+  #[inline]
+  pub fn outputs(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<TxOutput<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<TxOutput>>>>(TxReport::VT_OUTPUTS, None)}
+  }
+  #[inline]
+  pub fn transparent(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(TxReport::VT_TRANSPARENT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn sapling(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(TxReport::VT_SAPLING, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn orchard(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(TxReport::VT_ORCHARD, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn net_sapling(&self) -> i64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<i64>(TxReport::VT_NET_SAPLING, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn net_orchard(&self) -> i64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<i64>(TxReport::VT_NET_ORCHARD, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn fee(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(TxReport::VT_FEE, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn privacy_level(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(TxReport::VT_PRIVACY_LEVEL, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for TxReport<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<TxOutput>>>>("outputs", Self::VT_OUTPUTS, false)?
+     .visit_field::<u64>("transparent", Self::VT_TRANSPARENT, false)?
+     .visit_field::<u64>("sapling", Self::VT_SAPLING, false)?
+     .visit_field::<u64>("orchard", Self::VT_ORCHARD, false)?
+     .visit_field::<i64>("net_sapling", Self::VT_NET_SAPLING, false)?
+     .visit_field::<i64>("net_orchard", Self::VT_NET_ORCHARD, false)?
+     .visit_field::<u64>("fee", Self::VT_FEE, false)?
+     .visit_field::<u8>("privacy_level", Self::VT_PRIVACY_LEVEL, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct TxReportArgs<'a> {
+    pub outputs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<TxOutput<'a>>>>>,
+    pub transparent: u64,
+    pub sapling: u64,
+    pub orchard: u64,
+    pub net_sapling: i64,
+    pub net_orchard: i64,
+    pub fee: u64,
+    pub privacy_level: u8,
+}
+impl<'a> Default for TxReportArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    TxReportArgs {
+      outputs: None,
+      transparent: 0,
+      sapling: 0,
+      orchard: 0,
+      net_sapling: 0,
+      net_orchard: 0,
+      fee: 0,
+      privacy_level: 0,
+    }
+  }
+}
+
+pub struct TxReportBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> TxReportBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_outputs(&mut self, outputs: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<TxOutput<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TxReport::VT_OUTPUTS, outputs);
+  }
+  #[inline]
+  pub fn add_transparent(&mut self, transparent: u64) {
+    self.fbb_.push_slot::<u64>(TxReport::VT_TRANSPARENT, transparent, 0);
+  }
+  #[inline]
+  pub fn add_sapling(&mut self, sapling: u64) {
+    self.fbb_.push_slot::<u64>(TxReport::VT_SAPLING, sapling, 0);
+  }
+  #[inline]
+  pub fn add_orchard(&mut self, orchard: u64) {
+    self.fbb_.push_slot::<u64>(TxReport::VT_ORCHARD, orchard, 0);
+  }
+  #[inline]
+  pub fn add_net_sapling(&mut self, net_sapling: i64) {
+    self.fbb_.push_slot::<i64>(TxReport::VT_NET_SAPLING, net_sapling, 0);
+  }
+  #[inline]
+  pub fn add_net_orchard(&mut self, net_orchard: i64) {
+    self.fbb_.push_slot::<i64>(TxReport::VT_NET_ORCHARD, net_orchard, 0);
+  }
+  #[inline]
+  pub fn add_fee(&mut self, fee: u64) {
+    self.fbb_.push_slot::<u64>(TxReport::VT_FEE, fee, 0);
+  }
+  #[inline]
+  pub fn add_privacy_level(&mut self, privacy_level: u8) {
+    self.fbb_.push_slot::<u8>(TxReport::VT_PRIVACY_LEVEL, privacy_level, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> TxReportBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    TxReportBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<TxReport<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for TxReport<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("TxReport");
+      ds.field("outputs", &self.outputs());
+      ds.field("transparent", &self.transparent());
+      ds.field("sapling", &self.sapling());
+      ds.field("orchard", &self.orchard());
+      ds.field("net_sapling", &self.net_sapling());
+      ds.field("net_orchard", &self.net_orchard());
+      ds.field("fee", &self.fee());
+      ds.field("privacy_level", &self.privacy_level());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct TxReportT {
+  pub outputs: Option<Vec<TxOutputT>>,
+  pub transparent: u64,
+  pub sapling: u64,
+  pub orchard: u64,
+  pub net_sapling: i64,
+  pub net_orchard: i64,
+  pub fee: u64,
+  pub privacy_level: u8,
+}
+impl Default for TxReportT {
+  fn default() -> Self {
+    Self {
+      outputs: None,
+      transparent: 0,
+      sapling: 0,
+      orchard: 0,
+      net_sapling: 0,
+      net_orchard: 0,
+      fee: 0,
+      privacy_level: 0,
+    }
+  }
+}
+impl TxReportT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<TxReport<'b>> {
+    let outputs = self.outputs.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();_fbb.create_vector(&w)
+    });
+    let transparent = self.transparent;
+    let sapling = self.sapling;
+    let orchard = self.orchard;
+    let net_sapling = self.net_sapling;
+    let net_orchard = self.net_orchard;
+    let fee = self.fee;
+    let privacy_level = self.privacy_level;
+    TxReport::create(_fbb, &TxReportArgs{
+      outputs,
+      transparent,
+      sapling,
+      orchard,
+      net_sapling,
+      net_orchard,
+      fee,
+      privacy_level,
+    })
+  }
+}
 }  // pub mod fb
 

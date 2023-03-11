@@ -123,7 +123,7 @@ fn derive_viewing_key(
     network: &Network,
     extsk: &ExtendedSpendingKey,
 ) -> anyhow::Result<(String, String)> {
-    let fvk = ExtendedFullViewingKey::from(extsk);
+    let fvk = extsk.to_extended_full_viewing_key();
     let pa = derive_address(network, &fvk)?;
     let fvk =
         encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk);

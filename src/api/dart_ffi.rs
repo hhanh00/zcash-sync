@@ -1,5 +1,5 @@
 use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
-use crate::db::data_generated::fb::{ProgressT, SendTemplate, Servers};
+use crate::db::data_generated::fb::{ProgressT, Recipients, SendTemplate, Servers};
 use crate::db::FullEncryptedBackup;
 use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
@@ -517,13 +517,19 @@ pub async unsafe extern "C" fn scan_transparent_accounts(gap_limit: u32) -> CRes
 pub async unsafe extern "C" fn prepare_multi_payment(
     coin: u8,
     account: u32,
-    recipients_json: *mut c_char,
+    recipients_bytes: *mut u8,
+    recipients_len: u64,
     anchor_offset: u32,
 ) -> CResult<*mut c_char> {
-    from_c_str!(recipients_json);
     let res = async {
         let last_height = crate::api::sync::get_latest_height().await?;
-        let recipients = crate::api::recipient::parse_recipients(&recipients_json)?;
+        let recipients_bytes: Vec<u8> = Vec::from_raw_parts(
+            recipients_bytes,
+            recipients_len as usize,
+            recipients_len as usize,
+        );
+        let recipients = flatbuffers::root::<Recipients>(&recipients_bytes)?;
+        let recipients = crate::api::recipient::parse_recipients(&recipients)?;
         let tx = crate::api::payment_v2::build_tx_plan(
             coin,
             account,
@@ -540,16 +546,18 @@ pub async unsafe extern "C" fn prepare_multi_payment(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn transaction_report(coin: u8, plan: *mut c_char) -> CResult<*mut c_char> {
+pub unsafe extern "C" fn transaction_report(coin: u8, plan: *mut c_char) -> CResult<*const u8> {
     from_c_str!(plan);
     let c = CoinConfig::get(coin);
     let res = || {
         let plan: TransactionPlan = serde_json::from_str(&plan)?;
         let report = TransactionReport::from_plan(c.chain.network(), plan);
-        let report = serde_json::to_string(&report)?;
-        Ok(report)
+        let mut builder = FlatBufferBuilder::new();
+        let root = report.pack(&mut builder);
+        builder.finish(root, None);
+        Ok(builder.finished_data().to_vec())
     };
-    to_cresult_str(res())
+    to_cresult_bytes(res())
 }
 
 #[tokio::main]
@@ -841,14 +849,17 @@ pub unsafe extern "C" fn derive_zip32(
     external: u32,
     has_address: bool,
     address: u32,
-) -> CResult<*mut c_char> {
+) -> CResult<*const u8> {
     let res = || {
         let address = if has_address { Some(address) } else { None };
         let kp = crate::api::account::derive_keys(coin, id_account, account, external, address)?;
-        let result = serde_json::to_string(&kp)?;
-        Ok(result)
+        let mut builder = FlatBufferBuilder::new();
+        let data = kp.pack(&mut builder);
+        builder.finish(data, None);
+        let res = builder.finished_data().to_vec();
+        Ok(res)
     };
-    to_cresult_str(res())
+    to_cresult_bytes(res())
 }
 
 #[no_mangle]

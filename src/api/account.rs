@@ -4,7 +4,7 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::{
-    AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs, BackupT,
+    AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs, BackupT, KeyPackT,
 };
 use crate::db::AccountData;
 use crate::key2::decode_key;
@@ -12,7 +12,6 @@ use crate::orchard::OrchardKeyBytes;
 use crate::taddr::{derive_taddr, derive_tkeys};
 use crate::unified::UnifiedAddressType;
 use crate::zip32::derive_zip32;
-use crate::KeyPack;
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};
 use orchard::keys::{FullViewingKey, Scope};
@@ -143,7 +142,7 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
             decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
                 .unwrap();
         let sapling_dfvk = sapling_efvk.to_diversifiable_full_viewing_key();
-        let orchard_fvk = orchard::keys::FullViewingKey::from_bytes(&ofvk);
+        let orchard_fvk = FullViewingKey::from_bytes(&ofvk);
         let ufvk = UnifiedFullViewingKey::new(Some(sapling_dfvk), orchard_fvk).unwrap();
         ufvk.encode(network)
     });
@@ -390,7 +389,7 @@ pub fn derive_keys(
     account: u32,
     external: u32,
     address: Option<u32>,
-) -> anyhow::Result<KeyPack> {
+) -> anyhow::Result<KeyPackT> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
     let AccountData { seed, .. } = db.get_account_info(id_account)?;

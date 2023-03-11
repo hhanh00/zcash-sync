@@ -162,6 +162,34 @@ typedef struct CResult_bool {
 
 #define Progress_VT_DOWNLOADED 8
 
+#define KeyPack_VT_T_ADDR 4
+
+#define KeyPack_VT_T_KEY 6
+
+#define KeyPack_VT_Z_ADDR 8
+
+#define KeyPack_VT_Z_KEY 10
+
+#define Recipient_VT_REPLY_TO 10
+
+#define Recipient_VT_MAX_AMOUNT_PER_NOTE 16
+
+#define UnsignedTxSummary_VT_RECIPIENTS 4
+
+#define TxOutput_VT_POOL 10
+
+#define TxReport_VT_OUTPUTS 4
+
+#define TxReport_VT_TRANSPARENT 6
+
+#define TxReport_VT_NET_SAPLING 12
+
+#define TxReport_VT_NET_ORCHARD 14
+
+#define TxReport_VT_FEE 16
+
+#define TxReport_VT_PRIVACY_LEVEL 18
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -247,10 +275,11 @@ struct CResult______u8 scan_transparent_accounts(uint32_t gap_limit);
 
 struct CResult_____c_char prepare_multi_payment(uint8_t coin,
                                                 uint32_t account,
-                                                char *recipients_json,
+                                                uint8_t *recipients_bytes,
+                                                uint64_t recipients_len,
                                                 uint32_t anchor_offset);
 
-struct CResult_____c_char transaction_report(uint8_t coin, char *plan);
+struct CResult______u8 transaction_report(uint8_t coin, char *plan);
 
 struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx_plan, int64_t _port);
 
@@ -310,12 +339,12 @@ struct CResult_____c_char get_best_server(uint8_t *servers, uint64_t len);
 
 void import_from_zwl(uint8_t coin, char *name, char *data);
 
-struct CResult_____c_char derive_zip32(uint8_t coin,
-                                       uint32_t id_account,
-                                       uint32_t account,
-                                       uint32_t external,
-                                       bool has_address,
-                                       uint32_t address);
+struct CResult______u8 derive_zip32(uint8_t coin,
+                                    uint32_t id_account,
+                                    uint32_t account,
+                                    uint32_t external,
+                                    bool has_address,
+                                    uint32_t address);
 
 struct CResult_u8 clear_tx_details(uint8_t coin, uint32_t account);
 

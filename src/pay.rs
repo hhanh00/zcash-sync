@@ -3,7 +3,7 @@ use crate::db::SpendableNote;
 use crate::api::recipient::RecipientMemo;
 use crate::chain::get_latest_height;
 use crate::coinconfig::CoinConfig;
-use crate::{GetAddressUtxosReply, Hash, RawTransaction};
+use crate::{GetAddressUtxosReply, RawTransaction};
 use anyhow::anyhow;
 use jubjub::Fr;
 use rand::prelude::SliceRandom;
@@ -14,8 +14,7 @@ use std::sync::mpsc;
 use tonic::Request;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
-    decode_extended_full_viewing_key, decode_payment_address, encode_extended_full_viewing_key,
-    encode_payment_address,
+    decode_extended_full_viewing_key, encode_extended_full_viewing_key, encode_payment_address,
 };
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
@@ -28,6 +27,7 @@ use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
 use zcash_primitives::transaction::builder::{Builder, Progress};
 use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut as ZTxOut};
+use zcash_primitives::transaction::fees::fixed::FeeRule;
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -219,7 +219,7 @@ impl TxBuilder {
             for n in notes.iter() {
                 if amount.is_positive() {
                     let a = amount.min(
-                        Amount::from_u64(n.note.value)
+                        Amount::from_u64(n.note.value().inner())
                             .map_err(|_| anyhow::anyhow!("Invalid amount"))?,
                     );
                     amount -= a;
@@ -230,7 +230,7 @@ impl TxBuilder {
                         self.add_z_input(
                             &n.diversifier,
                             fvk,
-                            Amount::from_u64(n.note.value).unwrap(),
+                            Amount::from_u64(n.note.value().inner()).unwrap(),
                             &rseed.to_bytes(),
                             &witness_bytes,
                         )?;
@@ -322,27 +322,22 @@ impl Tx {
         let chain = get_coin_chain(self.coin_type);
         let last_height = BlockHeight::from_u32(self.height as u32);
         let mut builder = Builder::new(*chain.network(), last_height);
-        let efvk = ExtendedFullViewingKey::from(zsk);
-
-        let ovk: Hash = hex::decode(&self.ovk)?.try_into().unwrap();
-        builder.send_change_to(
-            OutgoingViewingKey(ovk),
-            decode_payment_address(chain.network().hrp_sapling_payment_address(), &self.change)
-                .unwrap(),
-        );
+        let efvk = zsk.to_extended_full_viewing_key();
 
         if let Some(tsk) = tsk {
             for txin in self.t_inputs.iter() {
                 let mut txid = [0u8; 32];
                 hex::decode_to_slice(&txin.op, &mut txid)?;
-                builder.add_transparent_input(
-                    tsk,
-                    OutPoint::new(txid, txin.n),
-                    ZTxOut {
-                        value: Amount::from_u64(txin.amount).unwrap(),
-                        script_pubkey: Script(hex::decode(&txin.script).unwrap()),
-                    },
-                )?;
+                builder
+                    .add_transparent_input(
+                        tsk,
+                        OutPoint::new(txid, txin.n),
+                        ZTxOut {
+                            value: Amount::from_u64(txin.amount).unwrap(),
+                            script_pubkey: Script(hex::decode(&txin.script).unwrap()),
+                        },
+                    )
+                    .map_err(|e| anyhow!(e.to_string()))?;
             }
         } else if !self.t_inputs.is_empty() {
             anyhow::bail!("Missing secret key of transparent account");
@@ -364,14 +359,14 @@ impl Tx {
             let mut rseed_bytes = [0u8; 32];
             hex::decode_to_slice(&txin.rseed, &mut rseed_bytes)?;
             let rseed = Fr::from_bytes(&rseed_bytes).unwrap();
-            let note = pa
-                .create_note(txin.amount, Rseed::BeforeZip212(rseed))
-                .unwrap();
+            let note = pa.create_note(txin.amount, Rseed::BeforeZip212(rseed));
             let w = hex::decode(&txin.witness)?;
             let witness = IncrementalWitness::<Node>::read(&*w)?;
             let merkle_path = witness.path().unwrap();
 
-            builder.add_sapling_spend(zsk.clone(), diversifier, note, merkle_path)?;
+            builder
+                .add_sapling_spend(zsk.clone(), diversifier, note, merkle_path)
+                .map_err(|e| anyhow!(e.to_string()))?;
         }
 
         for txout in self.outputs.iter() {
@@ -379,7 +374,9 @@ impl Tx {
             let amount = Amount::from_u64(txout.amount).unwrap();
             match recipient {
                 RecipientAddress::Transparent(ta) => {
-                    builder.add_transparent_output(&ta, amount)?;
+                    builder
+                        .add_transparent_output(&ta, amount)
+                        .map_err(|e| anyhow!(e.to_string()))?;
                 }
                 RecipientAddress::Shielded(pa) => {
                     let mut ovk = [0u8; 32];
@@ -389,7 +386,9 @@ impl Tx {
                     let m = hex::decode(&txout.memo)?;
                     memo[..m.len()].copy_from_slice(&m);
                     let memo = MemoBytes::from_bytes(&memo)?;
-                    builder.add_sapling_output(Some(ovk), pa, amount, memo)?;
+                    builder
+                        .add_sapling_output(Some(ovk), pa, amount, memo)
+                        .map_err(|e| anyhow!(e.to_string()))?;
                 }
                 RecipientAddress::Unified(_ua) => {
                     todo!() // TODO
@@ -406,7 +405,7 @@ impl Tx {
                 progress_callback(progress);
             }
         });
-        let (tx, _) = builder.build(prover)?;
+        let (tx, _) = builder.build(prover, &FeeRule::standard())?;
         let mut raw_tx = vec![];
         tx.write(&mut raw_tx)?;
 

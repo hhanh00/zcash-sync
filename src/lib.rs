@@ -125,7 +125,6 @@ pub use crate::fountain::{FountainCodes, RaptorQDrops};
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;
 pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
-pub use zip32::KeyPack;
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
 
 pub use note_selection::{

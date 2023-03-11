@@ -67,7 +67,7 @@ impl<P: Parameters> DecryptedNote<SaplingDomain<P>, SaplingViewKey> for Decrypte
             height: self.output_position.height,
             output_index: self.output_position.output_index as u32,
             diversifier: self.pa.diversifier().0.to_vec(),
-            value: self.note.value,
+            value: self.note.value().inner(),
             rcm: self.note.rcm().to_repr().to_vec(),
             nf: self.note.nf(&viewing_key.nk, position).to_vec(),
             rho: None,

@@ -139,7 +139,7 @@ fn collect_decrypted_notes(
                                 usize::from_le_bytes(plaintext[52..60].try_into().unwrap());
                             let cmu = note.cmu().to_bytes();
                             if &cmu == co.cmu.as_slice() {
-                                log::info!("Note {} {}", account, u64::from(note.value));
+                                log::info!("Note {} {}", account, u64::from(note.value().inner()));
                                 decrypted_notes.push(DecryptedNote {
                                     account,
                                     ivk: fvk.clone(),
