@@ -968,7 +968,8 @@ pub unsafe extern "C" fn get_notes(coin: u8, id: u32) -> CResult<*const u8> {
 #[no_mangle]
 pub unsafe extern "C" fn get_txs(coin: u8, id: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
-        let shielded_txs = crate::db::read::get_txs(connection, id)?;
+        let c = CoinConfig::get(coin);
+        let shielded_txs = crate::db::read::get_txs(c.chain.network(), connection, id)?;
         let mut builder = FlatBufferBuilder::new();
         let shielded_txs = shielded_txs.pack(&mut builder);
         builder.finish(shielded_txs, None);

@@ -1,6 +1,12 @@
 use crate::db::data_generated::fb::*;
+use crate::unified::orchard_as_unified;
 use anyhow::Result;
+use orchard::keys::{FullViewingKey, Scope};
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashMap;
+use zcash_client_backend::address::RecipientAddress;
+use zcash_client_backend::encoding::AddressCodec;
+use zcash_primitives::consensus::Network;
 
 pub fn get_account_list(connection: &Connection) -> Result<Vec<u8>> {
     let mut builder = flatbuffers::FlatBufferBuilder::new();
@@ -243,12 +249,12 @@ pub fn get_notes(connection: &Connection, id: u32) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-pub fn get_txs(connection: &Connection, id: u32) -> Result<ShieldedTxVecT> {
+pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<ShieldedTxVecT> {
+    let addresses = resolve_addresses(network, connection)?;
     let mut stmt = connection.prepare(
-        "SELECT id_tx, txid, height, timestamp, t.address, c.name AS cname, a.name AS aname, value, memo FROM transactions t \
-        LEFT JOIN contacts c ON t.address = c.address \
-        LEFT JOIN accounts a ON a.address = t.address \
-        WHERE account = ?1 ORDER BY height DESC")?;
+        "SELECT id_tx, txid, height, timestamp, t.address, value, memo FROM transactions t \
+        WHERE account = ?1 ORDER BY height DESC",
+    )?;
     let rows = stmt.query_map(params![id], |row| {
         let id_tx: u32 = row.get("id_tx")?;
         let height: u32 = row.get("height")?;
@@ -257,12 +263,10 @@ pub fn get_txs(connection: &Connection, id: u32) -> Result<ShieldedTxVecT> {
         let tx_id = hex::encode(&tx_id);
         let short_tx_id = tx_id[..8].to_string();
         let timestamp: u32 = row.get("timestamp")?;
-        let contact_name: Option<String> = row.get("cname")?;
-        let account_name: Option<String> = row.get("aname")?;
-        let name = contact_name.or(account_name);
-        let value: i64 = row.get("value")?;
         let address: Option<String> = row.get("address")?;
+        let value: i64 = row.get("value")?;
         let memo: Option<String> = row.get("memo")?;
+        let name = address.as_ref().and_then(|a| addresses.get(a)).cloned();
         let tx = ShieldedTxT {
             id: id_tx,
             height,
@@ -614,3 +618,68 @@ pub fn get_checkpoints(connection: &Connection) -> Result<Vec<u8>> {
     let data = builder.finished_data().to_vec();
     Ok(data)
 }
+
+pub fn resolve_addresses(
+    network: &Network,
+    connection: &Connection,
+) -> Result<HashMap<String, String>> {
+    let mut addresses: HashMap<String, String> = HashMap::new();
+    let mut stmt = connection.prepare("SELECT name, address FROM contacts WHERE address <> ''")?;
+    let rows = stmt.query_map([], |row| {
+        let name: String = row.get(0)?;
+        let address: String = row.get(1)?;
+        let ra = RecipientAddress::decode(network, &address);
+        if let Some(ra) = ra {
+            match ra {
+                RecipientAddress::Unified(ua) => {
+                    if let Some(ta) = ua.transparent() {
+                        addresses.insert(ta.encode(network), name.clone());
+                    }
+                    if let Some(pa) = ua.sapling() {
+                        addresses.insert(pa.encode(network), name.clone());
+                    }
+                    if let Some(oa) = ua.orchard() {
+                        let oa = orchard_as_unified(network, oa);
+                        addresses.insert(oa.encode(), name.clone());
+                    }
+                }
+                _ => {
+                    addresses.insert(address, name);
+                }
+            }
+        }
+        Ok(())
+    })?;
+    for r in rows {
+        r?;
+    }
+
+    let mut stmt = connection.prepare(
+        "SELECT a.name, a.address, t.address, o.fvk FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account \
+        LEFT JOIN orchard_addrs o ON a.id_account = o.account",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let name: String = row.get(0)?;
+        let z_addr: String = row.get(1)?;
+        let t_addr: Option<String> = row.get(2)?;
+        let o_fvk: Option<Vec<u8>> = row.get(3)?;
+        addresses.insert(z_addr, name.clone());
+        if let Some(t_addr) = t_addr {
+            addresses.insert(t_addr, name.clone());
+        }
+        if let Some(o_fvk) = o_fvk {
+            let o_fvk = FullViewingKey::from_bytes(&o_fvk.try_into().unwrap()).unwrap();
+            let o_addr = o_fvk.address_at(0usize, Scope::External);
+            let o_addr = orchard_as_unified(network, &o_addr);
+            addresses.insert(o_addr.encode(), name.clone());
+        }
+        Ok(())
+    })?;
+    for r in rows {
+        r?;
+    }
+
+    Ok(addresses)
+}
+
+// TODO: In get_tx, resolve addresses to contact
