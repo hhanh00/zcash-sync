@@ -1,4 +1,4 @@
-#if !defined(__APPLE__) || defined(__MACH__)
+#if !defined(__APPLE__) && !defined(TARGET_OS_IPHONE)
 typedef char int8_t;
 typedef unsigned char uint8_t;
 typedef short int uint16_t;
