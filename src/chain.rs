@@ -4,7 +4,6 @@ use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
 use crate::scan::Blocks;
 use crate::DbAdapter;
-use ff::PrimeField;
 use futures::{future, FutureExt};
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
