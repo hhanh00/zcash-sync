@@ -86,7 +86,7 @@ pub fn decode_memo(
             id_tx,
             sender: None,
             recipient: recipient.to_string(),
-            subject: memo_lines[0].chars().take(20).collect(),
+            subject: String::new(),
             body: memo.to_string(),
             timestamp,
             height,
