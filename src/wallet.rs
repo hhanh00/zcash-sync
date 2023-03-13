@@ -132,7 +132,7 @@ pub fn decode_memo(memo: &str, recipient: &str, timestamp: u32, height: u32) -> 
         ZMessage {
             sender: None,
             recipient: recipient.to_string(),
-            subject: memo_lines[0].chars().take(20).collect(),
+            subject: String::new(),
             body: memo.to_string(),
             timestamp,
             height,
