@@ -4,7 +4,7 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::{
-    AddressBalance, AddressBalanceArgs, AddressBalanceVec, AddressBalanceVecArgs, BackupT, KeyPackT,
+    BackupT, KeyPackT, AddressBalanceVecT, AddressBalanceT,
 };
 use crate::db::AccountData;
 use crate::key2::decode_key;
@@ -265,35 +265,24 @@ pub async fn get_taddr_balance(coin: u8, id_account: u32) -> anyhow::Result<u64>
 /// is exceeded and no balance was found
 /// # Arguments
 /// * `gap_limit`: number of accounts with 0 balance before the scan stops
-pub async fn scan_transparent_accounts(gap_limit: usize) -> anyhow::Result<Vec<u8>> {
-    let c = CoinConfig::get_active();
-    let mut client = c.connect_lwd().await?;
-    let addresses =
-        crate::taddr::scan_transparent_accounts(c.chain.network(), &mut client, gap_limit).await?;
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let mut addrs = vec![];
-    for a in addresses {
-        let address = builder.create_string(&a.address);
-        let ab = AddressBalance::create(
-            &mut builder,
-            &AddressBalanceArgs {
-                index: a.index,
-                address: Some(address),
-                balance: a.balance,
-            },
-        );
-        addrs.push(ab);
+pub async fn scan_transparent_accounts(coin: u8, account: u32, gap_limit: usize) -> anyhow::Result<AddressBalanceVecT> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let account_data = db.get_account_info(account)?;
+    let AccountData {
+        seed, aindex, ..
+    } = account_data;
+    let mut addresses = vec![];
+    if let Some(seed) = seed {
+        let mut client = c.connect_lwd().await?;
+        addresses.extend(crate::taddr::scan_transparent_accounts(c.chain.network(), &mut client, &seed, aindex, gap_limit).await?);
     }
-    let addrs = builder.create_vector(&addrs);
-    let addrs = AddressBalanceVec::create(
-        &mut builder,
-        &AddressBalanceVecArgs {
-            values: Some(addrs),
-        },
-    );
-    builder.finish(addrs, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let addresses: Vec<_> = addresses.iter().map(|a| AddressBalanceT { index: a.index, 
+        address: Some(a.address.clone()), balance: a.balance }).collect();
+    let addresses = AddressBalanceVecT {
+        values: Some(addresses)
+    };
+    Ok(addresses)
 }
 
 /// Get the backup string. It is either the passphrase, the secret key or the viewing key

@@ -507,9 +507,15 @@ pub async unsafe extern "C" fn shield_taddr(
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn scan_transparent_accounts(gap_limit: u32) -> CResult<*const u8> {
-    let res = crate::api::account::scan_transparent_accounts(gap_limit as usize).await;
-    to_cresult_bytes(res)
+pub async unsafe extern "C" fn scan_transparent_accounts(coin: u8, account: u32, gap_limit: u32) -> CResult<*const u8> {
+    let res = async {
+        let addresses = crate::api::account::scan_transparent_accounts(coin, account, gap_limit as usize).await?;
+        let mut builder = FlatBufferBuilder::new();
+        let root = addresses.pack(&mut builder);
+        builder.finish(root, None);
+        Ok(builder.finished_data().to_vec())
+    };
+    to_cresult_bytes(res.await)
 }
 
 #[tokio::main]

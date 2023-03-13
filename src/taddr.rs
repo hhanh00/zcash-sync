@@ -1,6 +1,6 @@
 use crate::api::payment_v2::build_tx_plan_with_utxos;
 use crate::api::recipient::RecipientMemo;
-use crate::chain::{get_checkpoint_height, EXPIRY_HEIGHT_OFFSET};
+use crate::chain::{get_checkpoint_height, EXPIRY_HEIGHT_OFFSET, get_latest_height};
 use crate::coinconfig::CoinConfig;
 use crate::db::AccountData;
 use crate::key2::split_key;
@@ -8,7 +8,7 @@ use crate::note_selection::{SecretKeys, Source, UTXO};
 use crate::unified::orchard_as_unified;
 use crate::{
     broadcast_tx, build_tx, AddressList, BlockId, CompactTxStreamerClient, GetAddressUtxosArg,
-    GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
+    GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter, BlockRange,
 };
 use anyhow::anyhow;
 use base58check::FromBase58Check;
@@ -25,7 +25,7 @@ use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::encode_transparent_address;
 use zcash_params::coin::get_branch;
-use zcash_primitives::consensus::{Network, Parameters};
+use zcash_primitives::consensus::{Network, Parameters, NetworkUpgrade};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::memo::Memo;
 use zcash_primitives::transaction::components::OutPoint;
@@ -141,10 +141,11 @@ pub async fn get_ttx_history(
 pub async fn get_taddr_tx_count(
     client: &mut CompactTxStreamerClient<Channel>,
     address: &str,
+    range: &BlockRange,
 ) -> anyhow::Result<u32> {
     let req = TransparentAddressBlockFilter {
         address: address.to_string(),
-        range: None,
+        range: Some(range.clone()),
     };
     let rep = client
         .get_taddress_txids(Request::new(req))
@@ -173,39 +174,40 @@ pub async fn get_utxos(
 pub async fn scan_transparent_accounts(
     network: &Network,
     client: &mut CompactTxStreamerClient<Channel>,
+    seed: &str,
+    mut aindex: u32,
     gap_limit: usize,
 ) -> anyhow::Result<Vec<TBalance>> {
-    let c = CoinConfig::get_active();
+    let start: u32 = network.activation_height(NetworkUpgrade::Sapling).unwrap().into();
+    let end = get_latest_height(client).await?;
+
+    let range = BlockRange {
+        start: Some(BlockId { height: start as u64, hash: vec![] }),
+        end: Some(BlockId { height: end as u64, hash: vec![] }), spam_filter_threshold: 0 };
+
     let mut addresses = vec![];
-    let db = c.db()?;
-    let account_data = db.get_account_info(c.id_account)?;
-    let AccountData {
-        seed, mut aindex, ..
-    } = account_data;
-    if let Some(seed) = seed {
-        let mut gap = 0;
-        while gap < gap_limit {
-            let bip44_path = format!("m/44'/{}'/0'/0/{}", network.coin_type(), aindex);
-            log::info!("{} {}", aindex, bip44_path);
-            let (_, address) = derive_tkeys(network, &seed, &bip44_path)?;
-            let balance = get_taddr_balance(client, &address).await?;
-            if balance > 0 {
-                addresses.push(TBalance {
-                    index: aindex,
-                    address,
-                    balance,
-                });
+    let mut gap = 0;
+    while gap < gap_limit {
+        let bip44_path = format!("m/44'/{}'/0'/0/{}", network.coin_type(), aindex);
+        log::info!("{} {}", aindex, bip44_path);
+        let (_, address) = derive_tkeys(network, &seed, &bip44_path)?;
+        let balance = get_taddr_balance(client, &address).await?;
+        if balance > 0 {
+            addresses.push(TBalance {
+                index: aindex,
+                address,
+                balance,
+            });
+            gap = 0;
+        } else {
+            let tx_count = get_taddr_tx_count(client, &address, &range).await?;
+            if tx_count != 0 {
                 gap = 0;
             } else {
-                let tx_count = get_taddr_tx_count(client, &address).await?;
-                if tx_count != 0 {
-                    gap = 0;
-                } else {
-                    gap += 1;
-                }
+                gap += 1;
             }
-            aindex += 1;
         }
+        aindex += 1;
     }
     Ok(addresses)
 }

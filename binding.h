@@ -271,7 +271,9 @@ struct CResult_____c_char shield_taddr(uint8_t coin,
                                        uint64_t amount,
                                        uint32_t confirmations);
 
-struct CResult______u8 scan_transparent_accounts(uint32_t gap_limit);
+struct CResult______u8 scan_transparent_accounts(uint8_t coin,
+                                                 uint32_t account,
+                                                 uint32_t gap_limit);
 
 struct CResult_____c_char prepare_multi_payment(uint8_t coin,
                                                 uint32_t account,
