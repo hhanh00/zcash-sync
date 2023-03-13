@@ -659,4 +659,16 @@ pub fn resolve_addresses(
     Ok(addresses)
 }
 
-// TODO: In get_tx, resolve addresses to contact
+pub fn get_property(connection: &Connection, name: &str) -> anyhow::Result<String> {
+    let url = connection.query_row("SELECT value FROM properties WHERE name = ?1", [name], |row| {
+        let url: String = row.get(0)?;
+        Ok(url)
+    }).optional()?;
+    Ok(url.unwrap_or(String::new()))
+}
+
+pub fn set_property(connection: &Connection, name: &str, value: &str) -> anyhow::Result<()> {
+    connection.execute("INSERT INTO properties(name, value) VALUES (?1, ?2) ON CONFLICT (name) \
+    DO UPDATE SET value = excluded.value", params![name, value])?;
+    Ok(())
+}

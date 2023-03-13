@@ -1,4 +1,4 @@
-#if !defined(__APPLE__) && !defined(TARGET_OS_IPHONE)
+#if !defined(__APPLE__) || !defined(TARGET_OS_IPHONE)
 typedef char int8_t;
 typedef unsigned char uint8_t;
 typedef short int uint16_t;
@@ -400,6 +400,10 @@ struct CResult______u8 get_checkpoints(uint8_t coin);
 struct CResult_bool decrypt_db(char *db_path, char *passwd);
 
 struct CResult_u8 clone_db_with_passwd(uint8_t coin, char *temp_path, char *passwd);
+
+struct CResult_____c_char get_property(uint8_t coin, char *name);
+
+struct CResult_u8 set_property(uint8_t coin, char *name, char *value);
 
 bool has_cuda(void);
 

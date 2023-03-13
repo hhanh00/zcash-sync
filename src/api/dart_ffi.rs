@@ -1142,6 +1142,34 @@ pub unsafe extern "C" fn clone_db_with_passwd(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn get_property(
+    coin: u8,
+    name: *mut c_char,
+) -> CResult<*mut c_char> {
+    from_c_str!(name);
+    let res = |connection: &Connection| {
+        let value = crate::db::read::get_property(connection, &name)?;
+        Ok(value)
+    };
+    to_cresult_str(with_coin(coin, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn set_property(
+    coin: u8,
+    name: *mut c_char,
+    value: *mut c_char,
+) -> CResult<u8> {
+    from_c_str!(name);
+    from_c_str!(value);
+    let res = |connection: &Connection| {
+        crate::db::read::set_property(connection, &name, &value)?;
+        Ok(0)
+    };
+    to_cresult(with_coin(coin, res))
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn has_cuda() -> bool {
     crate::gpu::has_cuda()
 }
