@@ -981,7 +981,12 @@ pub unsafe extern "C" fn get_txs(coin: u8, id: u32) -> CResult<*const u8> {
 #[no_mangle]
 pub unsafe extern "C" fn get_messages(coin: u8, id: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
-        let data = crate::db::read::get_messages(connection, id)?;
+        let c = CoinConfig::get(coin);
+        let messages = crate::db::read::get_messages(c.chain.network(), connection, id)?;
+        let mut builder = flatbuffers::FlatBufferBuilder::new();
+        let root = messages.pack(&mut builder);
+        builder.finish(root, None);
+        let data = builder.finished_data().to_vec();
         Ok(data)
     };
     to_cresult_bytes(with_coin(coin, res))

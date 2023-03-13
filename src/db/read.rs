@@ -288,15 +288,12 @@ pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<Sh
     Ok(txs)
 }
 
-pub fn get_messages(connection: &Connection, id: u32) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_messages(network: &Network, connection: &Connection, id: u32) -> Result<MessageVecT> {
+    let addresses = resolve_addresses(network, connection)?;
+
     let mut stmt = connection.prepare(
-        "SELECT m.id, m.id_tx, m.timestamp, m.sender, m.recipient, m.incoming, c.name as scontact, a.name as saccount, c2.name as rcontact, a2.name as raccount, \
+        "SELECT m.id, m.id_tx, m.timestamp, m.sender, m.recipient, m.incoming, \
         subject, body, height, read FROM messages m \
-        LEFT JOIN contacts c ON m.sender = c.address \
-        LEFT JOIN accounts a ON m.sender = a.address \
-        LEFT JOIN contacts c2 ON m.recipient = c2.address \
-        LEFT JOIN accounts a2 ON m.recipient = a2.address \
         WHERE account = ?1 ORDER BY timestamp DESC")?;
     let rows = stmt.query_map(params![id], |row| {
         let id_msg: u32 = row.get("id")?;
@@ -304,56 +301,36 @@ pub fn get_messages(connection: &Connection, id: u32) -> Result<Vec<u8>> {
         let timestamp: u32 = row.get("timestamp")?;
         let height: u32 = row.get("height")?;
         let sender: Option<String> = row.get("sender")?;
-        let scontact: Option<String> = row.get("scontact")?;
-        let saccount: Option<String> = row.get("saccount")?;
         let recipient: Option<String> = row.get("recipient")?;
-        let rcontact: Option<String> = row.get("rcontact")?;
-        let raccount: Option<String> = row.get("raccount")?;
         let subject: String = row.get("subject")?;
         let body: String = row.get("body")?;
         let read: bool = row.get("read")?;
         let incoming: bool = row.get("incoming")?;
 
         let id_tx = id_tx.unwrap_or(0);
-        let from = scontact.or(saccount).or(sender).unwrap_or(String::new());
-        let to = rcontact.or(raccount).or(recipient).unwrap_or(String::new());
+        let from = sender.map(|s| addresses.get(&s).cloned().unwrap_or(String::new()));
+        let to = recipient.map(|s| addresses.get(&s).cloned().unwrap_or(String::new()));
 
-        let from = builder.create_string(&from);
-        let to = builder.create_string(&to);
-        let subject = builder.create_string(&subject);
-        let body = builder.create_string(&body);
-
-        let message = Message::create(
-            &mut builder,
-            &MessageArgs {
-                id_msg,
-                id_tx,
-                height,
-                timestamp,
-                from: Some(from),
-                to: Some(to),
-                subject: Some(subject),
-                body: Some(body),
-                read,
-                incoming,
-            },
-        );
+        let message = MessageT {
+            id_msg,
+            id_tx,
+            height,
+            timestamp,
+            from,
+            to,
+            subject: Some(subject),
+            body: Some(body),
+            read,
+            incoming,
+        };
         Ok(message)
     })?;
     let mut messages = vec![];
     for r in rows {
         messages.push(r?);
     }
-    let messages = builder.create_vector(&messages);
-    let messages = MessageVec::create(
-        &mut builder,
-        &MessageVecArgs {
-            messages: Some(messages),
-        },
-    );
-    builder.finish(messages, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let messages = MessageVecT { messages: Some(messages) };
+    Ok(messages)
 }
 
 pub fn get_prev_next_message(
