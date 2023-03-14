@@ -3,9 +3,7 @@
 // Account creation
 
 use crate::coinconfig::CoinConfig;
-use crate::db::data_generated::fb::{
-    BackupT, KeyPackT, AddressBalanceVecT, AddressBalanceT,
-};
+use crate::db::data_generated::fb::{AddressBalanceT, AddressBalanceVecT, BackupT, KeyPackT};
 use crate::db::AccountData;
 use crate::key2::decode_key;
 use crate::orchard::OrchardKeyBytes;
@@ -265,22 +263,39 @@ pub async fn get_taddr_balance(coin: u8, id_account: u32) -> anyhow::Result<u64>
 /// is exceeded and no balance was found
 /// # Arguments
 /// * `gap_limit`: number of accounts with 0 balance before the scan stops
-pub async fn scan_transparent_accounts(coin: u8, account: u32, gap_limit: usize) -> anyhow::Result<AddressBalanceVecT> {
+pub async fn scan_transparent_accounts(
+    coin: u8,
+    account: u32,
+    gap_limit: usize,
+) -> anyhow::Result<AddressBalanceVecT> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
     let account_data = db.get_account_info(account)?;
-    let AccountData {
-        seed, aindex, ..
-    } = account_data;
+    let AccountData { seed, aindex, .. } = account_data;
     let mut addresses = vec![];
     if let Some(seed) = seed {
         let mut client = c.connect_lwd().await?;
-        addresses.extend(crate::taddr::scan_transparent_accounts(c.chain.network(), &mut client, &seed, aindex, gap_limit).await?);
+        addresses.extend(
+            crate::taddr::scan_transparent_accounts(
+                c.chain.network(),
+                &mut client,
+                &seed,
+                aindex,
+                gap_limit,
+            )
+            .await?,
+        );
     }
-    let addresses: Vec<_> = addresses.iter().map(|a| AddressBalanceT { index: a.index, 
-        address: Some(a.address.clone()), balance: a.balance }).collect();
+    let addresses: Vec<_> = addresses
+        .iter()
+        .map(|a| AddressBalanceT {
+            index: a.index,
+            address: Some(a.address.clone()),
+            balance: a.balance,
+        })
+        .collect();
     let addresses = AddressBalanceVecT {
-        values: Some(addresses)
+        values: Some(addresses),
     };
     Ok(addresses)
 }

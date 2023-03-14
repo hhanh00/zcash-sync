@@ -226,6 +226,8 @@ struct CResult_u8 convert_to_watchonly(uint8_t coin, uint32_t id_account);
 
 struct CResult______u8 get_backup(uint8_t coin, uint32_t id_account);
 
+struct CResult_u8 get_available_addrs(uint8_t coin, uint32_t account);
+
 struct CResult_____c_char get_address(uint8_t coin, uint32_t id_account, uint8_t ua_type);
 
 void import_transparent_key(uint8_t coin, uint32_t id_account, char *path);

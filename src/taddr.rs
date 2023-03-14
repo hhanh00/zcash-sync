@@ -1,14 +1,14 @@
 use crate::api::payment_v2::build_tx_plan_with_utxos;
 use crate::api::recipient::RecipientMemo;
-use crate::chain::{get_checkpoint_height, EXPIRY_HEIGHT_OFFSET, get_latest_height};
+use crate::chain::{get_checkpoint_height, get_latest_height, EXPIRY_HEIGHT_OFFSET};
 use crate::coinconfig::CoinConfig;
 use crate::db::AccountData;
 use crate::key2::split_key;
 use crate::note_selection::{SecretKeys, Source, UTXO};
 use crate::unified::orchard_as_unified;
 use crate::{
-    broadcast_tx, build_tx, AddressList, BlockId, CompactTxStreamerClient, GetAddressUtxosArg,
-    GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter, BlockRange,
+    broadcast_tx, build_tx, AddressList, BlockId, BlockRange, CompactTxStreamerClient,
+    GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
 };
 use anyhow::anyhow;
 use base58check::FromBase58Check;
@@ -25,7 +25,7 @@ use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::encode_transparent_address;
 use zcash_params::coin::get_branch;
-use zcash_primitives::consensus::{Network, Parameters, NetworkUpgrade};
+use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::memo::Memo;
 use zcash_primitives::transaction::components::OutPoint;
@@ -178,12 +178,23 @@ pub async fn scan_transparent_accounts(
     mut aindex: u32,
     gap_limit: usize,
 ) -> anyhow::Result<Vec<TBalance>> {
-    let start: u32 = network.activation_height(NetworkUpgrade::Sapling).unwrap().into();
+    let start: u32 = network
+        .activation_height(NetworkUpgrade::Sapling)
+        .unwrap()
+        .into();
     let end = get_latest_height(client).await?;
 
     let range = BlockRange {
-        start: Some(BlockId { height: start as u64, hash: vec![] }),
-        end: Some(BlockId { height: end as u64, hash: vec![] }), spam_filter_threshold: 0 };
+        start: Some(BlockId {
+            height: start as u64,
+            hash: vec![],
+        }),
+        end: Some(BlockId {
+            height: end as u64,
+            hash: vec![],
+        }),
+        spam_filter_threshold: 0,
+    };
 
     let mut addresses = vec![];
     let mut gap = 0;

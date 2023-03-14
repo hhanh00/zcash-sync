@@ -1131,10 +1131,7 @@ impl DbAdapter {
             "UPDATE transactions SET address = NULL, memo = NULL WHERE account = ?1",
             [account],
         )?;
-        connection.execute(
-            "DELETE FROM messages WHERE account = ?1",
-            [account],
-        )?;
+        connection.execute("DELETE FROM messages WHERE account = ?1", [account])?;
         Ok(())
     }
 

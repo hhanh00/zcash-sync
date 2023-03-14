@@ -20,6 +20,13 @@ static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
 const MAX_COINS: u8 = 2;
 
+fn with_coin<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, f: F) -> anyhow::Result<T> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let connection = &db.connection;
+    f(connection)
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn dummy_export() {}
 
@@ -253,6 +260,15 @@ pub unsafe extern "C" fn get_backup(coin: u8, id_account: u32) -> CResult<*const
     };
 
     to_cresult_bytes(res())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_available_addrs(coin: u8, account: u32) -> CResult<u8> {
+    let res = |connection: &Connection| {
+        let res = crate::db::read::get_available_addrs(connection, account)?;
+        Ok(res)
+    };
+    to_cresult(with_coin(coin, res))
 }
 
 #[no_mangle]
@@ -507,9 +523,15 @@ pub async unsafe extern "C" fn shield_taddr(
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn scan_transparent_accounts(coin: u8, account: u32, gap_limit: u32) -> CResult<*const u8> {
+pub async unsafe extern "C" fn scan_transparent_accounts(
+    coin: u8,
+    account: u32,
+    gap_limit: u32,
+) -> CResult<*const u8> {
     let res = async {
-        let addresses = crate::api::account::scan_transparent_accounts(coin, account, gap_limit as usize).await?;
+        let addresses =
+            crate::api::account::scan_transparent_accounts(coin, account, gap_limit as usize)
+                .await?;
         let mut builder = FlatBufferBuilder::new();
         let root = addresses.pack(&mut builder);
         builder.finish(root, None);
@@ -877,13 +899,6 @@ pub unsafe extern "C" fn clear_tx_details(coin: u8, account: u32) -> CResult<u8>
     to_cresult(with_coin(coin, res))
 }
 
-fn with_coin<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, f: F) -> anyhow::Result<T> {
-    let c = CoinConfig::get(coin);
-    let db = c.db()?;
-    let connection = &db.connection;
-    f(connection)
-}
-
 #[no_mangle]
 pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
     let res = |connection: &Connection| {
@@ -1142,10 +1157,7 @@ pub unsafe extern "C" fn clone_db_with_passwd(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_property(
-    coin: u8,
-    name: *mut c_char,
-) -> CResult<*mut c_char> {
+pub unsafe extern "C" fn get_property(coin: u8, name: *mut c_char) -> CResult<*mut c_char> {
     from_c_str!(name);
     let res = |connection: &Connection| {
         let value = crate::db::read::get_property(connection, &name)?;

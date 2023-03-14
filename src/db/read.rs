@@ -294,7 +294,8 @@ pub fn get_messages(network: &Network, connection: &Connection, id: u32) -> Resu
     let mut stmt = connection.prepare(
         "SELECT m.id, m.id_tx, m.timestamp, m.sender, m.recipient, m.incoming, \
         subject, body, height, read FROM messages m \
-        WHERE account = ?1 ORDER BY timestamp DESC")?;
+        WHERE account = ?1 ORDER BY timestamp DESC",
+    )?;
     let rows = stmt.query_map(params![id], |row| {
         let id_msg: u32 = row.get("id")?;
         let id_tx: Option<u32> = row.get("id_tx")?;
@@ -329,7 +330,9 @@ pub fn get_messages(network: &Network, connection: &Connection, id: u32) -> Resu
     for r in rows {
         messages.push(r?);
     }
-    let messages = MessageVecT { messages: Some(messages) };
+    let messages = MessageVecT {
+        messages: Some(messages),
+    };
     Ok(messages)
 }
 
@@ -660,15 +663,48 @@ pub fn resolve_addresses(
 }
 
 pub fn get_property(connection: &Connection, name: &str) -> anyhow::Result<String> {
-    let url = connection.query_row("SELECT value FROM properties WHERE name = ?1", [name], |row| {
-        let url: String = row.get(0)?;
-        Ok(url)
-    }).optional()?;
+    let url = connection
+        .query_row(
+            "SELECT value FROM properties WHERE name = ?1",
+            [name],
+            |row| {
+                let url: String = row.get(0)?;
+                Ok(url)
+            },
+        )
+        .optional()?;
     Ok(url.unwrap_or(String::new()))
 }
 
 pub fn set_property(connection: &Connection, name: &str, value: &str) -> anyhow::Result<()> {
-    connection.execute("INSERT INTO properties(name, value) VALUES (?1, ?2) ON CONFLICT (name) \
-    DO UPDATE SET value = excluded.value", params![name, value])?;
+    connection.execute(
+        "INSERT INTO properties(name, value) VALUES (?1, ?2) ON CONFLICT (name) \
+    DO UPDATE SET value = excluded.value",
+        params![name, value],
+    )?;
     Ok(())
+}
+
+pub fn get_available_addrs(connection: &Connection, account: u32) -> anyhow::Result<u8> {
+    let has_transparent = connection
+        .query_row(
+            "SELECT 1 FROM taddrs WHERE account = ?1",
+            [account],
+            |_row| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    let has_sapling = true;
+    let has_orchard = connection
+        .query_row(
+            "SELECT 1 FROM orchard_addrs WHERE account = ?1",
+            [account],
+            |_row| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    let res = if has_transparent { 1 } else { 0 }
+        | if has_sapling { 2 } else { 0 }
+        | if has_orchard { 4 } else { 0 };
+    Ok(res)
 }
