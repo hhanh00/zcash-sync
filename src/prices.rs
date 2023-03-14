@@ -1,4 +1,4 @@
-use crate::DbAdapter;
+use crate::{DbAdapter, CoinConfig};
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use zcash_params::coin::get_coin_chain;
@@ -12,16 +12,20 @@ pub struct Quote {
 }
 
 pub async fn fetch_historical_prices(
+    coin: u8,
     now: i64,
     days: u32,
     currency: &str,
-    db: &DbAdapter,
 ) -> anyhow::Result<Vec<Quote>> {
-    let chain = get_coin_chain(db.coin_type);
+    let c = CoinConfig::get(coin);
+    let chain = c.chain;
     let json_error = || anyhow::anyhow!("Invalid JSON");
     let today = now / DAY_SEC;
     let from_day = today - days as i64;
-    let latest_quote = db.get_latest_quote(currency)?;
+    let latest_quote = {
+        let db = c.db()?;
+        db.get_latest_quote(currency)?
+    };
     let latest_day = if let Some(latest_quote) = latest_quote {
         latest_quote.timestamp / DAY_SEC
     } else {
