@@ -1,7 +1,6 @@
-use crate::{DbAdapter, CoinConfig};
+use crate::CoinConfig;
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
-use zcash_params::coin::get_coin_chain;
 
 const DAY_SEC: i64 = 24 * 3600;
 
@@ -34,9 +33,9 @@ pub async fn fetch_historical_prices(
     let latest_day = latest_day.max(from_day);
 
     let mut quotes: Vec<Quote> = vec![];
-    if latest_day < today {
-        let from = (latest_day + 1) * DAY_SEC;
-        let to = today * DAY_SEC;
+    let from = (latest_day + 1) * DAY_SEC;
+    let to = today * DAY_SEC;
+    if from != to {
         let client = reqwest::Client::new();
         let url = format!(
             "https://api.coingecko.com/api/v3/coins/{}/market_chart/range",
@@ -49,25 +48,29 @@ pub async fn fetch_historical_prices(
         ];
         let req = client.get(url).query(&params);
         let res = req.send().await?;
-        let r: serde_json::Value = res.json().await?;
-        let prices = r["prices"].as_array().ok_or_else(json_error)?;
-        let mut prev_timestamp = 0i64;
-        for p in prices.iter() {
-            let p = p.as_array().ok_or_else(json_error)?;
-            let ts = p[0].as_i64().ok_or_else(json_error)? / 1000;
-            let price = p[1].as_f64().ok_or_else(json_error)?;
-            // rounded to daily
-            let date = NaiveDateTime::from_timestamp_opt(ts, 0)
-                .ok_or(anyhow!("Invalid Date"))?
-                .date()
-                .and_hms_opt(0, 0, 0)
-                .ok_or(anyhow!("Invalid Date"))?;
-            let timestamp = date.timestamp();
-            if timestamp != prev_timestamp {
-                let quote = Quote { timestamp, price };
-                quotes.push(quote);
+        let t = res.text().await?;
+        let r: serde_json::Value = serde_json::from_str(&t)?;
+        let status = &r["status"]["error_code"];
+        if status.is_null() {
+            let prices = r["prices"].as_array().ok_or_else(json_error)?;
+            let mut prev_timestamp = 0i64;
+            for p in prices.iter() {
+                let p = p.as_array().ok_or_else(json_error)?;
+                let ts = p[0].as_i64().ok_or_else(json_error)? / 1000;
+                let price = p[1].as_f64().ok_or_else(json_error)?;
+                // rounded to daily
+                let date = NaiveDateTime::from_timestamp_opt(ts, 0)
+                    .ok_or(anyhow!("Invalid Date"))?
+                    .date()
+                    .and_hms_opt(0, 0, 0)
+                    .ok_or(anyhow!("Invalid Date"))?;
+                let timestamp = date.timestamp();
+                if timestamp != prev_timestamp {
+                    let quote = Quote { timestamp, price };
+                    quotes.push(quote);
+                }
+                prev_timestamp = timestamp;
             }
-            prev_timestamp = timestamp;
         }
     }
 
