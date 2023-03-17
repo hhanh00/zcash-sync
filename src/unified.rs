@@ -63,10 +63,14 @@ pub fn get_unified_address(
         tpe.orchard = true;
     }
 
+    let AccountData {
+        address: account_address,
+        ..
+    } = db.get_account_info(account)?;
+    let mut ua_type = 0;
     let address = match (tpe.transparent, tpe.sapling, tpe.orchard) {
         (false, true, false) => {
-            let AccountData { address, .. } = db.get_account_info(account)?;
-            return Ok(address);
+            return Ok(account_address);
         }
         _ => {
             let mut rcvs = vec![];
@@ -77,15 +81,20 @@ pub fn get_unified_address(
                     if let TransparentAddress::PublicKey(pkh) = address {
                         let rcv = Receiver::P2pkh(pkh);
                         rcvs.push(rcv);
+                        ua_type |= 1;
                     }
                 }
             }
             if tpe.sapling {
-                let AccountData { address, .. } = db.get_account_info(account)?;
-                let pa = decode_payment_address(network.hrp_sapling_payment_address(), &address)
-                    .unwrap();
-                let rcv = Receiver::Sapling(pa.to_bytes());
-                rcvs.push(rcv);
+                let AccountData { address, sk, .. } = db.get_account_info(account)?;
+                if sk.is_some() {
+                    let pa =
+                        decode_payment_address(network.hrp_sapling_payment_address(), &address)
+                            .unwrap();
+                    let rcv = Receiver::Sapling(pa.to_bytes());
+                    rcvs.push(rcv);
+                    ua_type |= 2;
+                }
             }
             if tpe.orchard {
                 let okey = db.get_orchard(account)?;
@@ -94,15 +103,22 @@ pub fn get_unified_address(
                     let address = fvk.address_at(0usize, Scope::External);
                     let rcv = Receiver::Orchard(address.to_raw_address_bytes());
                     rcvs.push(rcv);
+                    ua_type |= 4;
                 }
             }
 
-            assert!(!rcvs.is_empty());
-            let addresses = unified::Address(rcvs);
-            ZcashAddress::from_unified(network.address_network().unwrap(), addresses)
+            assert_ne!(ua_type, 0);
+
+            if ua_type == 1 {
+                account_address
+            } else {
+                let addresses = unified::Address(rcvs);
+                let ua = ZcashAddress::from_unified(network.address_network().unwrap(), addresses);
+                ua.encode()
+            }
         }
     };
-    Ok(address.encode())
+    Ok(address)
 }
 
 pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<DecodedUA> {

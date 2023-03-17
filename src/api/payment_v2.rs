@@ -13,8 +13,6 @@ use rand::rngs::OsRng;
 use std::cmp::min;
 use std::slice;
 use std::str::FromStr;
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_primitives::consensus::Parameters;
 use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::transaction::builder::Progress;
 
@@ -42,12 +40,10 @@ pub async fn build_tx_plan_with_utxos(
         }
     }
 
-    let fvk = {
+    let address = {
         let db = c.db()?;
-        let AccountData { fvk, .. } = db.get_account_info(account)?;
-        let taddr = db.get_taddr(account)?;
-        fvk.or(taddr)
-            .expect("Account must have either fvk or taddr")
+        let AccountData { address, .. } = db.get_account_info(account)?;
+        address
     };
     let change_address = get_unified_address(coin, account, 7)?;
     let context = TxBuilderContext::from_height(coin, checkpoint_height)?;
@@ -78,7 +74,7 @@ pub async fn build_tx_plan_with_utxos(
     let config = TransactionBuilderConfig::new(&change_address);
     let tx_plan = note_selection::build_tx_plan::<FeeFlat>(
         network,
-        &fvk,
+        &address,
         checkpoint_height,
         expiry_height,
         &context.orchard_anchor,
@@ -119,26 +115,14 @@ pub async fn build_tx_plan(
 
 pub fn sign_plan(coin: u8, account: u32, tx_plan: &TransactionPlan) -> anyhow::Result<Vec<u8>> {
     let c = CoinConfig::get(coin);
-    let network = c.chain.network();
-    let fvk = {
+    let address = {
         let db = c.db()?;
-        let AccountData { fvk, .. } = db.get_account_info(account)?;
-        let taddr = db.get_taddr(account)?;
-        fvk.or(taddr)
-            .expect("Account must have either fvk or taddr")
+        let AccountData { address, .. } = db.get_account_info(account)?;
+        address
     };
-    let fvk =
-        decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
-            .unwrap()
-            .to_diversifiable_full_viewing_key();
-    let tx_plan_fvk = decode_extended_full_viewing_key(
-        network.hrp_sapling_extended_full_viewing_key(),
-        &tx_plan.fvk,
-    )
-    .unwrap()
-    .to_diversifiable_full_viewing_key();
+    let tx_plan_address = tx_plan.account_address.clone();
 
-    if fvk.to_bytes() != tx_plan_fvk.to_bytes() {
+    if address != tx_plan_address {
         return Err(anyhow::anyhow!("Account does not match transaction"));
     }
 

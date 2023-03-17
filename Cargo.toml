@@ -120,7 +120,7 @@ sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
-rev = "c43d03dda4a78172fe5283168510cd41ee8f1430"
+rev = "461c2698b15c91158e7b953e74cf4e6d0535f5fc"
 #path = "../zcash-params"
 
 [dependencies.zcash_client_backend]

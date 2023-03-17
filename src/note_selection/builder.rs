@@ -301,12 +301,11 @@ pub fn get_secret_keys(coin: u8, account: u32) -> anyhow::Result<SecretKeys> {
         .map(|tsk| SecretKey::from_str(&tsk).unwrap());
 
     let AccountData { sk, .. } = db.get_account_info(account)?;
-    let sapling_sk = sk.ok_or(anyhow!("No secret key"))?;
-    let sapling_sk = decode_extended_spending_key(
+    let sapling_sk = sk.map(|sk| decode_extended_spending_key(
         c.chain.network().hrp_sapling_extended_spending_key(),
-        &sapling_sk,
+        &sk,
     )
-    .unwrap();
+    .unwrap());
 
     let orchard_sk = db
         .get_orchard(account)?
@@ -314,7 +313,7 @@ pub fn get_secret_keys(coin: u8, account: u32) -> anyhow::Result<SecretKeys> {
 
     let sk = SecretKeys {
         transparent: transparent_sk,
-        sapling: Some(sapling_sk),
+        sapling: sapling_sk,
         orchard: orchard_sk,
     };
     Ok(sk)

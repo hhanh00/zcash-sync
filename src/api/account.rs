@@ -101,7 +101,7 @@ fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::
                 &address,
             )?;
             if c.chain.has_transparent() {
-                db.create_taddr(account)?;
+                db.create_taddr(account, seed.as_deref(), index, key)?;
             }
             if c.chain.has_unified() {
                 match ofvk {

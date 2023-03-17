@@ -288,7 +288,7 @@ pub fn outputs_for_change(
 
 pub fn build_tx_plan<F: FeeCalculator>(
     network: &Network,
-    fvk: &str,
+    account_address: &str,
     anchor_height: u32,
     expiry_height: u32,
     orchard_anchor: &Option<Hash>,
@@ -320,7 +320,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
         let updated_fee = F::calculate_fee(&notes, &fills);
         if updated_fee == fee {
             let tx_plan = TransactionPlan {
-                fvk: fvk.to_string(),
+                account_address: account_address.to_string(),
                 anchor_height,
                 expiry_height,
                 orchard_anchor: orchard_anchor.unwrap_or(Hash::default()),

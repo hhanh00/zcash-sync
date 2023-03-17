@@ -694,7 +694,16 @@ pub fn get_available_addrs(connection: &Connection, account: u32) -> anyhow::Res
         )
         .optional()?
         .is_some();
-    let has_sapling = true;
+    let has_sapling = connection
+        .query_row(
+            "SELECT sk FROM accounts WHERE id_account = ?1",
+            [account],
+            |row| {
+                let sk: Option<String> = row.get(0)?;
+                Ok(sk)
+            },
+        )?
+        .is_some();
     let has_orchard = connection
         .query_row(
             "SELECT 1 FROM orchard_addrs WHERE account = ?1",
@@ -707,4 +716,24 @@ pub fn get_available_addrs(connection: &Connection, account: u32) -> anyhow::Res
         | if has_sapling { 2 } else { 0 }
         | if has_orchard { 4 } else { 0 };
     Ok(res)
+}
+
+pub fn can_pay(connection: &Connection, account: u32) -> anyhow::Result<bool> {
+    let sk = connection.query_row(
+        "SELECT sk FROM accounts WHERE id_account = ?1",
+        [account],
+        |row| {
+            let sk: Option<String> = row.get(0)?;
+            Ok(sk)
+        },
+    )?;
+    let tsk = connection
+        .query_row(
+            "SELECT 1 FROM taddrs WHERE account = ?1",
+            [account],
+            |_row| Ok(()),
+        )
+        .optional()?;
+    let can_pay = sk.is_some() || tsk.is_some();
+    Ok(can_pay)
 }

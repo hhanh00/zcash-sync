@@ -5,7 +5,7 @@ use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
 use crate::prices::Quote;
 use crate::sapling::SaplingViewKey;
 use crate::sync::tree::{CTree, TreeCheckpoint};
-use crate::taddr::{derive_tkeys, TransparentTxInfo};
+use crate::taddr::{derive_taddr, derive_tkeys, TransparentTxInfo};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Hash};
@@ -904,16 +904,28 @@ impl DbAdapter {
         Ok(sk)
     }
 
-    pub fn create_taddr(&self, account: u32) -> anyhow::Result<()> {
-        let AccountData { seed, aindex, .. } = self.get_account_info(account)?;
-        if let Some(seed) = seed {
-            let bip44_path = format!("m/44'/{}'/0'/0/{}", self.network().coin_type(), aindex);
-            let (sk, address) = derive_tkeys(self.network(), &seed, &bip44_path)?;
-            self.connection.execute(
-                "INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3)",
-                params![account, &sk, &address],
-            )?;
-        }
+    pub fn create_taddr(
+        &self,
+        account: u32,
+        seed: Option<&str>,
+        aindex: u32,
+        key: &str,
+    ) -> anyhow::Result<()> {
+        let (sk, address) = match seed {
+            Some(seed) => {
+                let bip44_path = format!("m/44'/{}'/0'/0/{}", self.network().coin_type(), aindex);
+                derive_tkeys(self.network(), &seed, &bip44_path)?
+            }
+            None => {
+                let (sk, address) = derive_taddr(self.network(), key)?;
+                let sk = sk.display_secret().to_string();
+                (sk, address)
+            }
+        };
+        self.connection.execute(
+            "INSERT INTO taddrs(account, sk, address) VALUES (?1, ?2, ?3)",
+            params![account, &sk, &address],
+        )?;
         Ok(())
     }
 

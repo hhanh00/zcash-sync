@@ -1,5 +1,5 @@
 use crate::coinconfig::CoinConfig;
-use crate::taddr::derive_taddr;
+use crate::taddr::{derive_taddr, parse_seckey};
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic, Seed};
 use zcash_client_backend::address::RecipientAddress;
@@ -92,7 +92,9 @@ pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     if UnifiedFullViewingKey::decode(network, key).is_ok() {
         return 3;
     }
-    // TODO: Accept UA viewing key
+    if parse_seckey(key).is_ok() {
+        return 4;
+    }
     -1
 }
 

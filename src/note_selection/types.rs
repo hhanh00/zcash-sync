@@ -157,7 +157,7 @@ pub struct RecipientShort {
 #[derive(Serialize, Deserialize, Default)]
 #[serde_as]
 pub struct TransactionPlan {
-    pub fvk: String,
+    pub account_address: String,
     pub anchor_height: u32,
     pub expiry_height: u32,
     #[serde(with = "SerHex::<Strict>")]

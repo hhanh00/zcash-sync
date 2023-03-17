@@ -1182,6 +1182,15 @@ pub unsafe extern "C" fn set_property(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn can_pay(coin: u8, account: u32) -> CResult<bool> {
+    let res = |connection: &Connection| {
+        let r = crate::db::read::can_pay(connection, account)?;
+        Ok(r)
+    };
+    to_cresult(with_coin(coin, res))
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn has_cuda() -> bool {
     crate::gpu::has_cuda()
 }
