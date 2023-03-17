@@ -45,7 +45,9 @@ pub async fn build_tx_plan_with_utxos(
     let fvk = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
-        fvk
+        let taddr = db.get_taddr(account)?;
+        fvk.or(taddr)
+            .expect("Account must have either fvk or taddr")
     };
     let change_address = get_unified_address(coin, account, 7)?;
     let context = TxBuilderContext::from_height(coin, checkpoint_height)?;
@@ -121,7 +123,9 @@ pub fn sign_plan(coin: u8, account: u32, tx_plan: &TransactionPlan) -> anyhow::R
     let fvk = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
-        fvk
+        let taddr = db.get_taddr(account)?;
+        fvk.or(taddr)
+            .expect("Account must have either fvk or taddr")
     };
     let fvk =
         decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)

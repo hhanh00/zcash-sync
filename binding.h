@@ -152,6 +152,8 @@ typedef struct CResult_bool {
 
 #define Backup_VT_UVK 14
 
+#define Backup_VT_TSK 16
+
 #define RaptorQDrops_VT_DROPS 4
 
 #define AGEKeys_VT_PK 6

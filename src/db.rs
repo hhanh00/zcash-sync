@@ -185,12 +185,12 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn get_account_id(&self, ivk: &str) -> anyhow::Result<Option<u32>> {
+    pub fn get_account_id(&self, address: &str) -> anyhow::Result<Option<u32>> {
         let r = self
             .connection
             .query_row(
-                "SELECT id_account FROM accounts WHERE ivk = ?1",
-                params![ivk],
+                "SELECT id_account FROM accounts WHERE address = ?1",
+                params![address],
                 |r| {
                     let id: u32 = r.get(0)?;
                     Ok(id)
@@ -206,21 +206,16 @@ impl DbAdapter {
         seed: Option<&str>,
         index: u32,
         sk: Option<&str>,
-        ivk: &str,
+        ivk: Option<&str>,
         address: &str,
     ) -> anyhow::Result<u32> {
         self.connection.execute(
             "INSERT INTO accounts(name, seed, aindex, sk, ivk, address) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![name, seed, index, sk, ivk, address],
         )?;
-        let id_account: u32 = self
-            .connection
-            .query_row(
-                "SELECT id_account FROM accounts WHERE ivk = ?1",
-                params![ivk],
-                |row| row.get(0),
-            )
-            .map_err(wrap_query_no_rows("store_account/id_account"))?;
+        let id_account = self
+            .get_account_id(address)?
+            .ok_or_else(|| anyhow!("store_account/id_account"))?;
         Ok(id_account)
     }
 
@@ -267,19 +262,23 @@ impl DbAdapter {
             .prepare("SELECT id_account, ivk FROM accounts")?;
         let rows = statement.query_map([], |row| {
             let account: u32 = row.get(0)?;
-            let ivk: String = row.get(1)?;
-            let fvk = decode_extended_full_viewing_key(
-                self.network().hrp_sapling_extended_full_viewing_key(),
-                &ivk,
-            )
-            .unwrap();
-            let ivk = fvk.fvk.vk.ivk();
-            Ok(SaplingViewKey { account, fvk, ivk })
+            let ivk: Option<String> = row.get(1)?;
+            let key = ivk.map(|ivk| {
+                let fvk = decode_extended_full_viewing_key(
+                    self.network().hrp_sapling_extended_full_viewing_key(),
+                    &ivk,
+                )
+                .unwrap();
+                let ivk = fvk.fvk.vk.ivk();
+                SaplingViewKey { account, fvk, ivk }
+            });
+            Ok(key)
         })?;
         let mut fvks = vec![];
         for r in rows {
-            let row = r?;
-            fvks.push(row);
+            if let Some(key) = r? {
+                fvks.push(key);
+            }
         }
         Ok(fvks)
     }
@@ -858,7 +857,7 @@ impl DbAdapter {
                     let name: String = row.get(0)?;
                     let seed: Option<String> = row.get(1)?;
                     let sk: Option<String> = row.get(2)?;
-                    let fvk: String = row.get(3)?;
+                    let fvk: Option<String> = row.get(3)?;
                     let address: String = row.get(4)?;
                     let aindex: u32 = row.get(5)?;
                     Ok(AccountData {
@@ -1288,7 +1287,7 @@ pub struct AccountData {
     pub name: String,
     pub seed: Option<String>,
     pub sk: Option<String>,
-    pub fvk: String,
+    pub fvk: Option<String>,
     pub address: String,
     pub aindex: u32,
 }

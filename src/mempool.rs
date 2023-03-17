@@ -83,6 +83,7 @@ impl MemPoolHandler {
             let nfs = db.get_nullifier_amounts(id_account, true)?;
             let network = c.chain.network();
             let AccountData { fvk, .. } = db.get_account_info(id_account)?;
+            let fvk = fvk.ok_or(anyhow::anyhow!("event_loop: No viewing key"))?;
             let fvk = decode_extended_full_viewing_key(
                 network.hrp_sapling_extended_full_viewing_key(),
                 &fvk,

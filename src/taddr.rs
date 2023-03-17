@@ -11,7 +11,7 @@ use crate::{
     GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
 };
 use anyhow::anyhow;
-use base58check::FromBase58Check;
+use base58check::{FromBase58Check, ToBase58Check};
 use bip39::{Language, Mnemonic, Seed};
 use core::slice;
 use futures::StreamExt;
@@ -242,6 +242,15 @@ pub fn parse_seckey(key: &str) -> anyhow::Result<SecretKey> {
     let sk = &sk[0..sk.len() - 1]; // remove compressed pub key marker
     let secret_key = SecretKey::from_slice(&sk)?;
     Ok(secret_key)
+}
+
+pub fn encode_seckey(sk: &str) -> anyhow::Result<String> {
+    let sk = hex::decode(sk)?;
+    let sk = SecretKey::from_slice(&sk)?;
+    let mut sk = sk.serialize_secret().to_vec();
+    sk.push(0x01);
+    let t_key = sk.to_base58check(0x80);
+    Ok(t_key)
 }
 
 pub fn derive_taddr(network: &Network, key: &str) -> anyhow::Result<(SecretKey, String)> {

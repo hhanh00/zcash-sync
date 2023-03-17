@@ -312,10 +312,7 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             [],
         )?;
         connection.execute("DROP TABLE accounts", [])?;
-        connection.execute(
-            "ALTER TABLE accounts2 RENAME TO accounts",
-            [],
-        )?;
+        connection.execute("ALTER TABLE accounts2 RENAME TO accounts", [])?;
     }
 
     if version != LATEST_VERSION {

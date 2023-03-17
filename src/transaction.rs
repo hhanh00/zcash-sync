@@ -265,6 +265,7 @@ fn get_decryption_keys(
     db: &DbAdapter,
 ) -> anyhow::Result<DecryptionKeys> {
     let AccountData { fvk, .. } = db.get_account_info(account)?;
+    let fvk = fvk.ok_or(anyhow::anyhow!("account has no shielded keys"))?;
     let fvk =
         decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
             .unwrap();

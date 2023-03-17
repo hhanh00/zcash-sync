@@ -1,4 +1,5 @@
 use crate::coinconfig::CoinConfig;
+use crate::taddr::derive_taddr;
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic, Seed};
 use zcash_client_backend::address::RecipientAddress;
@@ -31,7 +32,7 @@ pub fn decode_key(
 ) -> anyhow::Result<(
     Option<String>,
     Option<String>,
-    String,
+    Option<String>,
     String,
     Option<orchard::keys::FullViewingKey>,
 )> {
@@ -39,18 +40,18 @@ pub fn decode_key(
     let network = c.chain.network();
     let (phrase, password) = split_key(key);
     let res = if let Ok(mnemonic) = Mnemonic::from_phrase(&phrase, Language::English) {
-        let (sk, ivk, pa) = derive_secret_key(network, &mnemonic, &password, index)?;
-        Ok((Some(key.to_string()), Some(sk), ivk, pa, None))
+        let (sk, ivk, address) = derive_secret_key(network, &mnemonic, &password, index)?;
+        Ok((Some(key.to_string()), Some(sk), Some(ivk), address, None))
     } else if let Ok(sk) =
         decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key)
     {
-        let (ivk, pa) = derive_viewing_key(network, &sk)?;
-        Ok((None, Some(key.to_string()), ivk, pa, None))
+        let (ivk, address) = derive_viewing_key(network, &sk)?;
+        Ok((None, Some(key.to_string()), Some(ivk), address, None))
     } else if let Ok(fvk) =
         decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
     {
-        let pa = derive_address(network, &fvk)?;
-        Ok((None, None, key.to_string(), pa, None))
+        let address = derive_address(network, &fvk)?;
+        Ok((None, None, Some(key.to_string()), address, None))
     } else if let Ok(ufvk) = UnifiedFullViewingKey::decode(network, key) {
         let sapling_dfvk = ufvk
             .sapling()
@@ -61,9 +62,11 @@ pub fn decode_key(
             network.hrp_sapling_extended_full_viewing_key(),
             &sapling_efvk,
         );
-        let pa = derive_address(network, &sapling_efvk)?;
+        let address = derive_address(network, &sapling_efvk)?;
         let orchard_key = ufvk.orchard().cloned();
-        Ok((None, None, key, pa, orchard_key))
+        Ok((None, None, Some(key), address, orchard_key))
+    } else if let Ok((_, address)) = derive_taddr(network, key) {
+        Ok((None, None, None, address, None))
     } else {
         Err(anyhow::anyhow!("Not a valid key"))
     };
@@ -124,10 +127,10 @@ fn derive_viewing_key(
     extsk: &ExtendedSpendingKey,
 ) -> anyhow::Result<(String, String)> {
     let fvk = extsk.to_extended_full_viewing_key();
-    let pa = derive_address(network, &fvk)?;
+    let address = derive_address(network, &fvk)?;
     let fvk =
         encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk);
-    Ok((fvk, pa))
+    Ok((fvk, address))
 }
 
 fn derive_address(network: &Network, fvk: &ExtendedFullViewingKey) -> anyhow::Result<String> {

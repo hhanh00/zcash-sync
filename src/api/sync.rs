@@ -157,6 +157,7 @@ fn trial_decrypt(
 ) -> anyhow::Result<Option<Note>> {
     let c = CoinConfig::get_active();
     let AccountData { fvk, .. } = c.db().unwrap().get_account_info(c.id_account)?;
+    let fvk = fvk.unwrap();
     let note =
         crate::scan::trial_decrypt_one(c.chain.network(), height, &fvk, cmu, epk, ciphertext)?;
     Ok(note)

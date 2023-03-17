@@ -7,7 +7,7 @@ use crate::db::data_generated::fb::{AddressBalanceT, AddressBalanceVecT, BackupT
 use crate::db::AccountData;
 use crate::key2::decode_key;
 use crate::orchard::OrchardKeyBytes;
-use crate::taddr::{derive_taddr, derive_tkeys};
+use crate::taddr::{derive_taddr, derive_tkeys, encode_seckey};
 use crate::unified::UnifiedAddressType;
 use crate::zip32::derive_zip32;
 use anyhow::anyhow;
@@ -86,14 +86,20 @@ pub fn new_sub_account(name: &str, index: Option<u32>, count: u32) -> anyhow::Re
 
 fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::Result<u32> {
     let c = CoinConfig::get(coin);
-    let (seed, sk, ivk, pa, ofvk) = decode_key(coin, key, index)?;
+    let (seed, sk, ivk, address, ofvk) = decode_key(coin, key, index)?;
     let db = c.db()?;
-    let account = db.get_account_id(&ivk)?;
+    let account = db.get_account_id(&address)?;
     let account = match account {
         Some(account) => account,
         None => {
-            let account =
-                db.store_account(name, seed.as_deref(), index, sk.as_deref(), &ivk, &pa)?;
+            let account = db.store_account(
+                name,
+                seed.as_deref(),
+                index,
+                sk.as_deref(),
+                ivk.as_deref(),
+                &address,
+            )?;
             if c.chain.has_transparent() {
                 db.create_taddr(account)?;
             }
@@ -135,6 +141,7 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
     } = db.get_account_info(id_account)?;
     let orchard_keys = db.get_orchard(id_account)?;
     let uvk = orchard_keys.map(|OrchardKeyBytes { fvk: ofvk, .. }| {
+        let fvk = fvk.clone().expect("get_backup_package::No viewing key");
         // orchard sk is not serializable and must derived from seed
         let sapling_efvk =
             decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
@@ -144,13 +151,16 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
         let ufvk = UnifiedFullViewingKey::new(Some(sapling_dfvk), orchard_fvk).unwrap();
         ufvk.encode(network)
     });
+    let tsk = db.get_tsk(id_account)?;
+    let tsk = tsk.and_then(|sk| encode_seckey(&sk).ok());
     let backup = BackupT {
         name: Some(name),
         seed,
         index: aindex,
         sk,
-        fvk: Some(fvk),
+        fvk,
         uvk,
+        tsk,
     };
     Ok(backup)
 }
@@ -196,6 +206,7 @@ pub fn get_diversified_address(ua_type: u8, time: u32) -> anyhow::Result<String>
     let c = CoinConfig::get_active();
     let db = c.db()?;
     let AccountData { fvk, .. } = db.get_account_info(c.id_account)?;
+    let fvk = fvk.expect("get_diversified_address::No viewing key");
     let fvk = decode_extended_full_viewing_key(
         c.chain.network().hrp_sapling_extended_full_viewing_key(),
         &fvk,
@@ -308,14 +319,21 @@ pub async fn scan_transparent_accounts(
 /// Use the current active coin
 pub fn get_backup(account: u32) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
-    let AccountData { seed, sk, fvk, .. } = c.db()?.get_account_info(account)?;
+    let db = c.db()?;
+    let AccountData { seed, sk, fvk, .. } = db.get_account_info(account)?;
     if let Some(seed) = seed {
         return Ok(seed);
     }
     if let Some(sk) = sk {
         return Ok(sk);
     }
-    Ok(fvk)
+    if let Some(fvk) = fvk {
+        return Ok(fvk);
+    }
+    if let Some(sk) = db.get_tsk(account)? {
+        return Ok(sk);
+    }
+    Err(anyhow!("No key"))
 }
 
 /// Get the secret key. Returns empty string if the account has no secret key
@@ -375,7 +393,14 @@ pub fn import_from_zwl(coin: u8, name: &str, data: &str) -> anyhow::Result<()> {
     for (i, key) in sks.iter().enumerate() {
         let name = format!("{}-{}", name, i + 1);
         let (seed, sk, ivk, pa, _ufvk) = decode_key(coin, key, 0)?;
-        db.store_account(&name, seed.as_deref(), 0, sk.as_deref(), &ivk, &pa)?;
+        db.store_account(
+            &name,
+            seed.as_deref(),
+            0,
+            sk.as_deref(),
+            ivk.as_deref(),
+            &pa,
+        )?;
     }
     Ok(())
 }
