@@ -222,6 +222,7 @@ mod tests {
             db: DbAdapterBuilder {
                 coin_type: coin.coin_type,
                 db_path: coin.db_path.as_ref().unwrap().to_owned(),
+                passwd: String::new(),
             },
             shielded_pool: "sapling".to_string(),
             tree: CTree::new(),

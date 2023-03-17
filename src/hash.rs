@@ -168,7 +168,9 @@ mod tests {
             // println!("Reference Hash: {}", hex::encode(hash.repr));
             // println!("This Hash:      {}", hex::encode(hash2));
             // need to expose repr for this check
-            assert_eq!(hash.repr, hash2);
+            let mut hash1 = [0u8; 32];
+            hash.write(hash1.as_mut_slice()).unwrap();
+            assert_eq!(hash1, hash2);
         }
     }
 }
