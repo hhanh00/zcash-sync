@@ -34,7 +34,7 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-const LATEST_VERSION: u32 = 7;
+const LATEST_VERSION: u32 = 8;
 
 pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyhow::Result<()> {
     connection.execute(
@@ -289,6 +289,31 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             "CREATE TABLE IF NOT EXISTS properties (
                 name TEXT PRIMARY KEY,
                 value TEXT NOT NULL)",
+            [],
+        )?;
+    }
+
+    if version < 8 {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS accounts2 (
+                id_account INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                seed TEXT,
+                aindex INTEGER NOT NULL,
+                sk TEXT,
+                ivk TEXT,
+                address TEXT NOT NULL UNIQUE)",
+            [],
+        )?;
+        connection.execute(
+            "INSERT INTO accounts2(
+                id_account, name, seed, aindex, sk, ivk, address
+        ) SELECT * FROM accounts",
+            [],
+        )?;
+        connection.execute("DROP TABLE accounts", [])?;
+        connection.execute(
+            "ALTER TABLE accounts2 RENAME TO accounts",
             [],
         )?;
     }
