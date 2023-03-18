@@ -696,7 +696,7 @@ pub fn get_available_addrs(connection: &Connection, account: u32) -> anyhow::Res
         .is_some();
     let has_sapling = connection
         .query_row(
-            "SELECT sk FROM accounts WHERE id_account = ?1",
+            "SELECT ivk FROM accounts WHERE id_account = ?1",
             [account],
             |row| {
                 let sk: Option<String> = row.get(0)?;
