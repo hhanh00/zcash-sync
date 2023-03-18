@@ -84,6 +84,7 @@ mod orchard;
 mod sapling;
 mod sync;
 // mod key;
+mod bitcoin;
 mod key2;
 mod mempool;
 mod misc;

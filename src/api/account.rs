@@ -85,7 +85,11 @@ pub fn new_sub_account(name: &str, index: Option<u32>, count: u32) -> anyhow::Re
 }
 
 fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::Result<u32> {
+    if coin == 2 {
+        return crate::bitcoin::new_account_with_key(name, key, index);
+    }
     let c = CoinConfig::get(coin);
+
     let (seed, sk, ivk, address, ofvk) = decode_key(coin, key, index)?;
     let db = c.db()?;
     let account = db.get_account_id(&address)?;
@@ -247,12 +251,6 @@ pub fn get_diversified_address(ua_type: u8, time: u32) -> anyhow::Result<String>
     );
     let address = address.encode();
     Ok(address)
-}
-
-/// Retrieve the transparent balance for the current account from the LWD server
-pub async fn get_taddr_balance_default() -> anyhow::Result<u64> {
-    let c = CoinConfig::get_active();
-    get_taddr_balance(c.coin, c.id_account).await
 }
 
 /// Retrieve the transparent balance from the LWD server

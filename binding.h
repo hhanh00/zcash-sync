@@ -18,6 +18,8 @@ typedef void *DartPostCObjectFnType;
 
 #define QR_DATA_SIZE 256
 
+#define COIN_BTC 2
+
 #define MAX_ATTEMPTS 10
 
 #define N 200000

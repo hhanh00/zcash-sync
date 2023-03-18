@@ -87,6 +87,13 @@ pub struct AccountViewKey {
     pub viewonly: bool,
 }
 
+pub fn with_coin<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, f: F) -> anyhow::Result<T> {
+    let c = CoinConfig::get(coin);
+    let db = c.db()?;
+    let connection = &db.connection;
+    f(connection)
+}
+
 pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> anyhow::Error {
     move |err: rusqlite::Error| match err {
         QueryReturnedNoRows => anyhow::anyhow!("Query {} returned no rows", name),
@@ -111,12 +118,7 @@ impl DbAdapter {
         })
     }
 
-    pub fn migrate_db(
-        network: &Network,
-        db_path: &str,
-        passwd: &str,
-        has_ua: bool,
-    ) -> anyhow::Result<()> {
+    pub fn open_or_create(db_path: &str, passwd: &str) -> anyhow::Result<Connection> {
         let dir = Path::new(db_path)
             .parent()
             .ok_or(anyhow!("Invalid db path"))?;
@@ -127,6 +129,16 @@ impl DbAdapter {
         )?;
         set_db_passwd(&connection, passwd)?;
         connection.query_row("PRAGMA journal_mode=wal", [], |_| Ok(()))?;
+        Ok(connection)
+    }
+
+    pub fn migrate_db(
+        network: &Network,
+        db_path: &str,
+        passwd: &str,
+        has_ua: bool,
+    ) -> anyhow::Result<()> {
+        let connection = Self::open_or_create(db_path, passwd)?;
         migration::init_db(&connection, network, has_ua)?;
         Ok(())
     }

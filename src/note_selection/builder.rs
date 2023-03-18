@@ -301,11 +301,10 @@ pub fn get_secret_keys(coin: u8, account: u32) -> anyhow::Result<SecretKeys> {
         .map(|tsk| SecretKey::from_str(&tsk).unwrap());
 
     let AccountData { sk, .. } = db.get_account_info(account)?;
-    let sapling_sk = sk.map(|sk| decode_extended_spending_key(
-        c.chain.network().hrp_sapling_extended_spending_key(),
-        &sk,
-    )
-    .unwrap());
+    let sapling_sk = sk.map(|sk| {
+        decode_extended_spending_key(c.chain.network().hrp_sapling_extended_spending_key(), &sk)
+            .unwrap()
+    });
 
     let orchard_sk = db
         .get_orchard(account)?

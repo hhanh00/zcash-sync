@@ -123,8 +123,7 @@ pub fn update_account_name(connection: &Connection, id: u32, name: &str) -> Resu
     Ok(())
 }
 
-pub fn get_balances(connection: &Connection, id: u32, confirmed_height: u32) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_balances(connection: &Connection, id: u32, confirmed_height: u32) -> Result<BalanceT> {
     let shielded = connection.query_row(
         "SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent IS NULL",
         params![id],
@@ -170,21 +169,16 @@ pub fn get_balances(connection: &Connection, id: u32, confirmed_height: u32) -> 
             Ok(value.unwrap_or(0) as u64)
         })?;
 
-    let balance = Balance::create(
-        &mut builder,
-        &BalanceArgs {
-            shielded,
-            unconfirmed_spent,
-            balance,
-            under_confirmed,
-            excluded,
-            sapling,
-            orchard,
-        },
-    );
-    builder.finish(balance, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let balance = BalanceT {
+        shielded,
+        unconfirmed_spent,
+        balance,
+        under_confirmed,
+        excluded,
+        sapling,
+        orchard,
+    };
+    Ok(balance)
 }
 
 pub fn get_db_height(connection: &Connection) -> Result<Vec<u8>> {
@@ -210,8 +204,7 @@ pub fn get_db_height(connection: &Connection) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-pub fn get_notes(connection: &Connection, id: u32) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_notes(connection: &Connection, id: u32) -> Result<ShieldedNoteVecT> {
     let mut stmt = connection.prepare(
         "SELECT n.id_note, n.height, n.value, t.timestamp, n.orchard, n.excluded, n.spent FROM received_notes n, transactions t \
            WHERE n.account = ?1 AND (n.spent IS NULL OR n.spent = 0) \
@@ -224,29 +217,23 @@ pub fn get_notes(connection: &Connection, id: u32) -> Result<Vec<u8>> {
         let orchard: u8 = row.get("orchard")?;
         let excluded: Option<bool> = row.get("excluded")?;
         let spent: Option<u32> = row.get("spent")?;
-        let note = ShieldedNote::create(
-            &mut builder,
-            &ShieldedNoteArgs {
-                id,
-                height,
-                value: value as u64,
-                timestamp,
-                orchard: orchard == 1,
-                excluded: excluded.unwrap_or(false),
-                spent: spent.is_some(),
-            },
-        );
+        let note = ShieldedNoteT {
+            id,
+            height,
+            value: value as u64,
+            timestamp,
+            orchard: orchard == 1,
+            excluded: excluded.unwrap_or(false),
+            spent: spent.is_some(),
+        };
         Ok(note)
     })?;
     let mut notes = vec![];
     for r in rows {
         notes.push(r?);
     }
-    let notes = builder.create_vector(&notes);
-    let notes = ShieldedNoteVec::create(&mut builder, &ShieldedNoteVecArgs { notes: Some(notes) });
-    builder.finish(notes, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let notes = ShieldedNoteVecT { notes: Some(notes) };
+    Ok(notes)
 }
 
 pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<ShieldedTxVecT> {
@@ -424,40 +411,28 @@ pub fn get_templates(connection: &Connection) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-pub fn get_contacts(connection: &Connection) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_contacts(connection: &Connection) -> Result<ContactVecT> {
     let mut stmt = connection
         .prepare("SELECT id, name, address FROM contacts WHERE address <> '' ORDER BY name")?;
     let rows = stmt.query_map([], |row| {
         let id: u32 = row.get("id")?;
         let name: String = row.get("name")?;
         let address: String = row.get("address")?;
-        let name = builder.create_string(&name);
-        let address = builder.create_string(&address);
-        let contact = Contact::create(
-            &mut builder,
-            &ContactArgs {
-                id,
-                name: Some(name),
-                address: Some(address),
-            },
-        );
+        let contact = ContactT {
+            id,
+            name: Some(name),
+            address: Some(address),
+        };
         Ok(contact)
     })?;
     let mut contacts = vec![];
     for r in rows {
         contacts.push(r?);
     }
-    let contacts = builder.create_vector(&contacts);
-    let contacts = ContactVec::create(
-        &mut builder,
-        &ContactVecArgs {
-            contacts: Some(contacts),
-        },
-    );
-    builder.finish(contacts, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let contacts = ContactVecT {
+        contacts: Some(contacts),
+    };
+    Ok(contacts)
 }
 
 pub fn get_pnl_txs(connection: &Connection, id: u32, timestamp: u32) -> Result<Vec<u8>> {

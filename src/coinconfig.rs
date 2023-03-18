@@ -60,10 +60,15 @@ pub fn set_coin_passwd(coin: u8, passwd: &str) {
 
 /// Initialize a coin with a database path
 pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
-    let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
-    c.set_db_path(db_path)?;
-    c.migrate_db()?; // if the db was already migrated, this is a no-op
-    c.open_db()?;
+    {
+        let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
+        c.set_db_path(db_path)?;
+    }
+    migrate_db(coin, db_path)?;
+    {
+        let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
+        c.open_db()?;
+    }
     Ok(())
 }
 
@@ -71,8 +76,16 @@ pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
 /// Used from ywallet
 pub fn migrate_db(coin: u8, db_path: &str) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
-    let chain = c.chain;
-    DbAdapter::migrate_db(chain.network(), db_path, &c.passwd, chain.has_unified())?;
+    match coin {
+        2 => {
+            let connection = DbAdapter::open_or_create(db_path, &c.passwd)?;
+            crate::bitcoin::migrate_db(&connection)?;
+        }
+        _ => {
+            let chain = c.chain;
+            DbAdapter::migrate_db(chain.network(), db_path, &c.passwd, chain.has_unified())?;
+        }
+    }
     Ok(())
 }
 
@@ -114,17 +127,6 @@ impl CoinConfig {
 
     pub fn set_db_path(&mut self, db_path: &str) -> anyhow::Result<()> {
         self.db_path = Some(db_path.to_string());
-        Ok(())
-    }
-
-    pub fn migrate_db(&self) -> anyhow::Result<()> {
-        let network = self.chain.network();
-        DbAdapter::migrate_db(
-            network,
-            self.db_path.as_ref().unwrap(),
-            &self.passwd,
-            self.chain.has_unified(),
-        )?;
         Ok(())
     }
 
