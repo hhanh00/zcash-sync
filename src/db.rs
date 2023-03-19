@@ -20,7 +20,7 @@ use std::path::Path;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_params::coin::{get_coin_chain, CoinType};
+use zcash_params::coin::get_coin_chain;
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
@@ -41,13 +41,13 @@ pub const DEFAULT_DB_PATH: &str = "zec.db";
 
 #[derive(Clone)]
 pub struct DbAdapterBuilder {
-    pub coin_type: CoinType,
+    pub coin: u8,
     pub db_path: String,
     pub passwd: String,
 }
 
 pub struct DbAdapter {
-    pub coin_type: CoinType,
+    pub coin: u8,
     pub connection: Connection,
     pub db_path: String,
 }
@@ -103,16 +103,16 @@ pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> any
 
 impl DbAdapterBuilder {
     pub fn build(&self) -> anyhow::Result<DbAdapter> {
-        DbAdapter::new(self.coin_type, &self.db_path, &self.passwd)
+        DbAdapter::new(self.coin, &self.db_path, &self.passwd)
     }
 }
 
 impl DbAdapter {
-    pub fn new(coin_type: CoinType, db_path: &str, passwd: &str) -> anyhow::Result<DbAdapter> {
+    pub fn new(coin: u8, db_path: &str, passwd: &str) -> anyhow::Result<DbAdapter> {
         let connection = Connection::open(db_path)?;
         set_db_passwd(&connection, passwd)?;
         Ok(DbAdapter {
-            coin_type,
+            coin,
             connection,
             db_path: db_path.to_owned(),
         })
@@ -144,6 +144,9 @@ impl DbAdapter {
     }
 
     pub async fn migrate_data(&self, coin: u8) -> anyhow::Result<()> {
+        if coin >= 2 {
+            return Ok(());
+        }
         let cc = CoinConfig::get(coin);
         if cc.chain.has_unified() {
             let mut client: Option<CompactTxStreamerClient<Channel>> = None;
@@ -1261,7 +1264,7 @@ impl DbAdapter {
     }
 
     fn network(&self) -> &'static Network {
-        let chain = get_coin_chain(self.coin_type);
+        let chain = get_coin_chain(self.coin);
         chain.network()
     }
 
@@ -1319,11 +1322,10 @@ pub struct AccountData {
 #[cfg(test)]
 mod tests {
     use crate::db::{DbAdapter, DEFAULT_DB_PATH};
-    use zcash_params::coin::CoinType;
 
     #[test]
     fn test_balance() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, "").unwrap();
+        let db = DbAdapter::new(0, DEFAULT_DB_PATH, "").unwrap();
         let balance = db.get_balance(1).unwrap();
         println!("{}", balance);
     }

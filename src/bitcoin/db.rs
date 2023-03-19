@@ -1,5 +1,6 @@
 use anyhow::Result;
-use rusqlite::{Connection, OptionalExtension};
+use electrum_client::bitcoin::BlockHeader;
+use rusqlite::{params, Connection, OptionalExtension};
 
 const LATEST_VERSION: u32 = 1;
 
@@ -115,5 +116,19 @@ pub fn migrate_db(connection: &Connection) -> Result<()> {
         log::info!("Database migrated");
     }
 
+    Ok(())
+}
+
+pub fn store_block(
+    c: &Connection,
+    height: usize,
+    header: &BlockHeader,
+) -> std::result::Result<(), anyhow::Error> {
+    let hash = header.block_hash().to_vec();
+    c.execute(
+        "INSERT INTO blocks(height,hash,timestamp) VALUES (?1,?2,?3) \
+        ON CONFLICT DO NOTHING",
+        params![height, &hash, header.time],
+    )?;
     Ok(())
 }

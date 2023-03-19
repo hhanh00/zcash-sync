@@ -7,15 +7,15 @@ use lazycell::AtomicLazyCell;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tonic::transport::Channel;
-use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
+use zcash_params::coin::{get_coin_chain, CoinChain};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_proofs::prover::LocalTxProver;
 
 lazy_static! {
     pub static ref COIN_CONFIG: [Mutex<CoinConfig>; 3] = [
-        Mutex::new(CoinConfig::new(0, CoinType::Zcash)),
-        Mutex::new(CoinConfig::new(1, CoinType::Ycash)),
-        Mutex::new(CoinConfig::new(2, CoinType::PirateChain)),
+        Mutex::new(CoinConfig::new(0)),
+        Mutex::new(CoinConfig::new(1)),
+        Mutex::new(CoinConfig::new(2)),
     ];
     pub static ref PROVER: AtomicLazyCell<LocalTxProver> = AtomicLazyCell::new();
     pub static ref RAPTORQ: Mutex<FountainCodes> = Mutex::new(FountainCodes::new());
@@ -99,7 +99,6 @@ pub async fn migrate_data(coin: u8) -> anyhow::Result<()> {
 #[derive(Clone)]
 pub struct CoinConfig {
     pub coin: u8,
-    pub coin_type: CoinType,
     pub id_account: u32,
     pub height: u32,
     pub lwd_url: Option<String>,
@@ -110,11 +109,10 @@ pub struct CoinConfig {
 }
 
 impl CoinConfig {
-    pub fn new(coin: u8, coin_type: CoinType) -> Self {
-        let chain = get_coin_chain(coin_type);
+    pub fn new(coin: u8) -> Self {
+        let chain = get_coin_chain(coin);
         CoinConfig {
             coin,
-            coin_type,
             id_account: 0,
             height: 0,
             lwd_url: None,
@@ -131,8 +129,10 @@ impl CoinConfig {
     }
 
     pub fn open_db(&mut self) -> anyhow::Result<()> {
-        let mut db = DbAdapter::new(self.coin_type, self.db_path.as_ref().unwrap(), &self.passwd)?;
-        db.init_db()?;
+        let mut db = DbAdapter::new(self.coin, self.db_path.as_ref().unwrap(), &self.passwd)?;
+        if self.coin < 2 {
+            db.init_db()?;
+        }
         self.db = Some(Arc::new(Mutex::new(db)));
         Ok(())
     }
@@ -166,6 +166,10 @@ impl CoinConfig {
         } else {
             Err(anyhow!("LWD URL Not set"))
         }
+    }
+
+    pub fn url(&self) -> &str {
+        self.lwd_url.as_ref().expect("URL must be set")
     }
 }
 

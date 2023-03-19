@@ -16,7 +16,7 @@ use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, encode_extended_full_viewing_key, encode_payment_address,
 };
-use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
+use zcash_params::coin::{get_coin_chain, CoinChain};
 use zcash_primitives::consensus::{BlockHeight, Parameters};
 use zcash_primitives::keys::OutgoingViewingKey;
 use zcash_primitives::legacy::Script;
@@ -32,7 +32,7 @@ use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
-    pub coin_type: CoinType,
+    pub coin: u8,
     pub height: u32,
     pub t_inputs: Vec<TTxIn>,
     pub inputs: Vec<TxIn>,
@@ -42,9 +42,9 @@ pub struct Tx {
 }
 
 impl Tx {
-    pub fn new(coin_type: CoinType, height: u32) -> Self {
+    pub fn new(coin: u8, height: u32) -> Self {
         Tx {
-            coin_type,
+            coin,
             height,
             t_inputs: vec![],
             inputs: vec![],
@@ -94,15 +94,15 @@ pub struct RecipientSummary {
 #[allow(dead_code)]
 pub struct TxBuilder {
     pub tx: Tx,
-    coin_type: CoinType,
+    coin: u8,
 }
 
 #[allow(dead_code)]
 impl TxBuilder {
-    pub fn new(coin_type: CoinType, height: u32) -> Self {
+    pub fn new(coin: u8, height: u32) -> Self {
         TxBuilder {
-            coin_type,
-            tx: Tx::new(coin_type, height),
+            coin,
+            tx: Tx::new(coin, height),
         }
     }
 
@@ -304,7 +304,7 @@ impl TxBuilder {
     }
 
     fn chain(&self) -> &dyn CoinChain {
-        get_coin_chain(self.coin_type)
+        get_coin_chain(self.coin)
     }
 }
 
@@ -319,7 +319,7 @@ impl Tx {
         prover: &impl TxProver,
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<Vec<u8>> {
-        let chain = get_coin_chain(self.coin_type);
+        let chain = get_coin_chain(self.coin);
         let last_height = BlockHeight::from_u32(self.height as u32);
         let mut builder = Builder::new(*chain.network(), last_height);
         let efvk = zsk.to_extended_full_viewing_key();

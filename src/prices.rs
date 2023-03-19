@@ -83,12 +83,11 @@ mod tests {
     use crate::prices::fetch_historical_prices;
     use crate::DbAdapter;
     use std::time::SystemTime;
-    use zcash_params::coin::CoinType;
 
     #[tokio::test]
     async fn test_fetch_quotes() {
         let currency = "EUR";
-        let mut db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, "").unwrap();
+        let mut db = DbAdapter::new(0, DEFAULT_DB_PATH, "").unwrap();
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()

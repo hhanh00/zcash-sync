@@ -181,8 +181,7 @@ pub fn get_balances(connection: &Connection, id: u32, confirmed_height: u32) -> 
     Ok(balance)
 }
 
-pub fn get_db_height(connection: &Connection) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_db_height(connection: &Connection) -> Result<HeightT> {
     let height = connection
         .query_row(
             "SELECT height, timestamp FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)",
@@ -190,18 +189,13 @@ pub fn get_db_height(connection: &Connection) -> Result<Vec<u8>> {
             |row| {
                 let height: u32 = row.get(0)?;
                 let timestamp: u32 = row.get(1)?;
-                let height = Height::create(&mut builder, &HeightArgs { height, timestamp });
+                let height = HeightT { height, timestamp };
                 Ok(height)
             },
         )
-        .optional()?;
-    let data = height
-        .map(|h| {
-            builder.finish(h, None);
-            builder.finished_data().to_vec()
-        })
-        .unwrap_or(vec![]);
-    Ok(data)
+        .optional()?
+        .unwrap_or(HeightT::default());
+    Ok(height)
 }
 
 pub fn get_notes(connection: &Connection, id: u32) -> Result<ShieldedNoteVecT> {

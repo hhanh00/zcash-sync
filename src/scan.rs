@@ -150,7 +150,7 @@ async fn sync_async_inner<'a>(
     });
 
     let db_builder = DbAdapterBuilder {
-        coin_type: c.coin_type,
+        coin: c.coin,
         db_path: db_path.clone(),
         passwd: c.passwd.clone(),
     };

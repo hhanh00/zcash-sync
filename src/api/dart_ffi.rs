@@ -324,31 +324,36 @@ pub async unsafe extern "C" fn warp(
     let res = async {
         let _permit = SYNC_LOCK.acquire().await?;
         log::info!("Sync started");
-        let result = crate::api::sync::coin_sync(
-            coin,
-            get_tx,
-            anchor_offset,
-            max_cost,
-            move |progress| {
-                let progress = ProgressT {
-                    height: progress.height,
-                    trial_decryptions: progress.trial_decryptions,
-                    downloaded: progress.downloaded as u64,
-                };
-                let mut builder = FlatBufferBuilder::new();
-                let root = progress.pack(&mut builder);
-                builder.finish(root, None);
-                let v = builder.finished_data().to_vec();
-                let mut progress = v.into_dart();
-                if port != 0 {
-                    if let Some(p) = POST_COBJ {
-                        p(port, &mut progress);
+        let result = if coin == 2 {
+            let c = CoinConfig::get(coin);
+            crate::bitcoin::sync(coin, c.url()).await
+        } else {
+            crate::api::sync::coin_sync(
+                coin,
+                get_tx,
+                anchor_offset,
+                max_cost,
+                move |progress| {
+                    let progress = ProgressT {
+                        height: progress.height,
+                        trial_decryptions: progress.trial_decryptions,
+                        downloaded: progress.downloaded as u64,
+                    };
+                    let mut builder = FlatBufferBuilder::new();
+                    let root = progress.pack(&mut builder);
+                    builder.finish(root, None);
+                    let v = builder.finished_data().to_vec();
+                    let mut progress = v.into_dart();
+                    if port != 0 {
+                        if let Some(p) = POST_COBJ {
+                            p(port, &mut progress);
+                        }
                     }
-                }
-            },
-            &SYNC_CANCELED,
-        )
-        .await;
+                },
+                &SYNC_CANCELED,
+            )
+            .await
+        };
         log::info!("Sync finished");
 
         match result {
@@ -987,8 +992,11 @@ pub unsafe extern "C" fn get_balances(
 #[no_mangle]
 pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
     let res = |connection: &Connection| {
-        let data = crate::db::read::get_db_height(connection)?;
-        Ok(data)
+        let height = crate::db::read::get_db_height(connection)?;
+        let mut builder = FlatBufferBuilder::new();
+        let height = height.pack(&mut builder);
+        builder.finish(height, None);
+        Ok(builder.finished_data().to_vec())
     };
     to_cresult_bytes(with_coin(coin, res))
 }

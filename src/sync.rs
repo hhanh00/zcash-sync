@@ -213,15 +213,15 @@ mod tests {
     #[test]
     fn test() {
         init_coin(0, "zec.db").unwrap();
-        let coin = COIN_CONFIG[0].lock().unwrap();
-        let network = coin.chain.network();
+        let c = COIN_CONFIG[0].lock().unwrap();
+        let network = c.chain.network();
         let mut synchronizer = SaplingSynchronizer {
             decrypter: SaplingDecrypter::new(*network),
             warper: WarpProcessor::new(SaplingHasher::default()),
             vks: vec![],
             db: DbAdapterBuilder {
-                coin_type: coin.coin_type,
-                db_path: coin.db_path.as_ref().unwrap().to_owned(),
+                coin: c.coin,
+                db_path: c.db_path.as_ref().unwrap().to_owned(),
                 passwd: String::new(),
             },
             shielded_pool: "sapling".to_string(),
