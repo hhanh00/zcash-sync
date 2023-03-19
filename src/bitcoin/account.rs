@@ -1,11 +1,14 @@
 use anyhow::Result;
 use base58check::ToBase58Check;
 use bip39::{Language, Mnemonic, Seed};
+use bitcoin::hashes::Hash;
+use electrum_client::{Client, ElectrumApi, bitcoin::{Script, PubkeyHash}};
 use ripemd::{Digest, Ripemd160};
 use rusqlite::{params, Connection};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use tiny_hderive::bip32::ExtendedPrivKey;
+use base58check::FromBase58Check;
 
 use crate::{
     db::{
@@ -81,8 +84,15 @@ pub fn get_address(connection: &Connection, id_account: u32) -> Result<String, a
     Ok(address)
 }
 
-pub fn get_balance(_id: u32) -> Result<u64> {
-    Ok(0)
+pub fn get_balance(coin: u8, id_account: u32, url: &str) -> Result<u64> {
+    let client = Client::new(url)?;
+    let address = with_coin(coin, |c| get_address(c, id_account))?;
+    let (_version, hash) = address.from_base58check().map_err(|_| anyhow::anyhow!("Invalid address"))?;
+    let pkh = PubkeyHash::from_slice(&hash)?;
+    let script = Script::new_p2pkh(&pkh);
+    let balance = client.script_get_balance(&script)?;
+    let balance = balance.confirmed;
+    Ok(balance)
 }
 
 pub fn get_balances(_id: u32, _height: u32) -> Result<BalanceT> {

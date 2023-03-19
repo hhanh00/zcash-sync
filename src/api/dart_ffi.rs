@@ -20,7 +20,7 @@ use zcash_primitives::transaction::builder::Progress;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
-const MAX_COINS: u8 = 2;
+const MAX_COINS: u8 = 3;
 
 #[no_mangle]
 pub unsafe extern "C" fn dummy_export() {}
@@ -471,7 +471,8 @@ pub async unsafe extern "C" fn rescan_from(height: u32) {
 #[no_mangle]
 pub async unsafe extern "C" fn get_taddr_balance(coin: u8, id_account: u32) -> CResult<u64> {
     let res = if coin == 2 {
-        crate::bitcoin::get_balance(id_account)
+        let c = CoinConfig::get(coin);
+        crate::bitcoin::get_balance(coin, id_account, c.url())
     } else {
         crate::api::account::get_taddr_balance(coin, id_account).await
     };
