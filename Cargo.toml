@@ -49,6 +49,7 @@ tokio-stream = "0.1.7"
 protobuf = "3.0.2"
 hex = "0.4.3"
 futures = "0.3.15"
+parking_lot = "0.12"
 tonic = {version = "0.7.2", features = ["tls", "tls-roots"]}
 prost = "0.10.3"
 rayon = "1.5.1"
@@ -123,7 +124,7 @@ sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
-rev = "e6ac4bea343e0f0bc1ea7247b8e249bb7e3b1bfe"
+rev = "bba595dd5ced8755f4dcd2d83be834914870ae55"
 #path = "../zcash-params"
 
 [dependencies.zcash_client_backend]

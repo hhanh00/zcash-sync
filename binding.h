@@ -194,6 +194,8 @@ typedef struct CResult_bool {
 
 #define TxReport_VT_PRIVACY_LEVEL 18
 
+#define TrpTransaction_VT_TXID 6
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);

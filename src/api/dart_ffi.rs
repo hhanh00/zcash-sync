@@ -909,11 +909,21 @@ pub unsafe extern "C" fn clear_tx_details(coin: u8, account: u32) -> CResult<u8>
 
 #[no_mangle]
 pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
-    let res = |connection: &Connection| {
-        let accounts = crate::db::read::get_account_list(connection)?;
-        Ok(accounts)
+    let res = || {
+        let accounts = if coin == 2 {
+            crate::bitcoin::get_account_list(coin)
+        } else {
+            with_coin(coin, |connection| {
+                crate::db::read::get_account_list(connection)
+            })
+        }?;
+        let mut builder = FlatBufferBuilder::new();
+        let root = accounts.pack(&mut builder);
+        builder.finish(root, None);
+        let data = builder.finished_data().to_vec();
+        Ok(data)
     };
-    to_cresult_bytes(with_coin(coin, res))
+    to_cresult_bytes(res())
 }
 
 #[no_mangle]
@@ -973,12 +983,13 @@ pub unsafe extern "C" fn get_balances(
     id: u32,
     confirmed_height: u32,
 ) -> CResult<*const u8> {
+    let c = CoinConfig::get(coin);
     let res = || {
         let balance_fn = |connection: &Connection| {
             crate::db::read::get_balances(connection, id, confirmed_height)
         };
         let balance = if coin == 2 {
-            crate::bitcoin::get_balances(id, confirmed_height)?
+            crate::bitcoin::get_balances(coin, id, c.url())?
         } else {
             with_coin(coin, balance_fn)?
         };
@@ -1004,35 +1015,40 @@ pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
 
 #[no_mangle]
 pub unsafe extern "C" fn get_notes(coin: u8, id: u32) -> CResult<*const u8> {
-    let res = |connection: &Connection| {
+    let res = || {
+        let c = CoinConfig::get(coin);
         let notes = if coin == 2 {
-            crate::bitcoin::get_notes(id)
+            crate::bitcoin::get_notes(coin, id, c.url())
         } else {
-            crate::db::read::get_notes(connection, id)
+            with_coin(coin, |connection| {
+                crate::db::read::get_notes(connection, id)
+            })
         }?;
         let mut builder = FlatBufferBuilder::new();
         let notes = notes.pack(&mut builder);
         builder.finish(notes, None);
         Ok(builder.finished_data().to_vec())
     };
-    to_cresult_bytes(with_coin(coin, res))
+    to_cresult_bytes(res())
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn get_txs(coin: u8, id: u32) -> CResult<*const u8> {
-    let res = |connection: &Connection| {
+    let res = || {
         let c = CoinConfig::get(coin);
         let shielded_txs = if coin == 2 {
-            crate::bitcoin::get_txs(id)
+            crate::bitcoin::get_txs(coin, id, c.url())
         } else {
-            crate::db::read::get_txs(c.chain.network(), connection, id)
+            with_coin(coin, |connection| {
+                crate::db::read::get_txs(c.chain.network(), connection, id)
+            })
         }?;
         let mut builder = FlatBufferBuilder::new();
         let shielded_txs = shielded_txs.pack(&mut builder);
         builder.finish(shielded_txs, None);
         Ok(builder.finished_data().to_vec())
     };
-    to_cresult_bytes(with_coin(coin, res))
+    to_cresult_bytes(res())
 }
 
 #[no_mangle]

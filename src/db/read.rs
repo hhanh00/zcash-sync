@@ -8,8 +8,7 @@ use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::AddressCodec;
 use zcash_primitives::consensus::Network;
 
-pub fn get_account_list(connection: &Connection) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_account_list(connection: &Connection) -> Result<AccountVecT> {
     let mut stmt = connection.prepare("WITH notes AS (SELECT a.id_account, a.name, CASE WHEN r.spent IS NULL THEN r.value ELSE 0 END AS nv FROM accounts a LEFT JOIN received_notes r ON a.id_account = r.account), \
                        accounts2 AS (SELECT id_account, name, COALESCE(sum(nv), 0) AS balance FROM notes GROUP by id_account) \
                        SELECT a.id_account, a.name, a.balance FROM accounts2 a")?;
@@ -17,31 +16,21 @@ pub fn get_account_list(connection: &Connection) -> Result<Vec<u8>> {
         let id: u32 = row.get("id_account")?;
         let name: String = row.get("name")?;
         let balance: i64 = row.get("balance")?;
-        let name = builder.create_string(&name);
-        let account = Account::create(
-            &mut builder,
-            &AccountArgs {
-                id,
-                name: Some(name),
-                balance: balance as u64,
-            },
-        );
+        let account = AccountT {
+            id,
+            name: Some(name),
+            balance: balance as u64,
+        };
         Ok(account)
     })?;
     let mut accounts = vec![];
     for r in rows {
         accounts.push(r?);
     }
-    let accounts = builder.create_vector(&accounts);
-    let accounts = AccountVec::create(
-        &mut builder,
-        &AccountVecArgs {
-            accounts: Some(accounts),
-        },
-    );
-    builder.finish(accounts, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let accounts = AccountVecT {
+        accounts: Some(accounts),
+    };
+    Ok(accounts)
 }
 
 pub fn get_active_account(connection: &Connection) -> Result<u32> {
@@ -255,7 +244,7 @@ pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<Sh
             short_tx_id: Some(short_tx_id),
             timestamp,
             name,
-            value: value as u64,
+            value,
             address,
             memo,
         };

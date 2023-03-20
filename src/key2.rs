@@ -75,26 +75,29 @@ pub fn decode_key(
 
 #[allow(dead_code)] // Used by C FFI
 pub fn is_valid_key(coin: u8, key: &str) -> i8 {
-    let c = CoinConfig::get(coin);
-    let network = c.chain.network();
     let (phrase, _password) = split_key(key);
     if Mnemonic::from_phrase(&phrase, Language::English).is_ok() {
         return 0;
     }
-    if decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key).is_ok() {
-        return 1;
-    }
-    if decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
-        .is_ok()
-    {
-        return 2;
-    }
-    if UnifiedFullViewingKey::decode(network, key).is_ok() {
-        return 3;
+    if coin < 2 {
+        let c = CoinConfig::get(coin);
+        let network = c.chain.network();
+        if decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key).is_ok() {
+            return 1;
+        }
+        if decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
+            .is_ok()
+        {
+            return 2;
+        }
+        if UnifiedFullViewingKey::decode(network, key).is_ok() {
+            return 3;
+        }
     }
     if parse_seckey(key).is_ok() {
         return 4;
     }
+
     -1
 }
 

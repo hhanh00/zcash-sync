@@ -2,6 +2,8 @@ use anyhow::Result;
 use electrum_client::bitcoin::BlockHeader;
 use rusqlite::{params, Connection, OptionalExtension};
 
+use crate::db::data_generated::fb::{AccountT, AccountVecT, TrpTransactionT};
+
 const LATEST_VERSION: u32 = 1;
 
 pub fn migrate_db(connection: &Connection) -> Result<()> {
@@ -53,22 +55,7 @@ pub fn migrate_db(connection: &Connection) -> Result<()> {
             timestamp INTEGER NOT NULL,
             value INTEGER NOT NULL,
             address TEXT,
-            tx_index INTEGER,
-            CONSTRAINT tx_account UNIQUE (height, tx_index, account))",
-            [],
-        )?;
-
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS received_notes (
-            id_note INTEGER PRIMARY KEY,
-            account INTEGER NOT NULL,
-            height INTEGER NOT NULL,
-            txid BLOB NOT NULL,
-            output_index INTEGER NOT NULL,
-            value INTEGER NOT NULL,
-            spent INTEGER,
-            excluded BOOL,
-            CONSTRAINT tx_output UNIQUE (txid, output_index))",
+            CONSTRAINT tx_account UNIQUE (txid))",
             [],
         )?;
 
@@ -90,10 +77,6 @@ pub fn migrate_db(connection: &Connection) -> Result<()> {
             [],
         )?;
 
-        connection.execute(
-            "CREATE INDEX i_received_notes ON received_notes(account)",
-            [],
-        )?;
         connection.execute("CREATE INDEX i_account ON accounts(address)", [])?;
         connection.execute("CREATE INDEX i_transaction ON transactions(account)", [])?;
 
@@ -119,16 +102,82 @@ pub fn migrate_db(connection: &Connection) -> Result<()> {
     Ok(())
 }
 
-pub fn store_block(
-    c: &Connection,
-    height: usize,
-    header: &BlockHeader,
-) -> std::result::Result<(), anyhow::Error> {
+pub fn fetch_accounts(c: &Connection) -> Result<AccountVecT> {
+    let mut s = c.prepare("SELECT id_account,name FROM accounts")?;
+    let rows = s.query_map([], |row| {
+        let id: u32 = row.get(0)?;
+        let name: String = row.get(1)?;
+        Ok(AccountT {
+            id,
+            name: Some(name),
+            balance: 0,
+        })
+    })?;
+    let mut accounts = vec![];
+    for r in rows {
+        accounts.push(r?);
+    }
+    Ok(AccountVecT {
+        accounts: Some(accounts),
+    })
+}
+
+pub fn store_block(c: &Connection, height: usize, header: &BlockHeader) -> Result<()> {
     let hash = header.block_hash().to_vec();
     c.execute(
         "INSERT INTO blocks(height,hash,timestamp) VALUES (?1,?2,?3) \
         ON CONFLICT DO NOTHING",
         params![height, &hash, header.time],
     )?;
+    Ok(())
+}
+
+pub fn fetch_txs(c: &Connection, id_account: u32) -> Result<Vec<TrpTransactionT>> {
+    let mut s = c.prepare(
+        "SELECT id_tx,txid,height,timestamp,value,address FROM transactions \
+    WHERE account=?1",
+    )?;
+    let rows = s.query_map([id_account], |row| {
+        let id: u32 = row.get(0)?;
+        let txid: Vec<u8> = row.get(1)?;
+        let height: u32 = row.get(2)?;
+        let timestamp: u32 = row.get(3)?;
+        let value: i64 = row.get(4)?;
+        let address: String = row.get(5)?;
+        let tx = TrpTransactionT {
+            id,
+            txid: Some(txid),
+            height,
+            timestamp,
+            value,
+            address: Some(address),
+        };
+        Ok(tx)
+    })?;
+    let mut txs = vec![];
+    for tx in rows {
+        txs.push(tx?);
+    }
+    Ok(txs)
+}
+
+pub fn store_txs<'a, I>(c: &Connection, id_account: u32, txs: I) -> Result<()>
+where
+    I: IntoIterator<Item = &'a TrpTransactionT> + Clone,
+{
+    let mut s = c.prepare(
+        "INSERT INTO transactions(account,txid,height,timestamp,value,address) \
+    VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT (txid) DO NOTHING",
+    )?;
+    for tx in txs {
+        s.execute(params![
+            id_account,
+            tx.txid.as_ref().unwrap(),
+            tx.height,
+            tx.timestamp,
+            tx.value,
+            tx.address
+        ])?;
+    }
     Ok(())
 }

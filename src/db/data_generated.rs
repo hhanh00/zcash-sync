@@ -1255,11 +1255,11 @@ impl<'a> ShieldedTx<'a> {
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(ShieldedTx::VT_NAME, None)}
   }
   #[inline]
-  pub fn value(&self) -> u64 {
+  pub fn value(&self) -> i64 {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<u64>(ShieldedTx::VT_VALUE, Some(0)).unwrap()}
+    unsafe { self._tab.get::<i64>(ShieldedTx::VT_VALUE, Some(0)).unwrap()}
   }
   #[inline]
   pub fn address(&self) -> Option<&'a str> {
@@ -1290,7 +1290,7 @@ impl flatbuffers::Verifiable for ShieldedTx<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("short_tx_id", Self::VT_SHORT_TX_ID, false)?
      .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
-     .visit_field::<u64>("value", Self::VT_VALUE, false)?
+     .visit_field::<i64>("value", Self::VT_VALUE, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("memo", Self::VT_MEMO, false)?
      .finish();
@@ -1304,7 +1304,7 @@ pub struct ShieldedTxArgs<'a> {
     pub short_tx_id: Option<flatbuffers::WIPOffset<&'a str>>,
     pub timestamp: u32,
     pub name: Option<flatbuffers::WIPOffset<&'a str>>,
-    pub value: u64,
+    pub value: i64,
     pub address: Option<flatbuffers::WIPOffset<&'a str>>,
     pub memo: Option<flatbuffers::WIPOffset<&'a str>>,
 }
@@ -1355,8 +1355,8 @@ impl<'a: 'b, 'b> ShieldedTxBuilder<'a, 'b> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ShieldedTx::VT_NAME, name);
   }
   #[inline]
-  pub fn add_value(&mut self, value: u64) {
-    self.fbb_.push_slot::<u64>(ShieldedTx::VT_VALUE, value, 0);
+  pub fn add_value(&mut self, value: i64) {
+    self.fbb_.push_slot::<i64>(ShieldedTx::VT_VALUE, value, 0);
   }
   #[inline]
   pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
@@ -1405,7 +1405,7 @@ pub struct ShieldedTxT {
   pub short_tx_id: Option<String>,
   pub timestamp: u32,
   pub name: Option<String>,
-  pub value: u64,
+  pub value: i64,
   pub address: Option<String>,
   pub memo: Option<String>,
 }
@@ -6702,6 +6702,255 @@ impl TxReportT {
       net_orchard,
       fee,
       privacy_level,
+    })
+  }
+}
+pub enum TrpTransactionOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct TrpTransaction<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for TrpTransaction<'a> {
+  type Inner = TrpTransaction<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> TrpTransaction<'a> {
+  pub const VT_ID: flatbuffers::VOffsetT = 4;
+  pub const VT_TXID: flatbuffers::VOffsetT = 6;
+  pub const VT_HEIGHT: flatbuffers::VOffsetT = 8;
+  pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 10;
+  pub const VT_VALUE: flatbuffers::VOffsetT = 12;
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 14;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    TrpTransaction { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args TrpTransactionArgs<'args>
+  ) -> flatbuffers::WIPOffset<TrpTransaction<'bldr>> {
+    let mut builder = TrpTransactionBuilder::new(_fbb);
+    builder.add_value(args.value);
+    if let Some(x) = args.address { builder.add_address(x); }
+    builder.add_timestamp(args.timestamp);
+    builder.add_height(args.height);
+    if let Some(x) = args.txid { builder.add_txid(x); }
+    builder.add_id(args.id);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> TrpTransactionT {
+    let id = self.id();
+    let txid = self.txid().map(|x| {
+      x.into_iter().collect()
+    });
+    let height = self.height();
+    let timestamp = self.timestamp();
+    let value = self.value();
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    TrpTransactionT {
+      id,
+      txid,
+      height,
+      timestamp,
+      value,
+      address,
+    }
+  }
+
+  #[inline]
+  pub fn id(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(TrpTransaction::VT_ID, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn txid(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TrpTransaction::VT_TXID, None)}
+  }
+  #[inline]
+  pub fn height(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(TrpTransaction::VT_HEIGHT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn timestamp(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(TrpTransaction::VT_TIMESTAMP, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn value(&self) -> i64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<i64>(TrpTransaction::VT_VALUE, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(TrpTransaction::VT_ADDRESS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for TrpTransaction<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("id", Self::VT_ID, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("txid", Self::VT_TXID, false)?
+     .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
+     .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
+     .visit_field::<i64>("value", Self::VT_VALUE, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct TrpTransactionArgs<'a> {
+    pub id: u32,
+    pub txid: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    pub height: u32,
+    pub timestamp: u32,
+    pub value: i64,
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for TrpTransactionArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    TrpTransactionArgs {
+      id: 0,
+      txid: None,
+      height: 0,
+      timestamp: 0,
+      value: 0,
+      address: None,
+    }
+  }
+}
+
+pub struct TrpTransactionBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> TrpTransactionBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_id(&mut self, id: u32) {
+    self.fbb_.push_slot::<u32>(TrpTransaction::VT_ID, id, 0);
+  }
+  #[inline]
+  pub fn add_txid(&mut self, txid: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TrpTransaction::VT_TXID, txid);
+  }
+  #[inline]
+  pub fn add_height(&mut self, height: u32) {
+    self.fbb_.push_slot::<u32>(TrpTransaction::VT_HEIGHT, height, 0);
+  }
+  #[inline]
+  pub fn add_timestamp(&mut self, timestamp: u32) {
+    self.fbb_.push_slot::<u32>(TrpTransaction::VT_TIMESTAMP, timestamp, 0);
+  }
+  #[inline]
+  pub fn add_value(&mut self, value: i64) {
+    self.fbb_.push_slot::<i64>(TrpTransaction::VT_VALUE, value, 0);
+  }
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TrpTransaction::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> TrpTransactionBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    TrpTransactionBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<TrpTransaction<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for TrpTransaction<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("TrpTransaction");
+      ds.field("id", &self.id());
+      ds.field("txid", &self.txid());
+      ds.field("height", &self.height());
+      ds.field("timestamp", &self.timestamp());
+      ds.field("value", &self.value());
+      ds.field("address", &self.address());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrpTransactionT {
+  pub id: u32,
+  pub txid: Option<Vec<u8>>,
+  pub height: u32,
+  pub timestamp: u32,
+  pub value: i64,
+  pub address: Option<String>,
+}
+impl Default for TrpTransactionT {
+  fn default() -> Self {
+    Self {
+      id: 0,
+      txid: None,
+      height: 0,
+      timestamp: 0,
+      value: 0,
+      address: None,
+    }
+  }
+}
+impl TrpTransactionT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<TrpTransaction<'b>> {
+    let id = self.id;
+    let txid = self.txid.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
+    let height = self.height;
+    let timestamp = self.timestamp;
+    let value = self.value;
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    TrpTransaction::create(_fbb, &TrpTransactionArgs{
+      id,
+      txid,
+      height,
+      timestamp,
+      value,
+      address,
     })
   }
 }
