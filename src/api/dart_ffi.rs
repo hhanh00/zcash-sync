@@ -564,28 +564,46 @@ pub async unsafe extern "C" fn prepare_multi_payment(
     recipients_len: u64,
     anchor_offset: u32,
 ) -> CResult<*mut c_char> {
-    let res = async {
-        let last_height = crate::api::sync::get_latest_height().await?;
-        let recipients_bytes: Vec<u8> = Vec::from_raw_parts(
-            recipients_bytes,
-            recipients_len as usize,
-            recipients_len as usize,
-        );
-        let recipients = flatbuffers::root::<Recipients>(&recipients_bytes)?;
-        let recipients = crate::api::recipient::parse_recipients(&recipients)?;
-        let tx = crate::api::payment_v2::build_tx_plan(
-            coin,
-            account,
-            last_height,
-            &recipients,
-            0,
-            anchor_offset,
-        )
-        .await?;
-        let tx_str = serde_json::to_string(&tx)?;
-        Ok(tx_str)
-    };
-    to_cresult_str(res.await)
+    let recipients_bytes: Vec<u8> = Vec::from_raw_parts(
+        recipients_bytes,
+        recipients_len as usize,
+        recipients_len as usize,
+    );
+    if coin == 2 {
+        let res = || {
+            let c = CoinConfig::get(coin);
+            let recipients = flatbuffers::root::<Recipients>(&recipients_bytes)?;
+            let recipients = recipients.unpack();
+            let tx_plan = crate::bitcoin::prepare_tx(
+                coin,
+                account,
+                recipients.values.as_ref().unwrap(),
+                6,
+                c.url(),
+            )?;
+            println!(">> tx_plan: {}", tx_plan);
+            Ok(tx_plan)
+        };
+        to_cresult_str(res())
+    } else {
+        let res = async {
+            let last_height = crate::api::sync::get_latest_height().await?;
+            let recipients = flatbuffers::root::<Recipients>(&recipients_bytes)?;
+            let recipients = crate::api::recipient::parse_recipients(&recipients)?;
+            let tx = crate::api::payment_v2::build_tx_plan(
+                coin,
+                account,
+                last_height,
+                &recipients,
+                0,
+                anchor_offset,
+            )
+            .await?;
+            let tx_str = serde_json::to_string(&tx)?;
+            Ok(tx_str)
+        };
+        to_cresult_str(res.await)
+    }
 }
 
 #[no_mangle]
@@ -752,7 +770,9 @@ pub unsafe extern "C" fn check_account(coin: u8, account: u32) -> bool {
 pub unsafe extern "C" fn delete_account(coin: u8, account: u32) -> CResult<u8> {
     let res = || {
         if coin == 2 {
-            with_coin(coin, |connection| crate::bitcoin::delete_account(connection, account))?;
+            with_coin(coin, |connection| {
+                crate::bitcoin::delete_account(connection, account)
+            })?;
         } else {
             crate::api::account::delete_account(coin, account)?;
         }

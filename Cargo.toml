@@ -75,7 +75,7 @@ clap = "3.1.18"
 chrono = "0.4.19"
 lazycell = "1.3.0"
 reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-features = false }
-bitcoin = "0.29"
+bitcoin = { version = "0.29", features = ["serde"] }
 bitcoin_hashes = "0.12"
 electrum-client = "0.13"
 
