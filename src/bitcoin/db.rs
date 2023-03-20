@@ -2,7 +2,7 @@ use anyhow::Result;
 use electrum_client::bitcoin::BlockHeader;
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::db::data_generated::fb::{AccountT, AccountVecT, TrpTransactionT};
+use crate::db::data_generated::fb::{AccountT, TrpTransactionT};
 
 const LATEST_VERSION: u32 = 1;
 
@@ -102,7 +102,7 @@ pub fn migrate_db(connection: &Connection) -> Result<()> {
     Ok(())
 }
 
-pub fn fetch_accounts(c: &Connection) -> Result<AccountVecT> {
+pub fn fetch_accounts(c: &Connection) -> Result<Vec<AccountT>> {
     let mut s = c.prepare("SELECT id_account,name FROM accounts")?;
     let rows = s.query_map([], |row| {
         let id: u32 = row.get(0)?;
@@ -117,9 +117,7 @@ pub fn fetch_accounts(c: &Connection) -> Result<AccountVecT> {
     for r in rows {
         accounts.push(r?);
     }
-    Ok(AccountVecT {
-        accounts: Some(accounts),
-    })
+    Ok(accounts)
 }
 
 pub fn store_block(c: &Connection, height: usize, header: &BlockHeader) -> Result<()> {

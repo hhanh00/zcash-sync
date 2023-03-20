@@ -88,8 +88,19 @@ pub fn get_address(connection: &Connection, id_account: u32) -> Result<String, a
     Ok(address)
 }
 
-pub fn get_account_list(coin: u8) -> Result<AccountVecT> {
-    with_coin(coin, |c| fetch_accounts(c))
+pub fn get_account_list(coin: u8, url: &str) -> Result<AccountVecT> {
+    let mut accounts = with_coin(coin, |c| fetch_accounts(c))?;
+    let client = get_client(url)?;
+    let scripts: Result<Vec<_>> = accounts.iter().map(|a| {
+        get_script(coin, a.id)
+    }).collect();
+    let scripts = scripts?;
+    let balances = client.batch_script_get_balance(scripts.iter())?;
+    for (a, b) in accounts.iter_mut().zip(balances.iter()) {
+        a.balance = b.confirmed;
+    }
+    let accounts = AccountVecT { accounts: Some(accounts) };
+    Ok(accounts)
 }
 
 pub fn get_balance(coin: u8, id_account: u32, url: &str) -> Result<u64> {

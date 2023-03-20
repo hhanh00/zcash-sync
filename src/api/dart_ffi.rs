@@ -911,7 +911,8 @@ pub unsafe extern "C" fn clear_tx_details(coin: u8, account: u32) -> CResult<u8>
 pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
     let res = || {
         let accounts = if coin == 2 {
-            crate::bitcoin::get_account_list(coin)
+            let c = CoinConfig::get(coin);
+            crate::bitcoin::get_account_list(coin, c.url())
         } else {
             with_coin(coin, |connection| {
                 crate::db::read::get_account_list(connection)
