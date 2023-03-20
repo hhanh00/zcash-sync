@@ -2,7 +2,7 @@ use anyhow::Result;
 use electrum_client::bitcoin::BlockHeader;
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::db::data_generated::fb::{AccountT, TrpTransactionT};
+use crate::db::data_generated::fb::{AccountT, BackupT, TrpTransactionT};
 
 const LATEST_VERSION: u32 = 1;
 
@@ -120,6 +120,30 @@ pub fn fetch_accounts(c: &Connection) -> Result<Vec<AccountT>> {
     Ok(accounts)
 }
 
+pub fn get_backup(connection: &Connection, id_account: u32) -> Result<BackupT> {
+    let backup = connection.query_row(
+        "SELECT name,seed,aindex,sk FROM accounts WHERE id_account=?1",
+        [id_account],
+        |row| {
+            let name: String = row.get(0)?;
+            let seed: String = row.get(1)?;
+            let index: u32 = row.get(2)?;
+            let sk: String = row.get(3)?;
+            let backup = BackupT {
+                name: Some(name),
+                seed: Some(seed),
+                index,
+                sk: None,
+                fvk: None,
+                uvk: None,
+                tsk: Some(sk),
+            };
+            Ok(backup)
+        },
+    )?;
+    Ok(backup)
+}
+
 pub fn store_block(c: &Connection, height: usize, header: &BlockHeader) -> Result<()> {
     let hash = header.block_hash().to_vec();
     c.execute(
@@ -177,5 +201,11 @@ where
             tx.address
         ])?;
     }
+    Ok(())
+}
+
+pub fn delete_account(connection: &Connection, id_account: u32) -> Result<()> {
+    connection.execute("DELETE FROM accounts WHERE id_account=?1", [id_account])?;
+    connection.execute("DELETE FROM transactions WHERE account=?1", [id_account])?;
     Ok(())
 }

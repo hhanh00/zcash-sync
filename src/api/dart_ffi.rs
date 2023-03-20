@@ -247,11 +247,18 @@ pub unsafe extern "C" fn convert_to_watchonly(coin: u8, id_account: u32) -> CRes
 #[no_mangle]
 pub unsafe extern "C" fn get_backup(coin: u8, id_account: u32) -> CResult<*const u8> {
     let res = || {
+        let backup = if coin == 2 {
+            with_coin(coin, |connection| {
+                crate::bitcoin::get_backup(connection, id_account)
+            })
+        } else {
+            crate::api::account::get_backup_package(coin, id_account)
+        }?;
         let mut builder = FlatBufferBuilder::new();
-        let backup = crate::api::account::get_backup_package(coin, id_account)?;
-        let backup_bytes = backup.pack(&mut builder);
-        builder.finish(backup_bytes, None);
-        Ok::<_, anyhow::Error>(builder.finished_data().to_vec())
+        let root = backup.pack(&mut builder);
+        builder.finish(root, None);
+        let data = builder.finished_data().to_vec();
+        Ok::<_, anyhow::Error>(data)
     };
 
     to_cresult_bytes(res())
@@ -742,9 +749,16 @@ pub unsafe extern "C" fn check_account(coin: u8, account: u32) -> bool {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn delete_account(coin: u8, account: u32) {
-    let res = crate::api::account::delete_account(coin, account);
-    log_error(res)
+pub unsafe extern "C" fn delete_account(coin: u8, account: u32) -> CResult<u8> {
+    let res = || {
+        if coin == 2 {
+            with_coin(coin, |connection| crate::bitcoin::delete_account(connection, account))?;
+        } else {
+            crate::api::account::delete_account(coin, account)?;
+        }
+        Ok(0)
+    };
+    to_cresult(res())
 }
 
 #[no_mangle]

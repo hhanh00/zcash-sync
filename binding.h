@@ -324,7 +324,7 @@ void truncate_sync_data(void);
 
 bool check_account(uint8_t coin, uint32_t account);
 
-void delete_account(uint8_t coin, uint32_t account);
+struct CResult_u8 delete_account(uint8_t coin, uint32_t account);
 
 struct CResult_____c_char make_payment_uri(uint8_t coin,
                                            char *address,

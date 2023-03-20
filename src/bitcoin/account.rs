@@ -22,7 +22,7 @@ use crate::{
     taddr::parse_seckey,
 };
 
-use super::db::{fetch_txs, store_txs, fetch_accounts};
+use super::db::{fetch_accounts, fetch_txs, store_txs};
 use super::{get_client, get_script, COIN_BTC};
 
 pub fn new_account_with_key(name: &str, key: &str, index: u32) -> Result<u32> {
@@ -74,12 +74,12 @@ fn derive_from_sk(sk: SecretKey) -> Result<(String, String)> {
 
     let mut sk = sk.serialize_secret().to_vec();
     sk.push(0x01);
-    let sk = sk.to_base58check(0);
+    let sk = sk.to_base58check(0x80);
 
     Ok((sk, address))
 }
 
-pub fn get_address(connection: &Connection, id_account: u32) -> Result<String, anyhow::Error> {
+pub fn get_address(connection: &Connection, id_account: u32) -> Result<String> {
     let address = connection.query_row(
         "SELECT address FROM accounts WHERE id_account = ?1",
         params![id_account],
@@ -91,15 +91,15 @@ pub fn get_address(connection: &Connection, id_account: u32) -> Result<String, a
 pub fn get_account_list(coin: u8, url: &str) -> Result<AccountVecT> {
     let mut accounts = with_coin(coin, |c| fetch_accounts(c))?;
     let client = get_client(url)?;
-    let scripts: Result<Vec<_>> = accounts.iter().map(|a| {
-        get_script(coin, a.id)
-    }).collect();
+    let scripts: Result<Vec<_>> = accounts.iter().map(|a| get_script(coin, a.id)).collect();
     let scripts = scripts?;
     let balances = client.batch_script_get_balance(scripts.iter())?;
     for (a, b) in accounts.iter_mut().zip(balances.iter()) {
         a.balance = b.confirmed;
     }
-    let accounts = AccountVecT { accounts: Some(accounts) };
+    let accounts = AccountVecT {
+        accounts: Some(accounts),
+    };
     Ok(accounts)
 }
 
