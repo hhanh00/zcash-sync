@@ -4,6 +4,7 @@ use crate::sync::{
     CompactOutputBytes, DecryptedNote, Node, OutputPosition, TrialDecrypter, ViewKey,
 };
 use crate::CompactTx;
+use orchard::keys::PreparedIncomingViewingKey;
 use orchard::note_encryption::OrchardDomain;
 use zcash_primitives::consensus::{BlockHeight, Parameters};
 
@@ -18,8 +19,9 @@ impl ViewKey<OrchardDomain> for OrchardViewKey {
         self.account
     }
 
-    fn ivk(&self) -> orchard::keys::IncomingViewingKey {
-        self.fvk.to_ivk(orchard::keys::Scope::External)
+    fn ivk(&self) -> orchard::keys::PreparedIncomingViewingKey {
+        let ivk = self.fvk.to_ivk(orchard::keys::Scope::External);
+        PreparedIncomingViewingKey::new(&ivk)
     }
 }
 

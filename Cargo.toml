@@ -59,10 +59,10 @@ zip = "0.6"
 # Workaround for https://github.com/gyscos/zstd-rs/issues/177
 zstd-sys = "=2.0.1+zstd.1.5.2"
 age = "0.9"
-jubjub = "0.9.0"
+jubjub = "0.10.0"
 bls12_381 = "0.7"
-ff = "0.12"
-group = "0.12.0"
+ff = "0.13"
+group = "0.13.0"
 byteorder = "^1.4"
 secp256k1 = "0.21.3"
 tiny-hderive = "0.3.0"
@@ -120,38 +120,38 @@ sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
-rev = "c43d03dda4a78172fe5283168510cd41ee8f1430"
+rev = "154f3544781500c27f58923ccc6c7e779eecf9df"
 #path = "../zcash-params"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "7469d70261e8e72f2bbf3163704ddf8fd825b1aa"
+rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
 #path = "../../librustzcash/zcash_client_backend"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "7469d70261e8e72f2bbf3163704ddf8fd825b1aa"
+rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
 #path = "../../librustzcash/zcash_primitives"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "7469d70261e8e72f2bbf3163704ddf8fd825b1aa"
+rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
 #path = "../../librustzcash/zcash_proofs"
 
 [dependencies.zcash_address]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "7469d70261e8e72f2bbf3163704ddf8fd825b1aa"
+rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
 #path = "../../librustzcash/components/zcash_address"
 
 [dependencies.zcash_encoding]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "7469d70261e8e72f2bbf3163704ddf8fd825b1aa"
+rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
 #path = "../../librustzcash/components/zcash_encoding"
 
 [dependencies.zcash_note_encryption]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "7469d70261e8e72f2bbf3163704ddf8fd825b1aa"
+rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
 #path = "../../librustzcash/components/zcash_note_encryption"
 
 [build-dependencies]

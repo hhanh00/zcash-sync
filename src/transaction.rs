@@ -173,13 +173,14 @@ pub fn decode_transaction(
         if let Some(orchard_bundle) = tx.orchard_bundle() {
             let mut contact_decoder = ContactDecoder::new(orchard_bundle.actions().len());
             if let Some((orchard_ivk, orchard_ovk)) = decryption_keys.orchard_keys.clone() {
+                let poivk = orchard::keys::PreparedIncomingViewingKey::new(&orchard_ivk);
                 for action in orchard_bundle.actions().iter() {
                     let mut incoming = false;
                     let mut outgoing = false;
                     let mut temp_address = String::new();
                     let domain = OrchardDomain::for_action(action);
                     if let Some((_note, pa, memo)) =
-                        try_note_decryption(&domain, &orchard_ivk, action)
+                        try_note_decryption(&domain, &poivk, action)
                     {
                         if let Ok(memo) = Memo::try_from(MemoBytes::from_bytes(&memo)?) {
                             if memo != Memo::Empty {

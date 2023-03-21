@@ -1,5 +1,5 @@
 use crate::{AccountData, Empty, Hash, RawTransaction};
-use orchard::keys::{FullViewingKey, IncomingViewingKey, Scope};
+use orchard::keys::{FullViewingKey, IncomingViewingKey, Scope, PreparedEphemeralPublicKey};
 use orchard::note_encryption::OrchardDomain;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
@@ -277,6 +277,7 @@ impl MemPoolImpl {
         }
         if let Some(orchard_bundle) = tx.orchard_bundle() {
             if let Some(ref oivk) = self.oivk {
+                let poivk = orchard::keys::PreparedIncomingViewingKey::new(oivk);
                 for a in orchard_bundle.actions().iter() {
                     let nf = a.nullifier().to_bytes();
                     if let Some(&value) = self.nfs.get(&nf) {
@@ -284,7 +285,7 @@ impl MemPoolImpl {
                         balance -= value as i64;
                     }
                     let domain = OrchardDomain::for_action(a);
-                    if let Some((note, _, _)) = try_note_decryption(&domain, oivk, a) {
+                    if let Some((note, _, _)) = try_note_decryption(&domain, &poivk, a) {
                         balance += note.value().inner() as i64; // value is incoming
                     }
                 }
