@@ -54,9 +54,10 @@ pub enum Source {
     },
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde_as]
 pub enum Destination {
+    TransparentAddress(String),
     Transparent(#[serde(with = "SerHex::<Strict>")] [u8; 21]), // t1/t3 + Hash
     Sapling(#[serde(with = "SerHex::<Strict>")] [u8; 43]),     // Diversifier + Jubjub Point
     Orchard(#[serde(with = "SerHex::<Strict>")] [u8; 43]),     // Diviersifer + Pallas Point
@@ -108,6 +109,7 @@ impl Destination {
                 let zo = orchard_as_unified(network, &address);
                 zo.encode()
             }
+            _ => unreachable!(),
         }
     }
 }
@@ -132,7 +134,7 @@ pub struct UTXO {
 #[derive(Serialize, Debug)]
 pub struct Order {
     pub id: u32,
-    pub destinations: [Option<Destination>; 3],
+    pub destinations: Vec<Option<Destination>>,
     pub raw_amount: u64,
     pub take_fee: bool,
     #[serde(with = "MemoBytesProxy")]
@@ -227,6 +229,7 @@ impl Destination {
             Destination::Transparent { .. } => 0,
             Destination::Sapling { .. } => 1,
             Destination::Orchard { .. } => 2,
+            _ => unreachable!(),
         }
     }
 }

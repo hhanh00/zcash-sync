@@ -206,6 +206,7 @@ pub fn build_tx(
                     )
                     .map_err(|_| anyhow!("Orchard::add_recipient"))?;
             }
+            _ => unreachable!(),
         }
     }
 

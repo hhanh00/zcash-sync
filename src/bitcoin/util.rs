@@ -1,6 +1,6 @@
 use anyhow::Result;
 use base58check::FromBase58Check;
-use bitcoin::{hashes::Hash, PubkeyHash, Script};
+use bitcoin::{hashes::Hash, Address, PubkeyHash, Script};
 
 use crate::db::with_coin;
 
@@ -14,4 +14,8 @@ pub fn get_script(coin: u8, id_account: u32) -> Result<Script> {
     let pkh = PubkeyHash::from_slice(&hash)?;
     let script = Script::new_p2pkh(&pkh);
     Ok(script)
+}
+
+pub fn is_valid_address(address: &str) -> bool {
+    address.parse::<Address>().is_ok()
 }

@@ -200,7 +200,10 @@ pub fn fill(
             1 | 2 | 4 => {
                 let fill = Fill {
                     id_order: Some(order.id),
-                    destination: order.destinations[ilog2(info.group_type)].unwrap(),
+                    destination: order.destinations[ilog2(info.group_type)]
+                        .as_ref()
+                        .unwrap()
+                        .clone(),
                     amount: order.amount(fee)?,
                     memo: order.memo.clone(),
                 };
@@ -209,13 +212,13 @@ pub fn fill(
             6 => {
                 let fill1 = Fill {
                     id_order: Some(order.id),
-                    destination: order.destinations[1].unwrap(),
+                    destination: order.destinations[1].as_ref().unwrap().clone(),
                     amount: (order.amount(fee)? as f64 * f).round() as u64,
                     memo: order.memo.clone(),
                 };
                 let fill2 = Fill {
                     id_order: Some(order.id),
-                    destination: order.destinations[2].unwrap(),
+                    destination: order.destinations[2].as_ref().unwrap().clone(),
                     amount: order.amount(fee)? - fill1.amount,
                     memo: order.memo.clone(),
                 };
@@ -259,17 +262,17 @@ pub fn select_inputs(
 }
 
 pub fn outputs_for_change(
-    change_destinations: &[Option<Destination>; 3],
+    change_destinations: &[Option<Destination>],
     change: &PoolAllocation,
 ) -> Result<Vec<Fill>> {
     let mut change_fills = vec![];
     for i in 0..3 {
-        let destination = change_destinations[i];
+        let destination = &change_destinations[i];
         match destination {
             Some(destination) => {
                 let change_fill = Fill {
                     id_order: None,
-                    destination,
+                    destination: destination.clone(),
                     amount: change.0[i],
                     memo: MemoBytes::empty(),
                 };

@@ -392,7 +392,11 @@ pub unsafe extern "C" fn is_valid_key(coin: u8, key: *mut c_char) -> i8 {
 #[no_mangle]
 pub unsafe extern "C" fn valid_address(coin: u8, address: *mut c_char) -> bool {
     from_c_str!(address);
-    crate::key2::decode_address(coin, &address).is_some()
+    if coin == 2 {
+        crate::bitcoin::is_valid_address(&address)
+    } else {
+        crate::key2::decode_address(coin, &address).is_some()
+    }
 }
 
 #[no_mangle]
@@ -574,15 +578,16 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             let c = CoinConfig::get(coin);
             let recipients = flatbuffers::root::<Recipients>(&recipients_bytes)?;
             let recipients = recipients.unpack();
-            let tx_plan = crate::bitcoin::prepare_tx(
+            let psbt = crate::bitcoin::prepare_tx(
                 coin,
                 account,
                 recipients.values.as_ref().unwrap(),
                 6,
                 c.url(),
             )?;
-            println!(">> tx_plan: {}", tx_plan);
-            Ok(tx_plan)
+            let json = serde_json::to_string(&psbt)?;
+            println!(">> tx_plan: {}", json);
+            Ok(json)
         };
         to_cresult_str(res())
     } else {
@@ -609,10 +614,14 @@ pub async unsafe extern "C" fn prepare_multi_payment(
 #[no_mangle]
 pub unsafe extern "C" fn transaction_report(coin: u8, plan: *mut c_char) -> CResult<*const u8> {
     from_c_str!(plan);
-    let c = CoinConfig::get(coin);
     let res = || {
+        let c = CoinConfig::get(coin);
         let plan: TransactionPlan = serde_json::from_str(&plan)?;
-        let report = TransactionReport::from_plan(c.chain.network(), plan);
+        let report = if coin == 2 {
+            crate::bitcoin::to_report(&plan)
+        } else {
+            TransactionReport::from_plan(c.chain.network(), plan)
+        }?;
         let mut builder = FlatBufferBuilder::new();
         let root = report.pack(&mut builder);
         builder.finish(root, None);

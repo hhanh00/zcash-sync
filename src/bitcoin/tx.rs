@@ -1,15 +1,19 @@
 use anyhow::Result;
-use base58check::FromBase58Check;
-use bitcoin::{
-    hashes::Hash, psbt::Psbt, LockTime, OutPoint, PubkeyHash, Script, Sequence, Transaction, TxIn,
-    TxOut, Witness,
-};
+use bitcoin::hashes::Hash;
 use electrum_client::ElectrumApi;
+use zcash_primitives::memo::MemoBytes;
 
 use crate::{
     bitcoin::{get_client, get_script},
-    db::data_generated::fb::RecipientT,
+    db::{
+        data_generated::fb::{RecipientT, TxOutputT, TxReportT},
+        with_coin,
+    },
+    note_selection::{Destination, Fill, Source, UTXO},
+    TransactionPlan,
 };
+
+use super::get_address;
 
 pub fn prepare_tx(
     coin: u8,
@@ -17,33 +21,46 @@ pub fn prepare_tx(
     recipients: &[RecipientT],
     num_blocks: u32,
     url: &str,
-) -> Result<String> {
-    let mut amount = 0;
+) -> Result<TransactionPlan> {
     let client = get_client(url)?;
     let fee_rate = (client.estimate_fee(num_blocks as usize)? * 100_000f64) as u64;
     let mut fee = 0;
 
+    let account_address = with_coin(coin, |c| get_address(c, id_account))?;
     let script = get_script(coin, id_account)?;
     let utxos = client.script_list_unspent(&script)?;
 
-    let mut psbt = None;
+    let mut tx = None;
 
     for _ in 0..2 {
+        let mut amount = 0;
+        let mut outputs = vec![];
+        for (id, recipient) in recipients.iter().enumerate() {
+            let address = recipient.address.as_ref().unwrap();
+            let tx_out = Fill {
+                id_order: Some(id as u32),
+                destination: Destination::TransparentAddress(address.clone()),
+                amount: recipient.amount,
+                memo: MemoBytes::empty(),
+            };
+            amount += tx_out.amount;
+            outputs.push(tx_out);
+        }
+
         let target_amount = amount + fee;
-        let mut input = vec![];
+        let mut inputs = vec![];
         let mut value_inputs = 0;
-        for utxo in utxos.iter() {
-            let tx_in = TxIn {
-                previous_output: OutPoint {
-                    txid: utxo.tx_hash,
-                    vout: utxo.tx_pos as u32,
+        for (id, utxo) in utxos.iter().enumerate() {
+            let tx_in = UTXO {
+                id: id as u32,
+                source: Source::Transparent {
+                    txid: utxo.tx_hash.into_inner(),
+                    index: utxo.tx_pos as u32,
                 },
-                script_sig: Script::new(),
-                sequence: Sequence::MAX,
-                witness: Witness::new(),
+                amount: utxo.value,
             };
             value_inputs += utxo.value;
-            input.push(tx_in);
+            inputs.push(tx_in);
             if value_inputs >= target_amount {
                 break;
             }
@@ -53,41 +70,65 @@ pub fn prepare_tx(
         }
         let change = value_inputs - target_amount;
 
-        let mut output = vec![];
-        for recipient in recipients.iter() {
-            amount += recipient.amount;
-            let address = recipient.address.as_deref().unwrap();
-            let (_version, hash) = address
-                .from_base58check()
-                .map_err(|_| anyhow::anyhow!("Invalid address"))?;
-            let pkh = PubkeyHash::from_slice(&hash)?;
-            let tx_out = TxOut {
-                value: recipient.amount,
-                script_pubkey: Script::new_p2pkh(&pkh),
-            };
-            output.push(tx_out);
-        }
         if change > 0 {
-            let tx_out = TxOut {
-                value: change,
-                script_pubkey: script.clone(),
+            let tx_out = Fill {
+                id_order: None,
+                destination: Destination::TransparentAddress(account_address.clone()),
+                amount: change,
+                memo: MemoBytes::empty(),
             };
-            output.push(tx_out);
+            outputs.push(tx_out);
         }
 
-        let tx = Transaction {
-            version: 2,
-            lock_time: LockTime::ZERO.into(),
-            input,
-            output,
-        };
+        let size = (inputs.len() * 180 + outputs.len() * 34) as u64;
+        fee = size * fee_rate;
 
-        let psbt2 = Psbt::from_unsigned_tx(tx).unwrap();
-        fee = psbt2.unsigned_tx.vsize() as u64 * fee_rate;
-        psbt = Some(psbt2);
+        let tx2 = TransactionPlan {
+            account_address: account_address.clone(),
+            anchor_height: 0,
+            expiry_height: 0,
+            orchard_anchor: [0u8; 32],
+            spends: inputs,
+            outputs,
+            fee,
+            net_chg: [0, 0],
+        };
+        tx = Some(tx2);
     }
 
-    let psbt = psbt.unwrap();
-    let json = serde_json::to_string(&psbt)?;
-    Ok(json)
+    let tx = tx.unwrap();
+    Ok(tx)
+}
+
+pub fn to_report(tx: &TransactionPlan) -> Result<TxReportT> {
+    let mut value = 0;
+    for i in tx.spends.iter() {
+        value += i.amount;
+    }
+    let mut outputs = vec![];
+    for o in tx.outputs.iter() {
+        if o.id_order.is_none() {
+            continue;
+        }
+        if let Destination::TransparentAddress(ref address) = o.destination {
+            let output = TxOutputT {
+                id: o.id_order.unwrap(),
+                address: Some(address.clone()),
+                amount: o.amount,
+                pool: 0,
+            };
+            outputs.push(output);
+        }
+    }
+    let report = TxReportT {
+        outputs: Some(outputs),
+        transparent: value,
+        sapling: 0,
+        orchard: 0,
+        net_sapling: 0,
+        net_orchard: 0,
+        fee: tx.fee,
+        privacy_level: 0,
+    };
+    Ok(report)
 }

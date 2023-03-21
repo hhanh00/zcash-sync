@@ -20,7 +20,7 @@ impl From<MemoBytesProxy> for MemoBytes {
 }
 
 impl TransactionReport {
-    pub fn from_plan(network: &Network, p: TransactionPlan) -> TxReportT {
+    pub fn from_plan(network: &Network, p: TransactionPlan) -> anyhow::Result<TxReportT> {
         let mut spends = [0; 3];
         let mut outs = [0; 3];
         let mut changes = [0; 3];
@@ -72,6 +72,6 @@ impl TransactionReport {
             privacy_level,
         };
 
-        report
+        Ok(report)
     }
 }

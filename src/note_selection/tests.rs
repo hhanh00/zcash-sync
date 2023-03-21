@@ -71,20 +71,28 @@ macro_rules! t {
         order!(
             $id,
             $q,
-            [Some(Destination::Transparent([0u8; 21])), None, None]
+            vec![Some(Destination::Transparent([0u8; 21])), None, None]
         )
     };
 }
 
 macro_rules! s {
     ($id: expr, $q:expr) => {
-        order!($id, $q, [None, Some(Destination::Sapling([0u8; 43])), None])
+        order!(
+            $id,
+            $q,
+            vec![None, Some(Destination::Sapling([0u8; 43])), None]
+        )
     };
 }
 
 macro_rules! o {
     ($id: expr, $q:expr) => {
-        order!($id, $q, [None, None, Some(Destination::Orchard([0u8; 43]))])
+        order!(
+            $id,
+            $q,
+            vec![None, None, Some(Destination::Orchard([0u8; 43]))]
+        )
     };
 }
 
@@ -93,7 +101,7 @@ macro_rules! ts {
         order!(
             $id,
             $q,
-            [
+            vec![
                 Some(Destination::Transparent([0u8; 21])),
                 Some(Destination::Sapling([0u8; 43])),
                 None
@@ -107,7 +115,7 @@ macro_rules! to {
         order!(
             $id,
             $q,
-            [
+            vec![
                 Some(Destination::Transparent([0u8; 21])),
                 None,
                 Some(Destination::Orchard([0u8; 43]))
@@ -121,7 +129,7 @@ macro_rules! so {
         order!(
             $id,
             $q,
-            [
+            vec![
                 None,
                 Some(Destination::Sapling([0u8; 43])),
                 Some(Destination::Orchard([0u8; 43]))
@@ -135,7 +143,7 @@ macro_rules! tso {
         order!(
             $id,
             $q,
-            [
+            vec![
                 Some(Destination::Transparent([0u8; 21])),
                 Some(Destination::Sapling([0u8; 43])),
                 Some(Destination::Orchard([0u8; 43]))

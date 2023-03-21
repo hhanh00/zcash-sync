@@ -1,5 +1,5 @@
 pub use crate::note_selection::types::{
-    Destination, Order, RecipientShort, Source, TransactionBuilderConfig, TransactionPlan,
+    Destination, Fill, Order, RecipientShort, Source, TransactionBuilderConfig, TransactionPlan,
     TransactionReport, UTXO,
 };
 pub use crate::note_selection::TransactionBuilderError::TxTooComplex;

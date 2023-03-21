@@ -5,8 +5,8 @@ use zcash_client_backend::encoding::{decode_payment_address, decode_transparent_
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 
-pub fn decode(network: &Network, address: &str) -> anyhow::Result<[Option<Destination>; 3]> {
-    let mut destinations: [Option<Destination>; 3] = [None; 3];
+pub fn decode(network: &Network, address: &str) -> anyhow::Result<Vec<Option<Destination>>> {
+    let mut destinations: Vec<Option<Destination>> = vec![None; 3];
     if let Ok(data) = decode_payment_address(network.hrp_sapling_payment_address(), address) {
         let destination = Destination::Sapling(data.to_bytes());
         destinations[Pool::Sapling as usize] = Some(destination);
