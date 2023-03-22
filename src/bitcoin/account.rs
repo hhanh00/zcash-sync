@@ -154,6 +154,7 @@ pub fn get_notes(coin: u8, id_account: u32, url: &str) -> Result<ShieldedNoteVec
 }
 
 pub fn get_txs(coin: u8, id_account: u32, url: &str) -> Result<ShieldedTxVecT> {
+    let account_address = with_coin(coin, |c| get_address(c, id_account))?;
     let client = get_client(url)?;
     let script = get_script(coin, id_account)?;
     let history = client.script_get_history(&script)?;
@@ -191,6 +192,7 @@ pub fn get_txs(coin: u8, id_account: u32, url: &str) -> Result<ShieldedTxVecT> {
     let txs = client.batch_transaction_get(&new_txids)?;
     let mut timestamp_cache: HashMap<u32, u32> = HashMap::new();
     for (btc_tx, tx) in txs.iter().zip(new_txs.iter_mut()) {
+        tx.address = Some(account_address.clone());
         let timestamp = timestamp_cache.entry(tx.height).or_insert_with_key(|h| {
             let header = client.block_header(*h as usize).ok();
             header.map(|h| h.time).unwrap_or_default()
@@ -243,7 +245,7 @@ pub fn get_txs(coin: u8, id_account: u32, url: &str) -> Result<ShieldedTxVecT> {
                     name: None,
                     value: tx.value,
                     address: tx.address,
-                    memo: None,
+                    memo: Some(String::new()),
                 }
             })
             .collect();

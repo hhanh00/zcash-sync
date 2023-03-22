@@ -586,7 +586,6 @@ pub async unsafe extern "C" fn prepare_multi_payment(
                 c.url(),
             )?;
             let json = serde_json::to_string(&psbt)?;
-            println!(">> tx_plan: {}", json);
             Ok(json)
         };
         to_cresult_str(res())
@@ -641,7 +640,12 @@ pub async unsafe extern "C" fn sign(
     from_c_str!(tx_plan);
     let res = async {
         let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
-        let raw_tx = crate::api::payment_v2::sign_plan(coin, account, &tx_plan)?;
+        let raw_tx = if coin == 2 {
+            crate::bitcoin::sign_plan(coin, account, &tx_plan)
+        } else {
+            crate::api::payment_v2::sign_plan(coin, account, &tx_plan)
+        }?;
+
         let tx_str = base64::encode(&raw_tx);
         Ok::<_, anyhow::Error>(tx_str)
     };
@@ -659,7 +663,13 @@ pub async unsafe extern "C" fn sign_and_broadcast(
     from_c_str!(tx_plan);
     let res = async {
         let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
-        let txid = crate::api::payment_v2::sign_and_broadcast(coin, account, &tx_plan).await?;
+        let txid = if coin == 2 {
+            let c = CoinConfig::get(coin);
+            let tx_bytes = crate::bitcoin::sign_plan(coin, account, &tx_plan)?;
+            crate::bitcoin::broadcast(&tx_bytes, c.url())
+        } else {
+            crate::api::payment_v2::sign_and_broadcast(coin, account, &tx_plan).await
+        }?;
         Ok::<_, anyhow::Error>(txid)
     };
     let res = res.await;

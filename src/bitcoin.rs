@@ -12,5 +12,5 @@ pub use account::{
 };
 pub use db::{delete_account, get_backup, migrate_db};
 pub use sync::{get_client, get_height, sync};
-pub use tx::{prepare_tx, to_report};
+pub use tx::{broadcast, prepare_tx, sign_plan, to_report};
 pub use util::{get_script, is_valid_address};

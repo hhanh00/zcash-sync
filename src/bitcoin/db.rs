@@ -165,14 +165,14 @@ pub fn fetch_txs(c: &Connection, id_account: u32) -> Result<Vec<TrpTransactionT>
         let height: u32 = row.get(2)?;
         let timestamp: u32 = row.get(3)?;
         let value: i64 = row.get(4)?;
-        let address: String = row.get(5)?;
+        let address: Option<String> = row.get(5)?;
         let tx = TrpTransactionT {
             id,
             txid: Some(txid),
             height,
             timestamp,
             value,
-            address: Some(address),
+            address,
         };
         Ok(tx)
     })?;
