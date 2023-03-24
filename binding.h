@@ -304,7 +304,7 @@ struct CResult_____c_char sweep_tkey(uint32_t last_height,
                                      uint8_t pool,
                                      uint32_t confirmations);
 
-struct CResult_u32 get_activation_date(void);
+struct CResult_u32 get_activation_date(uint8_t coin);
 
 struct CResult_u32 get_block_by_time(uint32_t time);
 

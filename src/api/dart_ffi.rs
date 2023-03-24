@@ -708,8 +708,12 @@ pub async unsafe extern "C" fn sweep_tkey(
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn get_activation_date() -> CResult<u32> {
-    let res = crate::api::sync::get_activation_date().await;
+pub async unsafe extern "C" fn get_activation_date(coin: u8) -> CResult<u32> {
+    let res = if coin >= 2 {
+        Ok(0u32)
+    } else {
+        crate::api::sync::get_activation_date().await
+    };
     to_cresult(res)
 }
 
