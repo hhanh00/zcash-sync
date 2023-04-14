@@ -1,5 +1,5 @@
 use crate::{AccountData, Empty, Hash, RawTransaction};
-use orchard::keys::{FullViewingKey, IncomingViewingKey, Scope, PreparedEphemeralPublicKey};
+use orchard::keys::{FullViewingKey, IncomingViewingKey, Scope};
 use orchard::note_encryption::OrchardDomain;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;

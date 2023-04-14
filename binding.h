@@ -250,6 +250,12 @@ struct CResult_____c_char get_diversified_address(uint8_t ua_type, uint32_t time
 
 struct CResult_u32 get_latest_height(void);
 
+struct CResult_u8 ledger_build_keys(void);
+
+struct CResult_____c_char ledger_get_fvk(uint8_t coin);
+
+struct CResult_____c_char ledger_get_address(void);
+
 void skip_to_last_height(uint8_t coin);
 
 struct CResult_u32 rewind_to(uint32_t height);

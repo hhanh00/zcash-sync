@@ -15,6 +15,8 @@ use std::path::Path;
 use std::sync::Mutex;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
+#[cfg(feature="ledger2")]
+use crate::ledger2;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -392,6 +394,42 @@ pub unsafe extern "C" fn get_diversified_address(ua_type: u8, time: u32) -> CRes
 pub async unsafe extern "C" fn get_latest_height() -> CResult<u32> {
     let height = crate::api::sync::get_latest_height().await;
     to_cresult(height)
+}
+
+#[cfg(feature = "ledger2")]
+#[no_mangle]
+pub unsafe extern "C" fn ledger_build_keys() -> CResult<u8> {
+    use crate::ledger2::{LedgerClient, build_keys};
+
+    let res = || {
+        let client = ledger2::LedgerClient::new()?;
+        ledger2::build_keys(&client)?;
+        Ok(0u8)
+    };
+    to_cresult(res())
+}
+
+#[cfg(feature="ledger2")]
+#[no_mangle]
+pub unsafe extern "C" fn ledger_get_fvk(coin: u8) -> CResult<*mut c_char> {
+    let res = || {
+        let c = CoinConfig::get(coin);
+        let client = ledger2::LedgerClient::new()?;
+        let fvk = ledger2::get_fvk(c.chain.network(), &client)?;
+        Ok(fvk)
+    };
+    to_cresult_str(res())
+}
+
+#[cfg(feature = "ledger2")]
+#[no_mangle]
+pub unsafe extern "C" fn ledger_get_address() -> CResult<*mut c_char> {
+    let res = || {
+        let client = ledger2::LedgerClient::new()?;
+        let address = ledger2::get_address(&client)?;
+        Ok(address)
+    };
+    to_cresult_str(res())
 }
 
 #[allow(dead_code)]

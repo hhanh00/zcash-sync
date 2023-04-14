@@ -42,10 +42,11 @@ pub async fn build_tx_plan_with_utxos(
         }
     }
 
-    let fvk = {
+    let (fvk, taddr) = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
-        fvk
+        let taddr = db.get_taddr(account)?.unwrap_or_default();
+        (fvk, taddr)
     };
     let change_address = get_unified_address(coin, account, 7)?;
     let context = TxBuilderContext::from_height(coin, checkpoint_height)?;
@@ -77,6 +78,7 @@ pub async fn build_tx_plan_with_utxos(
     let tx_plan = note_selection::build_tx_plan::<FeeFlat>(
         network,
         &fvk,
+        &taddr,
         checkpoint_height,
         expiry_height,
         &context.orchard_anchor,

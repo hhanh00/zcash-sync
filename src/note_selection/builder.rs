@@ -13,7 +13,8 @@ use orchard::keys::{FullViewingKey, Scope, SpendAuthorizingKey, SpendingKey};
 use orchard::note::Nullifier;
 use orchard::value::NoteValue;
 use orchard::{Address, Anchor, Bundle};
-use rand::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
@@ -99,7 +100,8 @@ pub fn build_tx(
     };
 
     let mut has_orchard = false;
-    let mut builder = Builder::new(*network, BlockHeight::from_u32(plan.anchor_height));
+    let mut rng = ChaChaRng::from_seed([0; 32]);
+    let mut builder = Builder::new_with_rng(*network, BlockHeight::from_u32(plan.anchor_height), &mut rng);
     let anchor: Anchor = orchard::tree::MerkleHashOrchard::from_bytes(&plan.orchard_anchor)
         .unwrap()
         .into();

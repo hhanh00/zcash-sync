@@ -1,20 +1,7 @@
-use serde::{Deserialize, Serialize};
+mod transport;
+mod builder;
 
-#[cfg(feature = "ledger_sapling")]
-pub mod sapling;
+// #[cfg(test)]
+mod tests;
 
-mod transparent;
-
-#[derive(Serialize, Deserialize)]
-#[allow(non_snake_case)]
-struct APDURequest {
-    apduHex: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct APDUReply {
-    data: String,
-    error: Option<String>,
-}
-
-pub use transparent::sweep_ledger;
+pub use builder::build_broadcast_tx;

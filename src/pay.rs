@@ -422,16 +422,19 @@ pub async fn broadcast_tx(tx: &[u8]) -> anyhow::Result<String> {
         data: tx.to_vec(),
         height: latest_height as u64,
     };
-    let rep = client
-        .send_transaction(Request::new(raw_tx))
-        .await?
-        .into_inner();
-    let code = rep.error_code;
-    if code == 0 {
-        Ok(rep.error_message)
-    } else {
-        Err(anyhow::anyhow!(rep.error_message))
-    }
+
+    return Err(anyhow!("Broadcasting is disabled"));
+
+    // let rep = client
+    //     .send_transaction(Request::new(raw_tx))
+    //     .await?
+    //     .into_inner();
+    // let code = rep.error_code;
+    // if code == 0 {
+    //     Ok(rep.error_message)
+    // } else {
+    //     Err(anyhow::anyhow!(rep.error_message))
+    // }
 }
 
 pub fn get_tx_summary(tx: &Tx) -> anyhow::Result<TxSummary> {

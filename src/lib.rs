@@ -104,17 +104,6 @@ pub mod api;
 #[cfg(feature = "ledger")]
 mod ledger;
 
-#[cfg(not(feature = "ledger"))]
-#[allow(dead_code)]
-mod ledger {
-    pub async fn build_tx_ledger(
-        _tx: &mut super::pay::Tx,
-        _prover: &impl zcash_primitives::sapling::prover::TxProver,
-    ) -> anyhow::Result<Vec<u8>> {
-        unreachable!()
-    }
-}
-
 pub use crate::chain::{connect_lightwalletd, get_best_server, ChainError};
 pub use crate::coinconfig::{
     init_coin, set_active, set_active_account, set_coin_lwd_url, CoinConfig, COIN_CONFIG,
@@ -128,16 +117,11 @@ pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
 
 pub use note_selection::{
+    Source, Destination,
     build_tx, build_tx_plan, fetch_utxos, get_secret_keys, TransactionBuilderConfig,
     TransactionBuilderError, TransactionPlan, TxBuilderContext, MAX_ATTEMPTS,
 };
 pub use unified::{decode_unified_address, get_unified_address};
-
-#[cfg(feature = "ledger_sapling")]
-pub use crate::ledger::sapling::build_tx_ledger;
-
-#[cfg(feature = "ledger")]
-pub use crate::ledger::sweep_ledger;
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;
@@ -149,3 +133,6 @@ pub fn init_test() {
     init_coin(0, "./zec.db").unwrap();
     set_coin_lwd_url(0, "http://127.0.0.1:9067");
 }
+
+#[cfg(feature = "ledger")]
+pub use ledger::build_broadcast_tx;
