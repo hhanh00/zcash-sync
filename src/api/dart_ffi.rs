@@ -1,8 +1,8 @@
-use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
+use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER, self};
 use crate::db::data_generated::fb::{ProgressT, Recipients, SendTemplate, Servers};
 use crate::db::FullEncryptedBackup;
 use crate::note_selection::TransactionReport;
-use crate::{ChainError, TransactionPlan, Tx};
+use crate::{ChainError, TransactionPlan, Tx, build_broadcast_tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use flatbuffers::FlatBufferBuilder;
@@ -1217,6 +1217,21 @@ pub unsafe extern "C" fn set_property(
         Ok(0)
     };
     to_cresult(with_coin(coin, res))
+}
+
+#[no_mangle]
+#[tokio::main]
+pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CResult<*mut c_char> {
+    from_c_str!(tx_plan);
+    let res = async {
+        let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
+        let c = CoinConfig::get(coin);
+        let mut client = c.connect_lwd().await?;
+        let prover = coinconfig::get_prover();
+        let response = build_broadcast_tx(&mut client, &tx_plan, prover).await?;
+        Ok::<_, anyhow::Error>(response)
+    };
+    to_cresult_str(res.await)
 }
 
 #[no_mangle]

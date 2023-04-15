@@ -13,7 +13,7 @@ use zcash_primitives::zip32::DiversifiableFullViewingKey;
 use std::io::Write;
 use hex_literal::hex;
 
-async fn apdu(data: &[u8]) -> Vec<u8> {
+async fn apdu_usb(data: &[u8]) -> Vec<u8> {
     let api = HidApi::new().unwrap();
     let transport = TransportNativeHID::new(&api).unwrap();
     let command = APDUCommand {
@@ -31,7 +31,7 @@ async fn apdu(data: &[u8]) -> Vec<u8> {
 
 const TEST_SERVER_IP: &str = "127.0.0.1";
 
-async fn apdu2(data: &[u8]) -> Vec<u8> {
+async fn apdu(data: &[u8]) -> Vec<u8> {
     let client = Client::new();
     let response = client.post(&format!("http://{}:5000/apdu", TEST_SERVER_IP))
     .body(format!("{{\"data\": \"{}\"}}", hex::encode(data)))
@@ -197,4 +197,11 @@ pub async fn ledger_pedersen_hash(data: &[u8]) -> Result<Vec<u8>> {
     bb.write_all(data)?;
     let cmu = apdu(&bb).await;
     Ok(cmu)
+}
+
+pub async fn ledger_get_taddr() -> Result<Vec<u8>> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E013000000"))?;
+    let pkh = apdu(&bb).await;
+    Ok(pkh)
 }

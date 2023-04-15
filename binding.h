@@ -413,6 +413,8 @@ struct CResult_____c_char get_property(uint8_t coin, char *name);
 
 struct CResult_u8 set_property(uint8_t coin, char *name, char *value);
 
+struct CResult_____c_char ledger_send(uint8_t coin, char *tx_plan);
+
 bool has_cuda(void);
 
 bool has_metal(void);

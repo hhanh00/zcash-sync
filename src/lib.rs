@@ -135,4 +135,6 @@ pub fn init_test() {
 }
 
 #[cfg(feature = "ledger")]
-pub use ledger::build_broadcast_tx;
+pub use ledger::{build_broadcast_tx, ledger_get_taddr};
+
+pub use taddr::derive_from_secretkey;
