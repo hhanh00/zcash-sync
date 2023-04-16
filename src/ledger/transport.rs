@@ -13,7 +13,7 @@ use zcash_primitives::zip32::DiversifiableFullViewingKey;
 use std::io::Write;
 use hex_literal::hex;
 
-async fn apdu_usb(data: &[u8]) -> Vec<u8> {
+async fn apdu(data: &[u8]) -> Vec<u8> {
     let api = HidApi::new().unwrap();
     let transport = TransportNativeHID::new(&api).unwrap();
     let command = APDUCommand {
@@ -31,7 +31,7 @@ async fn apdu_usb(data: &[u8]) -> Vec<u8> {
 
 const TEST_SERVER_IP: &str = "127.0.0.1";
 
-async fn apdu(data: &[u8]) -> Vec<u8> {
+async fn apdu_http(data: &[u8]) -> Vec<u8> {
     let client = Client::new();
     let response = client.post(&format!("http://{}:5000/apdu", TEST_SERVER_IP))
     .body(format!("{{\"data\": \"{}\"}}", hex::encode(data)))
@@ -101,21 +101,19 @@ pub async fn ledger_add_t_input(amount: u64) -> Result<()> {
 
 pub async fn ledger_add_t_output(amount: u64, address: &[u8]) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E00A000020"))?;
+    bb.write_all(&hex!("E00A00001D"))?;
     bb.write_u64::<LE>(amount)?;
     bb.write_all(address)?;
-    bb.write_all(&hex!("000000"))?;
     apdu(&bb).await;
     Ok(())
 }
 
 pub async fn ledger_add_s_output(amount: u64, epk: &[u8], address: &[u8], enc_compact: &[u8]) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E00B00008C"))?;
+    bb.write_all(&hex!("E00B000087"))?;
+    bb.write_all(address)?;
     bb.write_u64::<LE>(amount)?;
     bb.write_all(epk)?;
-    bb.write_all(address)?;
-    bb.write_all(&hex!("0000000000"))?;
     bb.write_all(enc_compact)?;
     apdu(&bb).await;
     Ok(())
