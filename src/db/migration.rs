@@ -34,7 +34,7 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-const LATEST_VERSION: u32 = 7;
+const LATEST_VERSION: u32 = 8;
 
 pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyhow::Result<()> {
     connection.execute(
@@ -291,6 +291,28 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
                 value TEXT NOT NULL)",
             [],
         )?;
+    }
+
+    if version < 8 {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS new_taddrs (
+            account INTEGER PRIMARY KEY NOT NULL,
+            sk TEXT,
+            address TEXT NOT NULL)",
+            [],
+        )?;
+        connection.execute(
+            "INSERT INTO new_taddrs(
+            account, sk, address
+        ) SELECT * FROM taddrs",
+            [],
+        )?;
+        connection.execute("DROP TABLE taddrs", [])?;
+        connection.execute(
+            "ALTER TABLE new_taddrs RENAME TO taddrs",
+            [],
+        )?;
+
     }
 
     if version != LATEST_VERSION {

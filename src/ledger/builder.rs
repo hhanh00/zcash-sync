@@ -15,6 +15,13 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use tonic::{Request, transport::Channel};
+use zcash_client_backend::address::RecipientAddress;
+use zcash_client_backend::encoding::decode_transparent_address;
+use zcash_primitives::consensus::Parameters;
+use zcash_primitives::legacy::{TransparentAddress, Script};
+use zcash_primitives::transaction::components::transparent::builder::Unauthorized;
+use zcash_primitives::transaction::components::{transparent, TxIn, OutPoint, TxOut};
+use zcash_primitives::transaction::txid::TxIdDigester;
 use crate::{Destination, Source, TransactionPlan, RawTransaction, CompactTxStreamerClient};
 use crate::ledger::transport::*;
 use anyhow::{anyhow, Result};
@@ -33,6 +40,11 @@ use zcash_primitives::{
 };
 use zcash_proofs::{prover::LocalTxProver, sapling::SaplingProvingContext};
 
+struct TransparentInputUnAuthorized {
+    utxo: OutPoint,
+    coin: TxOut,
+}
+
 struct SpendDescriptionUnAuthorized {
     cv: ValueCommitment,
     anchor: Fq,
@@ -43,19 +55,22 @@ struct SpendDescriptionUnAuthorized {
 
 pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, tx_plan: &TransactionPlan, prover: &LocalTxProver) -> Result<String> {
     ledger_init().await?;
-    let address = ledger_get_address().await?;
-    println!("address {}", address);
+    let pubkey = ledger_get_pubkey().await?;
 
+    let network = MainNetwork; // TODO: Pass network as param
     let secp = Secp256k1::<All>::new();
 
-    // TODO: Not used atm
-    let sk: SecretKey = "ee729122985b068958c6c62afe6ee70927d3e7f9405c0b9a09e822cd2f5ce2ae"
-        .parse()
-        .unwrap();
-    let pub_key = PublicKey::from_secret_key(&secp, &sk);
-    let pub_key = pub_key.serialize();
-    let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
-    let tpub_key: [u8; 20] = pub_key.into();
+    let taddr = &tx_plan.taddr;
+    let taddr = decode_transparent_address(
+        &network.b58_pubkey_address_prefix(),
+        &network.b58_script_address_prefix(),
+        taddr
+    )?.ok_or(anyhow!("Invalid taddr"))?;
+    let pkh = match taddr {
+        TransparentAddress::PublicKey(pkh) => pkh,
+        _ => unreachable!()
+    };
+    let tin_pubscript = taddr.script();
 
     // Compute header digest
     let mut h = Params::new()
@@ -134,6 +149,7 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
     let mut sapling_context = SaplingProvingContext::new();
     let mut value_balance = ValueSum::zero();
 
+    let mut vin = vec![];
     let mut shielded_spends = vec![];
     for sp in tx_plan.spends.iter() {
         match sp.source {
@@ -141,10 +157,17 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
                 prevouts_hasher.update(&txid);
                 prevouts_hasher.write_u32::<LE>(index)?;
                 trscripts_hasher.update(&hex!("1976a914"));
-                trscripts_hasher.update(&tpub_key);
+                trscripts_hasher.update(&pkh);
                 trscripts_hasher.update(&hex!("88ac"));
                 sequences_hasher.update(&hex!("FFFFFFFF"));
 
+                vin.push(TransparentInputUnAuthorized { 
+                    utxo: OutPoint::new(txid, index), 
+                    coin: TxOut { value: Amount::from_u64(sp.amount).unwrap(), 
+                        script_pubkey: tin_pubscript.clone(), // will always use the h/w address
+                    } 
+                });
+                
                 ledger_add_t_input(sp.amount).await?;
             }
             Source::Sapling { diversifier, rseed, ref witness, .. } => {
@@ -195,8 +218,10 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
         .hash_length(32)
         .personal(b"ZTxIdSSpendsHash")
         .to_state();
-    spends_hasher.update(spends_compact_digest.as_bytes());
-    spends_hasher.update(spends_non_compact_digest.as_bytes());
+    if !shielded_spends.is_empty() {
+        spends_hasher.update(spends_compact_digest.as_bytes());
+        spends_hasher.update(spends_non_compact_digest.as_bytes());
+    }
     let spends_digest = spends_hasher.finalize();
     println!("SPENDS {}", hex::encode(spends_digest));
 
@@ -210,13 +235,23 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
         .personal(b"ZTxIdSOutN__Hash")
         .to_state();
 
+    let mut vout = vec![];
     let mut shielded_outputs = vec![];
     for output in tx_plan.outputs.iter() {
         if let Destination::Transparent(raw_address) = output.destination {
-            ledger_add_t_output(output.amount, &raw_address[1..21]).await?;
+            if raw_address[0] != 0 {
+                anyhow::bail!("Only t1 addresses are supported");
+            }
+            ledger_add_t_output(output.amount, &raw_address).await?;
+            let ta = TransparentAddress::PublicKey(raw_address[1..21].try_into().unwrap());
+            vout.push(TxOut { 
+                value: Amount::from_u64(output.amount).unwrap(), 
+                script_pubkey: ta.script()
+            });
         }
     }
     ledger_set_stage(2).await?;
+    let has_transparent = !vin.is_empty() || !vout.is_empty();
 
     for output in tx_plan.outputs.iter() {
         if let Destination::Sapling(raw_address) = output.destination {
@@ -276,6 +311,39 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
 
     ledger_set_net_sapling(-tx_plan.net_chg[0]).await?;
 
+    let mut vins = vec![];
+    for tin in vin.iter() {
+        let mut txin_hasher = Params::new()
+            .hash_length(32)
+            .personal(b"Zcash___TxInHash")
+            .to_state();
+
+        txin_hasher.update(tin.utxo.hash());
+        txin_hasher.update(&tin.utxo.n().to_le_bytes());
+        txin_hasher.update(&tin.coin.value.to_i64_le_bytes());
+        txin_hasher.update(&[0x19]); // add the script length
+        txin_hasher.update(&tin.coin.script_pubkey.0);
+        txin_hasher.update(&0xFFFFFFFFu32.to_le_bytes());
+        let txin_hash = txin_hasher.finalize();
+        println!("TXIN {}", hex::encode(txin_hash));
+
+        let signature = ledger_sign_transparent(txin_hash.as_bytes()).await?;
+        let signature = secp256k1::ecdsa::Signature::from_der(&signature)?;
+        let mut signature = signature.serialize_der().to_vec();
+        signature.extend(&[0x01]); // add SIG_HASH_ALL
+
+        // witness is PUSH(signature) PUSH(pk)
+        let script_sig = Script::default() << &*signature << &*pubkey;
+
+        let txin = TxIn::<transparent::Authorized> {
+            prevout: tin.utxo.clone(),
+            script_sig,
+            sequence: 0xFFFFFFFFu32,
+        };
+        println!("TXIN {:?}", txin);
+        vins.push(txin);
+    }
+
     let mut signatures = vec![];
     for _sp in shielded_spends.iter() {
         let signature = ledger_sign_sapling().await?;
@@ -292,14 +360,56 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
         signatures.push(signature);
     }
 
-    let shielded_spends = shielded_spends.into_iter().zip(signatures.into_iter()).map(|(sp, spend_auth_sig)| 
-        SpendDescription::<_> { cv: sp.cv, anchor: sp.anchor, nullifier: sp.nullifier, rk: sp.rk, zkproof: sp.zkproof, 
+    // let sk = SecretKey::from_slice(&hex::decode("a2a6cef015bbce367e916d83152094d6492c422beb037edcbbd50593aa02b183").unwrap()).unwrap();
+    // let mut transparent_builder = transparent::builder::TransparentBuilder::empty();
+    // for vin in vin.iter() {
+    //     transparent_builder.add_input(sk.clone(), vin.utxo.clone(), vin.coin.clone()).unwrap();
+    // }
+    // for vout in vout.iter() {
+    //     transparent_builder.add_output(&vout.recipient_address().unwrap(), vout.value).unwrap();
+    // }
+    // let transparent_bundle = transparent_builder.build();
+    // let transparent_bundle = {
+    //     let consensus_branch_id =
+    //         BranchId::for_height(&network, BlockHeight::from_u32(tx_plan.anchor_height));
+    //     let version = TxVersion::suggested_for_branch(consensus_branch_id);
+    //     let unauthed_tx: TransactionData<zcash_primitives::transaction::Unauthorized> =
+    //     TransactionData::from_parts(
+    //         version,
+    //         consensus_branch_id,
+    //         0,
+    //         BlockHeight::from_u32(tx_plan.expiry_height),
+    //         transparent_bundle.clone(),
+    //         None,
+    //         None,
+    //         None,
+    //     );
+
+    //     let txid_parts = unauthed_tx.digest(TxIdDigester);
+
+    //     transparent_bundle.unwrap().apply_signatures(&unauthed_tx, &txid_parts)
+    // };
+    // println!("VIN 2 {:?}", &transparent_bundle.vin[0]);
+
+    let transparent_bundle = transparent::Bundle::<transparent::Authorized> { 
+        vin: vins, 
+        vout, 
+        authorization: transparent::Authorized 
+    };
+
+    let shielded_spends: Vec<_> = shielded_spends.into_iter().zip(signatures.into_iter()).map(|(sp, spend_auth_sig)| 
+        SpendDescription::<SapAuthorized> { cv: sp.cv, anchor: sp.anchor, nullifier: sp.nullifier, rk: sp.rk, zkproof: sp.zkproof, 
             spend_auth_sig }).collect();
+    let has_sapling = !shielded_spends.is_empty() || !shielded_outputs.is_empty();
 
     let value: i64 = value_balance.try_into().unwrap();
     let value = Amount::from_i64(value).unwrap();
     let sighash = ledger_get_sighash().await?;
+    println!("TXID {}", hex::encode(&sighash));
     let binding_sig = sapling_context.binding_sig(value, &sighash.try_into().unwrap()).unwrap();
+
+    println!("{} {}", has_transparent, has_sapling);
+    println!("{} {} {:?}", shielded_spends.len(), shielded_outputs.len(), value_balance);
 
     let sapling_bundle = Bundle::<_>::from_parts(
         shielded_spends, shielded_outputs, value, 
@@ -310,9 +420,9 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
         consensus_branch_id: BranchId::Nu5,
         lock_time: 0,
         expiry_height: BlockHeight::from_u32(tx_plan.expiry_height),
-        transparent_bundle: None,
+        transparent_bundle: if has_transparent { Some(transparent_bundle) } else { None },
         sprout_bundle: None,
-        sapling_bundle: Some(sapling_bundle),
+        sapling_bundle: if has_sapling { Some(sapling_bundle) } else { None },
         orchard_bundle: None,
     };
 

@@ -172,6 +172,21 @@ pub async fn ledger_sign_sapling() -> Result<Vec<u8>> {
     Ok(signature)
 }
 
+pub async fn ledger_sign_transparent(txin_digest: &[u8]) -> Result<Vec<u8>> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E014000020"))?;
+    bb.write_all(txin_digest)?;
+    let signature = apdu(&bb).await;
+    Ok(signature)
+}
+
+pub async fn ledger_get_pubkey() -> Result<Vec<u8>> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E013000000"))?;
+    let pk = apdu(&bb).await;
+    Ok(pk)
+}
+
 pub async fn ledger_cmu(data: &[u8]) -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E0800000"))?;
@@ -197,11 +212,4 @@ pub async fn ledger_pedersen_hash(data: &[u8]) -> Result<Vec<u8>> {
     bb.write_all(data)?;
     let cmu = apdu(&bb).await;
     Ok(cmu)
-}
-
-pub async fn ledger_get_taddr() -> Result<Vec<u8>> {
-    let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E013000000"))?;
-    let pkh = apdu(&bb).await;
-    Ok(pkh)
 }

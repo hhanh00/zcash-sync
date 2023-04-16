@@ -5,9 +5,9 @@ use std::{
 };
 use ripemd::Digest;
 use secp256k1::SecretKey;
-use warp_api_ffi::{TransactionPlan, connect_lightwalletd, build_broadcast_tx, ledger_get_taddr, derive_from_secretkey};
+use warp_api_ffi::{TransactionPlan, connect_lightwalletd, build_broadcast_tx, derive_from_secretkey};
 use anyhow::Result;
-use zcash_client_backend::encoding::encode_transparent_address;
+use zcash_client_backend::{encoding::encode_transparent_address, address::RecipientAddress};
 use zcash_primitives::{legacy::TransparentAddress, consensus::{Parameters, Network, Network::MainNetwork}};
 use zcash_proofs::prover::LocalTxProver;
 
