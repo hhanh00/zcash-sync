@@ -42,11 +42,12 @@ pub async fn build_tx_plan_with_utxos(
         }
     }
 
-    let (fvk, taddr) = {
+    let (fvk, taddr, orchard_fvk) = {
         let db = c.db()?;
         let AccountData { fvk, .. } = db.get_account_info(account)?;
         let taddr = db.get_taddr(account)?.unwrap_or_default();
-        (fvk, taddr)
+        let orchard_fvk = db.get_orchard(account)?.map(|o| hex::encode(&o.fvk)).unwrap_or_default();
+        (fvk, taddr, orchard_fvk)
     };
     let change_address = get_unified_address(coin, account, 7)?;
     let context = TxBuilderContext::from_height(coin, checkpoint_height)?;
@@ -79,6 +80,7 @@ pub async fn build_tx_plan_with_utxos(
         network,
         &fvk,
         &taddr,
+        &orchard_fvk,
         checkpoint_height,
         expiry_height,
         &context.orchard_anchor,

@@ -1,7 +1,8 @@
 use super::transport::*;
 use anyhow::Result;
 
-async fn unit_tests() -> Result<()> {
+#[allow(dead_code)]
+pub async fn unit_tests() -> Result<()> {
     let hash = ledger_pedersen_hash(
         &hex::decode("B315693B486D4D3CD8E4256E8C37CA4E8EC367E4D95D5C314625DC7B44B57EA2CA18FDCFF5871906F4238FB315693B486D4D3CD8E4256E8C37CA4E8EC367E4D95D5C314625DC7B44B57EA2")?
     ).await?;

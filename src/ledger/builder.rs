@@ -1,7 +1,3 @@
-use std::{
-    io::Read, vec,
-};
-use std::io::Write;
 use blake2b_simd::Params;
 use byteorder::WriteBytesExt;
 use byteorder::LE;
@@ -9,26 +5,30 @@ use ff::{PrimeField, Field};
 use group::GroupEncoding;
 use hex_literal::hex;
 use jubjub::{Fr, Fq};
+
+
+use orchard::keys::Scope;
+
 use rand::{rngs::OsRng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use ripemd::{Digest, Ripemd160};
-use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
+use secp256k1::PublicKey;
 use sha2::Sha256;
 use tonic::{Request, transport::Channel};
-use zcash_client_backend::address::RecipientAddress;
-use zcash_client_backend::encoding::decode_transparent_address;
+use zcash_client_backend::encoding::{decode_transparent_address, encode_extended_full_viewing_key, encode_transparent_address};
+use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::legacy::{TransparentAddress, Script};
-use zcash_primitives::transaction::components::transparent::builder::Unauthorized;
 use zcash_primitives::transaction::components::{transparent, TxIn, OutPoint, TxOut};
-use zcash_primitives::transaction::txid::TxIdDigester;
+use zcash_primitives::zip32::ExtendedFullViewingKey;
+use crate::taddr::derive_from_pubkey;
 use crate::{Destination, Source, TransactionPlan, RawTransaction, CompactTxStreamerClient};
 use crate::ledger::transport::*;
 use anyhow::{anyhow, Result};
 
 use zcash_primitives::{
     consensus::{BlockHeight, BranchId, MainNetwork},
-    merkle_tree::{Hashable, IncrementalWitness},
+    merkle_tree::IncrementalWitness,
     sapling::{
         note_encryption::sapling_note_encryption, value::{NoteValue, ValueCommitment, ValueSum}, Diversifier, Node, Note,
         PaymentAddress, Rseed, Nullifier, prover::TxProver, redjubjub::Signature,
@@ -53,14 +53,40 @@ struct SpendDescriptionUnAuthorized {
     zkproof: [u8; GROTH_PROOF_SIZE],
 }
 
-pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, tx_plan: &TransactionPlan, prover: &LocalTxProver) -> Result<String> {
+#[allow(dead_code)]
+pub async fn show_public_keys() -> Result<()> {
+    let network = MainNetwork;
+    
+    ledger_init().await?;
+    let pub_key = ledger_get_pubkey().await?;
+    let pub_key = PublicKey::from_slice(&pub_key)?;
+    let pub_key = pub_key.serialize();
+    let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
+    let address = TransparentAddress::PublicKey(pub_key.into());
+    let address = encode_transparent_address(
+        &network.b58_pubkey_address_prefix(),
+        &network.b58_script_address_prefix(),
+        &address,
+    );
+    println!("address {}", address);
+    let dfvk = ledger_get_dfvk().await?;
+    let efvk = ExtendedFullViewingKey::from_diversifiable_full_viewing_key(&dfvk);
+    let efvk = encode_extended_full_viewing_key(MainNetwork.hrp_sapling_extended_full_viewing_key(), &efvk);
+    println!("efvk {}", efvk);
+    Ok(())
+}
+
+pub async fn build_broadcast_tx(network: &Network, client: &mut CompactTxStreamerClient<Channel>, tx_plan: &TransactionPlan, prover: &LocalTxProver) -> Result<String> {
     ledger_init().await?;
     let pubkey = ledger_get_pubkey().await?;
+    let ledger_taddr = derive_from_pubkey(network, &pubkey)?;
 
-    let network = MainNetwork; // TODO: Pass network as param
-    let secp = Secp256k1::<All>::new();
+    if ledger_taddr != tx_plan.taddr {
+        anyhow::bail!("This ledger wallet has a different address");
+    }
 
     let taddr = &tx_plan.taddr;
+
     let taddr = decode_transparent_address(
         &network.b58_pubkey_address_prefix(),
         &network.b58_script_address_prefix(),
@@ -99,7 +125,9 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
     let fvk = dfvk.fvk;
     let nf_key = proofgen_key.to_viewing_key().nk;
 
-    println!("NSK {}", hex::encode(proofgen_key.nsk.to_bytes()));
+    let o_fvk: [u8; 96] = ledger_get_o_fvk().await?.try_into().unwrap();
+    let o_fvk = orchard::keys::FullViewingKey::from_bytes(&o_fvk).ok_or(anyhow!("Invalid Orchard FVK"))?;
+
     assert_eq!(PROOF_GENERATION_KEY_GENERATOR * proofgen_key.nsk, fvk.vk.nk.0);
 
     // Derive rseed PRNG
@@ -118,7 +146,6 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
         .to_state();
     h.update(&master_seed);
     let alpha = h.finalize();
-    println!("ALPHA SEED {}", hex::encode(&alpha.as_bytes()));
     let mut alpha_rng = ChaChaRng::from_seed(alpha.as_bytes().try_into().unwrap());
 
     let mut prevouts_hasher = Params::new()
@@ -197,22 +224,22 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
 
                 shielded_spends.push(SpendDescriptionUnAuthorized { cv, anchor, nullifier, rk, zkproof });
             }
-            Source::Orchard { .. } => { unimplemented!() },
+            Source::Orchard { .. } => {}
         }
     }
-    ledger_set_stage(1).await?;
+    ledger_set_stage(2).await?;
 
     let prevouts_digest = prevouts_hasher.finalize();
-    println!("PREVOUTS {}", hex::encode(prevouts_digest));
+    log::info!("PREVOUTS {}", hex::encode(prevouts_digest));
     let pubscripts_digest = trscripts_hasher.finalize();
-    println!("PUBSCRIPTS {}", hex::encode(pubscripts_digest));
+    log::info!("PUBSCRIPTS {}", hex::encode(pubscripts_digest));
     let sequences_digest = sequences_hasher.finalize();
-    println!("SEQUENCES {}", hex::encode(sequences_digest));
+    log::info!("SEQUENCES {}", hex::encode(sequences_digest));
 
     let spends_compact_digest = spends_compact_hasher.finalize();
-    println!("C SPENDS {}", hex::encode(spends_compact_digest));
+    log::info!("C SPENDS {}", hex::encode(spends_compact_digest));
     let spends_non_compact_digest = spends_non_compact_hasher.finalize();
-    println!("NC SPENDS {}", hex::encode(spends_non_compact_digest));
+    log::info!("NC SPENDS {}", hex::encode(spends_non_compact_digest));
 
     let mut spends_hasher = Params::new()
         .hash_length(32)
@@ -223,7 +250,7 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
         spends_hasher.update(spends_non_compact_digest.as_bytes());
     }
     let spends_digest = spends_hasher.finalize();
-    println!("SPENDS {}", hex::encode(spends_digest));
+    log::info!("SPENDS {}", hex::encode(spends_digest));
 
     let mut output_memos_hasher = Params::new()
         .hash_length(32)
@@ -250,7 +277,7 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
             });
         }
     }
-    ledger_set_stage(2).await?;
+    ledger_set_stage(3).await?;
     let has_transparent = !vin.is_empty() || !vout.is_empty();
 
     for output in tx_plan.outputs.iter() {
@@ -266,7 +293,7 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
             let note = Note::from_parts(recipient, value, rseed);
             let rcm = note.rcm();
             let cmu = note.cmu();
-            println!("cmu {}", hex::encode(cmu.to_bytes()));
+            log::info!("cmu {}", hex::encode(cmu.to_bytes()));
 
             let encryptor =
                 sapling_note_encryption::<_, MainNetwork>(Some(ovk.clone()), note, recipient, output.memo.clone(), &mut OsRng);
@@ -298,18 +325,125 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
             shielded_outputs.push(OutputDescription { cv, cmu, ephemeral_key, enc_ciphertext, out_ciphertext, zkproof });
         }
     }
-    ledger_set_stage(3).await?;
+    ledger_set_stage(4).await?;
 
     let memos_digest = output_memos_hasher.finalize();
-    println!("MEMOS {}", hex::encode(memos_digest));
+    log::info!("MEMOS {}", hex::encode(memos_digest));
     let outputs_nc_digest = output_non_compact_hasher.finalize();
-    println!("NC OUTPUTS {}", hex::encode(outputs_nc_digest));
+    log::info!("NC OUTPUTS {}", hex::encode(outputs_nc_digest));
 
     ledger_set_transparent_merkle_proof(prevouts_digest.as_bytes(), 
         pubscripts_digest.as_bytes(), sequences_digest.as_bytes()).await?;
     ledger_set_sapling_merkle_proof(spends_digest.as_bytes(), memos_digest.as_bytes(), outputs_nc_digest.as_bytes()).await?;
 
     ledger_set_net_sapling(-tx_plan.net_chg[0]).await?;
+
+    ledger_set_stage(5).await?;
+
+
+    let orchard_spends: Vec<_> = tx_plan.spends.iter().filter(|&s| 
+        if let Source::Orchard { .. } = s.source { true } else { false }
+    ).cloned().collect();
+    let orchard_outputs: Vec<_> = tx_plan.outputs.iter().filter(|&o| 
+        if let Destination::Orchard(_) = o.destination { true } else { false }
+    ).cloned().collect();
+
+    let num_orchard_spends = orchard_spends.len();
+    let num_orchard_outputs = orchard_outputs.len();
+    let num_actions = num_orchard_spends.max(num_orchard_outputs);
+
+    let orchard_address = o_fvk.address_at(0u64, Scope::External);
+    let mut empty_memo = [0u8; 512];
+    empty_memo[0] = 0xF6;
+
+    // let mut actions = vec![];
+    for i in 0..num_actions {
+        let rcv = orchard::value::ValueCommitTrapdoor::random(OsRng);
+
+        let (_sk, dummy_fvk, dummy_note) = orchard::Note::dummy(&mut OsRng, None);
+        let _dummy_recipient = dummy_fvk.address_at(0u64, Scope::External);
+
+        let alpha = pasta_curves::pallas::Scalar::random(&mut alpha_rng);
+
+        let (fvk, spend_note) = if i < num_orchard_spends {
+            let sp = &tx_plan.spends[i];
+            let note = match &sp.source {
+                Source::Orchard {  rseed, rho,  .. } => {
+                    let rho = orchard::note::Nullifier::from_bytes(rho).unwrap();
+                    let note = orchard::Note::from_parts(
+                        orchard_address.clone(), 
+                        orchard::value::NoteValue::from_raw(sp.amount), 
+                        rho,
+                        orchard::note::RandomSeed::from_bytes(rseed.clone(), &rho).unwrap()).unwrap();
+                    note
+                }
+                _ => unreachable!()
+            };
+            (o_fvk.clone(), note)
+        }
+        else {
+            (dummy_fvk, dummy_note)
+        };
+        let nf = spend_note.nullifier(&fvk);
+
+        let mut rseed = [0; 32];
+        rseed_rng.fill_bytes(&mut rseed);
+        let (output_note, memo) = if i < num_orchard_outputs {
+            let output = &orchard_outputs[i];
+            let address = match output.destination {
+                Destination::Orchard(address) => address,
+                _ => unreachable!()
+            };
+            let rseed = orchard::note::RandomSeed::from_bytes(rseed, &nf).unwrap();
+            let note = orchard::Note::from_parts(
+                orchard::Address::from_raw_address_bytes(&address).unwrap(),
+                orchard::value::NoteValue::from_raw(output.amount),
+                nf.clone(),
+                rseed).unwrap();
+            let memo = output.memo.as_array().clone();
+            (note, memo)
+        }
+        else {
+            (dummy_note.clone(), empty_memo)
+        };
+
+        let _rk = fvk.ak.randomize(&alpha);
+        let cm = output_note.commitment();
+        let cmx = cm.into();
+
+        let encryptor = orchard::note_encryption::OrchardNoteEncryption::new(
+            Some(o_fvk.to_ovk(Scope::External)),
+            output_note,
+            output_note.recipient(),
+            memo.clone()
+        );
+        let v_net = orchard::value::ValueSum::default();
+        let cv_net = orchard::value::ValueCommitment::derive(v_net, rcv.clone());
+        let _encrypted_note = orchard::note::TransmittedNoteCiphertext {
+            epk_bytes: encryptor.epk().to_bytes().0,
+            enc_ciphertext: encryptor.encrypt_note_plaintext(),
+            out_ciphertext: encryptor.encrypt_outgoing_plaintext(&cv_net, &cmx, &mut OsRng),
+        };
+
+        // compact outputs ZTxIdOrcActCHash
+        // nf
+        // cmx
+        // epk_bytes
+        // enc_ciphertext[..52]
+
+        // memo ZTxIdOrcActMHash
+        // enc_ciphertext[52..564]
+
+        // non compact ZTxIdOrcActNHash
+        // cv_net
+        // rk
+        // enc_ciphertext[564..]
+        // out_ciphertext
+    }
+
+
+
+
 
     let mut vins = vec![];
     for tin in vin.iter() {
@@ -325,7 +459,7 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
         txin_hasher.update(&tin.coin.script_pubkey.0);
         txin_hasher.update(&0xFFFFFFFFu32.to_le_bytes());
         let txin_hash = txin_hasher.finalize();
-        println!("TXIN {}", hex::encode(txin_hash));
+        log::info!("TXIN {}", hex::encode(txin_hash));
 
         let signature = ledger_sign_transparent(txin_hash.as_bytes()).await?;
         let signature = secp256k1::ecdsa::Signature::from_der(&signature)?;
@@ -340,14 +474,12 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
             script_sig,
             sequence: 0xFFFFFFFFu32,
         };
-        println!("TXIN {:?}", txin);
         vins.push(txin);
     }
 
     let mut signatures = vec![];
     for _sp in shielded_spends.iter() {
         let signature = ledger_sign_sapling().await?;
-        println!("SIGNATURE {}", hex::encode(&signature));
         let signature = Signature::read(&*signature)?;
         // Signature verification
         // let rk = sp.rk();
@@ -359,37 +491,6 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
         // assert!(verified);
         signatures.push(signature);
     }
-
-    // let sk = SecretKey::from_slice(&hex::decode("a2a6cef015bbce367e916d83152094d6492c422beb037edcbbd50593aa02b183").unwrap()).unwrap();
-    // let mut transparent_builder = transparent::builder::TransparentBuilder::empty();
-    // for vin in vin.iter() {
-    //     transparent_builder.add_input(sk.clone(), vin.utxo.clone(), vin.coin.clone()).unwrap();
-    // }
-    // for vout in vout.iter() {
-    //     transparent_builder.add_output(&vout.recipient_address().unwrap(), vout.value).unwrap();
-    // }
-    // let transparent_bundle = transparent_builder.build();
-    // let transparent_bundle = {
-    //     let consensus_branch_id =
-    //         BranchId::for_height(&network, BlockHeight::from_u32(tx_plan.anchor_height));
-    //     let version = TxVersion::suggested_for_branch(consensus_branch_id);
-    //     let unauthed_tx: TransactionData<zcash_primitives::transaction::Unauthorized> =
-    //     TransactionData::from_parts(
-    //         version,
-    //         consensus_branch_id,
-    //         0,
-    //         BlockHeight::from_u32(tx_plan.expiry_height),
-    //         transparent_bundle.clone(),
-    //         None,
-    //         None,
-    //         None,
-    //     );
-
-    //     let txid_parts = unauthed_tx.digest(TxIdDigester);
-
-    //     transparent_bundle.unwrap().apply_signatures(&unauthed_tx, &txid_parts)
-    // };
-    // println!("VIN 2 {:?}", &transparent_bundle.vin[0]);
 
     let transparent_bundle = transparent::Bundle::<transparent::Authorized> { 
         vin: vins, 
@@ -405,11 +506,8 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
     let value: i64 = value_balance.try_into().unwrap();
     let value = Amount::from_i64(value).unwrap();
     let sighash = ledger_get_sighash().await?;
-    println!("TXID {}", hex::encode(&sighash));
+    log::info!("TXID {}", hex::encode(&sighash));
     let binding_sig = sapling_context.binding_sig(value, &sighash.try_into().unwrap()).unwrap();
-
-    println!("{} {}", has_transparent, has_sapling);
-    println!("{} {} {:?}", shielded_spends.len(), shielded_outputs.len(), value_balance);
 
     let sapling_bundle = Bundle::<_>::from_parts(
         shielded_spends, shielded_outputs, value, 
@@ -430,11 +528,13 @@ pub async fn build_broadcast_tx(client: &mut CompactTxStreamerClient<Channel>, t
     let mut raw_tx = vec![];
     tx.write_v5(&mut raw_tx)?;
 
+    ledger_end_tx().await?;
+
     let response = client.send_transaction(Request::new(RawTransaction { 
         data: raw_tx, 
         height: 0, 
     })).await?.into_inner();
-    println!("{}", response.error_message);
+    log::info!("{}", response.error_message);
 
     Ok(response.error_message)
 }

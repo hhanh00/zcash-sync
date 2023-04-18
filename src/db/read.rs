@@ -708,3 +708,10 @@ pub fn get_available_addrs(connection: &Connection, account: u32) -> anyhow::Res
         | if has_orchard { 4 } else { 0 };
     Ok(res)
 }
+
+pub fn get_account_by_address(connection: &Connection, address: &str) -> Result<Option<u32>> {
+    let id = connection.query_row("SELECT id_account FROM accounts WHERE address = ?1", [address], |row| {
+        row.get::<_, u32>(0)
+    }).optional()?;
+    Ok(id)
+}

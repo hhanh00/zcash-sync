@@ -2,7 +2,7 @@ use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER, self};
 use crate::db::data_generated::fb::{ProgressT, Recipients, SendTemplate, Servers};
 use crate::db::FullEncryptedBackup;
 use crate::note_selection::TransactionReport;
-use crate::{ChainError, TransactionPlan, Tx, build_broadcast_tx};
+use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use flatbuffers::FlatBufferBuilder;
@@ -1219,6 +1219,7 @@ pub unsafe extern "C" fn set_property(
     to_cresult(with_coin(coin, res))
 }
 
+#[cfg(feature = "ledger")]
 #[no_mangle]
 #[tokio::main]
 pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CResult<*mut c_char> {
@@ -1228,10 +1229,28 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
         let c = CoinConfig::get(coin);
         let mut client = c.connect_lwd().await?;
         let prover = coinconfig::get_prover();
-        let response = build_broadcast_tx(&mut client, &tx_plan, prover).await?;
+        let response = crate::ledger::build_broadcast_tx(c.chain.network(), &mut client, &tx_plan, prover).await?;
         Ok::<_, anyhow::Error>(response)
     };
     to_cresult_str(res.await)
+}
+
+#[cfg(feature = "ledger")]
+#[no_mangle]
+#[tokio::main]
+pub async unsafe extern "C" fn ledger_import_account(coin: u8, name: *mut c_char) -> CResult<u32> {
+    from_c_str!(name);
+    let account = crate::ledger::import_account(coin, &name).await;
+    to_cresult(account)
+}
+
+#[cfg(feature = "ledger")]
+#[no_mangle]
+pub unsafe extern "C" fn ledger_has_account(coin: u8, account: u32) -> CResult<bool> {
+    let res = |connection: &Connection| {
+        crate::ledger::is_external(connection, account)
+    };
+    to_cresult(with_coin(coin, res))
 }
 
 #[no_mangle]

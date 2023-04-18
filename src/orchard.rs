@@ -12,7 +12,7 @@ mod note;
 
 pub use hash::{OrchardHasher, ORCHARD_ROOTS};
 pub use key::{derive_orchard_keys, OrchardKeyBytes};
-pub use note::{DecryptedOrchardNote, OrchardDecrypter, OrchardViewKey};
+pub use note::{DecryptedOrchardNote, OrchardDecrypter, OrchardViewKey, decode_merkle_path};
 
 pub fn get_proving_key() -> &'static ProvingKey {
     if !PROVING_KEY.filled() {

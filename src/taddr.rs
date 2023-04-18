@@ -268,6 +268,19 @@ pub fn derive_from_secretkey(
     Ok((sk, address))
 }
 
+pub fn derive_from_pubkey(network: &Network, pub_key: &[u8]) -> anyhow::Result<String> {
+    let pub_key = PublicKey::from_slice(pub_key)?;
+    let pub_key = pub_key.serialize();
+    let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
+    let address = TransparentAddress::PublicKey(pub_key.into());
+    let address = encode_transparent_address(
+        &network.b58_pubkey_address_prefix(),
+        &network.b58_script_address_prefix(),
+        &address,
+    );
+    Ok(address)
+}
+
 pub async fn sweep_tkey(
     last_height: u32,
     sk: &str,

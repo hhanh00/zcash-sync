@@ -313,6 +313,12 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             [],
         )?;
 
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS hw_wallets(
+            account INTEGER PRIMARY KEY NOT NULL,
+            ledger BOOL NOT NULL)",
+            [],
+        )?;
     }
 
     if version != LATEST_VERSION {

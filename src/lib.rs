@@ -102,7 +102,7 @@ mod zip32;
 pub mod api;
 
 #[cfg(feature = "ledger")]
-mod ledger;
+pub mod ledger;
 
 pub use crate::chain::{connect_lightwalletd, get_best_server, ChainError};
 pub use crate::coinconfig::{
@@ -121,7 +121,8 @@ pub use note_selection::{
     build_tx, build_tx_plan, fetch_utxos, get_secret_keys, TransactionBuilderConfig,
     TransactionBuilderError, TransactionPlan, TxBuilderContext, MAX_ATTEMPTS,
 };
-pub use unified::{decode_unified_address, get_unified_address};
+pub use crate::orchard::decode_merkle_path as decode_orchard_merkle_path;
+pub use crate::unified::{decode_unified_address, get_unified_address};
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;
@@ -133,8 +134,5 @@ pub fn init_test() {
     init_coin(0, "./zec.db").unwrap();
     set_coin_lwd_url(0, "http://127.0.0.1:9067");
 }
-
-#[cfg(feature = "ledger")]
-pub use ledger::{build_broadcast_tx};
 
 pub use taddr::derive_from_secretkey;

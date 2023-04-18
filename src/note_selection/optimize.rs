@@ -290,6 +290,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
     network: &Network,
     fvk: &str,
     taddr: &str,
+    orchard_fvk: &str,
     anchor_height: u32,
     expiry_height: u32,
     orchard_anchor: &Option<Hash>,
@@ -323,6 +324,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
             let tx_plan = TransactionPlan {
                 fvk: fvk.to_string(),
                 taddr: taddr.to_string(),
+                orchard_fvk: orchard_fvk.to_string(),
                 anchor_height,
                 expiry_height,
                 orchard_anchor: orchard_anchor.unwrap_or(Hash::default()),

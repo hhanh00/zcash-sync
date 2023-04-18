@@ -42,6 +42,9 @@ impl std::fmt::Display for DecodedUA {
     }
 }
 
+/*
+ * It can also return a t-addr if there is no other selection
+ */
 pub fn get_unified_address(
     network: &Network,
     db: &DbAdapter,
@@ -59,8 +62,8 @@ pub fn get_unified_address(
     }
     if !tpe.sapling && !tpe.orchard {
         // UA cannot be t-only
-        tpe.sapling = true;
-        tpe.orchard = true;
+        let address = db.get_taddr(account)?.ok_or(anyhow!("No taddr"))?;
+        return Ok(address)
     }
 
     let address = match (tpe.transparent, tpe.sapling, tpe.orchard) {

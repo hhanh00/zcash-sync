@@ -1,7 +1,7 @@
 use crate::chain::Nf;
 use crate::db::ReceivedNote;
 use crate::sync::{
-    CompactOutputBytes, DecryptedNote, Node, OutputPosition, TrialDecrypter, ViewKey,
+    CompactOutputBytes, DecryptedNote, Node, OutputPosition, TrialDecrypter, ViewKey, Witness,
 };
 use crate::CompactTx;
 use orchard::keys::PreparedIncomingViewingKey;
@@ -109,4 +109,18 @@ impl<N: Parameters> TrialDecrypter<N, OrchardDomain, OrchardViewKey, DecryptedOr
     fn outputs(&self, vtx: &CompactTx) -> Vec<CompactOutputBytes> {
         vtx.actions.iter().map(|co| co.into()).collect()
     }
+}
+
+pub fn decode_merkle_path(id_note: u32, witness: &[u8]) -> anyhow::Result<orchard::tree::MerklePath> {
+    let witness = Witness::from_bytes(id_note, witness)?;
+    let auth_path: Vec<_> = witness
+        .auth_path(32, &super::ORCHARD_ROOTS, &super::OrchardHasher::new())
+        .iter()
+        .map(|n| orchard::tree::MerkleHashOrchard::from_bytes(n).unwrap())
+        .collect();
+    let merkle_path = orchard::tree::MerklePath::from_parts(
+        witness.position as u32,
+        auth_path.try_into().unwrap(),
+    );
+    Ok(merkle_path)
 }

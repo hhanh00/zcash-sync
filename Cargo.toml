@@ -32,6 +32,7 @@ name = "warp_api_ffi"
 crate-type = ["rlib"]
 
 [dependencies]
+nonempty = "0.7"
 env_logger = "0.9.0"
 anyhow = "1.0.40"
 thiserror = "1.0.25"
@@ -75,6 +76,8 @@ chrono = "0.4.19"
 lazycell = "1.3.0"
 reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-features = false }
 hex-literal = "0.4"
+pasta_curves = "0.5"
+f4jumble = { path = "../../librustzcash/components/f4jumble" }
 
 # Halo
 orchard = "0.3.0"
@@ -108,7 +111,7 @@ objc = { version = "0.2", features = [ "objc_exception" ], optional = true }
 block = { version = "0.1.6", optional = true }
 
 [features]
-ledger = ["ledger-apdu", "ledger-transport-hid"]
+ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv"]
 dart_ffi = ["allo-isolate", "once_cell", "android_logger"]
 rpc = ["rocket", "dotenv"]
 nodejs = ["node-bindgen"]
@@ -118,38 +121,38 @@ sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies.zcash_params]
 #git = "https://github.com/hhanh00/zcash-params.git"
-#rev = "154f3544781500c27f58923ccc6c7e779eecf9df"
+#rev = "2e118feceeaa31ef68fb83d1fc94a1a46db4569c"
 path = "../zcash-params"
 
 [dependencies.zcash_client_backend]
 #git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
+#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
 path = "../../librustzcash/zcash_client_backend"
 
 [dependencies.zcash_primitives]
 #git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
+#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
 path = "../../librustzcash/zcash_primitives"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 #git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
+#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
 path = "../../librustzcash/zcash_proofs"
 
 [dependencies.zcash_address]
 #git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
+#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
 path = "../../librustzcash/components/zcash_address"
 
 [dependencies.zcash_encoding]
 #git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
+#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
 path = "../../librustzcash/components/zcash_encoding"
 
 [dependencies.zcash_note_encryption]
 #git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "f39dd6c2af20662fd1aaa9e00172efebd3435ff4"
+#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
 path = "../../librustzcash/components/zcash_note_encryption"
 
 [build-dependencies]
@@ -161,5 +164,4 @@ criterion = "0.3.4"
 
 #These patch overrides must be included in your workspace root Cargo.toml
 #[patch.crates-io]
-#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "ad4a1c61fdaf04ac4fb884976ad175196e695264" }
-#jubjub = { git = "https://github.com/hhanh00/jubjub.git", rev = "4a3edf3d242f368b5aa418ec659d01f191127cf3" }
+#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646" }
