@@ -1,6 +1,8 @@
-use crate::coinconfig::{init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER, self};
+use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
 use crate::db::data_generated::fb::{ProgressT, Recipients, SendTemplate, Servers};
 use crate::db::FullEncryptedBackup;
+#[cfg(feature = "ledger2")]
+use crate::ledger2;
 use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
@@ -15,8 +17,6 @@ use std::path::Path;
 use std::sync::Mutex;
 use tokio::sync::Semaphore;
 use zcash_primitives::transaction::builder::Progress;
-#[cfg(feature="ledger2")]
-use crate::ledger2;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -399,7 +399,7 @@ pub async unsafe extern "C" fn get_latest_height() -> CResult<u32> {
 #[cfg(feature = "ledger2")]
 #[no_mangle]
 pub unsafe extern "C" fn ledger_build_keys() -> CResult<u8> {
-    use crate::ledger2::{LedgerClient, build_keys};
+    use crate::ledger2::{build_keys, LedgerClient};
 
     let res = || {
         let client = ledger2::LedgerClient::new()?;
@@ -409,7 +409,7 @@ pub unsafe extern "C" fn ledger_build_keys() -> CResult<u8> {
     to_cresult(res())
 }
 
-#[cfg(feature="ledger2")]
+#[cfg(feature = "ledger2")]
 #[no_mangle]
 pub unsafe extern "C" fn ledger_get_fvk(coin: u8) -> CResult<*mut c_char> {
     let res = || {
@@ -1229,7 +1229,9 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
         let c = CoinConfig::get(coin);
         let mut client = c.connect_lwd().await?;
         let prover = coinconfig::get_prover();
-        let response = crate::ledger::build_broadcast_tx(c.chain.network(), &mut client, &tx_plan, prover).await?;
+        let response =
+            crate::ledger::build_broadcast_tx(c.chain.network(), &mut client, &tx_plan, prover)
+                .await?;
         Ok::<_, anyhow::Error>(response)
     };
     to_cresult_str(res.await)
@@ -1247,9 +1249,7 @@ pub async unsafe extern "C" fn ledger_import_account(coin: u8, name: *mut c_char
 #[cfg(feature = "ledger")]
 #[no_mangle]
 pub unsafe extern "C" fn ledger_has_account(coin: u8, account: u32) -> CResult<bool> {
-    let res = |connection: &Connection| {
-        crate::ledger::is_external(connection, account)
-    };
+    let res = |connection: &Connection| crate::ledger::is_external(connection, account);
     to_cresult(with_coin(coin, res))
 }
 

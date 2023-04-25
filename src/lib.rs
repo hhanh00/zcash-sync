@@ -116,13 +116,13 @@ pub use crate::lw_rpc::*;
 pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
 
-pub use note_selection::{
-    Source, Destination,
-    build_tx, build_tx_plan, fetch_utxos, get_secret_keys, TransactionBuilderConfig,
-    TransactionBuilderError, TransactionPlan, TxBuilderContext, MAX_ATTEMPTS,
-};
 pub use crate::orchard::decode_merkle_path as decode_orchard_merkle_path;
 pub use crate::unified::{decode_unified_address, get_unified_address};
+pub use note_selection::{
+    build_tx, build_tx_plan, fetch_utxos, get_secret_keys, Destination, Source,
+    TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
+    MAX_ATTEMPTS,
+};
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;

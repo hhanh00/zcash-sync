@@ -1,29 +1,47 @@
+use blake2b_simd::Params;
+use byteorder::{WriteBytesExt, LE};
+use group::{Group, GroupEncoding};
 use std::{
     fs::File,
     io::{Read, Write},
     path::Path,
 };
-use blake2b_simd::Params;
-use byteorder::{WriteBytesExt, LE};
-use group::{Group, GroupEncoding};
 
-use halo2_proofs::{pasta::pallas::{self}};
-use orchard::{keys::{Scope, SpendValidatingKey}, note::{RandomSeed, Nullifier, ExtractedNoteCommitment}, bundle::{Flags, Authorized}, tree::MerklePath, value::{ValueCommitTrapdoor, ValueCommitment, ValueSum}, circuit::{Circuit, ProvingKey}, primitives::redpallas::{Signature, SpendAuth}, Action, builder::{SpendInfo}, Proof};
-use rand::{SeedableRng, RngCore};
+use halo2_proofs::pasta::pallas::{self};
+use orchard::{
+    circuit::{Circuit, ProvingKey},
+    keys::{Scope, SpendValidatingKey},
+    note::{ExtractedNoteCommitment, Nullifier, RandomSeed},
+    primitives::redpallas::{Signature, SpendAuth},
+    tree::MerklePath,
+    value::ValueCommitTrapdoor,
+};
+use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use ripemd::Digest;
 
-use warp_api_ffi::{TransactionPlan, connect_lightwalletd, ledger::{build_broadcast_tx, ledger_init, ledger_set_stage, ledger_init_tx, ledger_add_o_action, ledger_set_orchard_merkle_proof, ledger_confirm_fee, ledger_set_net_orchard}, decode_orchard_merkle_path};
 use anyhow::Result;
+use warp_api_ffi::{
+    connect_lightwalletd,
+    ledger::{
+        build_broadcast_tx, ledger_add_o_action, ledger_confirm_fee, ledger_init, ledger_init_tx,
+        ledger_set_net_orchard, ledger_set_orchard_merkle_proof, ledger_set_stage,
+    },
+    TransactionPlan,
+};
 
-use zcash_primitives::{consensus::{Network::MainNetwork, BlockHeight, BranchId}, transaction::{TransactionData, TxVersion, txid::TxIdDigester, sighash_v5, sighash::SignableInput, components::Amount}};
+use zcash_primitives::{
+    consensus::{BlockHeight, BranchId, Network::MainNetwork},
+    transaction::{
+        sighash::SignableInput, sighash_v5, txid::TxIdDigester, TransactionData, TxVersion,
+    },
+};
 use zcash_proofs::prover::LocalTxProver;
 
 use group::ff::Field;
 use nonempty::NonEmpty;
 
 use hex_literal::hex;
-use warp_api_ffi::{Source, Destination};
 
 mod orchard_bundle;
 
@@ -60,7 +78,8 @@ async fn main3() -> Result<()> {
     dotenv::dotenv()?;
     let spending_key = hex::decode(dotenv::var("SPENDING_KEY").unwrap()).unwrap();
 
-    let x = hex::decode("063b1e0d8b7f64bb2a9465903b46c9019b552951afa5d735817d449d1334c510").unwrap();
+    let x =
+        hex::decode("063b1e0d8b7f64bb2a9465903b46c9019b552951afa5d735817d449d1334c510").unwrap();
 
     let expiry_height = 2_500_000;
     let mut h = Params::new()
@@ -70,7 +89,7 @@ async fn main3() -> Result<()> {
     h.update(&hex!("050000800a27a726b4d0d6c200000000"));
     h.write_u32::<LE>(expiry_height)?;
     let header_digest = h.finalize();
-    
+
     // let Q: Point = Point::hash_to_curve(Q_PERSONALIZATION)(MERKLE_CRH_PERSONALIZATION.as_bytes());
     // let p = <Ep as GroupEncoding>::from_bytes(&ORCHARD_SPENDAUTHSIG_BASEPOINT_BYTES).unwrap();
     // println!("p {:?}", p);
@@ -120,8 +139,13 @@ async fn main3() -> Result<()> {
     buf.write_all(&address.to_raw_address_bytes())?;
     buf.write_u64::<LE>(400_000)?;
 
-    let note = orchard::Note::from_parts(address, 
-        orchard::value::NoteValue::from_raw(400_000), rho, rseed).unwrap();
+    let note = orchard::Note::from_parts(
+        address,
+        orchard::value::NoteValue::from_raw(400_000),
+        rho,
+        rseed,
+    )
+    .unwrap();
     println!("note {:?}", note);
     let cmx: ExtractedNoteCommitment = note.commitment().into();
     println!("cmx {:?}", cmx);
@@ -134,7 +158,8 @@ async fn main3() -> Result<()> {
         None,
         note.clone(),
         address.clone(),
-        memo);
+        memo,
+    );
 
     let epk = encryptor.epk().to_bytes().0;
     let enc = encryptor.encrypt_note_plaintext();
@@ -150,12 +175,21 @@ async fn main3() -> Result<()> {
 
     let _authorization = zcash_primitives::transaction::components::orchard::Unauthorized {};
 
-    let action = 
-        orchard::Action::from_parts(rho.clone(), rk, cmx, encrypted_note, cv_net.clone(), 
-        Signature::<SpendAuth>::from([0; 64]));
+    let action = orchard::Action::from_parts(
+        rho.clone(),
+        rk,
+        cmx,
+        encrypted_note,
+        cv_net.clone(),
+        Signature::<SpendAuth>::from([0; 64]),
+    );
     let _actions = NonEmpty::new(action);
-    let _circuit = Circuit::from_action_context_unchecked(orchard::builder::SpendInfo::new(
-        fvk.clone(), note.clone(), merkle_path).unwrap(), note, alpha, rcv.clone());
+    let _circuit = Circuit::from_action_context_unchecked(
+        orchard::builder::SpendInfo::new(fvk.clone(), note.clone(), merkle_path).unwrap(),
+        note,
+        alpha,
+        rcv.clone(),
+    );
 
     let mut orchard_memos_hasher = Params::new()
         .hash_length(32)
@@ -177,7 +211,7 @@ async fn main3() -> Result<()> {
     // let mut orchard_builder = orchard::builder::Builder::new(Flags::from_byte(3).unwrap(),
     //     anchor);
     // orchard_builder.add_spend(fvk.clone(), note, merkle_path).unwrap();
-    // orchard_builder.add_recipient(None, address.clone(), 
+    // orchard_builder.add_recipient(None, address.clone(),
     //     orchard::value::NoteValue::from_raw(399_000), None).unwrap();
     // let bundle: orchard::Bundle<orchard::builder::InProgress<orchard::builder::Unproven, orchard::builder::Unauthorized>, _> = orchard_builder.build(&mut prng).unwrap();
 
@@ -185,29 +219,28 @@ async fn main3() -> Result<()> {
 
     let _pk = ProvingKey::build();
     // let instance = action.to_instance(Flags::from_parts(true, true), anchor.clone());
-    // let bundle = orchard::Bundle::from_parts(actions, 
-    //     Flags::from_byte(3).unwrap(), 
-    //     Amount::from_i64(-1000).unwrap(), 
-    //     anchor, 
-    //     InProgress::<Unproven, OrchardUnauthorized> { 
-    //         proof: Unproven { circuits: vec![circuit] }, 
-    //         sigs: OrchardUnauthorized { bsk } 
+    // let bundle = orchard::Bundle::from_parts(actions,
+    //     Flags::from_byte(3).unwrap(),
+    //     Amount::from_i64(-1000).unwrap(),
+    //     anchor,
+    //     InProgress::<Unproven, OrchardUnauthorized> {
+    //         proof: Unproven { circuits: vec![circuit] },
+    //         sigs: OrchardUnauthorized { bsk }
     //     }
     // );
     // let proof = bundle.create_proof(&pk, &mut prng).unwrap();
     // let proof = proof.authorization();
     // let proof = &proof.proof;
 
-    // let bundle = orchard::Bundle::from_parts(actions, 
-    //     Flags::from_byte(3).unwrap(), 
-    //     Amount::from_i64(-1000).unwrap(), 
-    //     anchor, 
+    // let bundle = orchard::Bundle::from_parts(actions,
+    //     Flags::from_byte(3).unwrap(),
+    //     Amount::from_i64(-1000).unwrap(),
+    //     anchor,
     //     orchard::bundle::Authorized {
     //         proof: todo!(),
     //         binding_signature: todo!(),
     //     }
     // );
-
 
     let tx_data: TransactionData<zcash_primitives::transaction::Unauthorized> = TransactionData {
         version: TxVersion::Zip225,
@@ -231,8 +264,13 @@ async fn main3() -> Result<()> {
 
     ledger_init().await.unwrap();
     ledger_init_tx(header_digest.as_bytes()).await.unwrap();
-    ledger_set_orchard_merkle_proof(&anchor.to_bytes(), 
-    orchard_memos_hash.as_bytes(), orchard_nc_hash.as_bytes()).await.unwrap();
+    ledger_set_orchard_merkle_proof(
+        &anchor.to_bytes(),
+        orchard_memos_hash.as_bytes(),
+        orchard_nc_hash.as_bytes(),
+    )
+    .await
+    .unwrap();
 
     // no t-in
     ledger_set_stage(2).await.unwrap();
@@ -240,14 +278,21 @@ async fn main3() -> Result<()> {
     ledger_set_stage(3).await.unwrap();
     // no s-out
     ledger_set_stage(4).await.unwrap();
-    ledger_add_o_action(&x, 400_000, &epk, 
-        &address.to_raw_address_bytes(), &enc[0..52]).await.unwrap();
+    ledger_add_o_action(
+        &x,
+        400_000,
+        &epk,
+        &address.to_raw_address_bytes(),
+        &enc[0..52],
+    )
+    .await
+    .unwrap();
     ledger_set_stage(5).await.unwrap();
 
     ledger_set_net_orchard(-1000).await.unwrap();
 
     ledger_confirm_fee().await.unwrap();
-    
+
     // println!("address {}", hex::encode(address.to_raw_address_bytes()));
 
     // let esk = ExtendedSpendingKey::master(&[1; 32]);
@@ -255,15 +300,15 @@ async fn main3() -> Result<()> {
     // let ta = TransparentAddress::PublicKey([1; 20]);
 
     // let ua = UnifiedAddress::from_receivers(
-    //     Some(address), 
-    //     Some(pa), 
+    //     Some(address),
+    //     Some(pa),
     //     Some(ta),
     // ).unwrap();
     // let ua = ua.encode(&MainNetwork);
     // println!("UA {}", ua);
 
     // let mut message = [1u8; 128];
-    // f4jumble::f4jumble_mut(&mut message[..]).unwrap();    
+    // f4jumble::f4jumble_mut(&mut message[..]).unwrap();
     // println!("f4 {}", hex::encode(message));
 
     // println!("{}", hex::encode(address.to_raw_address_bytes()));
@@ -277,7 +322,6 @@ async fn main3() -> Result<()> {
     // }
     // println!("a {:?}", a);
 
-
     // ledger_init().await?;
     // ledger_test_math().await?;
     // let fvk = ledger_get_o_fvk().await?;
@@ -285,4 +329,3 @@ async fn main3() -> Result<()> {
 
     Ok(())
 }
-

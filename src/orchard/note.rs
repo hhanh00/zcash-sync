@@ -111,7 +111,10 @@ impl<N: Parameters> TrialDecrypter<N, OrchardDomain, OrchardViewKey, DecryptedOr
     }
 }
 
-pub fn decode_merkle_path(id_note: u32, witness: &[u8]) -> anyhow::Result<orchard::tree::MerklePath> {
+pub fn decode_merkle_path(
+    id_note: u32,
+    witness: &[u8],
+) -> anyhow::Result<orchard::tree::MerklePath> {
     let witness = Witness::from_bytes(id_note, witness)?;
     let auth_path: Vec<_> = witness
         .auth_path(32, &super::ORCHARD_ROOTS, &super::OrchardHasher::new())

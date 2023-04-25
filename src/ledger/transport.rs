@@ -1,17 +1,17 @@
 use anyhow::{anyhow, Result};
+use byteorder::WriteBytesExt;
+use byteorder::LE;
+use group::GroupEncoding;
+use hex_literal::hex;
 use jubjub::Fr;
 use jubjub::SubgroupPoint;
-use group::GroupEncoding;
 use ledger_apdu::APDUCommand;
 use ledger_transport_hid::{hidapi::HidApi, TransportNativeHID};
 use reqwest::Client;
 use serde_json::Value;
-use byteorder::WriteBytesExt;
-use byteorder::LE;
+use std::io::Write;
 use zcash_primitives::sapling::ProofGenerationKey;
 use zcash_primitives::zip32::DiversifiableFullViewingKey;
-use std::io::Write;
-use hex_literal::hex;
 
 fn handle_error_code(code: u16) -> Result<()> {
     match code {
@@ -46,15 +46,17 @@ const TEST_SERVER_IP: Option<&'static str> = option_env!("LEDGER_IP");
 async fn apdu_http(data: &[u8]) -> Vec<u8> {
     let client = Client::new();
         .post(&format!("http://{}:5000/apdu", TEST_SERVER_IP.unwrap()))
-    .body(format!("{{\"data\": \"{}\"}}", hex::encode(data)))
-    .send()
-    .await?;
+        .body(format!("{{\"data\": \"{}\"}}", hex::encode(data)))
+        .send()
+        .await?;
     let response_body: Value = response.json().await?;
-    let data = response_body["data"].as_str().ok_or(anyhow!("No data field"))?;
+    let data = response_body["data"]
+        .as_str()
+        .ok_or(anyhow!("No data field"))?;
     let data = hex::decode(data)?;
-    let error_code = u16::from_be_bytes(data[data.len()-2..].try_into().unwrap());
+    let error_code = u16::from_be_bytes(data[data.len() - 2..].try_into().unwrap());
     handle_error_code(error_code)?;
-    Ok(data[..data.len()-2].to_vec())
+    Ok(data[..data.len() - 2].to_vec())
 }
 
 pub async fn ledger_init() -> Result<()> {
@@ -73,7 +75,8 @@ pub async fn ledger_get_dfvk() -> Result<DiversifiableFullViewingKey> {
     let mut dfvk = [0; 128];
     dfvk.copy_from_slice(&dfvk_vec);
 
-    let dfvk = DiversifiableFullViewingKey::from_bytes(&dfvk).ok_or(anyhow!("Invalid diversifiable fvk"))?;
+    let dfvk = DiversifiableFullViewingKey::from_bytes(&dfvk)
+        .ok_or(anyhow!("Invalid diversifiable fvk"))?;
     Ok(dfvk)
 }
 
@@ -108,7 +111,11 @@ pub async fn ledger_set_stage(stage: u8) -> Result<()> {
     Ok(())
 }
 
-pub async fn ledger_set_transparent_merkle_proof(prevouts_digest: &[u8], pubscripts_digest: &[u8], sequences_digest: &[u8]) -> Result<()> {
+pub async fn ledger_set_transparent_merkle_proof(
+    prevouts_digest: &[u8],
+    pubscripts_digest: &[u8],
+    sequences_digest: &[u8],
+) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E012000060"))?;
     bb.write_all(prevouts_digest)?;
@@ -118,7 +125,11 @@ pub async fn ledger_set_transparent_merkle_proof(prevouts_digest: &[u8], pubscri
     Ok(())
 }
 
-pub async fn ledger_set_sapling_merkle_proof(spends_digest: &[u8], memos_digest: &[u8], outputs_nc_digest: &[u8]) -> Result<()> {
+pub async fn ledger_set_sapling_merkle_proof(
+    spends_digest: &[u8],
+    memos_digest: &[u8],
+    outputs_nc_digest: &[u8],
+) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E013000060"))?;
     bb.write_all(spends_digest)?;
@@ -128,7 +139,11 @@ pub async fn ledger_set_sapling_merkle_proof(spends_digest: &[u8], memos_digest:
     Ok(())
 }
 
-pub async fn ledger_set_orchard_merkle_proof(anchor: &[u8], memos_digest: &[u8], outputs_nc_digest: &[u8]) -> Result<()> {
+pub async fn ledger_set_orchard_merkle_proof(
+    anchor: &[u8],
+    memos_digest: &[u8],
+    outputs_nc_digest: &[u8],
+) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E014000060"))?;
     bb.write_all(anchor)?;
@@ -155,7 +170,12 @@ pub async fn ledger_add_t_output(amount: u64, address: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub async fn ledger_add_s_output(amount: u64, epk: &[u8], address: &[u8], enc_compact: &[u8]) -> Result<()> {
+pub async fn ledger_add_s_output(
+    amount: u64,
+    epk: &[u8],
+    address: &[u8],
+    enc_compact: &[u8],
+) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E017010087"))?;
     bb.write_all(address)?;
@@ -166,7 +186,13 @@ pub async fn ledger_add_s_output(amount: u64, epk: &[u8], address: &[u8], enc_co
     Ok(())
 }
 
-pub async fn ledger_add_o_action(nf: &[u8], amount: u64, epk: &[u8], address: &[u8], enc_compact: &[u8]) -> Result<()> {
+pub async fn ledger_add_o_action(
+    nf: &[u8],
+    amount: u64,
+    epk: &[u8],
+    address: &[u8],
+    enc_compact: &[u8],
+) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E0180100A7"))?;
     bb.write_all(nf)?;

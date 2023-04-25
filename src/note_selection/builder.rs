@@ -99,7 +99,11 @@ pub fn build_tx(
     };
 
     let mut has_orchard = false;
-    let mut builder = Builder::new_with_rng(*network, BlockHeight::from_u32(plan.anchor_height), &mut rng);
+    let mut builder = Builder::new_with_rng(
+        *network,
+        BlockHeight::from_u32(plan.anchor_height),
+        &mut rng,
+    );
     let anchor: Anchor = orchard::tree::MerkleHashOrchard::from_bytes(&plan.orchard_anchor)
         .unwrap()
         .into();

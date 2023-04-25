@@ -179,9 +179,7 @@ pub fn decode_transaction(
                     let mut outgoing = false;
                     let mut temp_address = String::new();
                     let domain = OrchardDomain::for_action(action);
-                    if let Some((_note, pa, memo)) =
-                        try_note_decryption(&domain, &poivk, action)
-                    {
+                    if let Some((_note, pa, memo)) = try_note_decryption(&domain, &poivk, action) {
                         if let Ok(memo) = Memo::try_from(MemoBytes::from_bytes(&memo)?) {
                             if memo != Memo::Empty {
                                 tx_memo = memo;

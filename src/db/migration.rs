@@ -308,10 +308,7 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             [],
         )?;
         connection.execute("DROP TABLE taddrs", [])?;
-        connection.execute(
-            "ALTER TABLE new_taddrs RENAME TO taddrs",
-            [],
-        )?;
+        connection.execute("ALTER TABLE new_taddrs RENAME TO taddrs", [])?;
 
         connection.execute(
             "CREATE TABLE IF NOT EXISTS hw_wallets(
