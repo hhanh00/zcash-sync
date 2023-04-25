@@ -7,11 +7,9 @@ use group::GroupEncoding;
 use hex_literal::hex;
 use jubjub::{Fq, Fr};
 
-use orchard::keys::Scope;
-
-use crate::ledger::builder::transparent_bundle::{TransparentBuilder, TransparentInputUnAuthorized};
+use crate::ledger::builder::transparent_bundle::TransparentBuilder;
 use crate::ledger::transport::*;
-use crate::taddr::derive_from_pubkey;
+
 use crate::{CompactTxStreamerClient, Destination, RawTransaction, Source, TransactionPlan};
 use anyhow::{anyhow, Result};
 use rand::{rngs::OsRng, RngCore, SeedableRng};
@@ -21,12 +19,12 @@ use secp256k1::PublicKey;
 use sha2::Sha256;
 use tonic::{transport::Channel, Request};
 use zcash_client_backend::encoding::{
-    decode_transparent_address, encode_extended_full_viewing_key, encode_transparent_address,
+    encode_extended_full_viewing_key, encode_transparent_address,
 };
 use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Parameters;
-use zcash_primitives::legacy::{Script, TransparentAddress};
-use zcash_primitives::transaction::components::{transparent, OutPoint, TxIn, TxOut};
+use zcash_primitives::legacy::TransparentAddress;
+
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 use zcash_primitives::{
@@ -50,8 +48,8 @@ use zcash_primitives::{
 };
 use zcash_proofs::{prover::LocalTxProver, sapling::SaplingProvingContext};
 
-mod transparent_bundle;
 mod orchard_bundle;
+mod transparent_bundle;
 
 struct SpendDescriptionUnAuthorized {
     cv: ValueCommitment,
@@ -88,10 +86,7 @@ pub async fn show_public_keys() -> Result<()> {
 }
 
 pub fn create_hasher(perso: &[u8]) -> State {
-    let h = Params::new()
-        .hash_length(32)
-        .personal(perso)
-        .to_state();
+    let h = Params::new().hash_length(32).personal(perso).to_state();
     h
 }
 
@@ -109,8 +104,7 @@ pub async fn build_broadcast_tx(
         anyhow::bail!("This ledger wallet has a different address");
     }
 
-    let taddr = &tx_plan.taddr;
-
+    let _taddr = &tx_plan.taddr;
 
     // Compute header digest
     let mut h = create_hasher(b"ZTxIdHeadersHash");
@@ -137,7 +131,7 @@ pub async fn build_broadcast_tx(
     let nf_key = proofgen_key.to_viewing_key().nk;
 
     let o_fvk: [u8; 96] = ledger_get_o_fvk().await?.try_into().unwrap();
-    let o_fvk =
+    let _o_fvk =
         orchard::keys::FullViewingKey::from_bytes(&o_fvk).ok_or(anyhow!("Invalid Orchard FVK"))?;
 
     assert_eq!(
@@ -180,7 +174,9 @@ pub async fn build_broadcast_tx(
     for sp in tx_plan.spends.iter() {
         match sp.source {
             Source::Transparent { txid, index } => {
-                transparent_builder.add_input(txid, index, sp.amount).await?;
+                transparent_builder
+                    .add_input(txid, index, sp.amount)
+                    .await?;
             }
             Source::Sapling {
                 diversifier,
@@ -270,7 +266,9 @@ pub async fn build_broadcast_tx(
     let mut shielded_outputs = vec![];
     for output in tx_plan.outputs.iter() {
         if let Destination::Transparent(raw_address) = output.destination {
-            transparent_builder.add_output(raw_address, output.amount).await?;
+            transparent_builder
+                .add_output(raw_address, output.amount)
+                .await?;
         }
     }
     ledger_set_stage(3).await?;

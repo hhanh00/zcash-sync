@@ -1,53 +1,23 @@
-use blake2b_simd::Params;
 use blake2b_simd::State;
 use byteorder::WriteBytesExt;
 use byteorder::LE;
-use ff::{Field, PrimeField};
-use group::GroupEncoding;
-use hex_literal::hex;
-use jubjub::{Fq, Fr};
 
-use orchard::keys::Scope;
+use hex_literal::hex;
 
 use crate::ledger::transport::*;
 use crate::taddr::derive_from_pubkey;
-use crate::{CompactTxStreamerClient, Destination, RawTransaction, Source, TransactionPlan};
-use anyhow::{anyhow, Result};
-use rand::{rngs::OsRng, RngCore, SeedableRng};
-use rand_chacha::ChaChaRng;
-use ripemd::{Digest, Ripemd160};
-use secp256k1::PublicKey;
-use sha2::Sha256;
-use tonic::{transport::Channel, Request};
-use zcash_client_backend::encoding::{
-    decode_transparent_address, encode_extended_full_viewing_key, encode_transparent_address,
-};
+
+use anyhow::Result;
+
+use ripemd::Digest;
+
+use zcash_client_backend::encoding::decode_transparent_address;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::legacy::{Script, TransparentAddress};
 use zcash_primitives::transaction::components::{transparent, OutPoint, TxIn, TxOut};
-use zcash_primitives::zip32::ExtendedFullViewingKey;
 
-use zcash_primitives::{
-    consensus::{BlockHeight, BranchId, MainNetwork},
-    constants::PROOF_GENERATION_KEY_GENERATOR,
-    merkle_tree::IncrementalWitness,
-    sapling::{
-        note_encryption::sapling_note_encryption,
-        prover::TxProver,
-        redjubjub::Signature,
-        value::{NoteValue, ValueCommitment, ValueSum},
-        Diversifier, Node, Note, Nullifier, PaymentAddress, Rseed,
-    },
-    transaction::{
-        components::{
-            sapling::{Authorized as SapAuthorized, Bundle},
-            Amount, OutputDescription, SpendDescription, GROTH_PROOF_SIZE,
-        },
-        Authorized, TransactionData, TxVersion,
-    },
-};
-use zcash_proofs::{prover::LocalTxProver, sapling::SaplingProvingContext};
+use zcash_primitives::transaction::components::Amount;
 
 use super::create_hasher;
 
@@ -76,13 +46,15 @@ impl TransparentBuilder {
             &network.b58_pubkey_address_prefix(),
             &network.b58_script_address_prefix(),
             &taddr_str,
-        ).unwrap().unwrap();
+        )
+        .unwrap()
+        .unwrap();
         let pkh = match taddr {
             TransparentAddress::PublicKey(pkh) => pkh,
             _ => unreachable!(),
         };
         let tin_pubscript = taddr.script();
-        TransparentBuilder { 
+        TransparentBuilder {
             taddr: taddr_str,
             pubkey: pubkey.to_vec(),
             pkh: pkh.clone(),
@@ -91,7 +63,7 @@ impl TransparentBuilder {
             trscripts_hasher: create_hasher(b"ZTxTrScriptsHash"),
             sequences_hasher: create_hasher(b"ZTxIdSequencHash"),
             vin: vec![],
-            vins: vec![], 
+            vins: vec![],
             vout: vec![],
         }
     }
@@ -151,10 +123,10 @@ impl TransparentBuilder {
     }
 
     pub async fn sign(&mut self) -> Result<()> {
-        let mut vins: Vec<TxIn<transparent::Authorized>> = vec![];
+        let _vins: Vec<TxIn<transparent::Authorized>> = vec![];
         for tin in self.vin.iter() {
             let mut txin_hasher = create_hasher(b"Zcash___TxInHash");
-    
+
             txin_hasher.update(tin.utxo.hash());
             txin_hasher.update(&tin.utxo.n().to_le_bytes());
             txin_hasher.update(&tin.coin.value.to_i64_le_bytes());
@@ -163,15 +135,15 @@ impl TransparentBuilder {
             txin_hasher.update(&0xFFFFFFFFu32.to_le_bytes());
             let txin_hash = txin_hasher.finalize();
             log::info!("TXIN {}", hex::encode(txin_hash));
-    
+
             let signature = ledger_sign_transparent(txin_hash.as_bytes()).await?;
             let signature = secp256k1::ecdsa::Signature::from_der(&signature)?;
             let mut signature = signature.serialize_der().to_vec();
             signature.extend(&[0x01]); // add SIG_HASH_ALL
-    
+
             // witness is PUSH(signature) PUSH(pk)
             let script_sig = Script::default() << &*signature << &*self.pubkey;
-    
+
             let txin = TxIn::<transparent::Authorized> {
                 prevout: tin.utxo.clone(),
                 script_sig,
@@ -179,7 +151,7 @@ impl TransparentBuilder {
             };
             self.vins.push(txin);
         }
-    
+
         Ok(())
     }
 
@@ -191,8 +163,7 @@ impl TransparentBuilder {
                 authorization: transparent::Authorized,
             };
             Some(transparent_bundle)
-        }
-        else {
+        } else {
             None
         }
     }

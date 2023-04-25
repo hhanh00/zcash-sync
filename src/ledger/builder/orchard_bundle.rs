@@ -1,13 +1,18 @@
 use std::{fs::File, io::Read};
 
 use blake2b_simd::Params;
-use byteorder::{LE, WriteBytesExt};
+use byteorder::{WriteBytesExt, LE};
 use group::{Group, GroupEncoding};
 use orchard::{
-    builder::{SpendInfo, InProgress, Unproven, Unauthorized as OrchardUnauthorized, SigningMetadata, SigningParts},
-    bundle::{Authorized, Flags, Authorization},
+    builder::{
+        InProgress, SigningMetadata, SigningParts, SpendInfo, Unauthorized as OrchardUnauthorized,
+        Unproven,
+    },
+    bundle::{Authorization, Authorized, Flags},
     circuit::{Circuit, Instance, ProvingKey},
-    keys::{Diversifier, FullViewingKey, Scope, SpendValidatingKey, SpendingKey, SpendAuthorizingKey},
+    keys::{
+        Diversifier, FullViewingKey, Scope, SpendAuthorizingKey, SpendValidatingKey, SpendingKey,
+    },
     note::{ExtractedNoteCommitment, Nullifier, RandomSeed, TransmittedNoteCiphertext},
     note_encryption::OrchardNoteEncryption,
     primitives::redpallas::{Signature, SpendAuth},
@@ -19,16 +24,22 @@ use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use ripemd::Digest;
 
+use crate::{
+    connect_lightwalletd, decode_orchard_merkle_path, ledger::*, RawTransaction, TransactionPlan,
+};
 use anyhow::Result;
 use tonic::Request;
-use crate::{decode_orchard_merkle_path, TransactionPlan, RawTransaction, connect_lightwalletd, ledger::*};
 
-use zcash_primitives::{transaction::{components::Amount, TransactionData, TxVersion, Transaction, sighash_v5, sighash::SignableInput, 
-    txid::TxIdDigester, Unauthorized, Authorized as TxAuthorized}, 
-    consensus::{BlockHeight, BranchId}};
-use hex_literal::hex;
 use group::ff::Field;
+use hex_literal::hex;
 use nonempty::NonEmpty;
+use zcash_primitives::{
+    consensus::{BlockHeight, BranchId},
+    transaction::{
+        components::Amount, sighash::SignableInput, sighash_v5, txid::TxIdDigester,
+        Authorized as TxAuthorized, Transaction, TransactionData, TxVersion, Unauthorized,
+    },
+};
 
 use crate::{Destination, Source};
 
@@ -44,7 +55,7 @@ pub async fn build_orchard() -> Result<()> {
     let mut prng = ChaCha20Rng::from_seed([0; 32]);
     let mut rseed_rng = ChaCha20Rng::from_seed([1; 32]);
     let mut alpha_rng = ChaCha20Rng::from_seed([2; 32]);
-    let mut sig_rng = ChaCha20Rng::from_seed([3; 32]);
+    let _sig_rng = ChaCha20Rng::from_seed([3; 32]);
 
     let spending_key = hex::decode(dotenv::var("SPENDING_KEY").unwrap()).unwrap();
     let spk = SpendingKey::from_bytes(spending_key.try_into().unwrap()).unwrap();
@@ -117,7 +128,7 @@ pub async fn build_orchard() -> Result<()> {
         })
         .collect();
 
-    let zero_bsk = ValueCommitTrapdoor::zero().into_bsk();
+    let _zero_bsk = ValueCommitTrapdoor::zero().into_bsk();
 
     let mut orchard_memos_hasher = Params::new()
         .hash_length(32)
@@ -204,21 +215,28 @@ pub async fn build_orchard() -> Result<()> {
         orchard_nc_hasher.update(&enc[564..]);
         orchard_nc_hasher.update(&out);
 
-        println!("d/pkd {}", hex::encode(&output.recipient.to_raw_address_bytes()));
+        println!(
+            "d/pkd {}",
+            hex::encode(&output.recipient.to_raw_address_bytes())
+        );
         println!("rho {}", hex::encode(&rho.to_bytes()));
-        println!("amount {}", hex::encode(&output.amount.inner().to_le_bytes()));
+        println!(
+            "amount {}",
+            hex::encode(&output.amount.inner().to_le_bytes())
+        );
         println!("rseed {}", hex::encode(&rseed.as_bytes()));
         println!("cmx {}", hex::encode(&cmx.to_bytes()));
-    
+
         let action: Action<SigningMetadata> = Action::from_parts(
             rho.clone(),
             rk.clone(),
             cmx.clone(),
             encrypted_note,
             cv_net.clone(),
-            SigningMetadata { 
-                dummy_ask: None, 
-                parts: SigningParts { ak, alpha } },
+            SigningMetadata {
+                dummy_ask: None,
+                parts: SigningParts { ak, alpha },
+            },
         );
         actions.push(action);
 
@@ -238,13 +256,15 @@ pub async fn build_orchard() -> Result<()> {
     let flags = Flags::from_parts(true, true);
     let bsk = sum_rcv.into_bsk();
     let bundle: Bundle<_, Amount> = Bundle::from_parts(
-        actions, 
-        flags, 
-        amount, 
-        anchor, 
-        InProgress::<Unproven, OrchardUnauthorized> { 
-            proof: Unproven { circuits: vec![] }, 
-            sigs: OrchardUnauthorized { bsk: bsk.clone() } });
+        actions,
+        flags,
+        amount,
+        anchor,
+        InProgress::<Unproven, OrchardUnauthorized> {
+            proof: Unproven { circuits: vec![] },
+            sigs: OrchardUnauthorized { bsk: bsk.clone() },
+        },
+    );
 
     let tx_data: TransactionData<Unauthorized> = TransactionData {
         version: TxVersion::Zip225,
@@ -282,8 +302,7 @@ pub async fn build_orchard() -> Result<()> {
     for (a, o) in bundle.actions().iter().zip(padded_outputs.iter()) {
         let nf = a.nullifier().to_bytes();
         let epk = a.encrypted_note().epk_bytes;
-        let address = 
-        ledger_add_o_action(
+        let _address = ledger_add_o_action(
             &nf,
             o.amount.inner(),
             &epk,
@@ -291,7 +310,7 @@ pub async fn build_orchard() -> Result<()> {
             &a.encrypted_note().enc_ciphertext[0..52],
         )
         .await
-    .unwrap();
+        .unwrap();
     }
     ledger_set_stage(5).await.unwrap();
     ledger_set_net_orchard(-tx_plan.net_chg[1]).await.unwrap();
@@ -308,9 +327,13 @@ pub async fn build_orchard() -> Result<()> {
         let sig_bytes: [u8; 64] = ledger_sign_orchard().await.unwrap().try_into().unwrap();
         let signature: Signature<SpendAuth> = sig_bytes.into();
         let auth_action = Action::from_parts(
-            a.nullifier().clone(), a.rk().clone(), a.cmx().clone(), 
-            a.encrypted_note().clone(), a.cv_net().clone(), 
-            signature);
+            a.nullifier().clone(),
+            a.rk().clone(),
+            a.cmx().clone(),
+            a.encrypted_note().clone(),
+            a.cv_net().clone(),
+            signature,
+        );
         auth_actions.push(auth_action);
     }
     let auth_actions = NonEmpty::from_slice(&auth_actions).unwrap();
@@ -338,8 +361,8 @@ pub async fn build_orchard() -> Result<()> {
     let mut tx_bytes = vec![];
     tx.write(&mut tx_bytes).unwrap();
 
-    let orchard_memos_hash = orchard_memos_hasher.finalize();
-    let orchard_nc_hash = orchard_nc_hasher.finalize();
+    let _orchard_memos_hash = orchard_memos_hasher.finalize();
+    let _orchard_nc_hash = orchard_nc_hasher.finalize();
 
     let mut client = connect_lightwalletd("https://lwdv3.zecwallet.co").await?;
     let response = client
