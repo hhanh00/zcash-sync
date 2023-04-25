@@ -1,11 +1,13 @@
 use std::{fs::File, io::Read};
 
+use blake2b_simd::Params;
+use byteorder::{LE, WriteBytesExt};
 use group::{Group, GroupEncoding};
 use orchard::{
-    builder::SpendInfo,
-    bundle::{Authorized, Flags},
+    builder::{SpendInfo, InProgress, Unproven, Unauthorized as OrchardUnauthorized, SigningMetadata, SigningParts},
+    bundle::{Authorized, Flags, Authorization},
     circuit::{Circuit, Instance, ProvingKey},
-    keys::{Diversifier, FullViewingKey, Scope, SpendValidatingKey},
+    keys::{Diversifier, FullViewingKey, Scope, SpendValidatingKey, SpendingKey, SpendAuthorizingKey},
     note::{ExtractedNoteCommitment, Nullifier, RandomSeed, TransmittedNoteCiphertext},
     note_encryption::OrchardNoteEncryption,
     primitives::redpallas::{Signature, SpendAuth},
@@ -18,26 +20,49 @@ use rand_chacha::ChaCha20Rng;
 use ripemd::Digest;
 
 use anyhow::Result;
-use warp_api_ffi::{decode_orchard_merkle_path, TransactionPlan};
+use tonic::Request;
+use crate::{decode_orchard_merkle_path, TransactionPlan, RawTransaction, connect_lightwalletd, ledger::*};
 
-use zcash_primitives::transaction::components::Amount;
-
+use zcash_primitives::{transaction::{components::Amount, TransactionData, TxVersion, Transaction, sighash_v5, sighash::SignableInput, 
+    txid::TxIdDigester, Unauthorized, Authorized as TxAuthorized}, 
+    consensus::{BlockHeight, BranchId}};
+use hex_literal::hex;
 use group::ff::Field;
 use nonempty::NonEmpty;
 
-use warp_api_ffi::{Destination, Source};
+use crate::{Destination, Source};
+
+#[derive(Debug)]
+pub struct NoAuth;
+
+impl Authorization for NoAuth {
+    type SpendAuth = ();
+}
 
 pub async fn build_orchard() -> Result<()> {
     dotenv::dotenv()?;
     let mut prng = ChaCha20Rng::from_seed([0; 32]);
     let mut rseed_rng = ChaCha20Rng::from_seed([1; 32]);
     let mut alpha_rng = ChaCha20Rng::from_seed([2; 32]);
+    let mut sig_rng = ChaCha20Rng::from_seed([3; 32]);
 
-    let _spending_key = hex::decode(dotenv::var("SPENDING_KEY").unwrap()).unwrap();
+    let spending_key = hex::decode(dotenv::var("SPENDING_KEY").unwrap()).unwrap();
+    let spk = SpendingKey::from_bytes(spending_key.try_into().unwrap()).unwrap();
+    let ask = SpendAuthorizingKey::from(&spk);
+    println!("ASK {:?}", ask);
+
     let mut file = File::open("/tmp/tx.json").unwrap();
     let mut data = String::new();
     file.read_to_string(&mut data).unwrap();
     let tx_plan: TransactionPlan = serde_json::from_str(&data).unwrap();
+
+    let mut h = Params::new()
+        .hash_length(32)
+        .personal(b"ZTxIdHeadersHash")
+        .to_state();
+    h.update(&hex!("050000800a27a726b4d0d6c200000000"));
+    h.write_u32::<LE>(tx_plan.expiry_height)?;
+    let header_digest = h.finalize();
 
     let orchard_fvk: [u8; 96] = hex::decode(tx_plan.orchard_fvk)
         .unwrap()
@@ -92,12 +117,25 @@ pub async fn build_orchard() -> Result<()> {
         })
         .collect();
 
+    let zero_bsk = ValueCommitTrapdoor::zero().into_bsk();
+
+    let mut orchard_memos_hasher = Params::new()
+        .hash_length(32)
+        .personal(b"ZTxIdOrcActMHash")
+        .to_state();
+    let mut orchard_nc_hasher = Params::new()
+        .hash_length(32)
+        .personal(b"ZTxIdOrcActNHash")
+        .to_state();
+
     let num_actions = spends.len().max(outputs.len());
     let mut actions = vec![];
     let mut circuits = vec![];
     let mut instances = vec![];
     let mut net_value = ValueSum::default();
     let mut sum_rcv = ValueCommitTrapdoor::zero();
+
+    let mut padded_outputs = vec![];
     for i in 0..num_actions {
         // pad with dummy spends/outputs
         let spend = if i < spends.len() {
@@ -111,6 +149,7 @@ pub async fn build_orchard() -> Result<()> {
         } else {
             OrchardOutput::dummy(&mut prng)
         };
+        padded_outputs.push(output.clone());
 
         let rcv = ValueCommitTrapdoor::random(&mut prng);
         sum_rcv = sum_rcv + &rcv;
@@ -118,7 +157,7 @@ pub async fn build_orchard() -> Result<()> {
         let ak: SpendValidatingKey = orchard_fvk.clone().into();
         let rk = ak.randomize(&alpha);
 
-        let rho = spend.note.rho();
+        let rho = spend.note.nullifier(&orchard_fvk);
         let mut rseed = [0u8; 32];
         rseed_rng.fill_bytes(&mut rseed);
         let rseed = RandomSeed::from_bytes(rseed, &rho).unwrap();
@@ -158,13 +197,28 @@ pub async fn build_orchard() -> Result<()> {
             out_ciphertext: out.clone(),
         };
 
-        let action: Action<Signature<SpendAuth>> = Action::from_parts(
+        let rk_bytes: [u8; 32] = rk.clone().0.into();
+        orchard_memos_hasher.update(&enc[52..564]);
+        orchard_nc_hasher.update(&cv_net.to_bytes());
+        orchard_nc_hasher.update(&rk_bytes);
+        orchard_nc_hasher.update(&enc[564..]);
+        orchard_nc_hasher.update(&out);
+
+        println!("d/pkd {}", hex::encode(&output.recipient.to_raw_address_bytes()));
+        println!("rho {}", hex::encode(&rho.to_bytes()));
+        println!("amount {}", hex::encode(&output.amount.inner().to_le_bytes()));
+        println!("rseed {}", hex::encode(&rseed.as_bytes()));
+        println!("cmx {}", hex::encode(&cmx.to_bytes()));
+    
+        let action: Action<SigningMetadata> = Action::from_parts(
             rho.clone(),
             rk.clone(),
             cmx.clone(),
             encrypted_note,
             cv_net.clone(),
-            [0; 64].into(),
+            SigningMetadata { 
+                dummy_ask: None, 
+                parts: SigningParts { ak, alpha } },
         );
         actions.push(action);
 
@@ -174,26 +228,129 @@ pub async fn build_orchard() -> Result<()> {
         let instance = Instance::from_parts(anchor, cv_net, rho.clone(), rk, cmx, true, true);
         instances.push(instance);
     }
+    let actions = NonEmpty::from_slice(&actions).unwrap();
 
     let pk = ProvingKey::build();
     let proof = Proof::create(&pk, &circuits, &instances, &mut prng).unwrap();
     let nv = i64::try_from(net_value).unwrap();
     let amount = Amount::from_i64(nv).unwrap();
 
-    let sig_hash = [0u8; 32];
-
+    let flags = Flags::from_parts(true, true);
     let bsk = sum_rcv.into_bsk();
+    let bundle: Bundle<_, Amount> = Bundle::from_parts(
+        actions, 
+        flags, 
+        amount, 
+        anchor, 
+        InProgress::<Unproven, OrchardUnauthorized> { 
+            proof: Unproven { circuits: vec![] }, 
+            sigs: OrchardUnauthorized { bsk: bsk.clone() } });
+
+    let tx_data: TransactionData<Unauthorized> = TransactionData {
+        version: TxVersion::Zip225,
+        consensus_branch_id: BranchId::Nu5,
+        lock_time: 0,
+        expiry_height: BlockHeight::from_u32(tx_plan.expiry_height),
+        transparent_bundle: None,
+        sprout_bundle: None,
+        sapling_bundle: None,
+        orchard_bundle: Some(bundle.clone()),
+    };
+
+    let txid_parts = tx_data.digest(TxIdDigester);
+    let sig_hash = sighash_v5::v5_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts);
+    let sig_hash = sig_hash.as_bytes();
     let binding_signature = bsk.sign(&mut prng, &sig_hash);
 
-    let actions = NonEmpty::from_slice(&actions).unwrap();
+    ledger_init().await.unwrap();
+    ledger_init_tx(header_digest.as_bytes()).await.unwrap();
+    ledger_set_orchard_merkle_proof(
+        &anchor.to_bytes(),
+        orchard_memos_hasher.finalize().as_bytes(),
+        orchard_nc_hasher.finalize().as_bytes(),
+    )
+    .await
+    .unwrap();
 
-    let _bundle: Bundle<_, Amount> = Bundle::from_parts(
-        actions,
+    // no t-in
+    ledger_set_stage(2).await.unwrap();
+    // no t-out
+    ledger_set_stage(3).await.unwrap();
+    // no s-out
+    ledger_set_stage(4).await.unwrap();
+
+    for (a, o) in bundle.actions().iter().zip(padded_outputs.iter()) {
+        let nf = a.nullifier().to_bytes();
+        let epk = a.encrypted_note().epk_bytes;
+        let address = 
+        ledger_add_o_action(
+            &nf,
+            o.amount.inner(),
+            &epk,
+            &o.recipient.to_raw_address_bytes(),
+            &a.encrypted_note().enc_ciphertext[0..52],
+        )
+        .await
+    .unwrap();
+    }
+    ledger_set_stage(5).await.unwrap();
+    ledger_set_net_orchard(-tx_plan.net_chg[1]).await.unwrap();
+    ledger_confirm_fee().await.unwrap();
+
+    let mut auth_actions = vec![];
+    for a in bundle.actions() {
+        println!("ask {:?}", ask);
+        println!("alpha {:?}", a.authorization().parts.alpha);
+        let rsk = ask.randomize(&a.authorization().parts.alpha);
+        println!("rsk {:?}", rsk);
+        // let signature: Signature<SpendAuth> = [0; 64].into();
+        // let signature = rsk.sign(&mut sig_rng, sig_hash);
+        let sig_bytes: [u8; 64] = ledger_sign_orchard().await.unwrap().try_into().unwrap();
+        let signature: Signature<SpendAuth> = sig_bytes.into();
+        let auth_action = Action::from_parts(
+            a.nullifier().clone(), a.rk().clone(), a.cmx().clone(), 
+            a.encrypted_note().clone(), a.cv_net().clone(), 
+            signature);
+        auth_actions.push(auth_action);
+    }
+    let auth_actions = NonEmpty::from_slice(&auth_actions).unwrap();
+
+    let bundle: Bundle<_, Amount> = Bundle::from_parts(
+        auth_actions,
         Flags::from_parts(true, true),
         amount,
         anchor.clone(),
         Authorized::from_parts(proof, binding_signature),
     );
+
+    let tx_data: TransactionData<TxAuthorized> = TransactionData {
+        version: TxVersion::Zip225,
+        consensus_branch_id: BranchId::Nu5,
+        lock_time: 0,
+        expiry_height: BlockHeight::from_u32(tx_plan.expiry_height),
+        transparent_bundle: None,
+        sprout_bundle: None,
+        sapling_bundle: None,
+        orchard_bundle: Some(bundle),
+    };
+    let tx = Transaction::from_data(tx_data).unwrap();
+
+    let mut tx_bytes = vec![];
+    tx.write(&mut tx_bytes).unwrap();
+
+    let orchard_memos_hash = orchard_memos_hasher.finalize();
+    let orchard_nc_hash = orchard_nc_hasher.finalize();
+
+    let mut client = connect_lightwalletd("https://lwdv3.zecwallet.co").await?;
+    let response = client
+        .send_transaction(Request::new(RawTransaction {
+            data: tx_bytes,
+            height: 0,
+        }))
+        .await?
+        .into_inner();
+
+    println!("LWD send transaction {:?}", response);
 
     Ok(())
 }

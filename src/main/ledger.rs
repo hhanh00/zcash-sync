@@ -43,11 +43,9 @@ use nonempty::NonEmpty;
 
 use hex_literal::hex;
 
-mod orchard_bundle;
-
 #[tokio::main]
 async fn main() {
-    orchard_bundle::build_orchard().await.unwrap();
+    // orchard_bundle::build_orchard().await.unwrap();
 }
 
 #[tokio::main]

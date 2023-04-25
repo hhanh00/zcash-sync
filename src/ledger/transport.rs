@@ -260,6 +260,13 @@ pub async fn ledger_sign_sapling() -> Result<Vec<u8>> {
     Ok(signature)
 }
 
+pub async fn ledger_sign_orchard() -> Result<Vec<u8>> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E024000000"))?;
+    let signature = apdu(&bb).await?;
+    Ok(signature)
+}
+
 pub async fn ledger_end_tx() -> Result<()> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E030000000"))?;

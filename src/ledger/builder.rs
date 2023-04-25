@@ -1,4 +1,5 @@
 use blake2b_simd::Params;
+use blake2b_simd::State;
 use byteorder::WriteBytesExt;
 use byteorder::LE;
 use ff::{Field, PrimeField};
@@ -8,6 +9,7 @@ use jubjub::{Fq, Fr};
 
 use orchard::keys::Scope;
 
+use crate::ledger::builder::transparent_bundle::{TransparentBuilder, TransparentInputUnAuthorized};
 use crate::ledger::transport::*;
 use crate::taddr::derive_from_pubkey;
 use crate::{CompactTxStreamerClient, Destination, RawTransaction, Source, TransactionPlan};
@@ -48,10 +50,8 @@ use zcash_primitives::{
 };
 use zcash_proofs::{prover::LocalTxProver, sapling::SaplingProvingContext};
 
-struct TransparentInputUnAuthorized {
-    utxo: OutPoint,
-    coin: TxOut,
-}
+mod transparent_bundle;
+mod orchard_bundle;
 
 struct SpendDescriptionUnAuthorized {
     cv: ValueCommitment,
@@ -87,6 +87,14 @@ pub async fn show_public_keys() -> Result<()> {
     Ok(())
 }
 
+pub fn create_hasher(perso: &[u8]) -> State {
+    let h = Params::new()
+        .hash_length(32)
+        .personal(perso)
+        .to_state();
+    h
+}
+
 pub async fn build_broadcast_tx(
     network: &Network,
     client: &mut CompactTxStreamerClient<Channel>,
@@ -95,31 +103,17 @@ pub async fn build_broadcast_tx(
 ) -> Result<String> {
     ledger_init().await?;
     let pubkey = ledger_get_pubkey().await?;
-    let ledger_taddr = derive_from_pubkey(network, &pubkey)?;
+    let mut transparent_builder = TransparentBuilder::new(network, &pubkey);
 
-    if ledger_taddr != tx_plan.taddr {
+    if transparent_builder.taddr != tx_plan.taddr {
         anyhow::bail!("This ledger wallet has a different address");
     }
 
     let taddr = &tx_plan.taddr;
 
-    let taddr = decode_transparent_address(
-        &network.b58_pubkey_address_prefix(),
-        &network.b58_script_address_prefix(),
-        taddr,
-    )?
-    .ok_or(anyhow!("Invalid taddr"))?;
-    let pkh = match taddr {
-        TransparentAddress::PublicKey(pkh) => pkh,
-        _ => unreachable!(),
-    };
-    let tin_pubscript = taddr.script();
 
     // Compute header digest
-    let mut h = Params::new()
-        .hash_length(32)
-        .personal(b"ZTxIdHeadersHash")
-        .to_state();
+    let mut h = create_hasher(b"ZTxIdHeadersHash");
     h.update(&hex!("050000800a27a726b4d0d6c200000000"));
 
     h.write_u32::<LE>(tx_plan.expiry_height)?;
@@ -169,21 +163,6 @@ pub async fn build_broadcast_tx(
     let alpha = h.finalize();
     let mut alpha_rng = ChaChaRng::from_seed(alpha.as_bytes().try_into().unwrap());
 
-    let mut prevouts_hasher = Params::new()
-        .hash_length(32)
-        .personal(b"ZTxIdPrevoutHash")
-        .to_state();
-
-    let mut trscripts_hasher = Params::new()
-        .hash_length(32)
-        .personal(b"ZTxTrScriptsHash")
-        .to_state();
-
-    let mut sequences_hasher = Params::new()
-        .hash_length(32)
-        .personal(b"ZTxIdSequencHash")
-        .to_state();
-
     let mut spends_compact_hasher = Params::new()
         .hash_length(32)
         .personal(b"ZTxIdSSpendCHash")
@@ -197,27 +176,11 @@ pub async fn build_broadcast_tx(
     let mut sapling_context = SaplingProvingContext::new();
     let mut value_balance = ValueSum::zero();
 
-    let mut vin = vec![];
     let mut shielded_spends = vec![];
     for sp in tx_plan.spends.iter() {
         match sp.source {
             Source::Transparent { txid, index } => {
-                prevouts_hasher.update(&txid);
-                prevouts_hasher.write_u32::<LE>(index)?;
-                trscripts_hasher.update(&hex!("1976a914"));
-                trscripts_hasher.update(&pkh);
-                trscripts_hasher.update(&hex!("88ac"));
-                sequences_hasher.update(&hex!("FFFFFFFF"));
-
-                vin.push(TransparentInputUnAuthorized {
-                    utxo: OutPoint::new(txid, index),
-                    coin: TxOut {
-                        value: Amount::from_u64(sp.amount).unwrap(),
-                        script_pubkey: tin_pubscript.clone(), // will always use the h/w address
-                    },
-                });
-
-                ledger_add_t_input(sp.amount).await?;
+                transparent_builder.add_input(txid, index, sp.amount).await?;
             }
             Source::Sapling {
                 diversifier,
@@ -276,12 +239,7 @@ pub async fn build_broadcast_tx(
     }
     ledger_set_stage(2).await?;
 
-    let prevouts_digest = prevouts_hasher.finalize();
-    log::info!("PREVOUTS {}", hex::encode(prevouts_digest));
-    let pubscripts_digest = trscripts_hasher.finalize();
-    log::info!("PUBSCRIPTS {}", hex::encode(pubscripts_digest));
-    let sequences_digest = sequences_hasher.finalize();
-    log::info!("SEQUENCES {}", hex::encode(sequences_digest));
+    transparent_builder.finalize_hash()?;
 
     let spends_compact_digest = spends_compact_hasher.finalize();
     log::info!("C SPENDS {}", hex::encode(spends_compact_digest));
@@ -309,23 +267,13 @@ pub async fn build_broadcast_tx(
         .personal(b"ZTxIdSOutN__Hash")
         .to_state();
 
-    let mut vout = vec![];
     let mut shielded_outputs = vec![];
     for output in tx_plan.outputs.iter() {
         if let Destination::Transparent(raw_address) = output.destination {
-            if raw_address[0] != 0 {
-                anyhow::bail!("Only t1 addresses are supported");
-            }
-            ledger_add_t_output(output.amount, &raw_address).await?;
-            let ta = TransparentAddress::PublicKey(raw_address[1..21].try_into().unwrap());
-            vout.push(TxOut {
-                value: Amount::from_u64(output.amount).unwrap(),
-                script_pubkey: ta.script(),
-            });
+            transparent_builder.add_output(raw_address, output.amount).await?;
         }
     }
     ledger_set_stage(3).await?;
-    let has_transparent = !vin.is_empty() || !vout.is_empty();
 
     for output in tx_plan.outputs.iter() {
         if let Destination::Sapling(raw_address) = output.destination {
@@ -397,12 +345,7 @@ pub async fn build_broadcast_tx(
     let outputs_nc_digest = output_non_compact_hasher.finalize();
     log::info!("NC OUTPUTS {}", hex::encode(outputs_nc_digest));
 
-    ledger_set_transparent_merkle_proof(
-        prevouts_digest.as_bytes(),
-        pubscripts_digest.as_bytes(),
-        sequences_digest.as_bytes(),
-    )
-    .await?;
+    transparent_builder.set_merkle_proof().await?;
     ledger_set_sapling_merkle_proof(
         spends_digest.as_bytes(),
         memos_digest.as_bytes(),
@@ -414,157 +357,7 @@ pub async fn build_broadcast_tx(
 
     ledger_set_stage(5).await?;
 
-    let orchard_spends: Vec<_> = tx_plan
-        .spends
-        .iter()
-        .filter(|&s| {
-            if let Source::Orchard { .. } = s.source {
-                true
-            } else {
-                false
-            }
-        })
-        .cloned()
-        .collect();
-    let orchard_outputs: Vec<_> = tx_plan
-        .outputs
-        .iter()
-        .filter(|&o| {
-            if let Destination::Orchard(_) = o.destination {
-                true
-            } else {
-                false
-            }
-        })
-        .cloned()
-        .collect();
-
-    let num_orchard_spends = orchard_spends.len();
-    let num_orchard_outputs = orchard_outputs.len();
-    let num_actions = num_orchard_spends.max(num_orchard_outputs);
-
-    let orchard_address = o_fvk.address_at(0u64, Scope::External);
-    let mut empty_memo = [0u8; 512];
-    empty_memo[0] = 0xF6;
-
-    // let mut actions = vec![];
-    for i in 0..num_actions {
-        let rcv = orchard::value::ValueCommitTrapdoor::random(OsRng);
-
-        let (_sk, dummy_fvk, dummy_note) = orchard::Note::dummy(&mut OsRng, None);
-        let _dummy_recipient = dummy_fvk.address_at(0u64, Scope::External);
-
-        let alpha = pasta_curves::pallas::Scalar::random(&mut alpha_rng);
-
-        let (fvk, spend_note) = if i < num_orchard_spends {
-            let sp = &tx_plan.spends[i];
-            let note = match &sp.source {
-                Source::Orchard { rseed, rho, .. } => {
-                    let rho = orchard::note::Nullifier::from_bytes(rho).unwrap();
-                    let note = orchard::Note::from_parts(
-                        orchard_address.clone(),
-                        orchard::value::NoteValue::from_raw(sp.amount),
-                        rho,
-                        orchard::note::RandomSeed::from_bytes(rseed.clone(), &rho).unwrap(),
-                    )
-                    .unwrap();
-                    note
-                }
-                _ => unreachable!(),
-            };
-            (o_fvk.clone(), note)
-        } else {
-            (dummy_fvk, dummy_note)
-        };
-        let nf = spend_note.nullifier(&fvk);
-
-        let mut rseed = [0; 32];
-        rseed_rng.fill_bytes(&mut rseed);
-        let (output_note, memo) = if i < num_orchard_outputs {
-            let output = &orchard_outputs[i];
-            let address = match output.destination {
-                Destination::Orchard(address) => address,
-                _ => unreachable!(),
-            };
-            let rseed = orchard::note::RandomSeed::from_bytes(rseed, &nf).unwrap();
-            let note = orchard::Note::from_parts(
-                orchard::Address::from_raw_address_bytes(&address).unwrap(),
-                orchard::value::NoteValue::from_raw(output.amount),
-                nf.clone(),
-                rseed,
-            )
-            .unwrap();
-            let memo = output.memo.as_array().clone();
-            (note, memo)
-        } else {
-            (dummy_note.clone(), empty_memo)
-        };
-
-        let _rk = fvk.ak.randomize(&alpha);
-        let cm = output_note.commitment();
-        let cmx = cm.into();
-
-        let encryptor = orchard::note_encryption::OrchardNoteEncryption::new(
-            Some(o_fvk.to_ovk(Scope::External)),
-            output_note,
-            output_note.recipient(),
-            memo.clone(),
-        );
-        let v_net = orchard::value::ValueSum::default();
-        let cv_net = orchard::value::ValueCommitment::derive(v_net, rcv.clone());
-        let _encrypted_note = orchard::note::TransmittedNoteCiphertext {
-            epk_bytes: encryptor.epk().to_bytes().0,
-            enc_ciphertext: encryptor.encrypt_note_plaintext(),
-            out_ciphertext: encryptor.encrypt_outgoing_plaintext(&cv_net, &cmx, &mut OsRng),
-        };
-
-        // compact outputs ZTxIdOrcActCHash
-        // nf
-        // cmx
-        // epk_bytes
-        // enc_ciphertext[..52]
-
-        // memo ZTxIdOrcActMHash
-        // enc_ciphertext[52..564]
-
-        // non compact ZTxIdOrcActNHash
-        // cv_net
-        // rk
-        // enc_ciphertext[564..]
-        // out_ciphertext
-    }
-
-    let mut vins = vec![];
-    for tin in vin.iter() {
-        let mut txin_hasher = Params::new()
-            .hash_length(32)
-            .personal(b"Zcash___TxInHash")
-            .to_state();
-
-        txin_hasher.update(tin.utxo.hash());
-        txin_hasher.update(&tin.utxo.n().to_le_bytes());
-        txin_hasher.update(&tin.coin.value.to_i64_le_bytes());
-        txin_hasher.update(&[0x19]); // add the script length
-        txin_hasher.update(&tin.coin.script_pubkey.0);
-        txin_hasher.update(&0xFFFFFFFFu32.to_le_bytes());
-        let txin_hash = txin_hasher.finalize();
-        log::info!("TXIN {}", hex::encode(txin_hash));
-
-        let signature = ledger_sign_transparent(txin_hash.as_bytes()).await?;
-        let signature = secp256k1::ecdsa::Signature::from_der(&signature)?;
-        let mut signature = signature.serialize_der().to_vec();
-        signature.extend(&[0x01]); // add SIG_HASH_ALL
-
-        // witness is PUSH(signature) PUSH(pk)
-        let script_sig = Script::default() << &*signature << &*pubkey;
-
-        let txin = TxIn::<transparent::Authorized> {
-            prevout: tin.utxo.clone(),
-            script_sig,
-            sequence: 0xFFFFFFFFu32,
-        };
-        vins.push(txin);
-    }
+    transparent_builder.sign().await?;
 
     let mut signatures = vec![];
     for _sp in shielded_spends.iter() {
@@ -581,11 +374,7 @@ pub async fn build_broadcast_tx(
         signatures.push(signature);
     }
 
-    let transparent_bundle = transparent::Bundle::<transparent::Authorized> {
-        vin: vins,
-        vout,
-        authorization: transparent::Authorized,
-    };
+    let transparent_bundle = transparent_builder.build();
 
     let shielded_spends: Vec<_> = shielded_spends
         .into_iter()
@@ -621,11 +410,7 @@ pub async fn build_broadcast_tx(
         consensus_branch_id: BranchId::Nu5,
         lock_time: 0,
         expiry_height: BlockHeight::from_u32(tx_plan.expiry_height),
-        transparent_bundle: if has_transparent {
-            Some(transparent_bundle)
-        } else {
-            None
-        },
+        transparent_bundle,
         sprout_bundle: None,
         sapling_bundle: if has_sapling {
             Some(sapling_bundle)
