@@ -15,9 +15,7 @@ use zcash_client_backend::encoding::decode_transparent_address;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::legacy::{Script, TransparentAddress};
-use zcash_primitives::transaction::components::{transparent, OutPoint, TxIn, TxOut};
-
-use zcash_primitives::transaction::components::Amount;
+use zcash_primitives::transaction::components::{transparent, Amount, OutPoint, TxIn, TxOut};
 
 use super::create_hasher;
 
@@ -98,10 +96,6 @@ impl TransparentBuilder {
             value: Amount::from_u64(amount).unwrap(),
             script_pubkey: ta.script(),
         });
-        Ok(())
-    }
-
-    pub fn finalize_hash(&mut self) -> Result<()> {
         Ok(())
     }
 
