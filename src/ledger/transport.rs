@@ -155,7 +155,7 @@ pub async fn ledger_set_orchard_merkle_proof(
 
 pub async fn ledger_add_t_input(amount: u64) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E015000008"))?;
+    bb.write_all(&hex!("E015010008"))?;
     bb.write_u64::<LE>(amount)?;
     apdu(&bb).await?;
     Ok(())
@@ -222,7 +222,7 @@ pub async fn ledger_set_net_orchard(net: i64) -> Result<()> {
 
 pub async fn ledger_confirm_fee() -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E01B000000"))?;
+    bb.write_all(&hex!("E01B010000"))?;
     apdu(&bb).await?;
     Ok(())
 }

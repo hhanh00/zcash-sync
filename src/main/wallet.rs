@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     let mut started = false;
     let mut key = String::new();
     let mut next_line_is_key = true;
-    for (i, line) in reader.lines().enumerate() {
+    for (_i, line) in reader.lines().enumerate() {
         let ln = line?.trim_start().to_string();
         if ln == "HEADER=END" {
             started = true;

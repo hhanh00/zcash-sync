@@ -1,38 +1,22 @@
-use blake2b_simd::Params;
 use blake2b_simd::State;
-use byteorder::WriteBytesExt;
-use byteorder::LE;
-use ff::{Field, PrimeField};
+
+use ff::PrimeField;
 use group::GroupEncoding;
-use hex_literal::hex;
+
 use jubjub::{Fq, Fr};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::sapling::ProofGenerationKey;
 use zcash_primitives::zip32::DiversifiableFullViewingKey;
 
-use crate::ledger::builder::transparent_bundle::TransparentBuilder;
 use crate::ledger::transport::*;
 
-use crate::{CompactTxStreamerClient, Destination, RawTransaction, Source, TransactionPlan};
 use anyhow::{anyhow, Result};
-use rand::{rngs::OsRng, RngCore, SeedableRng};
-use rand_chacha::ChaChaRng;
-use ripemd::{Digest, Ripemd160};
-use secp256k1::PublicKey;
-use sha2::Sha256;
-use tonic::{transport::Channel, Request};
-use zcash_client_backend::encoding::{
-    encode_extended_full_viewing_key, encode_transparent_address,
-};
-use zcash_primitives::consensus::Network;
-use zcash_primitives::consensus::Parameters;
-use zcash_primitives::legacy::TransparentAddress;
+use rand::rngs::OsRng;
 
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use ripemd::Digest;
 
 use zcash_primitives::{
-    consensus::{BlockHeight, BranchId, MainNetwork},
-    constants::PROOF_GENERATION_KEY_GENERATOR,
+    consensus::MainNetwork,
     merkle_tree::IncrementalWitness,
     sapling::{
         note_encryption::sapling_note_encryption,
@@ -41,12 +25,9 @@ use zcash_primitives::{
         value::{NoteValue, ValueCommitment, ValueSum},
         Diversifier, Node, Note, Nullifier, PaymentAddress, Rseed,
     },
-    transaction::{
-        components::{
-            sapling::{Authorized as SapAuthorized, Bundle},
-            Amount, OutputDescription, SpendDescription, GROTH_PROOF_SIZE,
-        },
-        Authorized, TransactionData, TxVersion,
+    transaction::components::{
+        sapling::{Authorized as SapAuthorized, Bundle},
+        Amount, OutputDescription, SpendDescription, GROTH_PROOF_SIZE,
     },
 };
 use zcash_proofs::{prover::LocalTxProver, sapling::SaplingProvingContext};
@@ -81,15 +62,19 @@ pub struct SaplingBuilder<'a> {
     signatures: Vec<Signature>,
 }
 
-impl <'a> SaplingBuilder<'a> {
-    pub fn new(prover: &'a LocalTxProver, dfvk: DiversifiableFullViewingKey, proofgen_key: ProofGenerationKey) -> Self {
+impl<'a> SaplingBuilder<'a> {
+    pub fn new(
+        prover: &'a LocalTxProver,
+        dfvk: DiversifiableFullViewingKey,
+        proofgen_key: ProofGenerationKey,
+    ) -> Self {
         let spends_compact_hasher = create_hasher(b"ZTxIdSSpendCHash");
         let spends_non_compact_hasher = create_hasher(b"ZTxIdSSpendNHash");
 
         let output_memos_hasher = create_hasher(b"ZTxIdSOutM__Hash");
         let output_non_compact_hasher = create_hasher(b"ZTxIdSOutN__Hash");
 
-        SaplingBuilder { 
+        SaplingBuilder {
             prover,
             dfvk,
             proofgen_key,
@@ -109,9 +94,18 @@ impl <'a> SaplingBuilder<'a> {
         }
     }
 
-    pub async fn add_spend(&mut self, alpha: Fr, diversifier: [u8; 11], rseed: [u8; 32], witness: &[u8], amount: u64) -> Result<()> {
+    pub async fn add_spend(
+        &mut self,
+        alpha: Fr,
+        diversifier: [u8; 11],
+        rseed: [u8; 32],
+        witness: &[u8],
+        amount: u64,
+    ) -> Result<()> {
         let diversifier = Diversifier(diversifier);
-        let z_address = self.dfvk.fvk
+        let z_address = self
+            .dfvk
+            .fvk
             .vk
             .to_payment_address(diversifier)
             .ok_or(anyhow!("Invalid diversifier"))?;
@@ -126,7 +120,8 @@ impl <'a> SaplingBuilder<'a> {
         let nf_key = self.proofgen_key.to_viewing_key().nk;
         let nullifier = note.nf(&nf_key, merkle_path.position);
 
-        let (zkproof, cv, rk) = self.prover
+        let (zkproof, cv, rk) = self
+            .prover
             .spend_proof(
                 &mut self.sapling_context,
                 self.proofgen_key.clone(),
@@ -139,7 +134,8 @@ impl <'a> SaplingBuilder<'a> {
                 OsRng,
             )
             .map_err(|_| anyhow!("Error generating spend"))?;
-        self.value_balance = (self.value_balance + note.value()).ok_or(anyhow!("Invalid amount"))?;
+        self.value_balance =
+            (self.value_balance + note.value()).ok_or(anyhow!("Invalid amount"))?;
 
         self.spends_compact_hasher.update(nullifier.as_ref());
         self.spends_non_compact_hasher.update(&cv.to_bytes());
@@ -156,7 +152,13 @@ impl <'a> SaplingBuilder<'a> {
         Ok(())
     }
 
-    pub async fn add_output(&mut self, rseed: [u8; 32], raw_address: [u8; 43], memo: &MemoBytes, amount: u64) -> Result<()> {
+    pub async fn add_output(
+        &mut self,
+        rseed: [u8; 32],
+        raw_address: [u8; 43],
+        memo: &MemoBytes,
+        amount: u64,
+    ) -> Result<()> {
         let recipient = PaymentAddress::from_bytes(&raw_address).unwrap();
         let rseed = Rseed::AfterZip212(rseed);
 
@@ -201,8 +203,10 @@ impl <'a> SaplingBuilder<'a> {
         let memo = &enc_ciphertext[52..564];
         self.output_memos_hasher.update(memo);
 
-        self.output_non_compact_hasher.update(&cv.as_inner().to_bytes());
-        self.output_non_compact_hasher.update(&enc_ciphertext[564..]);
+        self.output_non_compact_hasher
+            .update(&cv.as_inner().to_bytes());
+        self.output_non_compact_hasher
+            .update(&enc_ciphertext[564..]);
         self.output_non_compact_hasher.update(&out_ciphertext);
 
         let ephemeral_key = epk.to_bytes();
@@ -214,6 +218,36 @@ impl <'a> SaplingBuilder<'a> {
             out_ciphertext,
             zkproof,
         });
+        Ok(())
+    }
+
+    pub async fn set_merkle_proof(&mut self, net_chg: i64) -> Result<()> {
+        let spends_compact_digest = self.spends_compact_hasher.finalize();
+        log::info!("C SPENDS {}", hex::encode(spends_compact_digest));
+        let spends_non_compact_digest = self.spends_non_compact_hasher.finalize();
+        log::info!("NC SPENDS {}", hex::encode(spends_non_compact_digest));
+
+        let mut spends_hasher = create_hasher(b"ZTxIdSSpendsHash");
+        if !self.shielded_spends.is_empty() {
+            spends_hasher.update(spends_compact_digest.as_bytes());
+            spends_hasher.update(spends_non_compact_digest.as_bytes());
+        }
+        let spends_digest = spends_hasher.finalize();
+        log::info!("SPENDS {}", hex::encode(spends_digest));
+
+        let memos_digest = self.output_memos_hasher.finalize();
+        log::info!("MEMOS {}", hex::encode(memos_digest));
+        let outputs_nc_digest = self.output_non_compact_hasher.finalize();
+        log::info!("NC OUTPUTS {}", hex::encode(outputs_nc_digest));
+
+        ledger_set_sapling_merkle_proof(
+            spends_digest.as_bytes(),
+            memos_digest.as_bytes(),
+            outputs_nc_digest.as_bytes(),
+        )
+        .await?;
+        ledger_set_net_sapling(-net_chg).await?;
+
         Ok(())
     }
 
@@ -234,29 +268,14 @@ impl <'a> SaplingBuilder<'a> {
         Ok(())
     }
 
-    pub async fn build(self, net_chg: i64) -> Result<Option<Bundle<SapAuthorized>>> {
-        let spends_compact_digest = self.spends_compact_hasher.finalize();
-        log::info!("C SPENDS {}", hex::encode(spends_compact_digest));
-        let spends_non_compact_digest = self.spends_non_compact_hasher.finalize();
-        log::info!("NC SPENDS {}", hex::encode(spends_non_compact_digest));
-    
-        let mut spends_hasher = create_hasher(b"ZTxIdSSpendsHash");
-        if !self.shielded_spends.is_empty() {
-            spends_hasher.update(spends_compact_digest.as_bytes());
-            spends_hasher.update(spends_non_compact_digest.as_bytes());
-        }
-        let spends_digest = spends_hasher.finalize();
-        log::info!("SPENDS {}", hex::encode(spends_digest));
-
-        let memos_digest = self.output_memos_hasher.finalize();
-        log::info!("MEMOS {}", hex::encode(memos_digest));
-        let outputs_nc_digest = self.output_non_compact_hasher.finalize();
-        log::info!("NC OUTPUTS {}", hex::encode(outputs_nc_digest));
-    
+    pub async fn build(self) -> Result<Option<Bundle<SapAuthorized>>> {
         let has_sapling = !self.shielded_spends.is_empty() || !self.shielded_outputs.is_empty();
-        if !has_sapling { return Ok(None); }
+        if !has_sapling {
+            return Ok(None);
+        }
 
-        let shielded_spends: Vec<_> = self.shielded_spends
+        let shielded_spends: Vec<_> = self
+            .shielded_spends
             .into_iter()
             .zip(self.signatures.into_iter())
             .map(|(sp, spend_auth_sig)| SpendDescription::<SapAuthorized> {
@@ -274,18 +293,11 @@ impl <'a> SaplingBuilder<'a> {
 
         let sighash = ledger_get_sighash().await?;
         log::info!("TXID {}", hex::encode(&sighash));
-        let binding_sig = self.sapling_context
+        let binding_sig = self
+            .sapling_context
             .binding_sig(value, &sighash.try_into().unwrap())
             .unwrap();
 
-        ledger_set_sapling_merkle_proof(
-            spends_digest.as_bytes(),
-            memos_digest.as_bytes(),
-            outputs_nc_digest.as_bytes(),
-        )
-        .await?;
-        
-        ledger_set_net_sapling(-net_chg).await?;
         let sapling_bundle = Bundle::<_>::from_parts(
             shielded_spends,
             self.shielded_outputs,
@@ -295,5 +307,4 @@ impl <'a> SaplingBuilder<'a> {
 
         Ok(Some(sapling_bundle))
     }
-
 }

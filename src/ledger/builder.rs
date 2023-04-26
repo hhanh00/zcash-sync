@@ -2,18 +2,19 @@ use blake2b_simd::Params;
 use blake2b_simd::State;
 use byteorder::WriteBytesExt;
 use byteorder::LE;
-use ff::{Field, PrimeField};
-use group::GroupEncoding;
+use ff::Field;
 use hex_literal::hex;
-use jubjub::{Fq, Fr};
+use jubjub::Fr;
+use orchard::circuit::ProvingKey;
 
+use crate::ledger::builder::orchard_bundle::OrchardBuilder;
 use crate::ledger::builder::sapling_bundle::SaplingBuilder;
 use crate::ledger::builder::transparent_bundle::TransparentBuilder;
 use crate::ledger::transport::*;
 
 use crate::{CompactTxStreamerClient, Destination, RawTransaction, Source, TransactionPlan};
 use anyhow::{anyhow, Result};
-use rand::{rngs::OsRng, RngCore, SeedableRng};
+use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::PublicKey;
@@ -30,24 +31,9 @@ use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 use zcash_primitives::{
     consensus::{BlockHeight, BranchId, MainNetwork},
-    constants::PROOF_GENERATION_KEY_GENERATOR,
-    merkle_tree::IncrementalWitness,
-    sapling::{
-        note_encryption::sapling_note_encryption,
-        prover::TxProver,
-        redjubjub::Signature,
-        value::{NoteValue, ValueCommitment, ValueSum},
-        Diversifier, Node, Note, Nullifier, PaymentAddress, Rseed,
-    },
-    transaction::{
-        components::{
-            sapling::{Authorized as SapAuthorized, Bundle},
-            Amount, OutputDescription, SpendDescription, GROTH_PROOF_SIZE,
-        },
-        Authorized, TransactionData, TxVersion,
-    },
+    transaction::{Authorized, TransactionData, TxVersion},
 };
-use zcash_proofs::{prover::LocalTxProver, sapling::SaplingProvingContext};
+use zcash_proofs::prover::LocalTxProver;
 
 mod orchard_bundle;
 mod sapling_bundle;
@@ -95,7 +81,8 @@ pub async fn build_broadcast_tx(
     let mut transparent_builder = TransparentBuilder::new(network, &pubkey);
 
     if transparent_builder.taddr != tx_plan.taddr {
-        anyhow::bail!("This ledger wallet has a different address");
+        anyhow::bail!("This ledger wallet has a different address {} != {}", 
+        transparent_builder.taddr, tx_plan.taddr);
     }
 
     // Compute header digest
@@ -116,9 +103,19 @@ pub async fn build_broadcast_tx(
     // let dfvk = extsk.to_diversifiable_full_viewing_key();
 
     let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk().await?;
-    let proofgen_key: zcash_primitives::sapling::ProofGenerationKey = ledger_get_proofgen_key().await?;
+    let proofgen_key: zcash_primitives::sapling::ProofGenerationKey =
+        ledger_get_proofgen_key().await?;
 
     let mut sapling_builder = SaplingBuilder::new(prover, dfvk, proofgen_key);
+
+    let orchard_fvk: [u8; 96] = hex::decode(&tx_plan.orchard_fvk)
+        .unwrap()
+        .try_into()
+        .unwrap();
+    let orchard_fvk = orchard::keys::FullViewingKey::from_bytes(&orchard_fvk).unwrap();
+    let anchor = orchard::Anchor::from_bytes(tx_plan.orchard_anchor).unwrap();
+
+    let mut orchard_builder = OrchardBuilder::new(&orchard_fvk, anchor);
 
     let o_fvk: [u8; 96] = ledger_get_o_fvk().await?.try_into().unwrap();
     let _o_fvk =
@@ -157,10 +154,14 @@ pub async fn build_broadcast_tx(
             } => {
                 let alpha = Fr::random(&mut alpha_rng);
                 println!("ALPHA {}", hex::encode(&alpha.to_bytes()));
-        
-                sapling_builder.add_spend(alpha, diversifier, rseed, witness, sp.amount).await?;
+
+                sapling_builder
+                    .add_spend(alpha, diversifier, rseed, witness, sp.amount)
+                    .await?;
             }
-            Source::Orchard { .. } => {}
+            Source::Orchard { diversifier, rseed, rho, ref witness, ..  } => {
+                orchard_builder.add_spend(diversifier, rseed, rho, &witness, sp.amount)?;
+            }
         }
     }
     ledger_set_stage(2).await?;
@@ -172,25 +173,40 @@ pub async fn build_broadcast_tx(
                 .await?;
         }
     }
+    transparent_builder.set_merkle_proof().await?;
     ledger_set_stage(3).await?;
 
     for output in tx_plan.outputs.iter() {
-        if let Destination::Sapling(raw_address) = output.destination {
-            let mut rseed = [0u8; 32];
-            rseed_rng.fill_bytes(&mut rseed);
-            sapling_builder.add_output(rseed, raw_address, &output.memo, output.amount).await?;
+        match output.destination {
+            Destination::Sapling(raw_address) => {
+                let mut rseed = [0u8; 32];
+                rseed_rng.fill_bytes(&mut rseed);
+                sapling_builder
+                    .add_output(rseed, raw_address, &output.memo, output.amount)
+                    .await?;
+            }
+            Destination::Orchard(raw_address) => {
+                orchard_builder.add_output(raw_address, output.amount, &output.memo)?;
+            }
+            _ => {}
         }
     }
+    sapling_builder.set_merkle_proof(tx_plan.net_chg[0]).await?;
     ledger_set_stage(4).await?;
 
-    transparent_builder.set_merkle_proof().await?;
+    let pk = ProvingKey::build();
+    orchard_builder.prepare(tx_plan.net_chg[1], &pk, &mut alpha_rng, &mut rseed_rng).await?;
 
     ledger_set_stage(5).await?;
+    ledger_confirm_fee().await?;
 
     transparent_builder.sign().await?;
+    sapling_builder.sign().await?;
+    orchard_builder.sign().await?;
 
     let transparent_bundle = transparent_builder.build();
-    let sapling_bundle = sapling_builder.build(tx_plan.net_chg[0]).await?;
+    let sapling_bundle = sapling_builder.build().await?;
+    let orchard_bundle = orchard_builder.build()?;
 
     let authed_tx: TransactionData<Authorized> = TransactionData {
         version: TxVersion::Zip225,
@@ -200,7 +216,7 @@ pub async fn build_broadcast_tx(
         transparent_bundle,
         sprout_bundle: None,
         sapling_bundle,
-        orchard_bundle: None,
+        orchard_bundle,
     };
 
     let tx = authed_tx.freeze().unwrap();
@@ -216,7 +232,7 @@ pub async fn build_broadcast_tx(
         }))
         .await?
         .into_inner();
-    log::info!("{}", response.error_message);
+    println!("{}", response.error_message);
 
     Ok(response.error_message)
 }
