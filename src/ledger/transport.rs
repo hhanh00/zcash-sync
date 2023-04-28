@@ -29,11 +29,11 @@ async fn apdu(data: &[u8]) -> Vec<u8> {
     response.data().to_vec()
 }
 
-const TEST_SERVER_IP: &str = "127.0.0.1";
+const TEST_SERVER_IP: Option<&'static str> = option_env!("LEDGER_IP");
 
 async fn apdu_http(data: &[u8]) -> Vec<u8> {
     let client = Client::new();
-    let response = client.post(&format!("http://{}:5000/apdu", TEST_SERVER_IP))
+        .post(&format!("http://{}:5000/apdu", TEST_SERVER_IP.unwrap()))
     .body(format!("{{\"data\": \"{}\"}}", hex::encode(data)))
     .send()
     .await
