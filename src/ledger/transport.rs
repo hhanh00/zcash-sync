@@ -23,7 +23,7 @@ fn handle_error_code(code: u16) -> Result<()> {
     }
 }
 
-async fn apdu_hid(data: &[u8]) -> Result<Vec<u8>> {
+async fn apdu(data: &[u8]) -> Result<Vec<u8>> {
     let api = HidApi::new()?;
     let transport = TransportNativeHID::new(&api)?;
     let command = APDUCommand {
@@ -43,8 +43,9 @@ async fn apdu_hid(data: &[u8]) -> Result<Vec<u8>> {
 
 const TEST_SERVER_IP: Option<&'static str> = option_env!("LEDGER_IP");
 
-async fn apdu_http(data: &[u8]) -> Vec<u8> {
+async fn apdu_http(data: &[u8]) -> Result<Vec<u8>> {
     let client = Client::new();
+    let response = client
         .post(&format!("http://{}:5000/apdu", TEST_SERVER_IP.unwrap()))
         .body(format!("{{\"data\": \"{}\"}}", hex::encode(data)))
         .send()
@@ -155,7 +156,7 @@ pub async fn ledger_set_orchard_merkle_proof(
 
 pub async fn ledger_add_t_input(amount: u64) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E015010008"))?;
+    bb.write_all(&hex!("E015000008"))?;
     bb.write_u64::<LE>(amount)?;
     apdu(&bb).await?;
     Ok(())
@@ -301,11 +302,20 @@ pub async fn ledger_pedersen_hash(data: &[u8]) -> Result<Vec<u8>> {
     Ok(cmu)
 }
 
-pub async fn ledger_test_math(data: &[u8]) -> Result<Vec<u8>> {
+pub async fn ledger_get_debug(i: u8) -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E0FF0000"))?;
-    bb.write_u8(data.len() as u8)?;
-    bb.write_all(data)?;
+    bb.write_all(&hex!("E0FE"))?;
+    bb.write_u8(i)?;
+    bb.write_all(&hex!("0000"))?;
+    let res = apdu(&bb).await?;
+    Ok(res)
+}
+
+pub async fn ledger_test_math(i: u8) -> Result<Vec<u8>> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E0FF"))?;
+    bb.write_u8(i)?;
+    bb.write_all(&hex!("0000"))?;
     let res = apdu(&bb).await?;
     Ok(res)
 }

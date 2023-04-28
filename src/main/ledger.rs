@@ -4,17 +4,17 @@ use group::{Group, GroupEncoding};
 use std::{
     fs::File,
     io::{Read, Write},
-    path::Path,
+    path::Path, env,
 };
 
 use halo2_proofs::pasta::pallas::{self};
 use orchard::{
     circuit::{Circuit, ProvingKey},
-    keys::{Scope, SpendValidatingKey},
+    keys::{Scope, SpendValidatingKey, SpendingKey, SpendAuthorizingKey, FullViewingKey},
     note::{ExtractedNoteCommitment, Nullifier, RandomSeed},
     primitives::redpallas::{Signature, SpendAuth},
     tree::MerklePath,
-    value::ValueCommitTrapdoor,
+    value::ValueCommitTrapdoor, Note,
 };
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -25,7 +25,7 @@ use warp_api_ffi::{
     connect_lightwalletd,
     ledger::{
         build_broadcast_tx, ledger_add_o_action, ledger_confirm_fee, ledger_init, ledger_init_tx,
-        ledger_set_net_orchard, ledger_set_orchard_merkle_proof, ledger_set_stage,
+        ledger_set_net_orchard, ledger_set_orchard_merkle_proof, ledger_set_stage, ledger_test_math, ledger_get_o_fvk, ledger_get_debug, ledger_cmu,
     },
     TransactionPlan,
 };
@@ -45,11 +45,63 @@ use hex_literal::hex;
 
 #[tokio::main]
 async fn main() {
+    // let args = env::args();
+    // let device: u32 = args.next().unwrap().parse().unwrap();
     // orchard_bundle::build_orchard().await.unwrap();
+    // ledger_init().await.unwrap();
+
+    // let sk = ledger_test_math(0).await.unwrap();
+    // println!("SK {}", hex::encode(&sk));
+
+    let mut rng = ChaCha20Rng::from_seed([4u8; 32]);
+    let (_, _, note) = Note::dummy(&mut rng, None);
+    let cmx: ExtractedNoteCommitment = note.commitment().into();
+    println!("cmx {:?}", cmx);
+
+    let address = note.recipient().to_raw_address_bytes();
+    let value = note.value().inner();
+    let rseed = note.rseed().as_bytes();
+    let rho = note.rho().to_bytes();
+
+    println!("{}", hex::encode(&address));
+    println!("{} {}", value, hex::encode(value.to_le_bytes()));
+    println!("{}", hex::encode(rseed));
+    println!("{}", hex::encode(&rho));
+
+    let mut buffer = vec![];
+    buffer.write(&address).unwrap();
+    buffer.write_u64::<LE>(value).unwrap();
+    buffer.write(rseed).unwrap();
+    buffer.write(&rho).unwrap();
+
+    let cmu = ledger_cmu(&buffer).await.unwrap();
+    println!("cmx {:?}", hex::encode(&cmu));
+
+    // for i in 0..3 {
+    //     let debug_data = ledger_get_debug(i).await.unwrap();
+    //     println!("debug {}", hex::encode(&debug_data));
+    // }
+
+    // for i in 0..10 {
+    //     let sk = ledger_test_math(i).await.unwrap();
+    //     println!("SK {}", hex::encode(&sk));
+    // }
+
+    // let o_fvk = ledger_get_o_fvk().await.unwrap();
+    // println!("FVK {}", hex::encode(&o_fvk));
+
+    // let sk = hex::decode("19778746bfdf33616075940a21c4011263e974ff7b7341a9a8e5713908d39dab").unwrap();
+    // let sk = SpendingKey::from_bytes(sk.try_into().unwrap()).unwrap();
+    // let ask = SpendAuthorizingKey::from(&sk);
+    // println!("ask {:?}", ask);
+    // let fvk = FullViewingKey::from(&sk);
+    // println!("fvk {}", hex::encode(fvk.to_bytes()));
+
+
 }
 
 #[tokio::main]
-async fn main2() -> Result<()> {
+async fn main1() -> Result<()> {
     let params_dir = Path::new(&std::env::var("HOME").unwrap()).join(".zcash-params");
     let prover = LocalTxProver::new(
         &params_dir.join("sapling-spend.params"),
