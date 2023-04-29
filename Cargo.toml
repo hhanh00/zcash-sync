@@ -19,9 +19,9 @@ name = "wallet"
 path = "src/main/wallet.rs"
 required-features = ["dotenv"]
 
-[[bin]]
-name = "ledger"
-path = "src/main/ledger.rs"
+#[[bin]]
+#name = "ledger"
+#path = "src/main/ledger.rs"
 
 #[[bin]]
 #name = "sign"
