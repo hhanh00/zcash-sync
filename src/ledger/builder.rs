@@ -85,14 +85,7 @@ pub async fn build_broadcast_tx(
         transparent_builder.taddr, tx_plan.taddr);
     }
 
-    // Compute header digest
-    let mut h = create_hasher(b"ZTxIdHeadersHash");
-    h.update(&hex!("050000800a27a726b4d0d6c200000000"));
-
-    h.write_u32::<LE>(tx_plan.expiry_height)?;
-    let header_digest = h.finalize();
-
-    let master_seed = ledger_init_tx(header_digest.as_bytes()).await?;
+    let master_seed = ledger_init_tx().await?;
 
     // For testing only
     // let esk = "secret-extended-key-main1qwy5cttzqqqqpq8ksfmzqgz90r73yevcw6mvwuv5zuddak9zgl9epp6x308pczzez3hse753heepdk886yf7dmse5qvyl5jsuk5w4ejhtm30cpa862kq0pfu0z4zxxvyd523zeta3rr6lj0vg30mshf6wrlfucg47jv3ldspe0sv464uewwlglr0dzakssj8tdx27vq3dnerfa5z5fgf8vjutlcey3lwn4m6ncg8y4n2cgl64rd768uqg0yfvshljqt3g4x83kngv4guq06xx";
@@ -139,6 +132,13 @@ pub async fn build_broadcast_tx(
     let alpha = h.finalize();
     let mut alpha_rng = ChaChaRng::from_seed(alpha.as_bytes().try_into().unwrap());
 
+    // Compute header digest
+    let mut h = create_hasher(b"ZTxIdHeadersHash");
+    h.update(&hex!("050000800a27a726b4d0d6c200000000"));
+
+    h.write_u32::<LE>(tx_plan.expiry_height)?;
+    let header_digest = h.finalize();
+
     for sp in tx_plan.spends.iter() {
         match sp.source {
             Source::Transparent { txid, index } => {
@@ -173,7 +173,7 @@ pub async fn build_broadcast_tx(
                 .await?;
         }
     }
-    transparent_builder.set_merkle_proof().await?;
+    transparent_builder.set_merkle_proof(header_digest.as_bytes()).await?;
     ledger_set_stage(3).await?;
 
     for output in tx_plan.outputs.iter() {

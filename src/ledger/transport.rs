@@ -95,10 +95,9 @@ pub async fn ledger_get_o_fvk() -> Result<Vec<u8>> {
     Ok(pk)
 }
 
-pub async fn ledger_init_tx(header_digest: &[u8]) -> Result<Vec<u8>> {
+pub async fn ledger_init_tx() -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E010000020"))?;
-    bb.write_all(header_digest)?;
+    bb.write_all(&hex!("E010000000"))?;
     let main_seed = apdu(&bb).await?;
     Ok(main_seed)
 }
@@ -113,12 +112,14 @@ pub async fn ledger_set_stage(stage: u8) -> Result<()> {
 }
 
 pub async fn ledger_set_transparent_merkle_proof(
+    header_digest: &[u8],
     prevouts_digest: &[u8],
     pubscripts_digest: &[u8],
     sequences_digest: &[u8],
 ) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E012000060"))?;
+    bb.write_all(&hex!("E012000080"))?;
+    bb.write_all(header_digest)?;
     bb.write_all(prevouts_digest)?;
     bb.write_all(pubscripts_digest)?;
     bb.write_all(sequences_digest)?;
