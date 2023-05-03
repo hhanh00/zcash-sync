@@ -272,7 +272,7 @@ impl OrchardBuilder {
 
 
     pub async fn sign(&mut self) -> Result<()> {
-        self.sig_hash = ledger_get_sighash().await?;
+        self.sig_hash = ledger_get_shielded_sighash().await?;
 
         for (a, (ref s, _)) in self.actions.iter().zip(self.padded_inouts.iter()) {
             let signature =

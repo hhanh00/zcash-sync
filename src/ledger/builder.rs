@@ -138,6 +138,7 @@ pub async fn build_broadcast_tx(
 
     h.write_u32::<LE>(tx_plan.expiry_height)?;
     let header_digest = h.finalize();
+    ledger_set_header_digest(header_digest.as_bytes()).await?;
 
     for sp in tx_plan.spends.iter() {
         match sp.source {
@@ -173,7 +174,7 @@ pub async fn build_broadcast_tx(
                 .await?;
         }
     }
-    transparent_builder.set_merkle_proof(header_digest.as_bytes()).await?;
+    transparent_builder.set_merkle_proof().await?;
     ledger_set_stage(3).await?;
 
     for output in tx_plan.outputs.iter() {

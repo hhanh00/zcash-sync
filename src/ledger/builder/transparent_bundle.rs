@@ -99,7 +99,7 @@ impl TransparentBuilder {
         Ok(())
     }
 
-    pub async fn set_merkle_proof(&self, header_hash: &[u8]) -> Result<()> {
+    pub async fn set_merkle_proof(&self) -> Result<()> {
         let prevouts_digest = self.prevouts_hasher.finalize();
         log::info!("PREVOUTS {}", hex::encode(prevouts_digest));
         let pubscripts_digest = self.trscripts_hasher.finalize();
@@ -108,7 +108,6 @@ impl TransparentBuilder {
         log::info!("SEQUENCES {}", hex::encode(sequences_digest));
 
         ledger_set_transparent_merkle_proof(
-            header_hash,
             prevouts_digest.as_bytes(),
             pubscripts_digest.as_bytes(),
             sequences_digest.as_bytes(),

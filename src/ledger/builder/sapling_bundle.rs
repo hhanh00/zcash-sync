@@ -291,7 +291,7 @@ impl<'a> SaplingBuilder<'a> {
         let value: i64 = self.value_balance.try_into().unwrap();
         let value = Amount::from_i64(value).unwrap();
 
-        let sighash = ledger_get_sighash().await?;
+        let sighash = ledger_get_shielded_sighash().await?;
         log::info!("TXID {}", hex::encode(&sighash));
         let binding_sig = self
             .sapling_context

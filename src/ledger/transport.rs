@@ -43,6 +43,7 @@ async fn apdu(data: &[u8]) -> Result<Vec<u8>> {
 
 const TEST_SERVER_IP: Option<&'static str> = option_env!("LEDGER_IP");
 
+#[allow(dead_code)]
 async fn apdu_http(data: &[u8]) -> Result<Vec<u8>> {
     let client = Client::new();
     let response = client
@@ -69,9 +70,16 @@ pub async fn ledger_init() -> Result<()> {
     Ok(())
 }
 
-pub async fn ledger_get_dfvk() -> Result<DiversifiableFullViewingKey> {
+pub async fn ledger_get_pubkey() -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E006000000"))?;
+    let pk = apdu(&bb).await?;
+    Ok(pk)
+}
+
+pub async fn ledger_get_dfvk() -> Result<DiversifiableFullViewingKey> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E007000000"))?;
     let dfvk_vec = apdu(&bb).await?;
     let mut dfvk = [0; 128];
     dfvk.copy_from_slice(&dfvk_vec);
@@ -79,13 +87,6 @@ pub async fn ledger_get_dfvk() -> Result<DiversifiableFullViewingKey> {
     let dfvk = DiversifiableFullViewingKey::from_bytes(&dfvk)
         .ok_or(anyhow!("Invalid diversifiable fvk"))?;
     Ok(dfvk)
-}
-
-pub async fn ledger_get_pubkey() -> Result<Vec<u8>> {
-    let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E007000000"))?;
-    let pk = apdu(&bb).await?;
-    Ok(pk)
 }
 
 pub async fn ledger_get_o_fvk() -> Result<Vec<u8>> {
@@ -111,53 +112,9 @@ pub async fn ledger_set_stage(stage: u8) -> Result<()> {
     Ok(())
 }
 
-pub async fn ledger_set_transparent_merkle_proof(
-    header_digest: &[u8],
-    prevouts_digest: &[u8],
-    pubscripts_digest: &[u8],
-    sequences_digest: &[u8],
-) -> Result<()> {
-    let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E012000080"))?;
-    bb.write_all(header_digest)?;
-    bb.write_all(prevouts_digest)?;
-    bb.write_all(pubscripts_digest)?;
-    bb.write_all(sequences_digest)?;
-    apdu(&bb).await?;
-    Ok(())
-}
-
-pub async fn ledger_set_sapling_merkle_proof(
-    spends_digest: &[u8],
-    memos_digest: &[u8],
-    outputs_nc_digest: &[u8],
-) -> Result<()> {
-    let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E013000060"))?;
-    bb.write_all(spends_digest)?;
-    bb.write_all(memos_digest)?;
-    bb.write_all(outputs_nc_digest)?;
-    apdu(&bb).await?;
-    Ok(())
-}
-
-pub async fn ledger_set_orchard_merkle_proof(
-    anchor: &[u8],
-    memos_digest: &[u8],
-    outputs_nc_digest: &[u8],
-) -> Result<()> {
-    let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E014000060"))?;
-    bb.write_all(anchor)?;
-    bb.write_all(memos_digest)?;
-    bb.write_all(outputs_nc_digest)?;
-    apdu(&bb).await?;
-    Ok(())
-}
-
 pub async fn ledger_add_t_input(amount: u64) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E015000008"))?;
+    bb.write_all(&hex!("E012000008"))?;
     bb.write_u64::<LE>(amount)?;
     apdu(&bb).await?;
     Ok(())
@@ -165,7 +122,7 @@ pub async fn ledger_add_t_input(amount: u64) -> Result<()> {
 
 pub async fn ledger_add_t_output(amount: u64, address: &[u8]) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E01601001D"))?;
+    bb.write_all(&hex!("E01301001D"))?;
     bb.write_u64::<LE>(amount)?;
     bb.write_all(address)?;
     apdu(&bb).await?;
@@ -179,7 +136,7 @@ pub async fn ledger_add_s_output(
     enc_compact: &[u8],
 ) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E017010087"))?;
+    bb.write_all(&hex!("E014010087"))?;
     bb.write_all(address)?;
     bb.write_u64::<LE>(amount)?;
     bb.write_all(epk)?;
@@ -196,7 +153,7 @@ pub async fn ledger_add_o_action(
     enc_compact: &[u8],
 ) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E0180100A7"))?;
+    bb.write_all(&hex!("E0150100A7"))?;
     bb.write_all(nf)?;
     bb.write_all(address)?;
     bb.write_u64::<LE>(amount)?;
@@ -208,7 +165,7 @@ pub async fn ledger_add_o_action(
 
 pub async fn ledger_set_net_sapling(net: i64) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E019000008"))?;
+    bb.write_all(&hex!("E016000008"))?;
     bb.write_i64::<LE>(net)?;
     apdu(&bb).await?;
     Ok(())
@@ -216,29 +173,74 @@ pub async fn ledger_set_net_sapling(net: i64) -> Result<()> {
 
 pub async fn ledger_set_net_orchard(net: i64) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E01A000008"))?;
+    bb.write_all(&hex!("E017000008"))?;
     bb.write_i64::<LE>(net)?;
+    apdu(&bb).await?;
+    Ok(())
+}
+
+pub async fn ledger_set_header_digest(
+    header_digest: &[u8],
+) -> Result<()> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E018000020"))?;
+    bb.write_all(header_digest)?;
+    apdu(&bb).await?;
+    Ok(())
+}
+
+pub async fn ledger_set_transparent_merkle_proof(
+    prevouts_digest: &[u8],
+    pubscripts_digest: &[u8],
+    sequences_digest: &[u8],
+) -> Result<()> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E019000060"))?;
+    bb.write_all(prevouts_digest)?;
+    bb.write_all(pubscripts_digest)?;
+    bb.write_all(sequences_digest)?;
+    apdu(&bb).await?;
+    Ok(())
+}
+
+pub async fn ledger_set_sapling_merkle_proof(
+    spends_digest: &[u8],
+    memos_digest: &[u8],
+    outputs_nc_digest: &[u8],
+) -> Result<()> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E01A000060"))?;
+    bb.write_all(spends_digest)?;
+    bb.write_all(memos_digest)?;
+    bb.write_all(outputs_nc_digest)?;
+    apdu(&bb).await?;
+    Ok(())
+}
+
+pub async fn ledger_set_orchard_merkle_proof(
+    anchor: &[u8],
+    memos_digest: &[u8],
+    outputs_nc_digest: &[u8],
+) -> Result<()> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E01B000060"))?;
+    bb.write_all(anchor)?;
+    bb.write_all(memos_digest)?;
+    bb.write_all(outputs_nc_digest)?;
     apdu(&bb).await?;
     Ok(())
 }
 
 pub async fn ledger_confirm_fee() -> Result<()> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E01B010000"))?;
+    bb.write_all(&hex!("E01C010000"))?;
     apdu(&bb).await?;
     Ok(())
 }
 
-pub async fn ledger_get_sighash() -> Result<Vec<u8>> {
-    let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E020000000"))?;
-    let sighash = apdu(&bb).await?;
-    Ok(sighash)
-}
-
 pub async fn ledger_get_proofgen_key() -> Result<ProofGenerationKey> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E021000000"))?;
+    bb.write_all(&hex!("E020000000"))?;
     let proofgen_key = apdu(&bb).await?;
     let proofgen_key = ProofGenerationKey {
         ak: SubgroupPoint::from_bytes(proofgen_key[0..32].try_into().unwrap()).unwrap(),
@@ -249,7 +251,7 @@ pub async fn ledger_get_proofgen_key() -> Result<ProofGenerationKey> {
 
 pub async fn ledger_sign_transparent(txin_digest: &[u8]) -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E022000020"))?;
+    bb.write_all(&hex!("E021000020"))?;
     bb.write_all(txin_digest)?;
     let signature = apdu(&bb).await?;
     Ok(signature)
@@ -257,12 +259,19 @@ pub async fn ledger_sign_transparent(txin_digest: &[u8]) -> Result<Vec<u8>> {
 
 pub async fn ledger_sign_sapling() -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E023000000"))?;
+    bb.write_all(&hex!("E022000000"))?;
     let signature = apdu(&bb).await?;
     Ok(signature)
 }
 
 pub async fn ledger_sign_orchard() -> Result<Vec<u8>> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E023000000"))?;
+    let signature = apdu(&bb).await?;
+    Ok(signature)
+}
+
+pub async fn ledger_get_shielded_sighash() -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E024000000"))?;
     let signature = apdu(&bb).await?;
