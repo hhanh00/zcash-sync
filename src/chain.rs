@@ -130,7 +130,8 @@ fn get_available_memory() -> anyhow::Result<usize> {
 fn get_system_available_memory() -> anyhow::Result<usize> {
     let mut sys = System::new();
     sys.refresh_memory();
-    let mem_available = sys.available_memory() as usize;
+    log::info!("{:?}", sys);
+    let mem_available = (sys.free_memory() as usize).max(10_000); // assume there is some memory left
     Ok(mem_available)
 }
 
