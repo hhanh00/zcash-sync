@@ -96,6 +96,17 @@ pub async fn ledger_get_o_fvk() -> Result<Vec<u8>> {
     Ok(pk)
 }
 
+pub async fn ledger_get_proofgen_key() -> Result<ProofGenerationKey> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E009000000"))?;
+    let proofgen_key = apdu(&bb).await?;
+    let proofgen_key = ProofGenerationKey {
+        ak: SubgroupPoint::from_bytes(proofgen_key[0..32].try_into().unwrap()).unwrap(),
+        nsk: Fr::from_bytes(proofgen_key[32..64].try_into().unwrap()).unwrap(),
+    };
+    Ok(proofgen_key)
+}
+
 pub async fn ledger_init_tx() -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E010000000"))?;
@@ -236,17 +247,6 @@ pub async fn ledger_confirm_fee() -> Result<()> {
     bb.write_all(&hex!("E01C010000"))?;
     apdu(&bb).await?;
     Ok(())
-}
-
-pub async fn ledger_get_proofgen_key() -> Result<ProofGenerationKey> {
-    let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E020000000"))?;
-    let proofgen_key = apdu(&bb).await?;
-    let proofgen_key = ProofGenerationKey {
-        ak: SubgroupPoint::from_bytes(proofgen_key[0..32].try_into().unwrap()).unwrap(),
-        nsk: Fr::from_bytes(proofgen_key[32..64].try_into().unwrap()).unwrap(),
-    };
-    Ok(proofgen_key)
 }
 
 pub async fn ledger_sign_transparent(txin_digest: &[u8]) -> Result<Vec<u8>> {

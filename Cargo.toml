@@ -91,7 +91,7 @@ chacha20poly1305 = "0.9.0"
 base64 = "^0.13"
 base58check = "0.1.0"
 raptorq = "1.7.0"
-sysinfo = "0.25"
+sysinfo = "0.28"
 
 ledger-transport-hid = { version = "0.10", optional = true }
 ledger-apdu = { version = "0.10", optional = true }
