@@ -66,7 +66,7 @@ impl TransparentBuilder {
         }
     }
 
-    pub async fn add_input(&mut self, txid: [u8; 32], index: u32, amount: u64) -> Result<()> {
+    pub fn add_input(&mut self, txid: [u8; 32], index: u32, amount: u64) -> Result<()> {
         self.prevouts_hasher.update(&txid);
         self.prevouts_hasher.write_u32::<LE>(index)?;
         self.trscripts_hasher.update(&hex!("1976a914"));
@@ -82,15 +82,15 @@ impl TransparentBuilder {
             },
         });
 
-        ledger_add_t_input(amount).await?;
+        ledger_add_t_input(amount)?;
         Ok(())
     }
 
-    pub async fn add_output(&mut self, raw_address: [u8; 21], amount: u64) -> Result<()> {
+    pub fn add_output(&mut self, raw_address: [u8; 21], amount: u64) -> Result<()> {
         if raw_address[0] != 0 {
             anyhow::bail!("Only t1 addresses are supported");
         }
-        ledger_add_t_output(amount, &raw_address).await?;
+        ledger_add_t_output(amount, &raw_address)?;
         let ta = TransparentAddress::PublicKey(raw_address[1..21].try_into().unwrap());
         self.vout.push(TxOut {
             value: Amount::from_u64(amount).unwrap(),
@@ -99,7 +99,7 @@ impl TransparentBuilder {
         Ok(())
     }
 
-    pub async fn set_merkle_proof(&self) -> Result<()> {
+    pub fn set_merkle_proof(&self) -> Result<()> {
         let prevouts_digest = self.prevouts_hasher.finalize();
         log::info!("PREVOUTS {}", hex::encode(prevouts_digest));
         let pubscripts_digest = self.trscripts_hasher.finalize();
@@ -112,11 +112,11 @@ impl TransparentBuilder {
             pubscripts_digest.as_bytes(),
             sequences_digest.as_bytes(),
         )
-        .await?;
+        ?;
         Ok(())
     }
 
-    pub async fn sign(&mut self) -> Result<()> {
+    pub fn sign(&mut self) -> Result<()> {
         let _vins: Vec<TxIn<transparent::Authorized>> = vec![];
         for tin in self.vin.iter() {
             let mut txin_hasher = create_hasher(b"Zcash___TxInHash");
@@ -130,7 +130,7 @@ impl TransparentBuilder {
             let txin_hash = txin_hasher.finalize();
             log::info!("TXIN {}", hex::encode(txin_hash));
 
-            let signature = ledger_sign_transparent(txin_hash.as_bytes()).await?;
+            let signature = ledger_sign_transparent(txin_hash.as_bytes())?;
             let signature = secp256k1::ecdsa::Signature::from_der(&signature)?;
             let mut signature = signature.serialize_der().to_vec();
             signature.extend(&[0x01]); // add SIG_HASH_ALL

@@ -6,11 +6,11 @@ use zcash_primitives::{consensus::Parameters, zip32::ExtendedFullViewingKey};
 
 use super::transport::*;
 
-pub async fn import(coin: u8, name: &str) -> Result<u32> {
+pub fn import(coin: u8, name: &str) -> Result<u32> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
-    ledger_init().await?;
-    let dfvk = ledger_get_dfvk().await?;
+    ledger_init()?;
+    let dfvk = ledger_get_dfvk()?;
     let fvk = ExtendedFullViewingKey::from_diversifiable_full_viewing_key(&dfvk);
     let fvk =
         encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk);
@@ -20,13 +20,10 @@ pub async fn import(coin: u8, name: &str) -> Result<u32> {
     if let Some(account) = get_account_by_address(&db.connection, &address)? {
         return Ok(account);
     }
-    let pub_key = ledger_get_pubkey().await?;
+    let pub_key = ledger_get_pubkey()?;
     let t_address = derive_from_pubkey(network, &pub_key)?;
 
-    println!("OFVK");
-    let o_fvk = ledger_get_o_fvk().await?;
-    println!("fvk {}", hex::encode(&o_fvk));
-    println!("OFVK2");
+    let has_orchard = ledger_has_orchard()?;
 
     let db_transaction = db.begin_transaction()?;
     db_transaction.execute(
@@ -40,11 +37,14 @@ pub async fn import(coin: u8, name: &str) -> Result<u32> {
         (?1, NULL, ?2)",
         params![id_account, t_address],
     )?;
-    db_transaction.execute(
-        "INSERT INTO orchard_addrs(account, sk, fvk) VALUES
+    if has_orchard {
+        let o_fvk = ledger_get_o_fvk()?;
+        db_transaction.execute(
+            "INSERT INTO orchard_addrs(account, sk, fvk) VALUES
         (?1, NULL, ?2)",
-        params![id_account, o_fvk],
-    )?;
+            params![id_account, o_fvk],
+        )?;
+    }
     db_transaction.execute(
         "INSERT INTO hw_wallets(account, ledger) VALUES
         (?1, 1)",

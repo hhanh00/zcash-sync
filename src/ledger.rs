@@ -6,5 +6,5 @@ mod transport;
 mod tests;
 
 pub use account::{import as import_account, is_external};
-pub use builder::build_broadcast_tx;
+pub use builder::build_ledger_tx;
 pub use transport::*;

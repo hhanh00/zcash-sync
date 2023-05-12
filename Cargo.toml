@@ -19,9 +19,9 @@ name = "wallet"
 path = "src/main/wallet.rs"
 required-features = ["dotenv"]
 
-#[[bin]]
-#name = "ledger"
-#path = "src/main/ledger.rs"
+[[bin]]
+name = "ledger"
+path = "src/main/ledger.rs"
 
 #[[bin]]
 #name = "sign"
@@ -74,7 +74,7 @@ rustyline = "9.1.2"
 clap = "3.1.18"
 chrono = "0.4.19"
 lazycell = "1.3.0"
-reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.11.4", features = ["json", "rustls-tls", "blocking"], default-features = false }
 hex-literal = "0.4"
 pasta_curves = "0.5"
 f4jumble = { path = "../../librustzcash/components/f4jumble" }
@@ -125,35 +125,35 @@ sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 path = "../zcash-params"
 
 [dependencies.zcash_client_backend]
-#git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
-path = "../../librustzcash/zcash_client_backend"
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+#path = "../../librustzcash/zcash_client_backend"
 
 [dependencies.zcash_primitives]
-#git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
-path = "../../librustzcash/zcash_primitives"
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+#path = "../../librustzcash/zcash_primitives"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
-#git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
-path = "../../librustzcash/zcash_proofs"
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+#path = "../../librustzcash/zcash_proofs"
 
 [dependencies.zcash_address]
-#git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
-path = "../../librustzcash/components/zcash_address"
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+#path = "../../librustzcash/components/zcash_address"
 
 [dependencies.zcash_encoding]
-#git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
-path = "../../librustzcash/components/zcash_encoding"
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+#path = "../../librustzcash/components/zcash_encoding"
 
 [dependencies.zcash_note_encryption]
-#git = "https://github.com/hhanh00/librustzcash.git"
-#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
-path = "../../librustzcash/components/zcash_note_encryption"
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+#path = "../../librustzcash/components/zcash_note_encryption"
 
 [build-dependencies]
 tonic-build = "0.7.2"

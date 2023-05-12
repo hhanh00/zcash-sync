@@ -94,7 +94,7 @@ impl<'a> SaplingBuilder<'a> {
         }
     }
 
-    pub async fn add_spend(
+    pub fn add_spend(
         &mut self,
         alpha: Fr,
         diversifier: [u8; 11],
@@ -152,7 +152,7 @@ impl<'a> SaplingBuilder<'a> {
         Ok(())
     }
 
-    pub async fn add_output(
+    pub fn add_output(
         &mut self,
         rseed: [u8; 32],
         raw_address: [u8; 43],
@@ -168,7 +168,7 @@ impl<'a> SaplingBuilder<'a> {
         let note = Note::from_parts(recipient, value, rseed);
         let rcm = note.rcm();
         let cmu = note.cmu();
-        log::info!("cmu {}", hex::encode(cmu.to_bytes()));
+        println!("cmu {}", hex::encode(cmu.to_bytes()));
 
         let encryptor = sapling_note_encryption::<_, MainNetwork>(
             Some(self.dfvk.fvk.ovk.clone()),
@@ -198,7 +198,7 @@ impl<'a> SaplingBuilder<'a> {
             &raw_address,
             &enc_ciphertext[0..52],
         )
-        .await?;
+        ?;
 
         let memo = &enc_ciphertext[52..564];
         self.output_memos_hasher.update(memo);
@@ -221,7 +221,7 @@ impl<'a> SaplingBuilder<'a> {
         Ok(())
     }
 
-    pub async fn set_merkle_proof(&mut self, net_chg: i64) -> Result<()> {
+    pub fn set_merkle_proof(&mut self, net_chg: i64) -> Result<()> {
         let spends_compact_digest = self.spends_compact_hasher.finalize();
         log::info!("C SPENDS {}", hex::encode(spends_compact_digest));
         let spends_non_compact_digest = self.spends_non_compact_hasher.finalize();
@@ -233,27 +233,27 @@ impl<'a> SaplingBuilder<'a> {
             spends_hasher.update(spends_non_compact_digest.as_bytes());
         }
         let spends_digest = spends_hasher.finalize();
-        log::info!("SPENDS {}", hex::encode(spends_digest));
+        println!("SPENDS {}", hex::encode(spends_digest));
 
         let memos_digest = self.output_memos_hasher.finalize();
-        log::info!("MEMOS {}", hex::encode(memos_digest));
+        println!("MEMOS {}", hex::encode(memos_digest));
         let outputs_nc_digest = self.output_non_compact_hasher.finalize();
-        log::info!("NC OUTPUTS {}", hex::encode(outputs_nc_digest));
+        println!("NC OUTPUTS {}", hex::encode(outputs_nc_digest));
 
         ledger_set_sapling_merkle_proof(
             spends_digest.as_bytes(),
             memos_digest.as_bytes(),
             outputs_nc_digest.as_bytes(),
         )
-        .await?;
-        ledger_set_net_sapling(-net_chg).await?;
+        ?;
+        ledger_set_net_sapling(-net_chg)?;
 
         Ok(())
     }
 
-    pub async fn sign(&mut self) -> Result<()> {
+    pub fn sign(&mut self) -> Result<()> {
         for _sp in self.shielded_spends.iter() {
-            let signature = ledger_sign_sapling().await?;
+            let signature = ledger_sign_sapling()?;
             let signature = Signature::read(&*signature)?;
             // Signature verification
             // let rk = sp.rk();
@@ -268,7 +268,7 @@ impl<'a> SaplingBuilder<'a> {
         Ok(())
     }
 
-    pub async fn build(self) -> Result<Option<Bundle<SapAuthorized>>> {
+    pub fn build(self) -> Result<Option<Bundle<SapAuthorized>>> {
         let has_sapling = !self.shielded_spends.is_empty() || !self.shielded_outputs.is_empty();
         if !has_sapling {
             return Ok(None);
@@ -291,7 +291,7 @@ impl<'a> SaplingBuilder<'a> {
         let value: i64 = self.value_balance.try_into().unwrap();
         let value = Amount::from_i64(value).unwrap();
 
-        let sighash = ledger_get_shielded_sighash().await?;
+        let sighash = ledger_get_shielded_sighash()?;
         log::info!("TXID {}", hex::encode(&sighash));
         let binding_sig = self
             .sapling_context

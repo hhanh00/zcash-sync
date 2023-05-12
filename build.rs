@@ -7,7 +7,7 @@ fn main() {
         )
         .unwrap();
 
-    // create_c_bindings();
+    create_c_bindings();
 }
 
 #[allow(dead_code)]

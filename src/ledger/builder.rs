@@ -40,11 +40,11 @@ mod sapling_bundle;
 mod transparent_bundle;
 
 #[allow(dead_code)]
-pub async fn show_public_keys() -> Result<()> {
+pub fn show_public_keys() -> Result<()> {
     let network = MainNetwork;
 
-    ledger_init().await?;
-    let pub_key = ledger_get_pubkey().await?;
+    ledger_init()?;
+    let pub_key = ledger_get_pubkey()?;
     let pub_key = PublicKey::from_slice(&pub_key)?;
     let pub_key = pub_key.serialize();
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
@@ -55,7 +55,7 @@ pub async fn show_public_keys() -> Result<()> {
         &address,
     );
     println!("address {}", address);
-    let dfvk = ledger_get_dfvk().await?;
+    let dfvk = ledger_get_dfvk()?;
     let efvk = ExtendedFullViewingKey::from_diversifiable_full_viewing_key(&dfvk);
     let efvk = encode_extended_full_viewing_key(
         MainNetwork.hrp_sapling_extended_full_viewing_key(),
@@ -70,14 +70,14 @@ pub fn create_hasher(perso: &[u8]) -> State {
     h
 }
 
-pub async fn build_broadcast_tx(
+pub fn build_ledger_tx(
     network: &Network,
-    client: &mut CompactTxStreamerClient<Channel>,
     tx_plan: &TransactionPlan,
     prover: &LocalTxProver,
-) -> Result<String> {
-    ledger_init().await?;
-    let pubkey = ledger_get_pubkey().await?;
+    proving_key: &ProvingKey,
+) -> Result<Vec<u8>> {
+    ledger_init()?;
+    let pubkey = ledger_get_pubkey()?;
     let mut transparent_builder = TransparentBuilder::new(network, &pubkey);
 
     if transparent_builder.taddr != tx_plan.taddr {
@@ -85,34 +85,32 @@ pub async fn build_broadcast_tx(
         transparent_builder.taddr, tx_plan.taddr);
     }
 
-    let master_seed = ledger_init_tx().await?;
+    let has_orchard = ledger_has_orchard()?;
 
-    // For testing only
-    // let esk = "secret-extended-key-main1qwy5cttzqqqqpq8ksfmzqgz90r73yevcw6mvwuv5zuddak9zgl9epp6x308pczzez3hse753heepdk886yf7dmse5qvyl5jsuk5w4ejhtm30cpa862kq0pfu0z4zxxvyd523zeta3rr6lj0vg30mshf6wrlfucg47jv3ldspe0sv464uewwlglr0dzakssj8tdx27vq3dnerfa5z5fgf8vjutlcey3lwn4m6ncg8y4n2cgl64rd768uqg0yfvshljqt3g4x83kngv4guq06xx";
-    // let extsk = decode_extended_spending_key(MainNetwork.hrp_sapling_extended_spending_key(), &esk)
-    //     .unwrap();
-    // let ovk = extsk.expsk.ovk;
-    // let proofgen_key = extsk.expsk.proof_generation_key();
-    // let dfvk = extsk.to_diversifiable_full_viewing_key();
+    let master_seed = ledger_init_tx()?;
 
-    let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk().await?;
+    let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk()?;
     let proofgen_key: zcash_primitives::sapling::ProofGenerationKey =
-        ledger_get_proofgen_key().await?;
+        ledger_get_proofgen_key()?;
 
     let mut sapling_builder = SaplingBuilder::new(prover, dfvk, proofgen_key);
 
-    let orchard_fvk: [u8; 96] = hex::decode(&tx_plan.orchard_fvk)
-        .unwrap()
-        .try_into()
-        .unwrap();
-    let orchard_fvk = orchard::keys::FullViewingKey::from_bytes(&orchard_fvk).unwrap();
+    let o_fvk: [u8; 96] = if has_orchard {
+            ledger_get_o_fvk()?.try_into().unwrap()
+        }
+        else {
+            // dummy o_fvk - we are not going to use it
+            let sk = orchard::keys::SpendingKey::from_bytes([0; 32]).unwrap();
+            orchard::keys::FullViewingKey::from(&sk).to_bytes()
+        };
+    let orchard_fvk =
+        orchard::keys::FullViewingKey::from_bytes(&o_fvk).ok_or(anyhow!("Invalid Orchard FVK"))?;
     let anchor = orchard::Anchor::from_bytes(tx_plan.orchard_anchor).unwrap();
 
     let mut orchard_builder = OrchardBuilder::new(&orchard_fvk, anchor);
-
-    let o_fvk: [u8; 96] = ledger_get_o_fvk().await?.try_into().unwrap();
-    let _o_fvk =
-        orchard::keys::FullViewingKey::from_bytes(&o_fvk).ok_or(anyhow!("Invalid Orchard FVK"))?;
+    if !has_orchard {
+        orchard_builder.disable();
+    }
 
     // Derive rseed PRNG
     let mut h = Params::new()
@@ -138,14 +136,14 @@ pub async fn build_broadcast_tx(
 
     h.write_u32::<LE>(tx_plan.expiry_height)?;
     let header_digest = h.finalize();
-    ledger_set_header_digest(header_digest.as_bytes()).await?;
+    ledger_set_header_digest(header_digest.as_bytes())?;
 
     for sp in tx_plan.spends.iter() {
         match sp.source {
             Source::Transparent { txid, index } => {
                 transparent_builder
                     .add_input(txid, index, sp.amount)
-                    .await?;
+                    ?;
             }
             Source::Sapling {
                 diversifier,
@@ -154,28 +152,28 @@ pub async fn build_broadcast_tx(
                 ..
             } => {
                 let alpha = Fr::random(&mut alpha_rng);
-                println!("ALPHA {}", hex::encode(&alpha.to_bytes()));
+                // println!("ALPHA {}", hex::encode(&alpha.to_bytes()));
 
                 sapling_builder
                     .add_spend(alpha, diversifier, rseed, witness, sp.amount)
-                    .await?;
+                    ?;
             }
             Source::Orchard { diversifier, rseed, rho, ref witness, ..  } => {
                 orchard_builder.add_spend(diversifier, rseed, rho, &witness, sp.amount)?;
             }
         }
     }
-    ledger_set_stage(2).await?;
+    ledger_set_stage(2)?;
 
     for output in tx_plan.outputs.iter() {
         if let Destination::Transparent(raw_address) = output.destination {
             transparent_builder
                 .add_output(raw_address, output.amount)
-                .await?;
+                ?;
         }
     }
-    transparent_builder.set_merkle_proof().await?;
-    ledger_set_stage(3).await?;
+    transparent_builder.set_merkle_proof()?;
+    ledger_set_stage(3)?;
 
     for output in tx_plan.outputs.iter() {
         match output.destination {
@@ -184,7 +182,7 @@ pub async fn build_broadcast_tx(
                 rseed_rng.fill_bytes(&mut rseed);
                 sapling_builder
                     .add_output(rseed, raw_address, &output.memo, output.amount)
-                    .await?;
+                    ?;
             }
             Destination::Orchard(raw_address) => {
                 orchard_builder.add_output(raw_address, output.amount, &output.memo)?;
@@ -192,21 +190,20 @@ pub async fn build_broadcast_tx(
             _ => {}
         }
     }
-    sapling_builder.set_merkle_proof(tx_plan.net_chg[0]).await?;
-    ledger_set_stage(4).await?;
+    sapling_builder.set_merkle_proof(tx_plan.net_chg[0])?;
+    ledger_set_stage(4)?;
 
-    let pk = ProvingKey::build();
-    orchard_builder.prepare(tx_plan.net_chg[1], &pk, &mut alpha_rng, &mut rseed_rng).await?;
+    orchard_builder.prepare(tx_plan.net_chg[1], proving_key, &mut alpha_rng, &mut rseed_rng)?;
 
-    ledger_set_stage(5).await?;
-    ledger_confirm_fee().await?;
+    ledger_set_stage(5)?;
+    ledger_confirm_fee()?;
 
-    transparent_builder.sign().await?;
-    sapling_builder.sign().await?;
-    orchard_builder.sign().await?;
+    transparent_builder.sign()?;
+    sapling_builder.sign()?;
+    orchard_builder.sign()?;
 
     let transparent_bundle = transparent_builder.build();
-    let sapling_bundle = sapling_builder.build().await?;
+    let sapling_bundle = sapling_builder.build()?;
     let orchard_bundle = orchard_builder.build()?;
 
     let authed_tx: TransactionData<Authorized> = TransactionData {
@@ -224,16 +221,7 @@ pub async fn build_broadcast_tx(
     let mut raw_tx = vec![];
     tx.write_v5(&mut raw_tx)?;
 
-    ledger_end_tx().await?;
+    ledger_end_tx()?;
 
-    let response = client
-        .send_transaction(Request::new(RawTransaction {
-            data: raw_tx,
-            height: 0,
-        }))
-        .await?
-        .into_inner();
-    println!("{}", response.error_message);
-
-    Ok(response.error_message)
+    Ok(raw_tx)
 }

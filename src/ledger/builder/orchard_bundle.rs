@@ -55,6 +55,7 @@ impl Authorization for NoAuth {
 }
 
 pub struct OrchardBuilder {
+    enabled: bool,
     orchard_fvk: FullViewingKey,
     anchor: Anchor,
 
@@ -75,6 +76,7 @@ pub struct OrchardBuilder {
 impl OrchardBuilder {
     pub fn new(orchard_fvk: &FullViewingKey, anchor: Anchor) -> Self {
         OrchardBuilder {
+            enabled: true,
             orchard_fvk: orchard_fvk.clone(),
             anchor,
 
@@ -93,6 +95,10 @@ impl OrchardBuilder {
         }
     }
 
+    pub fn disable(&mut self) {
+        self.enabled = false;
+    }
+
     pub fn add_spend(
         &mut self,
         diversifier: [u8; 11],
@@ -101,6 +107,9 @@ impl OrchardBuilder {
         witness: &[u8],
         amount: u64,
     ) -> Result<()> {
+        if !self.enabled {
+            anyhow::bail!("Orchard is disabled");
+        }
         let diversifier = Diversifier::from_bytes(diversifier);
         let address = self.orchard_fvk.address(diversifier, Scope::External);
         let rho = Nullifier::from_bytes(&rho).unwrap();
@@ -117,6 +126,9 @@ impl OrchardBuilder {
     }
 
     pub fn add_output(&mut self, address: [u8; 43], amount: u64, memo: &MemoBytes) -> Result<()> {
+        if !self.enabled {
+            anyhow::bail!("Orchard is disabled");
+        }
         let address = Address::from_raw_address_bytes(&address).unwrap();
         let output = OrchardOutput {
             recipient: address,
@@ -127,7 +139,7 @@ impl OrchardBuilder {
         Ok(())
     }
 
-    pub async fn prepare<R: RngCore>(
+    pub fn prepare<R: RngCore>(
         &mut self,
         netchg: i64,
         pk: &ProvingKey,
@@ -209,17 +221,17 @@ impl OrchardBuilder {
             orchard_nc_hasher.update(&enc[564..]);
             orchard_nc_hasher.update(&out);
 
-            println!(
-                "d/pkd {}",
-                hex::encode(&output.recipient.to_raw_address_bytes())
-            );
-            println!("rho {}", hex::encode(&rho.to_bytes()));
-            println!(
-                "amount {}",
-                hex::encode(&output.amount.inner().to_le_bytes())
-            );
-            println!("rseed {}", hex::encode(&rseed.as_bytes()));
-            println!("cmx {}", hex::encode(&cmx.to_bytes()));
+            // log::info!(
+            //     "d/pkd {}",
+            //     hex::encode(&output.recipient.to_raw_address_bytes())
+            // );
+            // log::info!("rho {}", hex::encode(&rho.to_bytes()));
+            // log::info!(
+            //     "amount {}",
+            //     hex::encode(&output.amount.inner().to_le_bytes())
+            // );
+            // log::info!("rseed {}", hex::encode(&rseed.as_bytes()));
+            // log::info!("cmx {}", hex::encode(&cmx.to_bytes()));
 
             let action: Action<SigningMetadata> = Action::from_parts(
                 rho.clone(),
@@ -237,6 +249,7 @@ impl OrchardBuilder {
             let circuit =
                 Circuit::from_action_context(spend_info, output_note, alpha, rcv.clone()).unwrap();
             circuits.push(circuit);
+
             let instance = Instance::from_parts(self.anchor, cv_net, rho.clone(), rk, cmx, true, true);
             instances.push(instance);
         }
@@ -253,7 +266,7 @@ impl OrchardBuilder {
                 &o.recipient.to_raw_address_bytes(),
                 &a.encrypted_note().enc_ciphertext[0..52],
             )
-            .await
+            
             .unwrap();
         }
 
@@ -261,18 +274,16 @@ impl OrchardBuilder {
             &self.anchor.to_bytes(),
             orchard_memos_hasher.finalize().as_bytes(),
             orchard_nc_hasher.finalize().as_bytes(),
-        )
-        .await
-        .unwrap();
+        )?;
 
-        ledger_set_net_orchard(-netchg).await?;
+        ledger_set_net_orchard(-netchg)?;
 
         Ok(())
     }
 
 
-    pub async fn sign(&mut self) -> Result<()> {
-        self.sig_hash = ledger_get_shielded_sighash().await?;
+    pub fn sign(&mut self) -> Result<()> {
+        self.sig_hash = ledger_get_shielded_sighash()?;
 
         for (a, (ref s, _)) in self.actions.iter().zip(self.padded_inouts.iter()) {
             let signature =
@@ -282,7 +293,7 @@ impl OrchardBuilder {
                         rsk.sign(&mut OsRng, &self.sig_hash)
                     }
                     None => {
-                        let sig_bytes: [u8; 64] = ledger_sign_orchard().await.unwrap().try_into().unwrap();
+                        let sig_bytes: [u8; 64] = ledger_sign_orchard().unwrap().try_into().unwrap();
                         let signature: Signature<SpendAuth> = sig_bytes.into();
                         signature
                     }

@@ -1227,11 +1227,13 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
     let res = async {
         let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
         let c = CoinConfig::get(coin);
-        let mut client = c.connect_lwd().await?;
         let prover = coinconfig::get_prover();
-        let response =
-            crate::ledger::build_broadcast_tx(c.chain.network(), &mut client, &tx_plan, prover)
-                .await?;
+        let pk = crate::orchard::get_proving_key();
+        let raw_tx = tokio::task::spawn_blocking(move || {
+            let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan, prover, &pk)?;
+            Ok::<_, anyhow::Error>(raw_tx)
+        }).await??;
+        let response = crate::broadcast_tx(&raw_tx).await?;
         Ok::<_, anyhow::Error>(response)
     };
     to_cresult_str(res.await)
@@ -1239,10 +1241,9 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
 
 #[cfg(feature = "ledger")]
 #[no_mangle]
-#[tokio::main]
-pub async unsafe extern "C" fn ledger_import_account(coin: u8, name: *mut c_char) -> CResult<u32> {
+pub unsafe extern "C" fn ledger_import_account(coin: u8, name: *mut c_char) -> CResult<u32> {
     from_c_str!(name);
-    let account = crate::ledger::import_account(coin, &name).await;
+    let account = crate::ledger::import_account(coin, &name);
     to_cresult(account)
 }
 
