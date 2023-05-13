@@ -19,9 +19,9 @@ name = "wallet"
 path = "src/main/wallet.rs"
 required-features = ["dotenv"]
 
-[[bin]]
-name = "ledger"
-path = "src/main/ledger.rs"
+#[[bin]]
+#name = "ledger"
+#path = "src/main/ledger.rs"
 
 #[[bin]]
 #name = "sign"
@@ -74,7 +74,8 @@ rustyline = "9.1.2"
 clap = "3.1.18"
 chrono = "0.4.19"
 lazycell = "1.3.0"
-reqwest = { version = "0.11.4", features = ["json", "rustls-tls", "blocking"], default-features = false }
+reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-features = false }
+ureq = { version = "2.6", optional = true }
 hex-literal = "0.4"
 pasta_curves = "0.5"
 f4jumble = { path = "../../librustzcash/components/f4jumble" }
@@ -111,7 +112,7 @@ objc = { version = "0.2", features = [ "objc_exception" ], optional = true }
 block = { version = "0.1.6", optional = true }
 
 [features]
-ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv"]
+ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv", "ureq" ]
 dart_ffi = ["allo-isolate", "once_cell", "android_logger"]
 rpc = ["rocket", "dotenv"]
 nodejs = ["node-bindgen"]

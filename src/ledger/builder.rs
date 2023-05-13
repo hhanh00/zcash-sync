@@ -15,7 +15,8 @@ use crate::ledger::transport::*;
 use crate::{CompactTxStreamerClient, Destination, RawTransaction, Source, TransactionPlan};
 use anyhow::{anyhow, Result};
 use rand::{RngCore, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand::rngs::OsRng;
+use rand_chacha::{ChaCha20Rng, ChaChaRng};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::PublicKey;
 use sha2::Sha256;
@@ -80,8 +81,9 @@ pub fn build_ledger_tx(
     let pubkey = ledger_get_pubkey()?;
     let mut transparent_builder = TransparentBuilder::new(network, &pubkey);
 
+    let mut rng = OsRng;
     if transparent_builder.taddr != tx_plan.taddr {
-        anyhow::bail!("This ledger wallet has a different address {} != {}", 
+        anyhow::bail!("This ledger wallet has a different address {} != {}",
         transparent_builder.taddr, tx_plan.taddr);
     }
 
@@ -155,7 +157,7 @@ pub fn build_ledger_tx(
                 // println!("ALPHA {}", hex::encode(&alpha.to_bytes()));
 
                 sapling_builder
-                    .add_spend(alpha, diversifier, rseed, witness, sp.amount)
+                    .add_spend(alpha, diversifier, rseed, witness, sp.amount, &mut rng)
                     ?;
             }
             Source::Orchard { diversifier, rseed, rho, ref witness, ..  } => {
@@ -181,7 +183,7 @@ pub fn build_ledger_tx(
                 let mut rseed = [0u8; 32];
                 rseed_rng.fill_bytes(&mut rseed);
                 sapling_builder
-                    .add_output(rseed, raw_address, &output.memo, output.amount)
+                    .add_output(rseed, raw_address, &output.memo, output.amount, &mut rng)
                     ?;
             }
             Destination::Orchard(raw_address) => {

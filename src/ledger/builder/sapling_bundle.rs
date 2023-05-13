@@ -11,7 +11,7 @@ use zcash_primitives::zip32::DiversifiableFullViewingKey;
 use crate::ledger::transport::*;
 
 use anyhow::{anyhow, Result};
-use rand::rngs::OsRng;
+use rand::RngCore;
 
 use ripemd::Digest;
 
@@ -94,13 +94,14 @@ impl<'a> SaplingBuilder<'a> {
         }
     }
 
-    pub fn add_spend(
+    pub fn add_spend<R: RngCore>(
         &mut self,
         alpha: Fr,
         diversifier: [u8; 11],
         rseed: [u8; 32],
         witness: &[u8],
         amount: u64,
+        mut rng: R,
     ) -> Result<()> {
         let diversifier = Diversifier(diversifier);
         let z_address = self
@@ -131,7 +132,7 @@ impl<'a> SaplingBuilder<'a> {
                 amount,
                 anchor,
                 merkle_path.clone(),
-                OsRng,
+                &mut rng,
             )
             .map_err(|_| anyhow!("Error generating spend"))?;
         self.value_balance =
@@ -152,12 +153,13 @@ impl<'a> SaplingBuilder<'a> {
         Ok(())
     }
 
-    pub fn add_output(
+    pub fn add_output<R: RngCore>(
         &mut self,
         rseed: [u8; 32],
         raw_address: [u8; 43],
         memo: &MemoBytes,
         amount: u64,
+        mut rng: R,
     ) -> Result<()> {
         let recipient = PaymentAddress::from_bytes(&raw_address).unwrap();
         let rseed = Rseed::AfterZip212(rseed);
@@ -175,7 +177,7 @@ impl<'a> SaplingBuilder<'a> {
             note,
             recipient,
             memo.clone(),
-            &mut OsRng,
+            &mut rng,
         );
 
         let (zkproof, cv) = self.prover.output_proof(
@@ -184,11 +186,11 @@ impl<'a> SaplingBuilder<'a> {
             recipient,
             rcm,
             amount,
-            &mut OsRng,
+            &mut rng,
         );
 
         let enc_ciphertext = encryptor.encrypt_note_plaintext();
-        let out_ciphertext = encryptor.encrypt_outgoing_plaintext(&cv, &cmu, &mut OsRng);
+        let out_ciphertext = encryptor.encrypt_outgoing_plaintext(&cv, &cmu, &mut rng);
 
         let epk = encryptor.epk();
 

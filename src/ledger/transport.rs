@@ -7,7 +7,6 @@ use jubjub::Fr;
 use jubjub::SubgroupPoint;
 use ledger_apdu::APDUCommand;
 use ledger_transport_hid::{hidapi::HidApi, TransportNativeHID};
-use reqwest::blocking::Client;
 use serde_json::Value;
 use std::io::Write;
 use zcash_primitives::sapling::ProofGenerationKey;
@@ -23,7 +22,7 @@ fn handle_error_code(code: u16) -> Result<()> {
     }
 }
 
-fn apdu_hid(data: &[u8]) -> Result<Vec<u8>> {
+fn apdu(data: &[u8]) -> Result<Vec<u8>> {
     let api = HidApi::new()?;
     let transport = TransportNativeHID::new(&api)?;
     let command = APDUCommand {
@@ -33,28 +32,30 @@ fn apdu_hid(data: &[u8]) -> Result<Vec<u8>> {
         p2: data[3],
         data: &data[5..],
     };
-    log::info!("ins {}", data[1]);
+    println!("ins {} {}", data[1], hex::encode(data));
     let response = transport.exchange(&command)?;
     let error_code = response.retcode();
     log::info!("error_code {}", error_code);
     handle_error_code(error_code)?;
-    Ok(response.data().to_vec())
+    let rep = response.data().to_vec();
+    println!("rep {}", hex::encode(&rep));
+    Ok(rep)
 }
 
 const TEST_SERVER_IP: Option<&'static str> = option_env!("LEDGER_IP");
 
 #[allow(dead_code)]
-fn apdu(data: &[u8]) -> Result<Vec<u8>> {
-    let client = Client::new();
-    let response = client
-        .post(&format!("http://{}:5000/apdu", TEST_SERVER_IP.unwrap()))
-        .body(format!("{{\"data\": \"{}\"}}", hex::encode(data)))
-        .send()?;
-    let response_body: Value = response.json()?;
+fn apdu2(data: &[u8]) -> Result<Vec<u8>> {
+    let response = ureq::post(&format!("http://{}:5000/apdu", TEST_SERVER_IP.unwrap()))
+        .send_string(&format!("{{\"data\": \"{}\"}}", hex::encode(data)))?
+        .into_string()?;
+    println!("ins {} {}", data[1], hex::encode(data));
+    let response_body: Value = serde_json::from_str(&response)?;
     let data = response_body["data"]
         .as_str()
         .ok_or(anyhow!("No data field"))?;
     let data = hex::decode(data)?;
+    println!("rep {}", hex::encode(&data));
     let error_code = u16::from_be_bytes(data[data.len() - 2..].try_into().unwrap());
     handle_error_code(error_code)?;
     Ok(data[..data.len() - 2].to_vec())
@@ -293,9 +294,9 @@ pub fn ledger_end_tx() -> Result<()> {
     Ok(())
 }
 
-pub fn ledger_cmu(data: &[u8]) -> Result<Vec<u8>> {
+pub fn ledger_test_cmu(data: &[u8]) -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E0800000"))?;
+    bb.write_all(&hex!("E0F00000"))?;
     bb.write_u8(data.len() as u8)?;
     bb.write_all(data)?;
     let cmu = apdu(&bb)?;
