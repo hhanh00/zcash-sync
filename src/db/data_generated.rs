@@ -37,7 +37,8 @@ pub mod fb {
     impl<'a> Account<'a> {
         pub const VT_ID: flatbuffers::VOffsetT = 4;
         pub const VT_NAME: flatbuffers::VOffsetT = 6;
-        pub const VT_BALANCE: flatbuffers::VOffsetT = 8;
+        pub const VT_KEY_TYPE: flatbuffers::VOffsetT = 8;
+        pub const VT_BALANCE: flatbuffers::VOffsetT = 10;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -54,14 +55,21 @@ pub mod fb {
                 builder.add_name(x);
             }
             builder.add_id(args.id);
+            builder.add_key_type(args.key_type);
             builder.finish()
         }
 
         pub fn unpack(&self) -> AccountT {
             let id = self.id();
             let name = self.name().map(|x| x.to_string());
+            let key_type = self.key_type();
             let balance = self.balance();
-            AccountT { id, name, balance }
+            AccountT {
+                id,
+                name,
+                key_type,
+                balance,
+            }
         }
 
         #[inline]
@@ -82,6 +90,13 @@ pub mod fb {
             }
         }
         #[inline]
+        pub fn key_type(&self) -> u8 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u8>(Account::VT_KEY_TYPE, Some(0)).unwrap() }
+        }
+        #[inline]
         pub fn balance(&self) -> u64 {
             // Safety:
             // Created from valid Table for this object
@@ -100,6 +115,7 @@ pub mod fb {
             v.visit_table(pos)?
                 .visit_field::<u32>("id", Self::VT_ID, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
+                .visit_field::<u8>("key_type", Self::VT_KEY_TYPE, false)?
                 .visit_field::<u64>("balance", Self::VT_BALANCE, false)?
                 .finish();
             Ok(())
@@ -108,6 +124,7 @@ pub mod fb {
     pub struct AccountArgs<'a> {
         pub id: u32,
         pub name: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub key_type: u8,
         pub balance: u64,
     }
     impl<'a> Default for AccountArgs<'a> {
@@ -116,6 +133,7 @@ pub mod fb {
             AccountArgs {
                 id: 0,
                 name: None,
+                key_type: 0,
                 balance: 0,
             }
         }
@@ -134,6 +152,10 @@ pub mod fb {
         pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b str>) {
             self.fbb_
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Account::VT_NAME, name);
+        }
+        #[inline]
+        pub fn add_key_type(&mut self, key_type: u8) {
+            self.fbb_.push_slot::<u8>(Account::VT_KEY_TYPE, key_type, 0);
         }
         #[inline]
         pub fn add_balance(&mut self, balance: u64) {
@@ -159,6 +181,7 @@ pub mod fb {
             let mut ds = f.debug_struct("Account");
             ds.field("id", &self.id());
             ds.field("name", &self.name());
+            ds.field("key_type", &self.key_type());
             ds.field("balance", &self.balance());
             ds.finish()
         }
@@ -168,6 +191,7 @@ pub mod fb {
     pub struct AccountT {
         pub id: u32,
         pub name: Option<String>,
+        pub key_type: u8,
         pub balance: u64,
     }
     impl Default for AccountT {
@@ -175,6 +199,7 @@ pub mod fb {
             Self {
                 id: 0,
                 name: None,
+                key_type: 0,
                 balance: 0,
             }
         }
@@ -186,8 +211,17 @@ pub mod fb {
         ) -> flatbuffers::WIPOffset<Account<'b>> {
             let id = self.id;
             let name = self.name.as_ref().map(|x| _fbb.create_string(x));
+            let key_type = self.key_type;
             let balance = self.balance;
-            Account::create(_fbb, &AccountArgs { id, name, balance })
+            Account::create(
+                _fbb,
+                &AccountArgs {
+                    id,
+                    name,
+                    key_type,
+                    balance,
+                },
+            )
         }
     }
     pub enum AccountVecOffset {}

@@ -199,8 +199,7 @@ impl<'a> SaplingBuilder<'a> {
             &epk.to_bytes().0,
             &raw_address,
             &enc_ciphertext[0..52],
-        )
-        ?;
+        )?;
 
         let memo = &enc_ciphertext[52..564];
         self.output_memos_hasher.update(memo);
@@ -246,8 +245,7 @@ impl<'a> SaplingBuilder<'a> {
             spends_digest.as_bytes(),
             memos_digest.as_bytes(),
             outputs_nc_digest.as_bytes(),
-        )
-        ?;
+        )?;
         ledger_set_net_sapling(-net_chg)?;
 
         Ok(())

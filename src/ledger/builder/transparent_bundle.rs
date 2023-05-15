@@ -111,8 +111,7 @@ impl TransparentBuilder {
             prevouts_digest.as_bytes(),
             pubscripts_digest.as_bytes(),
             sequences_digest.as_bytes(),
-        )
-        ?;
+        )?;
         Ok(())
     }
 
@@ -131,7 +130,7 @@ impl TransparentBuilder {
             log::info!("TXIN {}", hex::encode(txin_hash));
 
             let signature = ledger_sign_transparent(txin_hash.as_bytes())?;
-            let signature = secp256k1::ecdsa::Signature::from_der(&signature)?;
+            let signature = secp256k1::ecdsa::Signature::from_compact(&signature)?;
             let mut signature = signature.serialize_der().to_vec();
             signature.extend(&[0x01]); // add SIG_HASH_ALL
 

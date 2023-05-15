@@ -14,8 +14,8 @@ use crate::ledger::transport::*;
 
 use crate::{CompactTxStreamerClient, Destination, RawTransaction, Source, TransactionPlan};
 use anyhow::{anyhow, Result};
-use rand::{RngCore, SeedableRng};
 use rand::rngs::OsRng;
+use rand::{RngCore, SeedableRng};
 use rand_chacha::{ChaCha20Rng, ChaChaRng};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::PublicKey;
@@ -83,8 +83,11 @@ pub fn build_ledger_tx(
 
     let mut rng = OsRng;
     if transparent_builder.taddr != tx_plan.taddr {
-        anyhow::bail!("This ledger wallet has a different address {} != {}",
-        transparent_builder.taddr, tx_plan.taddr);
+        anyhow::bail!(
+            "This ledger wallet has a different address {} != {}",
+            transparent_builder.taddr,
+            tx_plan.taddr
+        );
     }
 
     let has_orchard = ledger_has_orchard()?;
@@ -92,19 +95,17 @@ pub fn build_ledger_tx(
     let master_seed = ledger_init_tx()?;
 
     let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk()?;
-    let proofgen_key: zcash_primitives::sapling::ProofGenerationKey =
-        ledger_get_proofgen_key()?;
+    let proofgen_key: zcash_primitives::sapling::ProofGenerationKey = ledger_get_proofgen_key()?;
 
     let mut sapling_builder = SaplingBuilder::new(prover, dfvk, proofgen_key);
 
     let o_fvk: [u8; 96] = if has_orchard {
-            ledger_get_o_fvk()?.try_into().unwrap()
-        }
-        else {
-            // dummy o_fvk - we are not going to use it
-            let sk = orchard::keys::SpendingKey::from_bytes([0; 32]).unwrap();
-            orchard::keys::FullViewingKey::from(&sk).to_bytes()
-        };
+        ledger_get_o_fvk()?.try_into().unwrap()
+    } else {
+        // dummy o_fvk - we are not going to use it
+        let sk = orchard::keys::SpendingKey::from_bytes([0; 32]).unwrap();
+        orchard::keys::FullViewingKey::from(&sk).to_bytes()
+    };
     let orchard_fvk =
         orchard::keys::FullViewingKey::from_bytes(&o_fvk).ok_or(anyhow!("Invalid Orchard FVK"))?;
     let anchor = orchard::Anchor::from_bytes(tx_plan.orchard_anchor).unwrap();
@@ -143,9 +144,7 @@ pub fn build_ledger_tx(
     for sp in tx_plan.spends.iter() {
         match sp.source {
             Source::Transparent { txid, index } => {
-                transparent_builder
-                    .add_input(txid, index, sp.amount)
-                    ?;
+                transparent_builder.add_input(txid, index, sp.amount)?;
             }
             Source::Sapling {
                 diversifier,
@@ -156,11 +155,22 @@ pub fn build_ledger_tx(
                 let alpha = Fr::random(&mut alpha_rng);
                 // println!("ALPHA {}", hex::encode(&alpha.to_bytes()));
 
-                sapling_builder
-                    .add_spend(alpha, diversifier, rseed, witness, sp.amount, &mut rng)
-                    ?;
+                sapling_builder.add_spend(
+                    alpha,
+                    diversifier,
+                    rseed,
+                    witness,
+                    sp.amount,
+                    &mut rng,
+                )?;
             }
-            Source::Orchard { diversifier, rseed, rho, ref witness, ..  } => {
+            Source::Orchard {
+                diversifier,
+                rseed,
+                rho,
+                ref witness,
+                ..
+            } => {
                 orchard_builder.add_spend(diversifier, rseed, rho, &witness, sp.amount)?;
             }
         }
@@ -169,9 +179,7 @@ pub fn build_ledger_tx(
 
     for output in tx_plan.outputs.iter() {
         if let Destination::Transparent(raw_address) = output.destination {
-            transparent_builder
-                .add_output(raw_address, output.amount)
-                ?;
+            transparent_builder.add_output(raw_address, output.amount)?;
         }
     }
     transparent_builder.set_merkle_proof()?;
@@ -182,9 +190,13 @@ pub fn build_ledger_tx(
             Destination::Sapling(raw_address) => {
                 let mut rseed = [0u8; 32];
                 rseed_rng.fill_bytes(&mut rseed);
-                sapling_builder
-                    .add_output(rseed, raw_address, &output.memo, output.amount, &mut rng)
-                    ?;
+                sapling_builder.add_output(
+                    rseed,
+                    raw_address,
+                    &output.memo,
+                    output.amount,
+                    &mut rng,
+                )?;
             }
             Destination::Orchard(raw_address) => {
                 orchard_builder.add_output(raw_address, output.amount, &output.memo)?;
@@ -195,7 +207,12 @@ pub fn build_ledger_tx(
     sapling_builder.set_merkle_proof(tx_plan.net_chg[0])?;
     ledger_set_stage(4)?;
 
-    orchard_builder.prepare(tx_plan.net_chg[1], proving_key, &mut alpha_rng, &mut rseed_rng)?;
+    orchard_builder.prepare(
+        tx_plan.net_chg[1],
+        proving_key,
+        &mut alpha_rng,
+        &mut rseed_rng,
+    )?;
 
     ledger_set_stage(5)?;
     ledger_confirm_fee()?;

@@ -941,7 +941,11 @@ pub unsafe extern "C" fn clear_tx_details(coin: u8, account: u32) -> CResult<u8>
 pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let accounts = crate::db::read::get_account_list(connection)?;
-        Ok(accounts)
+        let mut builder = flatbuffers::FlatBufferBuilder::new();
+        let root = accounts.pack(&mut builder);
+        builder.finish(root, None);
+        let data = builder.finished_data().to_vec();
+        Ok(data)
     };
     to_cresult_bytes(with_coin(coin, res))
 }
@@ -1232,7 +1236,8 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
         let raw_tx = tokio::task::spawn_blocking(move || {
             let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan, prover, &pk)?;
             Ok::<_, anyhow::Error>(raw_tx)
-        }).await??;
+        })
+        .await??;
         let response = crate::broadcast_tx(&raw_tx).await?;
         Ok::<_, anyhow::Error>(response)
     };

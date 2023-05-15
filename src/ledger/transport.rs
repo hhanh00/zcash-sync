@@ -199,9 +199,7 @@ pub fn ledger_set_net_orchard(net: i64) -> Result<()> {
     Ok(())
 }
 
-pub fn ledger_set_header_digest(
-    header_digest: &[u8],
-) -> Result<()> {
+pub fn ledger_set_header_digest(header_digest: &[u8]) -> Result<()> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E018000020"))?;
     bb.write_all(header_digest)?;

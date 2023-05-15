@@ -1095,8 +1095,10 @@ impl DbAdapter {
         )?;
         self.connection
             .execute("DELETE FROM messages WHERE account = ?1", params![account])?;
-        self.connection
-            .execute("DELETE FROM hw_wallets WHERE account = ?1", params![account])?;
+        self.connection.execute(
+            "DELETE FROM hw_wallets WHERE account = ?1",
+            params![account],
+        )?;
         Ok(())
     }
 

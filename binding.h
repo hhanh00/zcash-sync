@@ -62,7 +62,9 @@ typedef struct CResult_bool {
 
 #define Account_VT_NAME 6
 
-#define Account_VT_BALANCE 8
+#define Account_VT_KEY_TYPE 8
+
+#define Account_VT_BALANCE 10
 
 #define AccountVec_VT_ACCOUNTS 4
 

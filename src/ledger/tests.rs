@@ -13,8 +13,7 @@ pub fn unit_tests() -> Result<()> {
 
     let hash = ledger_jubjub_hash(&hex::decode(
         "B315693B486D4D3CD8E4256E8C37CA4E8EC367E4D95D5C314625DC7B44B57EA2CA18FDCFF5871906F4238F",
-    )?)
-    ?;
+    )?)?;
     assert_eq!(
         hex::encode(hash),
         "0ce188d187e6e5bd7b4b966bdb0b0cc7737138be5adb60491e51e146a96944da"

@@ -70,7 +70,7 @@ pub struct OrchardBuilder {
     net_rcv: ValueCommitTrapdoor,
     proof: Proof,
 
-    sig_hash: Vec<u8>
+    sig_hash: Vec<u8>,
 }
 
 impl OrchardBuilder {
@@ -250,7 +250,8 @@ impl OrchardBuilder {
                 Circuit::from_action_context(spend_info, output_note, alpha, rcv.clone()).unwrap();
             circuits.push(circuit);
 
-            let instance = Instance::from_parts(self.anchor, cv_net, rho.clone(), rk, cmx, true, true);
+            let instance =
+                Instance::from_parts(self.anchor, cv_net, rho.clone(), rk, cmx, true, true);
             instances.push(instance);
         }
 
@@ -266,7 +267,6 @@ impl OrchardBuilder {
                 &o.recipient.to_raw_address_bytes(),
                 &a.encrypted_note().enc_ciphertext[0..52],
             )
-            
             .unwrap();
         }
 
@@ -281,23 +281,22 @@ impl OrchardBuilder {
         Ok(())
     }
 
-
     pub fn sign(&mut self) -> Result<()> {
         self.sig_hash = ledger_get_shielded_sighash()?;
 
         for (a, (ref s, _)) in self.actions.iter().zip(self.padded_inouts.iter()) {
-            let signature =
-                match s.ask {
-                    Some(ref ask) => { // dummy spend (we have a dummy key)
-                        let rsk = ask.randomize(&a.authorization().parts.alpha);
-                        rsk.sign(&mut OsRng, &self.sig_hash)
-                    }
-                    None => {
-                        let sig_bytes: [u8; 64] = ledger_sign_orchard().unwrap().try_into().unwrap();
-                        let signature: Signature<SpendAuth> = sig_bytes.into();
-                        signature
-                    }
-                };
+            let signature = match s.ask {
+                Some(ref ask) => {
+                    // dummy spend (we have a dummy key)
+                    let rsk = ask.randomize(&a.authorization().parts.alpha);
+                    rsk.sign(&mut OsRng, &self.sig_hash)
+                }
+                None => {
+                    let sig_bytes: [u8; 64] = ledger_sign_orchard().unwrap().try_into().unwrap();
+                    let signature: Signature<SpendAuth> = sig_bytes.into();
+                    signature
+                }
+            };
 
             let auth_action = Action::from_parts(
                 a.nullifier().clone(),
@@ -313,7 +312,9 @@ impl OrchardBuilder {
     }
 
     pub fn build(self) -> Result<Option<Bundle<Authorized, Amount>>> {
-        if self.auth_actions.is_empty() { return Ok(None); }
+        if self.auth_actions.is_empty() {
+            return Ok(None);
+        }
         let auth_actions = NonEmpty::from_slice(&self.auth_actions).unwrap();
 
         let nv = i64::try_from(self.net_value).unwrap();
@@ -322,7 +323,7 @@ impl OrchardBuilder {
 
         let flags = Flags::from_parts(true, true);
         let binding_signature = bsk.sign(&mut OsRng, &self.sig_hash);
-    
+
         let bundle: Bundle<Authorized, Amount> = Bundle::from_parts(
             auth_actions,
             flags,
@@ -330,7 +331,7 @@ impl OrchardBuilder {
             self.anchor.clone(),
             Authorized::from_parts(self.proof, binding_signature),
         );
-    
+
         Ok(Some(bundle))
     }
 }
