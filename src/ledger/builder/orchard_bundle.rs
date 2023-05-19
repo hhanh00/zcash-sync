@@ -1,17 +1,11 @@
-use std::{fs::File, io::Read};
-
-use blake2b_simd::Params;
-use byteorder::{WriteBytesExt, LE};
-use group::{Group, GroupEncoding};
 use orchard::{
     builder::{
-        InProgress, SigningMetadata, SigningParts, SpendInfo, Unauthorized as OrchardUnauthorized,
-        Unproven,
+        SigningMetadata, SigningParts, SpendInfo,
     },
     bundle::{Authorization, Authorized, Flags},
     circuit::{Circuit, Instance, ProvingKey},
     keys::{
-        Diversifier, FullViewingKey, Scope, SpendAuthorizingKey, SpendValidatingKey, SpendingKey,
+        Diversifier, FullViewingKey, Scope, SpendAuthorizingKey, SpendValidatingKey,
     },
     note::{ExtractedNoteCommitment, Nullifier, RandomSeed, TransmittedNoteCiphertext},
     note_encryption::OrchardNoteEncryption,
@@ -21,29 +15,26 @@ use orchard::{
     Action, Address, Anchor, Bundle, Note, Proof,
 };
 
-use rand::{rngs::OsRng, RngCore, SeedableRng};
-use rand_chacha::ChaCha20Rng;
-use ripemd::Digest;
+use rand::{rngs::OsRng, RngCore};
+
 
 use crate::{
-    connect_lightwalletd, decode_orchard_merkle_path, ledger::*, RawTransaction, TransactionPlan,
+    decode_orchard_merkle_path, ledger::*,
 };
 use anyhow::Result;
-use tonic::Request;
+
 
 use group::ff::Field;
-use hex_literal::hex;
+
 use nonempty::NonEmpty;
 use zcash_primitives::{
-    consensus::{BlockHeight, BranchId},
     memo::MemoBytes,
     transaction::{
-        components::Amount, sighash::SignableInput, sighash_v5, txid::TxIdDigester,
-        Authorized as TxAuthorized, Transaction, TransactionData, TxVersion, Unauthorized,
+        components::Amount,
     },
 };
 
-use crate::{Destination, Source};
+
 
 use super::create_hasher;
 

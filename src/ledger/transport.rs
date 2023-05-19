@@ -249,11 +249,11 @@ pub fn ledger_set_orchard_merkle_proof(
     Ok(())
 }
 
-pub fn ledger_confirm_fee() -> Result<()> {
+pub fn ledger_confirm_fee() -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
-    bb.write_all(&hex!("E01C010000"))?;
-    apdu(&bb)?;
-    Ok(())
+    bb.write_all(&hex!("E01C010100"))?;
+    let hashes = apdu(&bb)?;
+    Ok(hashes)
 }
 
 pub fn ledger_sign_transparent(txin_digest: &[u8]) -> Result<Vec<u8>> {
