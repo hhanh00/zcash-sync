@@ -80,20 +80,20 @@ async fn main() -> Result<()> {
     println!("{}", response.error_message);
 
 
-    let mut rng = ChaCha20Rng::from_seed([4u8; 32]);
-    let (_, _, note) = Note::dummy(&mut rng, None);
-    let cmx: ExtractedNoteCommitment = note.commitment().into();
-    println!("cmx {:?}", cmx);
+    // let mut rng = ChaCha20Rng::from_seed([4u8; 32]);
+    // let (_, _, note) = Note::dummy(&mut rng, None);
+    // let cmx: ExtractedNoteCommitment = note.commitment().into();
+    // println!("cmx {:?}", cmx);
 
-    let address = note.recipient().to_raw_address_bytes();
-    let value = note.value().inner();
-    let rseed = note.rseed().as_bytes();
-    let rho = note.rho().to_bytes();
+    // let address = note.recipient().to_raw_address_bytes();
+    // let value = note.value().inner();
+    // let rseed = note.rseed().as_bytes();
+    // let rho = note.rho().to_bytes();
 
-    println!("{}", hex::encode(&address));
-    println!("{} {}", value, hex::encode(value.to_le_bytes()));
-    println!("{}", hex::encode(rseed));
-    println!("{}", hex::encode(&rho));
+    // println!("{}", hex::encode(&address));
+    // println!("{} {}", value, hex::encode(value.to_le_bytes()));
+    // println!("{}", hex::encode(rseed));
+    // println!("{}", hex::encode(&rho));
 
     // let mut buffer = vec![];
     // buffer.write(&address).unwrap();

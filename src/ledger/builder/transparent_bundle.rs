@@ -9,8 +9,6 @@ use crate::taddr::derive_from_pubkey;
 
 use anyhow::Result;
 
-use ripemd::Digest;
-
 use zcash_client_backend::encoding::decode_transparent_address;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Parameters;

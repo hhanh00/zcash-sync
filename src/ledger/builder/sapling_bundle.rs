@@ -1,3 +1,4 @@
+use std::io::Write;
 use blake2b_simd::State;
 
 use ff::PrimeField;
@@ -12,8 +13,6 @@ use crate::ledger::transport::*;
 
 use anyhow::{anyhow, Result};
 use rand::RngCore;
-
-use ripemd::Digest;
 
 use zcash_primitives::{
     consensus::MainNetwork,
@@ -30,6 +29,7 @@ use zcash_primitives::{
         Amount, OutputDescription, SpendDescription, GROTH_PROOF_SIZE,
     },
 };
+use zcash_primitives::constants::SPENDING_KEY_GENERATOR;
 use zcash_proofs::{prover::LocalTxProver, sapling::SaplingProvingContext};
 
 use super::create_hasher;
@@ -252,17 +252,20 @@ impl<'a> SaplingBuilder<'a> {
     }
 
     pub fn sign(&mut self) -> Result<()> {
-        for _sp in self.shielded_spends.iter() {
+        let sig_hash = ledger_get_shielded_sighash()?;
+
+        for sp in self.shielded_spends.iter() {
             let signature = ledger_sign_sapling()?;
             let signature = Signature::read(&*signature)?;
             // Signature verification
-            // let rk = sp.rk();
-            // let mut message: Vec<u8> = vec![];
-            // message.write_all(&rk.0.to_bytes())?;
-            // message.write_all(sig_hash.as_ref())?;
-            // println!("MSG {}", hex::encode(&message));
-            // let verified = rk.verify_with_zip216(&message, &signature, SPENDING_KEY_GENERATOR, true);
-            // assert!(verified);
+            let rk = &sp.rk;
+            let mut message: Vec<u8> = vec![];
+            message.write_all(&rk.0.to_bytes())?;
+            message.write_all(sig_hash.as_ref())?;
+            let verified = rk.verify_with_zip216(&message, &signature, SPENDING_KEY_GENERATOR, true);
+            if !verified {
+                anyhow::bail!("Invalid Sapling signature");
+            }
             self.signatures.push(signature);
         }
         Ok(())

@@ -285,6 +285,13 @@ pub fn ledger_get_shielded_sighash() -> Result<Vec<u8>> {
     Ok(signature)
 }
 
+pub fn ledger_get_shielded_hashes() -> Result<Vec<u8>> {
+    let mut bb: Vec<u8> = vec![];
+    bb.write_all(&hex!("E080000000"))?;
+    let hashes = apdu(&bb)?;
+    Ok(hashes)
+}
+
 pub fn ledger_end_tx() -> Result<()> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E030000000"))?;
