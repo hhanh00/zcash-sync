@@ -7,7 +7,6 @@ use hex_literal::hex;
 use jubjub::Fr;
 use orchard::circuit::ProvingKey;
 
-use crate::ledger::builder::orchard_bundle::OrchardBuilder;
 use crate::ledger::builder::sapling_bundle::SaplingBuilder;
 use crate::ledger::builder::transparent_bundle::TransparentBuilder;
 use crate::ledger::transport::*;
@@ -34,16 +33,21 @@ use zcash_primitives::{
     consensus::{BlockHeight, BranchId, MainNetwork},
     transaction::{Authorized, TransactionData, TxVersion},
 };
+use zcash_primitives::consensus::Network::YCashMainNetwork;
+use zcash_primitives::transaction::components::{Amount, transparent};
+use zcash_primitives::transaction::components::transparent::builder::Unauthorized;
+use zcash_primitives::transaction::components::transparent::Bundle;
+use zcash_primitives::transaction::sighash::SignableInput;
+use zcash_primitives::transaction::sighash_v4::v4_signature_hash;
 use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_proofs::prover::LocalTxProver;
 
-mod orchard_bundle;
 mod sapling_bundle;
 mod transparent_bundle;
 
 #[allow(dead_code)]
 pub fn show_public_keys() -> Result<()> {
-    let network = MainNetwork;
+    let network = YCashMainNetwork;
 
     ledger_init()?;
     let pub_key = ledger_get_pubkey()?;
@@ -83,64 +87,21 @@ pub fn build_ledger_tx(
     let mut transparent_builder = TransparentBuilder::new(network, &pubkey);
 
     let mut rng = OsRng;
-    if transparent_builder.taddr != tx_plan.taddr {
+    if transparent_builder.taddr_str != tx_plan.taddr {
         anyhow::bail!(
             "This ledger wallet has a different address {} != {}",
-            transparent_builder.taddr,
+            transparent_builder.taddr_str,
             tx_plan.taddr
         );
     }
 
-    let has_orchard = ledger_has_orchard()?;
-
-    let master_seed = ledger_init_tx()?;
-
     let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk()?;
     let proofgen_key: zcash_primitives::sapling::ProofGenerationKey = ledger_get_proofgen_key()?;
 
-    let mut sapling_builder = SaplingBuilder::new(prover, dfvk, proofgen_key);
+    let mut sapling_builder = SaplingBuilder::new(network, prover, dfvk, proofgen_key, tx_plan.anchor_height);
 
-    let o_fvk: [u8; 96] = if has_orchard {
-        ledger_get_o_fvk()?.try_into().unwrap()
-    } else {
-        // dummy o_fvk - we are not going to use it
-        let sk = orchard::keys::SpendingKey::from_bytes([0; 32]).unwrap();
-        orchard::keys::FullViewingKey::from(&sk).to_bytes()
-    };
-    let orchard_fvk =
-        orchard::keys::FullViewingKey::from_bytes(&o_fvk).ok_or(anyhow!("Invalid Orchard FVK"))?;
-    let anchor = orchard::Anchor::from_bytes(tx_plan.orchard_anchor).unwrap();
-
-    let mut orchard_builder = OrchardBuilder::new(&orchard_fvk, anchor);
-    if !has_orchard {
-        orchard_builder.disable();
-    }
-
-    // Derive rseed PRNG
-    let mut h = Params::new()
-        .hash_length(32)
-        .personal(b"ZRSeedPRNG__Hash")
-        .to_state();
-    h.update(&master_seed);
-    let main_rseed = h.finalize();
-    let mut rseed_rng = ChaChaRng::from_seed(main_rseed.as_bytes().try_into().unwrap());
-
-    // Derive alpha PRNG
-    let mut h = Params::new()
-        .hash_length(32)
-        .personal(b"ZAlphaPRNG__Hash")
-        .to_state();
-    h.update(&master_seed);
-    let alpha = h.finalize();
-    let mut alpha_rng = ChaChaRng::from_seed(alpha.as_bytes().try_into().unwrap());
-
-    // Compute header digest
-    let mut h = create_hasher(b"ZTxIdHeadersHash");
-    h.update(&hex!("050000800a27a726b4d0d6c200000000"));
-
-    h.write_u32::<LE>(tx_plan.expiry_height)?;
-    let header_digest = h.finalize();
-    ledger_set_header_digest(header_digest.as_bytes())?;
+    let mut rseed_rng = OsRng;
+    let mut alpha_rng = OsRng;
 
     for sp in tx_plan.spends.iter() {
         match sp.source {
@@ -157,7 +118,6 @@ pub fn build_ledger_tx(
                 // println!("ALPHA {}", hex::encode(&alpha.to_bytes()));
 
                 sapling_builder.add_spend(
-                    alpha,
                     diversifier,
                     rseed,
                     witness,
@@ -166,25 +126,18 @@ pub fn build_ledger_tx(
                 )?;
             }
             Source::Orchard {
-                diversifier,
-                rseed,
-                rho,
-                ref witness,
                 ..
             } => {
-                orchard_builder.add_spend(diversifier, rseed, rho, &witness, sp.amount)?;
+                anyhow::bail!("Orchard is unsupported");
             }
         }
     }
-    ledger_set_stage(2)?;
 
     for output in tx_plan.outputs.iter() {
         if let Destination::Transparent(raw_address) = output.destination {
             transparent_builder.add_output(raw_address, output.amount)?;
         }
     }
-    transparent_builder.set_merkle_proof()?;
-    ledger_set_stage(3)?;
 
     for output in tx_plan.outputs.iter() {
         match output.destination {
@@ -200,60 +153,43 @@ pub fn build_ledger_tx(
                 )?;
             }
             Destination::Orchard(raw_address) => {
-                orchard_builder.add_output(raw_address, output.amount, &output.memo)?;
+                anyhow::bail!("Orchard is unsupported");
             }
             _ => {}
         }
     }
-    sapling_builder.set_merkle_proof(tx_plan.net_chg[0])?;
-    ledger_set_stage(4)?;
 
-    orchard_builder.prepare(
-        tx_plan.net_chg[1],
-        proving_key,
-        &mut alpha_rng,
-        &mut rseed_rng,
-    )?;
+    let (transparent_builder, transparent_bundle) = transparent_builder.prepare();
+    let (mut sapling_builder, sapling_bundle) = sapling_builder.prepare(tx_plan.anchor_height, OsRng);
 
-    ledger_set_stage(5)?;
-    let hashes = ledger_confirm_fee()?;
-
-    transparent_builder.sign()?;
-    sapling_builder.sign()?;
-    orchard_builder.sign()?;
-
-    let transparent_bundle = transparent_builder.build();
-    let sapling_bundle = sapling_builder.build()?;
-    let orchard_bundle = orchard_builder.build()?;
-
-    let authed_tx: TransactionData<Authorized> = TransactionData {
-        version: TxVersion::Zip225,
-        consensus_branch_id: BranchId::Nu5,
+    let unauth_tx = TransactionData::<::zcash_primitives::transaction::Unauthorized> {
+        version: TxVersion::Sapling,
+        consensus_branch_id: BranchId::YCanopy,
         lock_time: 0,
         expiry_height: BlockHeight::from_u32(tx_plan.expiry_height),
         transparent_bundle,
         sprout_bundle: None,
         sapling_bundle,
-        orchard_bundle,
+        orchard_bundle: None
     };
 
-    let txid_parts = authed_tx.digest(TxIdDigester);
-    match txid_parts.sapling_digest {
-        Some(h) =>
-            if h.as_bytes() != &hashes[0..32] { anyhow::bail!("Sapling Hash Mismatch") }
-        None => ()
-    }
-    match txid_parts.orchard_digest {
-        Some(h) =>
-            if h.as_bytes() != &hashes[32..64] { anyhow::bail!("Orchard Hash Mismatch") }
-        None => ()
-    }
+    let transparent_bundle = transparent_builder.sign(&unauth_tx)?;
+    let sapling_bundle = sapling_builder.sign(&unauth_tx)?;
 
-    let tx = authed_tx.freeze().unwrap();
+    let tx = TransactionData::<Authorized> {
+        version: unauth_tx.version,
+        consensus_branch_id: unauth_tx.consensus_branch_id,
+        lock_time: unauth_tx.lock_time,
+        expiry_height: unauth_tx.expiry_height,
+        transparent_bundle,
+        sprout_bundle: None,
+        sapling_bundle,
+        orchard_bundle: None
+    };
+
+    let tx = tx.freeze().unwrap();
     let mut raw_tx = vec![];
-    tx.write_v5(&mut raw_tx)?;
-
-    ledger_end_tx()?;
+    tx.write_v4(&mut raw_tx)?;
 
     Ok(raw_tx)
 }
