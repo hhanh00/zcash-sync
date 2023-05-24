@@ -1,28 +1,17 @@
-use std::marker::PhantomData;
-use blake2b_simd::State;
-use byteorder::WriteBytesExt;
-use byteorder::LE;
-
-use hex_literal::hex;
-
 use crate::ledger::transport::*;
 use crate::taddr::derive_from_pubkey;
-
 use anyhow::Result;
 use secp256k1::SecretKey;
-
 use zcash_client_backend::encoding::decode_transparent_address;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::legacy::{Script, TransparentAddress};
-use zcash_primitives::transaction::components::{transparent, Amount, OutPoint, TxIn, TxOut};
 use zcash_primitives::transaction::components::transparent::builder::Unauthorized as TransparentUnauthorized;
-use zcash_primitives::transaction::components::transparent::{Authorized, Bundle, MapAuth};
-use zcash_primitives::transaction::{TransactionData, Unauthorized};
+use zcash_primitives::transaction::components::transparent::{Authorized, Bundle};
+use zcash_primitives::transaction::components::{transparent, Amount, OutPoint, TxIn, TxOut};
 use zcash_primitives::transaction::sighash::SignableInput;
 use zcash_primitives::transaction::sighash_v4::v4_signature_hash;
-
-use super::create_hasher;
+use zcash_primitives::transaction::{TransactionData, Unauthorized};
 
 pub trait TransparentAuth {}
 
@@ -60,16 +49,26 @@ impl TransparentBuilder<Unauth> {
             taddr_str,
             taddr,
             pubkey: pubkey.to_vec(),
-            auth: Unauth { builder, amounts: vec![] },
+            auth: Unauth {
+                builder,
+                amounts: vec![],
+            },
         }
     }
 
     pub fn add_input(&mut self, txid: [u8; 32], index: u32, amount: u64) -> Result<()> {
         let dummy_sk = SecretKey::from_slice(&[0; 32])?;
-        self.auth.builder.add_input(dummy_sk, OutPoint::new(txid, index), TxOut {
-            value: Amount::from_u64(amount).unwrap(),
-            script_pubkey: self.taddr.script(), // will always use the h/w address
-        }).unwrap();
+        self.auth
+            .builder
+            .add_input(
+                dummy_sk,
+                OutPoint::new(txid, index),
+                TxOut {
+                    value: Amount::from_u64(amount).unwrap(),
+                    script_pubkey: self.taddr.script(), // will always use the h/w address
+                },
+            )
+            .unwrap();
         self.auth.amounts.push(amount);
         Ok(())
     }
@@ -79,11 +78,19 @@ impl TransparentBuilder<Unauth> {
             anyhow::bail!("Only t1 addresses are supported");
         }
         let ta = TransparentAddress::PublicKey(raw_address[1..21].try_into().unwrap());
-        self.auth.builder.add_output(&ta, Amount::from_u64(amount).unwrap()).unwrap();
+        self.auth
+            .builder
+            .add_output(&ta, Amount::from_u64(amount).unwrap())
+            .unwrap();
         Ok(())
     }
 
-    pub fn prepare(self) -> (TransparentBuilder<Proven>, Option<Bundle<TransparentUnauthorized>>) {
+    pub fn prepare(
+        self,
+    ) -> (
+        TransparentBuilder<Proven>,
+        Option<Bundle<TransparentUnauthorized>>,
+    ) {
         let bundle = self.auth.builder.build();
         let builder = TransparentBuilder::<Proven> {
             taddr_str: self.taddr_str,
@@ -91,7 +98,7 @@ impl TransparentBuilder<Unauth> {
             pubkey: self.pubkey,
             auth: Proven {
                 amounts: self.auth.amounts,
-            }
+            },
         };
         (builder, bundle)
     }
@@ -112,11 +119,16 @@ impl TransparentBuilder<Unauth> {
 }
 
 impl TransparentBuilder<Proven> {
-    pub fn sign(&self, tx_data: &TransactionData<Unauthorized>) -> Result<Option<Bundle<Authorized>>> {
+    pub fn sign(
+        &self,
+        tx_data: &TransactionData<Unauthorized>,
+    ) -> Result<Option<Bundle<Authorized>>> {
         let bundle = match tx_data.transparent_bundle.as_ref() {
             Some(bundle) => {
                 let mut script_sigs = vec![];
-                for ((index, vin), amount) in bundle.vin.iter().enumerate().zip(self.auth.amounts.iter()) {
+                for ((index, _vin), amount) in
+                    bundle.vin.iter().enumerate().zip(self.auth.amounts.iter())
+                {
                     let txin = SignableInput::Transparent {
                         hash_type: 1,
                         index,
@@ -136,7 +148,8 @@ impl TransparentBuilder<Proven> {
                 }
 
                 let bundle = Bundle {
-                    vin: bundle.vin
+                    vin: bundle
+                        .vin
                         .iter()
                         .zip(script_sigs)
                         .map(|(txin, sig)| TxIn {

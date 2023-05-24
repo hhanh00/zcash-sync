@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
-use byteorder::WriteBytesExt;
-use byteorder::LE;
+
 use group::GroupEncoding;
 use hex_literal::hex;
 use jubjub::Fr;

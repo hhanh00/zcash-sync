@@ -1,45 +1,30 @@
-use blake2b_simd::Params;
-use blake2b_simd::State;
-use byteorder::WriteBytesExt;
-use byteorder::LE;
-use ff::Field;
-use hex_literal::hex;
-use jubjub::Fr;
-use orchard::circuit::ProvingKey;
-
 use crate::ledger::builder::sapling_bundle::SaplingBuilder;
 use crate::ledger::builder::transparent_bundle::TransparentBuilder;
 use crate::ledger::transport::*;
-
 use crate::{Destination, Source, TransactionPlan};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+use blake2b_simd::Params;
+use blake2b_simd::State;
+use ff::Field;
+use jubjub::Fr;
+use orchard::circuit::ProvingKey;
 use rand::rngs::OsRng;
-use rand::{RngCore, SeedableRng};
-use rand_chacha::{ChaChaRng};
+use rand::RngCore;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::PublicKey;
 use sha2::Sha256;
-
 use zcash_client_backend::encoding::{
     encode_extended_full_viewing_key, encode_transparent_address,
 };
 use zcash_primitives::consensus::Network;
+use zcash_primitives::consensus::Network::YCashMainNetwork;
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::legacy::TransparentAddress;
-
 use zcash_primitives::zip32::ExtendedFullViewingKey;
-
 use zcash_primitives::{
     consensus::{BlockHeight, BranchId, MainNetwork},
     transaction::{Authorized, TransactionData, TxVersion},
 };
-use zcash_primitives::consensus::Network::YCashMainNetwork;
-use zcash_primitives::transaction::components::{Amount, transparent};
-use zcash_primitives::transaction::components::transparent::builder::Unauthorized;
-use zcash_primitives::transaction::components::transparent::Bundle;
-use zcash_primitives::transaction::sighash::SignableInput;
-use zcash_primitives::transaction::sighash_v4::v4_signature_hash;
-use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_proofs::prover::LocalTxProver;
 
 mod sapling_bundle;
@@ -80,7 +65,7 @@ pub fn build_ledger_tx(
     network: &Network,
     tx_plan: &TransactionPlan,
     prover: &LocalTxProver,
-    proving_key: &ProvingKey,
+    _proving_key: &ProvingKey,
 ) -> Result<Vec<u8>> {
     ledger_init()?;
     let pubkey = ledger_get_pubkey()?;
@@ -98,7 +83,8 @@ pub fn build_ledger_tx(
     let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk()?;
     let proofgen_key: zcash_primitives::sapling::ProofGenerationKey = ledger_get_proofgen_key()?;
 
-    let mut sapling_builder = SaplingBuilder::new(network, prover, dfvk, proofgen_key, tx_plan.anchor_height);
+    let mut sapling_builder =
+        SaplingBuilder::new(network, prover, dfvk, proofgen_key, tx_plan.anchor_height);
 
     let mut rseed_rng = OsRng;
     let mut alpha_rng = OsRng;
@@ -114,20 +100,12 @@ pub fn build_ledger_tx(
                 ref witness,
                 ..
             } => {
-                let alpha = Fr::random(&mut alpha_rng);
+                let _alpha = Fr::random(&mut alpha_rng);
                 // println!("ALPHA {}", hex::encode(&alpha.to_bytes()));
 
-                sapling_builder.add_spend(
-                    diversifier,
-                    rseed,
-                    witness,
-                    sp.amount,
-                    &mut rng,
-                )?;
+                sapling_builder.add_spend(diversifier, rseed, witness, sp.amount, &mut rng)?;
             }
-            Source::Orchard {
-                ..
-            } => {
+            Source::Orchard { .. } => {
                 anyhow::bail!("Orchard is unsupported");
             }
         }
@@ -152,7 +130,7 @@ pub fn build_ledger_tx(
                     &mut rng,
                 )?;
             }
-            Destination::Orchard(raw_address) => {
+            Destination::Orchard(_raw_address) => {
                 anyhow::bail!("Orchard is unsupported");
             }
             _ => {}
@@ -160,7 +138,8 @@ pub fn build_ledger_tx(
     }
 
     let (transparent_builder, transparent_bundle) = transparent_builder.prepare();
-    let (mut sapling_builder, sapling_bundle) = sapling_builder.prepare(tx_plan.anchor_height, OsRng);
+    let (mut sapling_builder, sapling_bundle) =
+        sapling_builder.prepare(tx_plan.anchor_height, OsRng);
 
     let unauth_tx = TransactionData::<::zcash_primitives::transaction::Unauthorized> {
         version: TxVersion::Sapling,
@@ -170,7 +149,7 @@ pub fn build_ledger_tx(
         transparent_bundle,
         sprout_bundle: None,
         sapling_bundle,
-        orchard_bundle: None
+        orchard_bundle: None,
     };
 
     let transparent_bundle = transparent_builder.sign(&unauth_tx)?;
@@ -184,7 +163,7 @@ pub fn build_ledger_tx(
         transparent_bundle,
         sprout_bundle: None,
         sapling_bundle,
-        orchard_bundle: None
+        orchard_bundle: None,
     };
 
     let tx = tx.freeze().unwrap();
