@@ -7,12 +7,12 @@ use group::GroupEncoding;
 use jubjub::{Fq, Fr};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::sapling::ProofGenerationKey;
-use zcash_primitives::zip32::DiversifiableFullViewingKey;
+use zcash_primitives::zip32::{DiversifiableFullViewingKey, ExtendedSpendingKey, Scope};
 
 use crate::ledger::transport::*;
 
 use anyhow::{anyhow, Result};
-use rand::RngCore;
+use rand::{Rng, RngCore};
 
 use zcash_primitives::{
     consensus::MainNetwork,
@@ -30,6 +30,15 @@ use zcash_primitives::{
     },
 };
 use zcash_primitives::constants::SPENDING_KEY_GENERATOR;
+use ::zcash_primitives::transaction::components::sapling;
+use zcash_primitives::consensus::{BlockHeight, Network};
+use zcash_primitives::consensus::Network::YCashMainNetwork;
+use zcash_primitives::sapling::keys::ExpandedSpendingKey;
+use zcash_primitives::transaction::components::sapling::Authorized;
+use zcash_primitives::transaction::components::sapling::builder::Unauthorized as SaplingUnauthorized;
+use zcash_primitives::transaction::{TransactionData, Unauthorized};
+use zcash_primitives::transaction::sighash::SignableInput;
+use zcash_primitives::transaction::sighash_v4::v4_signature_hash;
 use zcash_proofs::{prover::LocalTxProver, sapling::SaplingProvingContext};
 
 use super::create_hasher;
@@ -39,64 +48,52 @@ struct SpendDescriptionUnAuthorized {
     anchor: Fq,
     pub nullifier: Nullifier,
     rk: zcash_primitives::sapling::redjubjub::PublicKey,
+    alpha: Fr,
     zkproof: [u8; GROTH_PROOF_SIZE],
 }
 
-pub struct SaplingBuilder<'a> {
+pub struct Unauth {
+    builder: sapling::builder::SaplingBuilder<Network>,
+}
+
+pub struct Proven {
+    ctx: SaplingProvingContext,
+}
+
+pub struct SaplingBuilder<'a, A> {
     prover: &'a LocalTxProver,
     dfvk: DiversifiableFullViewingKey,
     proofgen_key: ProofGenerationKey,
-
-    sapling_context: SaplingProvingContext,
-    value_balance: ValueSum,
-
-    shielded_spends: Vec<SpendDescriptionUnAuthorized>,
-    shielded_outputs: Vec<OutputDescription<[u8; GROTH_PROOF_SIZE]>>,
-
-    spends_compact_hasher: State,
-    spends_non_compact_hasher: State,
-
-    output_memos_hasher: State,
-    output_non_compact_hasher: State,
-
-    signatures: Vec<Signature>,
+    esk: ExtendedSpendingKey,
+    pub auth: A,
+    // signatures: Vec<Signature>,
 }
 
-impl<'a> SaplingBuilder<'a> {
+impl<'a> SaplingBuilder<'a, Unauth> {
     pub fn new(
+        network: &Network,
         prover: &'a LocalTxProver,
         dfvk: DiversifiableFullViewingKey,
         proofgen_key: ProofGenerationKey,
+        height: u32,
     ) -> Self {
-        let spends_compact_hasher = create_hasher(b"ZTxIdSSpendCHash");
-        let spends_non_compact_hasher = create_hasher(b"ZTxIdSSpendNHash");
-
-        let output_memos_hasher = create_hasher(b"ZTxIdSOutM__Hash");
-        let output_non_compact_hasher = create_hasher(b"ZTxIdSOutN__Hash");
-
+        let builder =
+            sapling::builder::SaplingBuilder::<_>::new(network.clone(), BlockHeight::from_u32(height));
+        // a dummy ExtendedSpendingKey
+        let esk = ExtendedSpendingKey::read([0; 169].as_slice()).unwrap();
         SaplingBuilder {
             prover,
             dfvk,
             proofgen_key,
-
-            sapling_context: SaplingProvingContext::new(),
-            value_balance: ValueSum::zero(),
-            shielded_spends: vec![],
-            shielded_outputs: vec![],
-
-            spends_compact_hasher,
-            spends_non_compact_hasher,
-
-            output_memos_hasher,
-            output_non_compact_hasher,
-
-            signatures: vec![],
+            esk,
+            auth: Unauth {
+                builder
+            },
         }
     }
 
     pub fn add_spend<R: RngCore>(
         &mut self,
-        alpha: Fr,
         diversifier: [u8; 11],
         rseed: [u8; 32],
         witness: &[u8],
@@ -114,42 +111,7 @@ impl<'a> SaplingBuilder<'a> {
         let note = Note::from_parts(z_address, NoteValue::from_raw(amount), rseed);
         let witness = IncrementalWitness::<Node>::read(&witness[..])?;
         let merkle_path = witness.path().ok_or(anyhow!("Invalid merkle path"))?;
-
-        let node = Node::from_cmu(&note.cmu());
-        let anchor = Fq::from_bytes(&merkle_path.root(node).repr).unwrap();
-
-        let nf_key = self.proofgen_key.to_viewing_key().nk;
-        let nullifier = note.nf(&nf_key, merkle_path.position);
-
-        let (zkproof, cv, rk) = self
-            .prover
-            .spend_proof(
-                &mut self.sapling_context,
-                self.proofgen_key.clone(),
-                diversifier,
-                rseed,
-                alpha,
-                amount,
-                anchor,
-                merkle_path.clone(),
-                &mut rng,
-            )
-            .map_err(|_| anyhow!("Error generating spend"))?;
-        self.value_balance =
-            (self.value_balance + note.value()).ok_or(anyhow!("Invalid amount"))?;
-
-        self.spends_compact_hasher.update(nullifier.as_ref());
-        self.spends_non_compact_hasher.update(&cv.to_bytes());
-        self.spends_non_compact_hasher.update(&anchor.to_repr());
-        rk.write(&mut self.spends_non_compact_hasher)?;
-
-        self.shielded_spends.push(SpendDescriptionUnAuthorized {
-            cv,
-            anchor,
-            nullifier,
-            rk,
-            zkproof,
-        });
+        self.auth.builder.add_spend_with_pgk(rng, self.esk.clone(), self.proofgen_key.clone(), diversifier, note, merkle_path).unwrap();
         Ok(())
     }
 
@@ -161,153 +123,62 @@ impl<'a> SaplingBuilder<'a> {
         amount: u64,
         mut rng: R,
     ) -> Result<()> {
+        let ovk = self.esk.expsk.ovk.clone();
         let recipient = PaymentAddress::from_bytes(&raw_address).unwrap();
-        let rseed = Rseed::AfterZip212(rseed);
-
         let value = NoteValue::from_raw(amount);
-        self.value_balance = (self.value_balance - value).ok_or(anyhow!("Invalid amount"))?;
-
-        let note = Note::from_parts(recipient, value, rseed);
-        let rcm = note.rcm();
-        let cmu = note.cmu();
-        println!("cmu {}", hex::encode(cmu.to_bytes()));
-
-        let encryptor = sapling_note_encryption::<_, MainNetwork>(
-            Some(self.dfvk.fvk.ovk.clone()),
-            note,
-            recipient,
-            memo.clone(),
-            &mut rng,
-        );
-
-        let (zkproof, cv) = self.prover.output_proof(
-            &mut self.sapling_context,
-            encryptor.esk().0,
-            recipient,
-            rcm,
-            amount,
-            &mut rng,
-        );
-
-        let enc_ciphertext = encryptor.encrypt_note_plaintext();
-        let out_ciphertext = encryptor.encrypt_outgoing_plaintext(&cv, &cmu, &mut rng);
-
-        let epk = encryptor.epk();
-
-        ledger_add_s_output(
-            amount,
-            &epk.to_bytes().0,
-            &raw_address,
-            &enc_ciphertext[0..52],
-        )?;
-
-        let memo = &enc_ciphertext[52..564];
-        self.output_memos_hasher.update(memo);
-
-        self.output_non_compact_hasher
-            .update(&cv.as_inner().to_bytes());
-        self.output_non_compact_hasher
-            .update(&enc_ciphertext[564..]);
-        self.output_non_compact_hasher.update(&out_ciphertext);
-
-        let ephemeral_key = epk.to_bytes();
-        self.shielded_outputs.push(OutputDescription {
-            cv,
-            cmu,
-            ephemeral_key,
-            enc_ciphertext,
-            out_ciphertext,
-            zkproof,
-        });
-        Ok(())
-    }
-
-    pub fn set_merkle_proof(&mut self, net_chg: i64) -> Result<()> {
-        let spends_compact_digest = self.spends_compact_hasher.finalize();
-        log::info!("C SPENDS {}", hex::encode(spends_compact_digest));
-        let spends_non_compact_digest = self.spends_non_compact_hasher.finalize();
-        log::info!("NC SPENDS {}", hex::encode(spends_non_compact_digest));
-
-        let mut spends_hasher = create_hasher(b"ZTxIdSSpendsHash");
-        if !self.shielded_spends.is_empty() {
-            spends_hasher.update(spends_compact_digest.as_bytes());
-            spends_hasher.update(spends_non_compact_digest.as_bytes());
-        }
-        let spends_digest = spends_hasher.finalize();
-        println!("SPENDS {}", hex::encode(spends_digest));
-
-        let memos_digest = self.output_memos_hasher.finalize();
-        println!("MEMOS {}", hex::encode(memos_digest));
-        let outputs_nc_digest = self.output_non_compact_hasher.finalize();
-        println!("NC OUTPUTS {}", hex::encode(outputs_nc_digest));
-
-        ledger_set_sapling_merkle_proof(
-            spends_digest.as_bytes(),
-            memos_digest.as_bytes(),
-            outputs_nc_digest.as_bytes(),
-        )?;
-        ledger_set_net_sapling(-net_chg)?;
+        self.auth.builder.add_output(rng, Some(ovk), recipient, value, memo.clone()).unwrap();
 
         Ok(())
     }
 
-    pub fn sign(&mut self) -> Result<()> {
-        let sig_hash = ledger_get_shielded_sighash()?;
+    pub fn prepare<R: RngCore>(self, height: u32, mut rng: R) -> (SaplingBuilder<'a, Proven>, Option<Bundle<SaplingUnauthorized>>) {
+        let mut ctx = SaplingProvingContext::new();
+        let bundle = self.auth.builder.build(self.prover, &mut ctx, rng, BlockHeight::from_u32(height), None).unwrap();
+        let builder = SaplingBuilder::<Proven> {
+            prover: self.prover,
+            dfvk: self.dfvk,
+            proofgen_key: self.proofgen_key,
+            esk: self.esk,
+            auth: Proven { ctx }
+        };
+        (builder, bundle)
+    }
+}
 
-        for sp in self.shielded_spends.iter() {
-            let signature = ledger_sign_sapling()?;
-            let signature = Signature::read(&*signature)?;
-            // Signature verification
-            let rk = &sp.rk;
-            let mut message: Vec<u8> = vec![];
-            message.write_all(&rk.0.to_bytes())?;
-            message.write_all(sig_hash.as_ref())?;
-            let verified = rk.verify_with_zip216(&message, &signature, SPENDING_KEY_GENERATOR, true);
-            if !verified {
-                anyhow::bail!("Invalid Sapling signature");
+impl <'a> SaplingBuilder<'a, Proven> {
+    pub fn sign(&mut self, tx_data: &TransactionData<Unauthorized>) -> Result<Option<Bundle<Authorized>>> {
+        let bundle = match tx_data.sapling_bundle.as_ref() {
+            Some(bundle) => {
+                let hash = v4_signature_hash(tx_data, &SignableInput::Shielded {});
+                let binding_sig = self.prover
+                    .binding_sig(&mut self.auth.ctx, bundle.value_balance, &hash.as_bytes().try_into().unwrap()).unwrap();
+                let mut signatures = vec![];
+                for sp in bundle.shielded_spends.iter() {
+                    let alpha = sp.spend_auth_sig.alpha;
+                    let signature = ledger_sign_sapling(hash.as_bytes(), &alpha.to_bytes())?;
+                    let signature = Signature::read(&*signature)?;
+                    signatures.push(signature);
+                }
+                let bundle = Bundle::<Authorized> {
+                    shielded_spends: bundle.shielded_spends.iter().zip(signatures).map(|(sp, sig)|
+                        SpendDescription {
+                            cv: sp.cv.clone(),
+                            anchor: sp.anchor.clone(),
+                            nullifier: sp.nullifier.clone(),
+                            rk: sp.rk.clone(),
+                            zkproof: sp.zkproof.clone(),
+                            spend_auth_sig: sig
+                        }
+
+                    ).collect(),
+                    shielded_outputs: bundle.shielded_outputs.clone(),
+                    value_balance: bundle.value_balance,
+                    authorization: Authorized { binding_sig }
+                };
+                Some(bundle)
             }
-            self.signatures.push(signature);
-        }
-        Ok(())
-    }
-
-    pub fn build(self) -> Result<Option<Bundle<SapAuthorized>>> {
-        let has_sapling = !self.shielded_spends.is_empty() || !self.shielded_outputs.is_empty();
-        if !has_sapling {
-            return Ok(None);
-        }
-
-        let shielded_spends: Vec<_> = self
-            .shielded_spends
-            .into_iter()
-            .zip(self.signatures.into_iter())
-            .map(|(sp, spend_auth_sig)| SpendDescription::<SapAuthorized> {
-                cv: sp.cv,
-                anchor: sp.anchor,
-                nullifier: sp.nullifier,
-                rk: sp.rk,
-                zkproof: sp.zkproof,
-                spend_auth_sig,
-            })
-            .collect();
-
-        let value: i64 = self.value_balance.try_into().unwrap();
-        let value = Amount::from_i64(value).unwrap();
-
-        let sighash = ledger_get_shielded_sighash()?;
-        log::info!("TXID {}", hex::encode(&sighash));
-        let binding_sig = self
-            .sapling_context
-            .binding_sig(value, &sighash.try_into().unwrap())
-            .unwrap();
-
-        let sapling_bundle = Bundle::<_>::from_parts(
-            shielded_spends,
-            self.shielded_outputs,
-            value,
-            SapAuthorized { binding_sig },
-        );
-
-        Ok(Some(sapling_bundle))
+            None => None
+        };
+        Ok(bundle)
     }
 }

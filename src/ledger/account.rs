@@ -23,8 +23,6 @@ pub fn import(coin: u8, name: &str) -> Result<u32> {
     let pub_key = ledger_get_pubkey()?;
     let t_address = derive_from_pubkey(network, &pub_key)?;
 
-    let has_orchard = ledger_has_orchard()?;
-
     let db_transaction = db.begin_transaction()?;
     db_transaction.execute(
         "INSERT INTO accounts(name, seed, aindex, sk, ivk, address) VALUES 
@@ -37,14 +35,6 @@ pub fn import(coin: u8, name: &str) -> Result<u32> {
         (?1, NULL, ?2)",
         params![id_account, t_address],
     )?;
-    if has_orchard {
-        let o_fvk = ledger_get_o_fvk()?;
-        db_transaction.execute(
-            "INSERT INTO orchard_addrs(account, sk, fvk) VALUES
-        (?1, NULL, ?2)",
-            params![id_account, o_fvk],
-        )?;
-    }
     db_transaction.execute(
         "INSERT INTO hw_wallets(account, ledger) VALUES
         (?1, 1)",
