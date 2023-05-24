@@ -322,8 +322,8 @@ pub async unsafe extern "C" fn warp(
     port: i64,
 ) -> CResult<u8> {
     let res = async {
-        let _permit = SYNC_LOCK.acquire().await?;
-        log::info!("Sync started");
+        let permit = SYNC_LOCK.acquire().await?;
+        println!("Sync started");
         let result = crate::api::sync::coin_sync(
             coin,
             get_tx,
@@ -349,7 +349,9 @@ pub async unsafe extern "C" fn warp(
             &SYNC_CANCELED,
         )
         .await;
-        log::info!("Sync finished");
+        println!("Sync finished");
+
+        drop(permit);
 
         match result {
             Ok(_) => Ok(0),
@@ -1223,6 +1225,17 @@ pub unsafe extern "C" fn set_property(
     to_cresult(with_coin(coin, res))
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn import_uvk(coin: u8, name: *mut c_char, yfvk: *mut c_char) -> CResult<u8> {
+    from_c_str!(name);
+    from_c_str!(yfvk);
+    let res = || {
+        crate::key2::import_uvk(coin, &name, &yfvk)?;
+        Ok(0)
+    };
+    to_cresult(res())
+}
+
 #[cfg(feature = "ledger")]
 #[no_mangle]
 #[tokio::main]
@@ -1232,9 +1245,8 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
         let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
         let c = CoinConfig::get(coin);
         let prover = coinconfig::get_prover();
-        let pk = crate::orchard::get_proving_key();
         let raw_tx = tokio::task::spawn_blocking(move || {
-            let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan, prover, &pk)?;
+            let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan, prover)?;
             Ok::<_, anyhow::Error>(raw_tx)
         })
         .await??;

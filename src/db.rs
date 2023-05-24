@@ -918,6 +918,14 @@ impl DbAdapter {
         Ok(())
     }
 
+    pub fn store_taddr(&self, account: u32, address: &str) -> anyhow::Result<()> {
+        self.connection.execute(
+            "INSERT INTO taddrs(account, address) VALUES (?1, ?2)",
+            params![account, address],
+        )?;
+        Ok(())
+    }
+
     pub fn create_orchard(&self, account: u32) -> anyhow::Result<()> {
         let AccountData { seed, aindex, .. } = self.get_account_info(account)?;
         if let Some(seed) = seed {

@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
-use byteorder::WriteBytesExt;
-use byteorder::LE;
+
 use group::GroupEncoding;
 use hex_literal::hex;
 use jubjub::Fr;
@@ -22,7 +21,8 @@ fn handle_error_code(code: u16) -> Result<()> {
     }
 }
 
-fn apdu2(data: &[u8]) -> Result<Vec<u8>> {
+#[cfg(not(feature="speculos"))]
+fn apdu(data: &[u8]) -> Result<Vec<u8>> {
     let api = HidApi::new()?;
     let transport = TransportNativeHID::new(&api)?;
     let command = APDUCommand {
@@ -32,18 +32,19 @@ fn apdu2(data: &[u8]) -> Result<Vec<u8>> {
         p2: data[3],
         data: &data[5..],
     };
-    println!("ins {} {}", data[1], hex::encode(data));
+    // println!("ins {} {}", data[1], hex::encode(data));
     let response = transport.exchange(&command)?;
     let error_code = response.retcode();
     log::info!("error_code {}", error_code);
     handle_error_code(error_code)?;
     let rep = response.data().to_vec();
-    println!("rep {}", hex::encode(&rep));
+    // println!("rep {}", hex::encode(&rep));
     Ok(rep)
 }
 
 const TEST_SERVER_IP: Option<&'static str> = option_env!("LEDGER_IP");
 
+#[cfg(feature="speculos")]
 #[allow(dead_code)]
 fn apdu(data: &[u8]) -> Result<Vec<u8>> {
     let response = ureq::post(&format!("http://{}:5000/apdu", TEST_SERVER_IP.unwrap()))
