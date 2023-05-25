@@ -415,6 +415,8 @@ struct CResult_____c_char get_property(uint8_t coin, char *name);
 
 struct CResult_u8 set_property(uint8_t coin, char *name, char *value);
 
+struct CResult_u8 import_uvk(uint8_t coin, char *name, char *yfvk);
+
 struct CResult_____c_char ledger_send(uint8_t coin, char *tx_plan);
 
 struct CResult_u32 ledger_import_account(uint8_t coin, char *name);

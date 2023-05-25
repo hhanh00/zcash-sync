@@ -1,6 +1,11 @@
+use std::io::{Cursor, Read};
+
 use crate::coinconfig::CoinConfig;
 use anyhow::anyhow;
+use bech32::FromBase32;
 use bip39::{Language, Mnemonic, Seed};
+use byteorder::ReadBytesExt;
+
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key,
@@ -8,7 +13,8 @@ use zcash_client_backend::encoding::{
 };
 use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::{Network, Parameters};
-use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
+use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey, DiversifiableFullViewingKey};
+use crate::taddr::derive_from_pubkey;
 
 pub fn split_key(key: &str) -> (String, String) {
     let words: Vec<_> = key.split_whitespace().collect();
@@ -134,4 +140,43 @@ fn derive_address(network: &Network, fvk: &ExtendedFullViewingKey) -> anyhow::Re
     let (_, payment_address) = fvk.default_address();
     let address = encode_payment_address(network.hrp_sapling_payment_address(), &payment_address);
     Ok(address)
+}
+
+pub fn import_uvk(coin: u8, name: &str, uvk: &str) -> anyhow::Result<()> {
+    let (hrp, data, _) = bech32::decode(uvk)?;
+    if hrp != "yfvk" { anyhow::bail!("Invalid HRP"); }
+    let data = Vec::<u8>::from_base32(&data)?;
+    let data = f4jumble::f4jumble_inv(&data)?;
+    let data_len = data.len() as u64;
+    let mut c = Cursor::new(data);
+    let coin = CoinConfig::get(coin);
+    let network = coin.chain.network();
+    let db = coin.db().unwrap();
+    let mut id_account = 0u32;
+    while c.position() != data_len {
+        let tpe = c.read_u8()?;
+        match tpe {
+            0 => {
+                let mut dfvkb = [0u8; 128];
+                c.read_exact(&mut dfvkb)?;
+                log::info!("DFVK {}", hex::encode(&dfvkb));
+                let dfvk = DiversifiableFullViewingKey::from_bytes(&dfvkb).ok_or(anyhow!("Invalid DFVK"))?;
+                let fvk = ExtendedFullViewingKey::from_diversifiable_full_viewing_key(&dfvk);
+                let fvk = encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk);
+                let (_, pa) = dfvk.default_address();
+                let pa = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
+                id_account = db.store_account(name, None, 0, None, &fvk, &pa)?;
+            }
+            1 => {
+                let mut pubkeyb = [0u8; 33];
+                c.read_exact(&mut pubkeyb)?;
+                log::info!("PUBK {}", hex::encode(&pubkeyb));
+                let taddr = derive_from_pubkey(network, &pubkeyb)?;
+                db.store_taddr(id_account, &taddr)?;
+            }
+            _ => anyhow::bail!("Invalid type")
+        }
+    }
+
+    Ok(())
 }

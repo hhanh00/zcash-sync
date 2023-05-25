@@ -1223,6 +1223,17 @@ pub unsafe extern "C" fn set_property(
     to_cresult(with_coin(coin, res))
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn import_uvk(coin: u8, name: *mut c_char, yfvk: *mut c_char) -> CResult<u8> {
+    from_c_str!(name);
+    from_c_str!(yfvk);
+    let res = || {
+        crate::key2::import_uvk(coin, &name, &yfvk)?;
+        Ok(0)
+    };
+    to_cresult(res())
+}
+
 #[cfg(feature = "ledger")]
 #[no_mangle]
 #[tokio::main]

@@ -78,7 +78,8 @@ reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-featu
 ureq = { version = "2.6", optional = true }
 hex-literal = "0.4"
 pasta_curves = "0.5"
-f4jumble = { path = "../../librustzcash/components/f4jumble" }
+f4jumble = "0.1.0"
+rust_decimal = { version = "1.29", optional = true }
 
 # Halo
 orchard = "0.3.0"
@@ -112,7 +113,7 @@ objc = { version = "0.2", features = [ "objc_exception" ], optional = true }
 block = { version = "0.1.6", optional = true }
 
 [features]
-ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv", "ureq" ]
+ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv", "ureq", "rust_decimal" ]
 dart_ffi = ["allo-isolate", "once_cell", "android_logger"]
 rpc = ["rocket", "dotenv"]
 nodejs = ["node-bindgen"]

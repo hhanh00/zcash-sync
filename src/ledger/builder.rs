@@ -1,3 +1,5 @@
+use std::io::Write;
+use bech32::{ToBase32, Variant};
 use blake2b_simd::Params;
 use blake2b_simd::State;
 use byteorder::WriteBytesExt;
@@ -18,12 +20,11 @@ use rand::rngs::OsRng;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::{ChaChaRng};
 use ripemd::{Digest, Ripemd160};
+
 use secp256k1::PublicKey;
 use sha2::Sha256;
+use zcash_client_backend::encoding::{encode_extended_full_viewing_key, encode_transparent_address};
 
-use zcash_client_backend::encoding::{
-    encode_extended_full_viewing_key, encode_transparent_address,
-};
 use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::legacy::TransparentAddress;
@@ -96,6 +97,17 @@ pub fn build_ledger_tx(
     let master_seed = ledger_init_tx()?;
 
     let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk()?;
+
+    let mut uvk = vec![];
+    uvk.write_u8(0x00)?;
+    uvk.write_all(&dfvk.to_bytes())?;
+    uvk.write_u8(0x01)?;
+    uvk.write_all(&pubkey)?;
+
+    let uvk = f4jumble::f4jumble(&uvk)?;
+    let uvk = bech32::encode("yfvk", &uvk.to_base32(), Variant::Bech32m)?;
+    println!("Your YWallet VK is {}", uvk);
+
     let proofgen_key: zcash_primitives::sapling::ProofGenerationKey = ledger_get_proofgen_key()?;
 
     let mut sapling_builder = SaplingBuilder::new(prover, dfvk, proofgen_key);
