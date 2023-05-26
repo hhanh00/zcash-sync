@@ -14,10 +14,10 @@ name = "warp-rpc"
 path = "src/main/rpc.rs"
 required-features = ["rpc"]
 
-[[bin]]
-name = "wallet"
-path = "src/main/wallet.rs"
-required-features = ["dotenv"]
+#[[bin]]
+#name = "wallet"
+#path = "src/main/wallet.rs"
+#required-features = ["dotenv"]
 
 #[[bin]]
 #name = "ledger"
@@ -71,7 +71,7 @@ ripemd = "0.1.1"
 sha2 = "0.10.2"
 lazy_static = "1.4.0"
 rustyline = "9.1.2"
-clap = "3.1.18"
+clap = { version = "4.3.0", features = [ "derive" ] }
 chrono = "0.4.19"
 lazycell = "1.3.0"
 reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-features = false }

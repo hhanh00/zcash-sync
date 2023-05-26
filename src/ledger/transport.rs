@@ -32,13 +32,13 @@ fn apdu(data: &[u8]) -> Result<Vec<u8>> {
         p2: data[3],
         data: &data[5..],
     };
-    println!("ins {} {}", data[1], hex::encode(data));
+    log::info!("ins {} {}", data[1], hex::encode(data));
     let response = transport.exchange(&command)?;
     let error_code = response.retcode();
     log::info!("error_code {}", error_code);
     handle_error_code(error_code)?;
     let rep = response.data().to_vec();
-    println!("rep {}", hex::encode(&rep));
+    log::info!("rep {}", hex::encode(&rep));
     Ok(rep)
 }
 
@@ -49,13 +49,13 @@ fn apdu2(data: &[u8]) -> Result<Vec<u8>> {
     let response = ureq::post(&format!("http://{}:5000/apdu", TEST_SERVER_IP.unwrap()))
         .send_string(&format!("{{\"data\": \"{}\"}}", hex::encode(data)))?
         .into_string()?;
-    println!("ins {} {}", data[1], hex::encode(data));
+    log::info!("ins {} {}", data[1], hex::encode(data));
     let response_body: Value = serde_json::from_str(&response)?;
     let data = response_body["data"]
         .as_str()
         .ok_or(anyhow!("No data field"))?;
     let data = hex::decode(data)?;
-    println!("rep {}", hex::encode(&data));
+    log::info!("rep {}", hex::encode(&data));
     let error_code = u16::from_be_bytes(data[data.len() - 2..].try_into().unwrap());
     handle_error_code(error_code)?;
     Ok(data[..data.len() - 2].to_vec())
