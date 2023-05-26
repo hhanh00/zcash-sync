@@ -1,6 +1,6 @@
 [package]
 name = "zcash-warpsync"
-version = "1.2.15"
+version = "1.4.0"
 authors = ["Hanh <hanh425@gmail.com>"]
 edition = "2021"
 
@@ -122,9 +122,9 @@ apple_metal = ["metal", "objc", "block"]
 sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies.zcash_params]
-#git = "https://github.com/hhanh00/zcash-params.git"
-#rev = "2e118feceeaa31ef68fb83d1fc94a1a46db4569c"
-path = "../zcash-params"
+git = "https://github.com/hhanh00/zcash-params.git"
+rev = "3617aa111f5aee879c1f25387047055497b68c68"
+#path = "../zcash-params"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
