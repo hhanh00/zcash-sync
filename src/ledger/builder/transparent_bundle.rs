@@ -8,6 +8,7 @@ use crate::ledger::transport::*;
 use crate::taddr::derive_from_pubkey;
 
 use anyhow::Result;
+use secp256k1::PublicKey;
 
 use zcash_client_backend::encoding::decode_transparent_address;
 use zcash_primitives::consensus::Network;
@@ -24,7 +25,7 @@ pub struct TransparentInputUnAuthorized {
 
 pub struct TransparentBuilder {
     pub taddr: String,
-    pubkey: Vec<u8>,
+    pubkey: PublicKey,
     pkh: [u8; 20],
     tin_pubscript: Script,
     prevouts_hasher: State,
@@ -36,8 +37,8 @@ pub struct TransparentBuilder {
 }
 
 impl TransparentBuilder {
-    pub fn new(network: &Network, pubkey: &[u8]) -> Self {
-        let taddr_str = derive_from_pubkey(network, &pubkey).unwrap();
+    pub fn new(network: &Network, pubkey: &PublicKey) -> Self {
+        let taddr_str = derive_from_pubkey(network, &pubkey.serialize()).unwrap();
         let taddr = decode_transparent_address(
             &network.b58_pubkey_address_prefix(),
             &network.b58_script_address_prefix(),
@@ -52,7 +53,7 @@ impl TransparentBuilder {
         let tin_pubscript = taddr.script();
         TransparentBuilder {
             taddr: taddr_str,
-            pubkey: pubkey.to_vec(),
+            pubkey: pubkey.clone(),
             pkh: pkh.clone(),
             tin_pubscript,
             prevouts_hasher: create_hasher(b"ZTxIdPrevoutHash"),
@@ -133,7 +134,7 @@ impl TransparentBuilder {
             signature.extend(&[0x01]); // add SIG_HASH_ALL
 
             // witness is PUSH(signature) PUSH(pk)
-            let script_sig = Script::default() << &*signature << &*self.pubkey;
+            let script_sig = Script::default() << &*signature << &*self.pubkey.serialize().to_vec();
 
             let txin = TxIn::<transparent::Authorized> {
                 prevout: tin.utxo.clone(),

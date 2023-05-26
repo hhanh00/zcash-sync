@@ -1245,7 +1245,9 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
         let prover = coinconfig::get_prover();
         let pk = crate::orchard::get_proving_key();
         let raw_tx = tokio::task::spawn_blocking(move || {
-            let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan, prover, &pk)?;
+            let (pubkey, dfvk, ofvk) = crate::ledger::ledger_get_fvks()?;
+            let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan,
+                &pubkey, &dfvk, ofvk, prover, &pk)?;
             Ok::<_, anyhow::Error>(raw_tx)
         })
         .await??;

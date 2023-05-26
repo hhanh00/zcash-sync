@@ -1,5 +1,3 @@
-use std::io::Write;
-use bech32::{ToBase32, Variant};
 use blake2b_simd::Params;
 use blake2b_simd::State;
 use byteorder::WriteBytesExt;
@@ -29,7 +27,7 @@ use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::legacy::TransparentAddress;
 
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_primitives::zip32::{DiversifiableFullViewingKey, ExtendedFullViewingKey};
 
 use zcash_primitives::{
     consensus::{BlockHeight, BranchId, MainNetwork},
@@ -76,11 +74,12 @@ pub fn create_hasher(perso: &[u8]) -> State {
 pub fn build_ledger_tx(
     network: &Network,
     tx_plan: &TransactionPlan,
+    pubkey: &PublicKey,
+    dfvk: &DiversifiableFullViewingKey,
+    ofvk: Option<orchard::keys::FullViewingKey>,
     prover: &LocalTxProver,
     proving_key: &ProvingKey,
 ) -> Result<Vec<u8>> {
-    ledger_init()?;
-    let pubkey = ledger_get_pubkey()?;
     let mut transparent_builder = TransparentBuilder::new(network, &pubkey);
 
     let mut rng = OsRng;
@@ -92,35 +91,18 @@ pub fn build_ledger_tx(
         );
     }
 
-    let has_orchard = ledger_has_orchard()?;
-
     let master_seed = ledger_init_tx()?;
-
-    let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk()?;
-
-    let mut uvk = vec![];
-    uvk.write_u8(0x00)?;
-    uvk.write_all(&dfvk.to_bytes())?;
-    uvk.write_u8(0x01)?;
-    uvk.write_all(&pubkey)?;
-
-    let uvk = f4jumble::f4jumble(&uvk)?;
-    let uvk = bech32::encode("yfvk", &uvk.to_base32(), Variant::Bech32m)?;
-    println!("Your YWallet VK is {}", uvk);
 
     let proofgen_key: zcash_primitives::sapling::ProofGenerationKey = ledger_get_proofgen_key()?;
 
-    let mut sapling_builder = SaplingBuilder::new(prover, dfvk, proofgen_key);
+    let mut sapling_builder = SaplingBuilder::new(prover, dfvk.clone(), proofgen_key);
 
-    let o_fvk: [u8; 96] = if has_orchard {
-        ledger_get_o_fvk()?.try_into().unwrap()
-    } else {
-        // dummy o_fvk - we are not going to use it
-        let sk = orchard::keys::SpendingKey::from_bytes([0; 32]).unwrap();
-        orchard::keys::FullViewingKey::from(&sk).to_bytes()
-    };
+    let has_orchard = ofvk.is_some();
     let orchard_fvk =
-        orchard::keys::FullViewingKey::from_bytes(&o_fvk).ok_or(anyhow!("Invalid Orchard FVK"))?;
+        ofvk.unwrap_or_else(|| {
+            let sk = orchard::keys::SpendingKey::from_bytes([0; 32]).unwrap();
+            orchard::keys::FullViewingKey::from(&sk)
+        });
     let anchor = orchard::Anchor::from_bytes(tx_plan.orchard_anchor).unwrap();
 
     let mut orchard_builder = OrchardBuilder::new(&orchard_fvk, anchor);

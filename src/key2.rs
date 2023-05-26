@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use bech32::FromBase32;
 use bip39::{Language, Mnemonic, Seed};
 use byteorder::ReadBytesExt;
+use orchard::keys::FullViewingKey;
 
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
@@ -173,6 +174,12 @@ pub fn import_uvk(coin: u8, name: &str, uvk: &str) -> anyhow::Result<()> {
                 log::info!("PUBK {}", hex::encode(&pubkeyb));
                 let taddr = derive_from_pubkey(network, &pubkeyb)?;
                 db.store_taddr(id_account, &taddr)?;
+            }
+            2 => {
+                let mut ofvkb = [0u8; 96];
+                c.read_exact(&mut ofvkb)?;
+                log::info!("OFVK {}", hex::encode(&ofvkb));
+                db.store_orchard_fvk(id_account, &ofvkb)?;
             }
             _ => anyhow::bail!("Invalid type")
         }
