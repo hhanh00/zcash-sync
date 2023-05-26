@@ -24,7 +24,7 @@ use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Network::YCashMainNetwork;
 use zcash_primitives::consensus::Parameters;
 use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_primitives::zip32::{DiversifiableFullViewingKey, ExtendedFullViewingKey};
 use zcash_primitives::{
     consensus::{BlockHeight, BranchId, MainNetwork},
     transaction::{Authorized, TransactionData, TxVersion},
@@ -71,11 +71,12 @@ pub fn create_hasher(perso: &[u8]) -> State {
 pub fn build_ledger_tx(
     network: &Network,
     tx_plan: &TransactionPlan,
+    pubkey: PublicKey,
+    dfvk: DiversifiableFullViewingKey,
     prover: &LocalTxProver,
 ) -> Result<Vec<u8>> {
-    ledger_init()?;
-    let pubkey = ledger_get_pubkey()?;
-    let mut transparent_builder = TransparentBuilder::new(network, &pubkey);
+    let mut transparent_builder = TransparentBuilder::new(network,
+  &pubkey.serialize());
 
     let mut rng = OsRng;
     if transparent_builder.taddr_str != tx_plan.taddr {
@@ -85,18 +86,6 @@ pub fn build_ledger_tx(
             tx_plan.taddr
         );
     }
-
-    let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk()?;
-
-    let mut uvk = vec![];
-    uvk.write_u8(0x00)?;
-    uvk.write_all(&dfvk.to_bytes())?;
-    uvk.write_u8(0x01)?;
-    uvk.write_all(&pubkey)?;
-
-    let uvk = f4jumble::f4jumble(&uvk)?;
-    let uvk = bech32::encode("yfvk", &uvk.to_base32(), Variant::Bech32m)?;
-    println!("Your YWallet VK is {}", uvk);
 
     let proofgen_key: zcash_primitives::sapling::ProofGenerationKey = ledger_get_proofgen_key()?;
 

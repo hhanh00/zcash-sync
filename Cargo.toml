@@ -71,7 +71,7 @@ ripemd = "0.1.1"
 sha2 = "0.10.2"
 lazy_static = "1.4.0"
 rustyline = "9.1.2"
-clap = "3.1.18"
+clap = { version = "4.3.0", features = [ "derive" ] }
 chrono = "0.4.19"
 lazycell = "1.3.0"
 reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-features = false }
@@ -129,33 +129,33 @@ path = "../zcash-params"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+rev = "ddd57a5ff62d9de7fd9aef3731dd56e148d8024a"
 #path = "../../librustzcash/zcash_client_backend"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+rev = "ddd57a5ff62d9de7fd9aef3731dd56e148d8024a"
 #path = "../../librustzcash/zcash_primitives"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+rev = "ddd57a5ff62d9de7fd9aef3731dd56e148d8024a"
 #path = "../../librustzcash/zcash_proofs"
 
 [dependencies.zcash_address]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+rev = "ddd57a5ff62d9de7fd9aef3731dd56e148d8024a"
 #path = "../../librustzcash/components/zcash_address"
 
 [dependencies.zcash_encoding]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+rev = "ddd57a5ff62d9de7fd9aef3731dd56e148d8024a"
 #path = "../../librustzcash/components/zcash_encoding"
 
 [dependencies.zcash_note_encryption]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+rev = "ddd57a5ff62d9de7fd9aef3731dd56e148d8024a"
 #path = "../../librustzcash/components/zcash_note_encryption"
 
 [build-dependencies]
@@ -167,4 +167,4 @@ criterion = "0.3.4"
 
 #These patch overrides must be included in your workspace root Cargo.toml
 #[patch.crates-io]
-#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646" }
+#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "ddd57a5ff62d9de7fd9aef3731dd56e148d8024a" }

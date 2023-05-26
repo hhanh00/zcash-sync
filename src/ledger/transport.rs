@@ -101,10 +101,6 @@ pub fn ledger_get_proofgen_key() -> Result<ProofGenerationKey> {
     Ok(proofgen_key)
 }
 
-pub fn ledger_confirm_fee() -> Result<()> {
-    bb.write_all(&hex!("E01C010000"))?;
-    apdu(&bb)?;
-    Ok(())
 pub fn ledger_sign_transparent(sighash: &[u8]) -> Result<Vec<u8>> {
     let mut bb: Vec<u8> = vec![];
     bb.write_all(&hex!("E021000020"))?;
