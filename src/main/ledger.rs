@@ -23,6 +23,10 @@ struct Cli {
     /// Sets a Lightwalletd URL
     #[arg(short, long)]
     server: Option<String>,
+
+    /// Sets an output filename
+    #[arg(short, long)]
+    out: Option<String>,
 }
 
 #[tokio::main]
@@ -53,23 +57,23 @@ async fn main() -> Result<()> {
 
         let raw_tx = build_ledger_tx(&MainNetwork, &tx_plan, &pubkey, &dfvk, ofvk.clone(), &prover, &proving_key)?;
 
-        match cli.server.as_ref() {
-            Some(url) => {
-                let mut client = connect_lightwalletd(&url).await?;
+        if let Some(url) = cli.server.as_ref() {
+            let mut client = connect_lightwalletd("https://lite.ycash.xyz:9067").await?;connect_lightwalletd(&url).await?;
 
-                let response = client
-                    .send_transaction(Request::new(RawTransaction {
-                        data: raw_tx,
-                        height: 0,
-                    }))
-                    .await?
-                    .into_inner();
-                println!("{}", response.error_message);
-            }
-            None => {
-                let tx = base64::encode(&raw_tx);
-                println!("{tx}");
-            }
+            let response = client
+                .send_transaction(Request::new(RawTransaction {
+                    data: raw_tx.clone(),
+                    height: 0,
+                }))
+                .await?
+                .into_inner();
+            println!("{}", response.error_message);
+        }
+
+        if let Some(out_filename) = cli.out.as_ref() {
+            let mut out = std::fs::File::create(&out_filename)?;
+            let tx = base64::encode(&raw_tx);
+            write!(out, "{tx}")?;
         }
     }
 

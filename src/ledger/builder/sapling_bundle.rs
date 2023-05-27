@@ -170,7 +170,6 @@ impl<'a> SaplingBuilder<'a> {
         let note = Note::from_parts(recipient, value, rseed);
         let rcm = note.rcm();
         let cmu = note.cmu();
-        println!("cmu {}", hex::encode(cmu.to_bytes()));
 
         let encryptor = sapling_note_encryption::<_, MainNetwork>(
             Some(self.dfvk.fvk.ovk.clone()),
@@ -234,12 +233,9 @@ impl<'a> SaplingBuilder<'a> {
             spends_hasher.update(spends_non_compact_digest.as_bytes());
         }
         let spends_digest = spends_hasher.finalize();
-        println!("SPENDS {}", hex::encode(spends_digest));
 
         let memos_digest = self.output_memos_hasher.finalize();
-        println!("MEMOS {}", hex::encode(memos_digest));
         let outputs_nc_digest = self.output_non_compact_hasher.finalize();
-        println!("NC OUTPUTS {}", hex::encode(outputs_nc_digest));
 
         ledger_set_sapling_merkle_proof(
             spends_digest.as_bytes(),
