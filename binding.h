@@ -423,6 +423,8 @@ struct CResult_u32 ledger_import_account(uint8_t coin, char *name);
 
 struct CResult_bool ledger_has_account(uint8_t coin, uint32_t account);
 
+struct CResult_u8 ledger_toggle_binding(uint8_t coin, uint32_t account);
+
 bool has_cuda(void);
 
 bool has_metal(void);

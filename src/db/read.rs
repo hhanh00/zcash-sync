@@ -23,7 +23,7 @@ pub fn get_account_list(connection: &Connection) -> Result<AccountVecT> {
             0
         } else if sk.is_some() {
             1
-        } else if ledger.is_some() {
+        } else if ledger == Some(true) {
             2
         } else {
             0x80

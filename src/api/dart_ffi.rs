@@ -1272,6 +1272,15 @@ pub unsafe extern "C" fn ledger_has_account(coin: u8, account: u32) -> CResult<b
     to_cresult(with_coin(coin, res))
 }
 
+#[cfg(feature = "ledger")]
+#[no_mangle]
+pub unsafe extern "C" fn ledger_toggle_binding(coin: u8, account: u32) -> CResult<u8> {
+    to_cresult(with_coin(coin, |connection: &Connection| {
+        crate::ledger::toggle_binding(connection, account)?;
+        Ok(0)
+    }))
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn has_cuda() -> bool {
     crate::gpu::has_cuda()
