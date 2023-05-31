@@ -13,7 +13,7 @@ use crate::ledger::builder::transparent_bundle::TransparentBuilder;
 use crate::ledger::transport::*;
 
 use crate::{Destination, Source, TransactionPlan};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use rand::rngs::OsRng;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::{ChaChaRng};

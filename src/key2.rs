@@ -40,7 +40,7 @@ pub fn decode_key(
     Option<String>,
     String,
     String,
-    Option<orchard::keys::FullViewingKey>,
+    Option<FullViewingKey>,
 )> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();

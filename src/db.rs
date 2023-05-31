@@ -1020,7 +1020,8 @@ impl DbAdapter {
         let db_transaction = self.connection.transaction()?;
         {
             let mut statement = db_transaction.prepare(
-                "INSERT INTO historical_prices(timestamp, price, currency) VALUES (?1, ?2, ?3)",
+                "INSERT INTO historical_prices(timestamp, price, currency) VALUES (?1, ?2, ?3) \
+                ON CONFLICT (currency, timestamp) DO NOTHING", // Ignore double insert due to async fetch price
             )?;
             for q in prices {
                 statement.execute(params![q.timestamp, q.price, currency])?;
