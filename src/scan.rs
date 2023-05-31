@@ -171,45 +171,45 @@ async fn sync_async_inner<'a>(
         progress.downloaded += blocks.1;
         progress.height = last_height;
 
-        // Sapling
-        log::info!("Sapling");
         {
-            let decrypter = SaplingDecrypter::new(network);
-            let warper = WarpProcessor::new(SaplingHasher::default());
-            let mut synchronizer = SaplingSynchronizer::new(
-                decrypter,
-                warper,
-                sapling_vks.clone(),
-                db_builder.clone(),
-                "sapling".to_string(),
-            );
-            synchronizer.initialize(height)?;
-            progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
-        }
-
-        if c.chain.has_unified() {
-            // Orchard
-            log::info!("Orchard");
+            let mut db = db_builder.build()?;
+            // Sapling
+            log::info!("Sapling");
             {
-                let decrypter = OrchardDecrypter::new(network);
-                let warper = WarpProcessor::new(OrchardHasher::new());
-                let mut synchronizer = OrchardSynchronizer::new(
+                let decrypter = SaplingDecrypter::new(network);
+                let warper = WarpProcessor::new(SaplingHasher::default());
+                let mut synchronizer = SaplingSynchronizer::new(
                     decrypter,
                     warper,
-                    orchard_vks.clone(),
-                    db_builder.clone(),
-                    "orchard".to_string(),
+                sapling_vks.clone(),
+                "sapling".to_string(),
                 );
-                synchronizer.initialize(height)?;
-                log::info!("Process orchard start");
-                progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
-                log::info!("Process orchard end");
+                synchronizer.initialize(height, &mut db)?;
+                progress.trial_decryptions += synchronizer.process(&blocks.0, &mut db)? as u64;
             }
-        }
 
-        let db = db_builder.build()?;
-        db.store_block_timestamp(last_height, &last_hash, last_timestamp)?;
-        height = last_height;
+            if c.chain.has_unified() {
+                // Orchard
+                log::info!("Orchard");
+                {
+                    let decrypter = OrchardDecrypter::new(network);
+                    let warper = WarpProcessor::new(OrchardHasher::new());
+                    let mut synchronizer = OrchardSynchronizer::new(
+                        decrypter,
+                        warper,
+                    orchard_vks.clone(),
+                    "orchard".to_string(),
+                    );
+                    synchronizer.initialize(height, &mut db)?;
+                    log::info!("Process orchard start");
+                    progress.trial_decryptions += synchronizer.process(&blocks.0, &mut db)? as u64;
+                    log::info!("Process orchard end");
+                }
+            }
+
+            db.store_block_timestamp(last_height, &last_hash, last_timestamp)?;
+            height = last_height;
+        }
         let cb = progress_callback.lock().await;
         cb(progress.clone());
     }

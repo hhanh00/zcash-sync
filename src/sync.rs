@@ -29,7 +29,6 @@ pub struct Synchronizer<
     pub decrypter: TD,
     pub warper: WarpProcessor<H>,
     pub vks: Vec<VK>,
-    pub db: DbAdapterBuilder,
     pub shielded_pool: String,
 
     pub note_position: usize,
@@ -52,14 +51,12 @@ impl<
         decrypter: TD,
         warper: WarpProcessor<H>,
         vks: Vec<VK>,
-        db: DbAdapterBuilder,
         shielded_pool: String,
     ) -> Self {
         Synchronizer {
             decrypter,
             warper,
             vks,
-            db,
             shielded_pool,
 
             note_position: 0,
@@ -70,8 +67,7 @@ impl<
         }
     }
 
-    pub fn initialize(&mut self, height: u32) -> Result<()> {
-        let db = self.db.build()?;
+    pub fn initialize(&mut self, height: u32, db: &mut DbAdapter) -> Result<()> {
         let TreeCheckpoint { tree, witnesses } =
             db.get_tree_by_name(height, &self.shielded_pool)?;
         self.tree = tree;
@@ -84,7 +80,7 @@ impl<
         Ok(())
     }
 
-    pub fn process(&mut self, blocks: &[CompactBlock]) -> Result<usize> {
+    pub fn process(&mut self, blocks: &[CompactBlock], db: &mut DbAdapter) -> Result<usize> {
         if blocks.is_empty() {
             return Ok(0);
         }
@@ -98,7 +94,6 @@ impl<
             .map(|b| b.count_outputs)
             .sum::<u32>() as usize;
 
-        let mut db = self.db.build()?;
         self.warper.initialize(&self.tree, &self.witnesses);
         let db_tx = db.begin_transaction()?;
 
