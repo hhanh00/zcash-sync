@@ -81,7 +81,7 @@ pub async fn sync_async<'a>(
     target_height_offset: u32,
     max_cost: u32,
     progress_callback: AMProgressCallback, // TODO
-    cancel: &'static std::sync::Mutex<bool>,
+    cancel: mpsc::Receiver<()>,
 ) -> anyhow::Result<()> {
     let result = sync_async_inner(
         coin,
@@ -109,7 +109,7 @@ async fn sync_async_inner<'a>(
     target_height_offset: u32,
     max_cost: u32,
     progress_callback: AMProgressCallback, // TODO
-    cancel: &'static std::sync::Mutex<bool>,
+    cancel: mpsc::Receiver<()>,
 ) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let ld_url = c.lwd_url.as_ref().unwrap().clone();
@@ -133,6 +133,7 @@ async fn sync_async_inner<'a>(
         return Ok(());
     }
 
+    log::info!("Scan started");
     let mut height = start_height;
     let (blocks_tx, mut blocks_rx) = mpsc::channel::<Blocks>(1);
     let downloader = tokio::spawn(async move {
@@ -181,8 +182,8 @@ async fn sync_async_inner<'a>(
                 let mut synchronizer = SaplingSynchronizer::new(
                     decrypter,
                     warper,
-                sapling_vks.clone(),
-                "sapling".to_string(),
+                    sapling_vks.clone(),
+                    "sapling".to_string(),
                 );
                 synchronizer.initialize(height, &mut db)?;
                 progress.trial_decryptions += synchronizer.process(&blocks.0, &mut db)? as u64;
@@ -197,8 +198,8 @@ async fn sync_async_inner<'a>(
                     let mut synchronizer = OrchardSynchronizer::new(
                         decrypter,
                         warper,
-                    orchard_vks.clone(),
-                    "orchard".to_string(),
+                        orchard_vks.clone(),
+                        "orchard".to_string(),
                     );
                     synchronizer.initialize(height, &mut db)?;
                     log::info!("Process orchard start");
@@ -213,8 +214,10 @@ async fn sync_async_inner<'a>(
         let cb = progress_callback.lock().await;
         cb(progress.clone());
     }
+    log::info!("Scan finishing");
 
     downloader.await??;
+    log::info!("Scan finished");
 
     if get_tx {
         get_transaction_details(coin).await?;

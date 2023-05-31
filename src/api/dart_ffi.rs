@@ -15,7 +15,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
 use std::sync::Mutex;
-use tokio::sync::Semaphore;
+use tokio::sync::{oneshot, Semaphore};
 use zcash_primitives::transaction::builder::Progress;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
@@ -303,13 +303,18 @@ pub unsafe extern "C" fn import_transparent_secret_key(
 
 lazy_static! {
     static ref SYNC_LOCK: Semaphore = Semaphore::new(1);
-    static ref SYNC_CANCELED: Mutex<bool> = Mutex::new(false);
+    static ref TX_CANCEL: Mutex<Option<oneshot::Sender<()>>> = Mutex::new(None);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cancel_warp() {
     log::info!("Sync canceled");
-    *SYNC_CANCELED.lock().unwrap() = true;
+    let mut tx = TX_CANCEL.lock().unwrap();
+    let tx = tx.take();
+    tx.map(|tx| {
+        log::info!("Cancellation sent");
+        let _ = tx.send(());
+    });
 }
 
 #[tokio::main]
@@ -324,6 +329,8 @@ pub async unsafe extern "C" fn warp(
     let res = async {
         let _permit = SYNC_LOCK.acquire().await?;
         log::info!("Sync started");
+        let (tx_cancel, rx_cancel) = oneshot::channel::<()>();
+        *TX_CANCEL.lock().unwrap() = Some(tx_cancel);
         let result = crate::api::sync::coin_sync(
             coin,
             get_tx,
@@ -346,7 +353,7 @@ pub async unsafe extern "C" fn warp(
                     }
                 }
             },
-            &SYNC_CANCELED,
+            rx_cancel,
         )
         .await;
         log::info!("Sync finished");
@@ -367,7 +374,7 @@ pub async unsafe extern "C" fn warp(
         }
     };
     let r = res.await;
-    *SYNC_CANCELED.lock().unwrap() = false;
+    *TX_CANCEL.lock().unwrap() = None;
     to_cresult(r)
 }
 
@@ -1246,8 +1253,15 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
         let pk = crate::orchard::get_proving_key();
         let raw_tx = tokio::task::spawn_blocking(move || {
             let (pubkey, dfvk, ofvk) = crate::ledger::ledger_get_fvks()?;
-            let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan,
-                &pubkey, &dfvk, ofvk, prover, &pk)?;
+            let raw_tx = crate::ledger::build_ledger_tx(
+                c.chain.network(),
+                &tx_plan,
+                &pubkey,
+                &dfvk,
+                ofvk,
+                prover,
+                &pk,
+            )?;
             Ok::<_, anyhow::Error>(raw_tx)
         })
         .await??;

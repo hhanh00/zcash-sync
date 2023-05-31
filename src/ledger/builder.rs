@@ -16,12 +16,14 @@ use crate::{Destination, Source, TransactionPlan};
 use anyhow::Result;
 use rand::rngs::OsRng;
 use rand::{RngCore, SeedableRng};
-use rand_chacha::{ChaChaRng};
+use rand_chacha::ChaChaRng;
 use ripemd::{Digest, Ripemd160};
 
 use secp256k1::PublicKey;
 use sha2::Sha256;
-use zcash_client_backend::encoding::{encode_extended_full_viewing_key, encode_transparent_address};
+use zcash_client_backend::encoding::{
+    encode_extended_full_viewing_key, encode_transparent_address,
+};
 
 use zcash_primitives::consensus::Network;
 use zcash_primitives::consensus::Parameters;
@@ -29,11 +31,11 @@ use zcash_primitives::legacy::TransparentAddress;
 
 use zcash_primitives::zip32::{DiversifiableFullViewingKey, ExtendedFullViewingKey};
 
+use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_primitives::{
     consensus::{BlockHeight, BranchId, MainNetwork},
     transaction::{Authorized, TransactionData, TxVersion},
 };
-use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_proofs::prover::LocalTxProver;
 
 mod orchard_bundle;
@@ -98,11 +100,10 @@ pub fn build_ledger_tx(
     let mut sapling_builder = SaplingBuilder::new(prover, dfvk.clone(), proofgen_key);
 
     let has_orchard = ofvk.is_some();
-    let orchard_fvk =
-        ofvk.unwrap_or_else(|| {
-            let sk = orchard::keys::SpendingKey::from_bytes([0; 32]).unwrap();
-            orchard::keys::FullViewingKey::from(&sk)
-        });
+    let orchard_fvk = ofvk.unwrap_or_else(|| {
+        let sk = orchard::keys::SpendingKey::from_bytes([0; 32]).unwrap();
+        orchard::keys::FullViewingKey::from(&sk)
+    });
     let anchor = orchard::Anchor::from_bytes(tx_plan.orchard_anchor).unwrap();
 
     let mut orchard_builder = OrchardBuilder::new(&orchard_fvk, anchor);
@@ -233,14 +234,20 @@ pub fn build_ledger_tx(
 
     let txid_parts = authed_tx.digest(TxIdDigester);
     match txid_parts.sapling_digest {
-        Some(h) =>
-            if h.as_bytes() != &hashes[0..32] { anyhow::bail!("Sapling Hash Mismatch") }
-        None => ()
+        Some(h) => {
+            if h.as_bytes() != &hashes[0..32] {
+                anyhow::bail!("Sapling Hash Mismatch")
+            }
+        }
+        None => (),
     }
     match txid_parts.orchard_digest {
-        Some(h) =>
-            if h.as_bytes() != &hashes[32..64] { anyhow::bail!("Orchard Hash Mismatch") }
-        None => ()
+        Some(h) => {
+            if h.as_bytes() != &hashes[32..64] {
+                anyhow::bail!("Orchard Hash Mismatch")
+            }
+        }
+        None => (),
     }
 
     let tx = authed_tx.freeze().unwrap();

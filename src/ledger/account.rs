@@ -68,8 +68,10 @@ pub fn is_external(connection: &Connection, account: u32) -> Result<bool> {
 
 pub fn toggle_binding(connection: &Connection, account: u32) -> Result<()> {
     let external = is_external(connection, account)?;
-    connection.execute("INSERT INTO hw_wallets(account, ledger) VALUES (?1, ?2) \
-        ON CONFLICT (account) DO UPDATE SET ledger = excluded.ledger", 
-    params![account, !external])?;
+    connection.execute(
+        "INSERT INTO hw_wallets(account, ledger) VALUES (?1, ?2) \
+        ON CONFLICT (account) DO UPDATE SET ledger = excluded.ledger",
+        params![account, !external],
+    )?;
     Ok(())
 }
