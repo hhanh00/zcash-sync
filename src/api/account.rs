@@ -5,7 +5,7 @@
 use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::{AddressBalanceT, AddressBalanceVecT, BackupT, KeyPackT};
 use crate::db::AccountData;
-use crate::key2::decode_key;
+use crate::key::decode_key;
 use crate::orchard::OrchardKeyBytes;
 use crate::taddr::{derive_taddr, derive_tkeys};
 use crate::unified::UnifiedAddressType;

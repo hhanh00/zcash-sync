@@ -3,7 +3,7 @@ use crate::api::recipient::RecipientMemo;
 use crate::chain::{get_checkpoint_height, get_latest_height, EXPIRY_HEIGHT_OFFSET};
 use crate::coinconfig::CoinConfig;
 use crate::db::AccountData;
-use crate::key2::split_key;
+use crate::key::split_key;
 use crate::note_selection::{SecretKeys, Source, UTXO};
 use crate::unified::orchard_as_unified;
 use crate::{

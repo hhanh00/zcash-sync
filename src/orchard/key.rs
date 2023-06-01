@@ -1,4 +1,4 @@
-use crate::key2::split_key;
+use crate::key::split_key;
 use bip39::{Language, Mnemonic, Seed};
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use orchard::Address;

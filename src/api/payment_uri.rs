@@ -1,7 +1,7 @@
 //! encode and decode Payment URI
 
 use crate::coinconfig::CoinConfig;
-use crate::key2::decode_address;
+use crate::key::decode_address;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::str::FromStr;

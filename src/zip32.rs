@@ -1,5 +1,5 @@
 use crate::db::data_generated::fb::KeyPackT;
-use crate::key2::split_key;
+use crate::key::split_key;
 use anyhow::anyhow;
 use base58check::ToBase58Check;
 use bip39::{Language, Mnemonic, Seed};

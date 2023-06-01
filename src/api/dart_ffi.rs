@@ -1,8 +1,6 @@
 use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
 use crate::db::data_generated::fb::{ProgressT, Recipients, SendTemplate, Servers};
 use crate::db::FullEncryptedBackup;
-#[cfg(feature = "ledger2")]
-use crate::ledger2;
 use crate::note_selection::TransactionReport;
 use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
@@ -381,13 +379,13 @@ pub async unsafe extern "C" fn warp(
 #[no_mangle]
 pub unsafe extern "C" fn is_valid_key(coin: u8, key: *mut c_char) -> i8 {
     from_c_str!(key);
-    crate::key2::is_valid_key(coin, &key)
+    crate::key::is_valid_key(coin, &key)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn valid_address(coin: u8, address: *mut c_char) -> bool {
     from_c_str!(address);
-    crate::key2::decode_address(coin, &address).is_some()
+    crate::key::decode_address(coin, &address).is_some()
 }
 
 #[no_mangle]
@@ -401,42 +399,6 @@ pub unsafe extern "C" fn get_diversified_address(ua_type: u8, time: u32) -> CRes
 pub async unsafe extern "C" fn get_latest_height() -> CResult<u32> {
     let height = crate::api::sync::get_latest_height().await;
     to_cresult(height)
-}
-
-#[cfg(feature = "ledger2")]
-#[no_mangle]
-pub unsafe extern "C" fn ledger_build_keys() -> CResult<u8> {
-    use crate::ledger2::{build_keys, LedgerClient};
-
-    let res = || {
-        let client = ledger2::LedgerClient::new()?;
-        ledger2::build_keys(&client)?;
-        Ok(0u8)
-    };
-    to_cresult(res())
-}
-
-#[cfg(feature = "ledger2")]
-#[no_mangle]
-pub unsafe extern "C" fn ledger_get_fvk(coin: u8) -> CResult<*mut c_char> {
-    let res = || {
-        let c = CoinConfig::get(coin);
-        let client = ledger2::LedgerClient::new()?;
-        let fvk = ledger2::get_fvk(c.chain.network(), &client)?;
-        Ok(fvk)
-    };
-    to_cresult_str(res())
-}
-
-#[cfg(feature = "ledger2")]
-#[no_mangle]
-pub unsafe extern "C" fn ledger_get_address() -> CResult<*mut c_char> {
-    let res = || {
-        let client = ledger2::LedgerClient::new()?;
-        let address = ledger2::get_address(&client)?;
-        Ok(address)
-    };
-    to_cresult_str(res())
 }
 
 #[allow(dead_code)]
@@ -1236,7 +1198,7 @@ pub unsafe extern "C" fn import_uvk(coin: u8, name: *mut c_char, yfvk: *mut c_ch
     from_c_str!(name);
     from_c_str!(yfvk);
     let res = || {
-        crate::key2::import_uvk(coin, &name, &yfvk)?;
+        crate::key::import_uvk(coin, &name, &yfvk)?;
         Ok(0)
     };
     to_cresult(res())

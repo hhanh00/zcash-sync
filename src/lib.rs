@@ -72,10 +72,8 @@ pub mod lw_rpc;
 
 pub type Hash = [u8; 32];
 
-// mod builder;
 mod chain;
 mod coinconfig;
-// mod commitment;
 mod contact;
 mod db;
 mod fountain;
@@ -83,21 +81,17 @@ mod hash;
 mod orchard;
 mod sapling;
 mod sync;
-// mod key;
-mod key2;
+mod key;
 mod mempool;
 mod misc;
 mod pay;
 mod prices;
-// mod print;
 mod note_selection;
 mod scan;
 mod taddr;
 mod transaction;
 mod unified;
-// mod ua;
 mod zip32;
-// mod wallet;
 /// accounts, sync, payments, etc.
 pub mod api;
 
