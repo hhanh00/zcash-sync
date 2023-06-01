@@ -1009,9 +1009,10 @@ pub unsafe extern "C" fn get_balances(
     coin: u8,
     id: u32,
     confirmed_height: u32,
+    filter_excluded: bool,
 ) -> CResult<*const u8> {
     let res = |connection: &Connection| {
-        let data = crate::db::read::get_balances(connection, id, confirmed_height)?;
+        let data = crate::db::read::get_balances(connection, id, confirmed_height, filter_excluded)?;
         Ok(data)
     };
     to_cresult_bytes(with_coin(coin, res))

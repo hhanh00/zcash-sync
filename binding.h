@@ -372,7 +372,10 @@ struct CResult_____c_char get_sk(uint8_t coin, uint32_t id);
 
 struct CResult_u8 update_account_name(uint8_t coin, uint32_t id, char *name);
 
-struct CResult______u8 get_balances(uint8_t coin, uint32_t id, uint32_t confirmed_height);
+struct CResult______u8 get_balances(uint8_t coin,
+                                    uint32_t id,
+                                    uint32_t confirmed_height,
+                                    bool filter_excluded);
 
 struct CResult______u8 get_db_height(uint8_t coin);
 
