@@ -163,7 +163,7 @@ async fn sync_async_inner<'a>(
 
     while let Some(blocks) = blocks_rx.recv().await {
         let first_block = blocks.0.first().unwrap(); // cannot be empty because blocks are not
-        log::info!("Height: {}", first_block.height);
+        println!("Height: {}", first_block.height);
         let last_block = blocks.0.last().unwrap();
         let last_hash: [u8; 32] = last_block.hash.clone().try_into().unwrap();
         let last_height = last_block.height as u32;
@@ -217,7 +217,7 @@ async fn sync_async_inner<'a>(
     log::info!("Scan finishing");
 
     downloader.await??;
-    log::info!("Scan finished");
+    println!("Scan finished");
 
     if get_tx {
         get_transaction_details(coin).await?;

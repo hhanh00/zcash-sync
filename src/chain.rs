@@ -172,15 +172,15 @@ pub async fn download_chain(
         .get_block_range(Request::new(range))
         .await?
         .into_inner();
-    loop {
+    let canceled = loop {
         tokio::select! {
             _ = cancel.recv() => {
                 log::info!("Download canceled");
-                break;
+                break true;
             },
             block = block_stream.message() => {
                 match block? {
-                    None => break,
+                    None => break false,
                     Some(mut block) => {
                         let block_size = get_block_size(&block);
                         total_block_size += block_size;
@@ -236,12 +236,14 @@ pub async fn download_chain(
                 }
             }
         }
+    };
+    if !canceled {
+        let blocks = Blocks(cbs, total_block_size);
+        if !blocks.0.is_empty() {
+            let _ = handler.send(blocks).await;
+        }
     }
-    let blocks = Blocks(cbs, total_block_size);
-    if !blocks.0.is_empty() {
-        let _ = handler.send(blocks).await;
-    }
-    log::info!("Download finished");
+    println!("Download finished");
     Ok(())
 }
 
