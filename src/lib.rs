@@ -72,28 +72,29 @@ pub mod lw_rpc;
 
 pub type Hash = [u8; 32];
 
+pub mod api;
+pub mod btc;
 mod chain;
+/// accounts, sync, payments, etc.
+pub mod coin;
 mod coinconfig;
 mod contact;
 mod db;
 mod fountain;
 mod hash;
-mod orchard;
-mod sapling;
-mod sync;
 mod key;
 mod mempool;
 mod misc;
-mod pay;
-mod prices;
 mod note_selection;
+mod orchard;
+mod pay;
+mod sapling;
 mod scan;
+mod sync;
 mod taddr;
 mod transaction;
 mod unified;
 mod zip32;
-/// accounts, sync, payments, etc.
-pub mod api;
 
 #[cfg(feature = "ledger")]
 pub mod ledger;
@@ -117,6 +118,11 @@ pub use note_selection::{
     TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
     MAX_ATTEMPTS,
 };
+
+pub use api::recipient::{make_recipient, make_recipients};
+pub use btc::init_db as init_btc_db;
+pub use coin::NoCoin;
+pub use db::data_generated::fb::{RecipientT, RecipientsT};
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;

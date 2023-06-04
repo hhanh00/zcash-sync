@@ -1390,11 +1390,11 @@ pub mod fb {
             }
         }
         #[inline]
-        pub fn value(&self) -> u64 {
+        pub fn value(&self) -> i64 {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe { self._tab.get::<u64>(ShieldedTx::VT_VALUE, Some(0)).unwrap() }
+            unsafe { self._tab.get::<i64>(ShieldedTx::VT_VALUE, Some(0)).unwrap() }
         }
         #[inline]
         pub fn address(&self) -> Option<&'a str> {
@@ -1436,7 +1436,7 @@ pub mod fb {
                 )?
                 .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
-                .visit_field::<u64>("value", Self::VT_VALUE, false)?
+                .visit_field::<i64>("value", Self::VT_VALUE, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
                     "address",
                     Self::VT_ADDRESS,
@@ -1454,7 +1454,7 @@ pub mod fb {
         pub short_tx_id: Option<flatbuffers::WIPOffset<&'a str>>,
         pub timestamp: u32,
         pub name: Option<flatbuffers::WIPOffset<&'a str>>,
-        pub value: u64,
+        pub value: i64,
         pub address: Option<flatbuffers::WIPOffset<&'a str>>,
         pub memo: Option<flatbuffers::WIPOffset<&'a str>>,
     }
@@ -1511,8 +1511,8 @@ pub mod fb {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(ShieldedTx::VT_NAME, name);
         }
         #[inline]
-        pub fn add_value(&mut self, value: u64) {
-            self.fbb_.push_slot::<u64>(ShieldedTx::VT_VALUE, value, 0);
+        pub fn add_value(&mut self, value: i64) {
+            self.fbb_.push_slot::<i64>(ShieldedTx::VT_VALUE, value, 0);
         }
         #[inline]
         pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b str>) {
@@ -1563,7 +1563,7 @@ pub mod fb {
         pub short_tx_id: Option<String>,
         pub timestamp: u32,
         pub name: Option<String>,
-        pub value: u64,
+        pub value: i64,
         pub address: Option<String>,
         pub memo: Option<String>,
     }
@@ -1756,6 +1756,1344 @@ pub mod fb {
                 _fbb.create_vector(&w)
             });
             ShieldedTxVec::create(_fbb, &ShieldedTxVecArgs { txs })
+        }
+    }
+    pub enum PlainTxOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct PlainTx<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for PlainTx<'a> {
+        type Inner = PlainTx<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> PlainTx<'a> {
+        pub const VT_ID: flatbuffers::VOffsetT = 4;
+        pub const VT_TX_ID: flatbuffers::VOffsetT = 6;
+        pub const VT_HEIGHT: flatbuffers::VOffsetT = 8;
+        pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 10;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 12;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            PlainTx { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args PlainTxArgs<'args>,
+        ) -> flatbuffers::WIPOffset<PlainTx<'bldr>> {
+            let mut builder = PlainTxBuilder::new(_fbb);
+            builder.add_value(args.value);
+            builder.add_timestamp(args.timestamp);
+            builder.add_height(args.height);
+            if let Some(x) = args.tx_id {
+                builder.add_tx_id(x);
+            }
+            builder.add_id(args.id);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> PlainTxT {
+            let id = self.id();
+            let tx_id = self.tx_id().map(|x| x.to_string());
+            let height = self.height();
+            let timestamp = self.timestamp();
+            let value = self.value();
+            PlainTxT {
+                id,
+                tx_id,
+                height,
+                timestamp,
+                value,
+            }
+        }
+
+        #[inline]
+        pub fn id(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(PlainTx::VT_ID, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn tx_id(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(PlainTx::VT_TX_ID, None)
+            }
+        }
+        #[inline]
+        pub fn height(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(PlainTx::VT_HEIGHT, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn timestamp(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u32>(PlainTx::VT_TIMESTAMP, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn value(&self) -> i64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<i64>(PlainTx::VT_VALUE, Some(0)).unwrap() }
+        }
+    }
+
+    impl flatbuffers::Verifiable for PlainTx<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<u32>("id", Self::VT_ID, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("tx_id", Self::VT_TX_ID, false)?
+                .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
+                .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
+                .visit_field::<i64>("value", Self::VT_VALUE, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct PlainTxArgs<'a> {
+        pub id: u32,
+        pub tx_id: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub height: u32,
+        pub timestamp: u32,
+        pub value: i64,
+    }
+    impl<'a> Default for PlainTxArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            PlainTxArgs {
+                id: 0,
+                tx_id: None,
+                height: 0,
+                timestamp: 0,
+                value: 0,
+            }
+        }
+    }
+
+    pub struct PlainTxBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> PlainTxBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_id(&mut self, id: u32) {
+            self.fbb_.push_slot::<u32>(PlainTx::VT_ID, id, 0);
+        }
+        #[inline]
+        pub fn add_tx_id(&mut self, tx_id: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(PlainTx::VT_TX_ID, tx_id);
+        }
+        #[inline]
+        pub fn add_height(&mut self, height: u32) {
+            self.fbb_.push_slot::<u32>(PlainTx::VT_HEIGHT, height, 0);
+        }
+        #[inline]
+        pub fn add_timestamp(&mut self, timestamp: u32) {
+            self.fbb_
+                .push_slot::<u32>(PlainTx::VT_TIMESTAMP, timestamp, 0);
+        }
+        #[inline]
+        pub fn add_value(&mut self, value: i64) {
+            self.fbb_.push_slot::<i64>(PlainTx::VT_VALUE, value, 0);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> PlainTxBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            PlainTxBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<PlainTx<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for PlainTx<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("PlainTx");
+            ds.field("id", &self.id());
+            ds.field("tx_id", &self.tx_id());
+            ds.field("height", &self.height());
+            ds.field("timestamp", &self.timestamp());
+            ds.field("value", &self.value());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct PlainTxT {
+        pub id: u32,
+        pub tx_id: Option<String>,
+        pub height: u32,
+        pub timestamp: u32,
+        pub value: i64,
+    }
+    impl Default for PlainTxT {
+        fn default() -> Self {
+            Self {
+                id: 0,
+                tx_id: None,
+                height: 0,
+                timestamp: 0,
+                value: 0,
+            }
+        }
+    }
+    impl PlainTxT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<PlainTx<'b>> {
+            let id = self.id;
+            let tx_id = self.tx_id.as_ref().map(|x| _fbb.create_string(x));
+            let height = self.height;
+            let timestamp = self.timestamp;
+            let value = self.value;
+            PlainTx::create(
+                _fbb,
+                &PlainTxArgs {
+                    id,
+                    tx_id,
+                    height,
+                    timestamp,
+                    value,
+                },
+            )
+        }
+    }
+    pub enum PlainTxVecOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct PlainTxVec<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for PlainTxVec<'a> {
+        type Inner = PlainTxVec<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> PlainTxVec<'a> {
+        pub const VT_TXS: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            PlainTxVec { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args PlainTxVecArgs<'args>,
+        ) -> flatbuffers::WIPOffset<PlainTxVec<'bldr>> {
+            let mut builder = PlainTxVecBuilder::new(_fbb);
+            if let Some(x) = args.txs {
+                builder.add_txs(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> PlainTxVecT {
+            let txs = self.txs().map(|x| x.iter().map(|t| t.unpack()).collect());
+            PlainTxVecT { txs }
+        }
+
+        #[inline]
+        pub fn txs(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PlainTx<'a>>>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PlainTx>>,
+                >>(PlainTxVec::VT_TXS, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for PlainTxVec<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<PlainTx>>,
+                >>("txs", Self::VT_TXS, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct PlainTxVecArgs<'a> {
+        pub txs: Option<
+            flatbuffers::WIPOffset<
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PlainTx<'a>>>,
+            >,
+        >,
+    }
+    impl<'a> Default for PlainTxVecArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            PlainTxVecArgs { txs: None }
+        }
+    }
+
+    pub struct PlainTxVecBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> PlainTxVecBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_txs(
+            &mut self,
+            txs: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<PlainTx<'b>>>,
+            >,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(PlainTxVec::VT_TXS, txs);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> PlainTxVecBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            PlainTxVecBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<PlainTxVec<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for PlainTxVec<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("PlainTxVec");
+            ds.field("txs", &self.txs());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct PlainTxVecT {
+        pub txs: Option<Vec<PlainTxT>>,
+    }
+    impl Default for PlainTxVecT {
+        fn default() -> Self {
+            Self { txs: None }
+        }
+    }
+    impl PlainTxVecT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<PlainTxVec<'b>> {
+            let txs = self.txs.as_ref().map(|x| {
+                let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();
+                _fbb.create_vector(&w)
+            });
+            PlainTxVec::create(_fbb, &PlainTxVecArgs { txs })
+        }
+    }
+    pub enum PlainNoteOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct PlainNote<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for PlainNote<'a> {
+        type Inner = PlainNote<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> PlainNote<'a> {
+        pub const VT_ID: flatbuffers::VOffsetT = 4;
+        pub const VT_TX_ID: flatbuffers::VOffsetT = 6;
+        pub const VT_HEIGHT: flatbuffers::VOffsetT = 8;
+        pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 10;
+        pub const VT_VOUT: flatbuffers::VOffsetT = 12;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 14;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            PlainNote { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args PlainNoteArgs<'args>,
+        ) -> flatbuffers::WIPOffset<PlainNote<'bldr>> {
+            let mut builder = PlainNoteBuilder::new(_fbb);
+            builder.add_value(args.value);
+            builder.add_vout(args.vout);
+            builder.add_timestamp(args.timestamp);
+            builder.add_height(args.height);
+            if let Some(x) = args.tx_id {
+                builder.add_tx_id(x);
+            }
+            builder.add_id(args.id);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> PlainNoteT {
+            let id = self.id();
+            let tx_id = self.tx_id().map(|x| x.to_string());
+            let height = self.height();
+            let timestamp = self.timestamp();
+            let vout = self.vout();
+            let value = self.value();
+            PlainNoteT {
+                id,
+                tx_id,
+                height,
+                timestamp,
+                vout,
+                value,
+            }
+        }
+
+        #[inline]
+        pub fn id(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(PlainNote::VT_ID, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn tx_id(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(PlainNote::VT_TX_ID, None)
+            }
+        }
+        #[inline]
+        pub fn height(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(PlainNote::VT_HEIGHT, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn timestamp(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u32>(PlainNote::VT_TIMESTAMP, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn vout(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(PlainNote::VT_VOUT, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn value(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u64>(PlainNote::VT_VALUE, Some(0)).unwrap() }
+        }
+    }
+
+    impl flatbuffers::Verifiable for PlainNote<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<u32>("id", Self::VT_ID, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("tx_id", Self::VT_TX_ID, false)?
+                .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
+                .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
+                .visit_field::<u32>("vout", Self::VT_VOUT, false)?
+                .visit_field::<u64>("value", Self::VT_VALUE, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct PlainNoteArgs<'a> {
+        pub id: u32,
+        pub tx_id: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub height: u32,
+        pub timestamp: u32,
+        pub vout: u32,
+        pub value: u64,
+    }
+    impl<'a> Default for PlainNoteArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            PlainNoteArgs {
+                id: 0,
+                tx_id: None,
+                height: 0,
+                timestamp: 0,
+                vout: 0,
+                value: 0,
+            }
+        }
+    }
+
+    pub struct PlainNoteBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> PlainNoteBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_id(&mut self, id: u32) {
+            self.fbb_.push_slot::<u32>(PlainNote::VT_ID, id, 0);
+        }
+        #[inline]
+        pub fn add_tx_id(&mut self, tx_id: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(PlainNote::VT_TX_ID, tx_id);
+        }
+        #[inline]
+        pub fn add_height(&mut self, height: u32) {
+            self.fbb_.push_slot::<u32>(PlainNote::VT_HEIGHT, height, 0);
+        }
+        #[inline]
+        pub fn add_timestamp(&mut self, timestamp: u32) {
+            self.fbb_
+                .push_slot::<u32>(PlainNote::VT_TIMESTAMP, timestamp, 0);
+        }
+        #[inline]
+        pub fn add_vout(&mut self, vout: u32) {
+            self.fbb_.push_slot::<u32>(PlainNote::VT_VOUT, vout, 0);
+        }
+        #[inline]
+        pub fn add_value(&mut self, value: u64) {
+            self.fbb_.push_slot::<u64>(PlainNote::VT_VALUE, value, 0);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> PlainNoteBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            PlainNoteBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<PlainNote<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for PlainNote<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("PlainNote");
+            ds.field("id", &self.id());
+            ds.field("tx_id", &self.tx_id());
+            ds.field("height", &self.height());
+            ds.field("timestamp", &self.timestamp());
+            ds.field("vout", &self.vout());
+            ds.field("value", &self.value());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct PlainNoteT {
+        pub id: u32,
+        pub tx_id: Option<String>,
+        pub height: u32,
+        pub timestamp: u32,
+        pub vout: u32,
+        pub value: u64,
+    }
+    impl Default for PlainNoteT {
+        fn default() -> Self {
+            Self {
+                id: 0,
+                tx_id: None,
+                height: 0,
+                timestamp: 0,
+                vout: 0,
+                value: 0,
+            }
+        }
+    }
+    impl PlainNoteT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<PlainNote<'b>> {
+            let id = self.id;
+            let tx_id = self.tx_id.as_ref().map(|x| _fbb.create_string(x));
+            let height = self.height;
+            let timestamp = self.timestamp;
+            let vout = self.vout;
+            let value = self.value;
+            PlainNote::create(
+                _fbb,
+                &PlainNoteArgs {
+                    id,
+                    tx_id,
+                    height,
+                    timestamp,
+                    vout,
+                    value,
+                },
+            )
+        }
+    }
+    pub enum PlainNoteVecOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct PlainNoteVec<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for PlainNoteVec<'a> {
+        type Inner = PlainNoteVec<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> PlainNoteVec<'a> {
+        pub const VT_NOTES: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            PlainNoteVec { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args PlainNoteVecArgs<'args>,
+        ) -> flatbuffers::WIPOffset<PlainNoteVec<'bldr>> {
+            let mut builder = PlainNoteVecBuilder::new(_fbb);
+            if let Some(x) = args.notes {
+                builder.add_notes(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> PlainNoteVecT {
+            let notes = self.notes().map(|x| x.iter().map(|t| t.unpack()).collect());
+            PlainNoteVecT { notes }
+        }
+
+        #[inline]
+        pub fn notes(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PlainNote<'a>>>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PlainNote>>,
+                >>(PlainNoteVec::VT_NOTES, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for PlainNoteVec<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<PlainNote>>,
+                >>("notes", Self::VT_NOTES, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct PlainNoteVecArgs<'a> {
+        pub notes: Option<
+            flatbuffers::WIPOffset<
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PlainNote<'a>>>,
+            >,
+        >,
+    }
+    impl<'a> Default for PlainNoteVecArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            PlainNoteVecArgs { notes: None }
+        }
+    }
+
+    pub struct PlainNoteVecBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> PlainNoteVecBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_notes(
+            &mut self,
+            notes: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<PlainNote<'b>>>,
+            >,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(PlainNoteVec::VT_NOTES, notes);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        ) -> PlainNoteVecBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            PlainNoteVecBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<PlainNoteVec<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for PlainNoteVec<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("PlainNoteVec");
+            ds.field("notes", &self.notes());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct PlainNoteVecT {
+        pub notes: Option<Vec<PlainNoteT>>,
+    }
+    impl Default for PlainNoteVecT {
+        fn default() -> Self {
+            Self { notes: None }
+        }
+    }
+    impl PlainNoteVecT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<PlainNoteVec<'b>> {
+            let notes = self.notes.as_ref().map(|x| {
+                let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();
+                _fbb.create_vector(&w)
+            });
+            PlainNoteVec::create(_fbb, &PlainNoteVecArgs { notes })
+        }
+    }
+    pub enum BTCInputOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct BTCInput<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for BTCInput<'a> {
+        type Inner = BTCInput<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> BTCInput<'a> {
+        pub const VT_TX_ID: flatbuffers::VOffsetT = 4;
+        pub const VT_VOUT: flatbuffers::VOffsetT = 6;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 8;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            BTCInput { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args BTCInputArgs<'args>,
+        ) -> flatbuffers::WIPOffset<BTCInput<'bldr>> {
+            let mut builder = BTCInputBuilder::new(_fbb);
+            builder.add_value(args.value);
+            builder.add_vout(args.vout);
+            if let Some(x) = args.tx_id {
+                builder.add_tx_id(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> BTCInputT {
+            let tx_id = self.tx_id().map(|x| x.to_string());
+            let vout = self.vout();
+            let value = self.value();
+            BTCInputT { tx_id, vout, value }
+        }
+
+        #[inline]
+        pub fn tx_id(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(BTCInput::VT_TX_ID, None)
+            }
+        }
+        #[inline]
+        pub fn vout(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(BTCInput::VT_VOUT, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn value(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u64>(BTCInput::VT_VALUE, Some(0)).unwrap() }
+        }
+    }
+
+    impl flatbuffers::Verifiable for BTCInput<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("tx_id", Self::VT_TX_ID, false)?
+                .visit_field::<u32>("vout", Self::VT_VOUT, false)?
+                .visit_field::<u64>("value", Self::VT_VALUE, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct BTCInputArgs<'a> {
+        pub tx_id: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub vout: u32,
+        pub value: u64,
+    }
+    impl<'a> Default for BTCInputArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            BTCInputArgs {
+                tx_id: None,
+                vout: 0,
+                value: 0,
+            }
+        }
+    }
+
+    pub struct BTCInputBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> BTCInputBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_tx_id(&mut self, tx_id: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(BTCInput::VT_TX_ID, tx_id);
+        }
+        #[inline]
+        pub fn add_vout(&mut self, vout: u32) {
+            self.fbb_.push_slot::<u32>(BTCInput::VT_VOUT, vout, 0);
+        }
+        #[inline]
+        pub fn add_value(&mut self, value: u64) {
+            self.fbb_.push_slot::<u64>(BTCInput::VT_VALUE, value, 0);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> BTCInputBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            BTCInputBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<BTCInput<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for BTCInput<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("BTCInput");
+            ds.field("tx_id", &self.tx_id());
+            ds.field("vout", &self.vout());
+            ds.field("value", &self.value());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct BTCInputT {
+        pub tx_id: Option<String>,
+        pub vout: u32,
+        pub value: u64,
+    }
+    impl Default for BTCInputT {
+        fn default() -> Self {
+            Self {
+                tx_id: None,
+                vout: 0,
+                value: 0,
+            }
+        }
+    }
+    impl BTCInputT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<BTCInput<'b>> {
+            let tx_id = self.tx_id.as_ref().map(|x| _fbb.create_string(x));
+            let vout = self.vout;
+            let value = self.value;
+            BTCInput::create(_fbb, &BTCInputArgs { tx_id, vout, value })
+        }
+    }
+    pub enum BTCOutputOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct BTCOutput<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for BTCOutput<'a> {
+        type Inner = BTCOutput<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> BTCOutput<'a> {
+        pub const VT_SCRIPT_PUBKEY: flatbuffers::VOffsetT = 4;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 6;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            BTCOutput { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args BTCOutputArgs<'args>,
+        ) -> flatbuffers::WIPOffset<BTCOutput<'bldr>> {
+            let mut builder = BTCOutputBuilder::new(_fbb);
+            builder.add_value(args.value);
+            if let Some(x) = args.script_pubkey {
+                builder.add_script_pubkey(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> BTCOutputT {
+            let script_pubkey = self.script_pubkey().map(|x| x.to_string());
+            let value = self.value();
+            BTCOutputT {
+                script_pubkey,
+                value,
+            }
+        }
+
+        #[inline]
+        pub fn script_pubkey(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(BTCOutput::VT_SCRIPT_PUBKEY, None)
+            }
+        }
+        #[inline]
+        pub fn value(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u64>(BTCOutput::VT_VALUE, Some(0)).unwrap() }
+        }
+    }
+
+    impl flatbuffers::Verifiable for BTCOutput<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "script_pubkey",
+                    Self::VT_SCRIPT_PUBKEY,
+                    false,
+                )?
+                .visit_field::<u64>("value", Self::VT_VALUE, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct BTCOutputArgs<'a> {
+        pub script_pubkey: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub value: u64,
+    }
+    impl<'a> Default for BTCOutputArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            BTCOutputArgs {
+                script_pubkey: None,
+                value: 0,
+            }
+        }
+    }
+
+    pub struct BTCOutputBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> BTCOutputBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_script_pubkey(&mut self, script_pubkey: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
+                BTCOutput::VT_SCRIPT_PUBKEY,
+                script_pubkey,
+            );
+        }
+        #[inline]
+        pub fn add_value(&mut self, value: u64) {
+            self.fbb_.push_slot::<u64>(BTCOutput::VT_VALUE, value, 0);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> BTCOutputBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            BTCOutputBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<BTCOutput<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for BTCOutput<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("BTCOutput");
+            ds.field("script_pubkey", &self.script_pubkey());
+            ds.field("value", &self.value());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct BTCOutputT {
+        pub script_pubkey: Option<String>,
+        pub value: u64,
+    }
+    impl Default for BTCOutputT {
+        fn default() -> Self {
+            Self {
+                script_pubkey: None,
+                value: 0,
+            }
+        }
+    }
+    impl BTCOutputT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<BTCOutput<'b>> {
+            let script_pubkey = self.script_pubkey.as_ref().map(|x| _fbb.create_string(x));
+            let value = self.value;
+            BTCOutput::create(
+                _fbb,
+                &BTCOutputArgs {
+                    script_pubkey,
+                    value,
+                },
+            )
+        }
+    }
+    pub enum BTCTxOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct BTCTx<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for BTCTx<'a> {
+        type Inner = BTCTx<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> BTCTx<'a> {
+        pub const VT_TXINS: flatbuffers::VOffsetT = 4;
+        pub const VT_TXOUTS: flatbuffers::VOffsetT = 6;
+        pub const VT_FEE: flatbuffers::VOffsetT = 8;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            BTCTx { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args BTCTxArgs<'args>,
+        ) -> flatbuffers::WIPOffset<BTCTx<'bldr>> {
+            let mut builder = BTCTxBuilder::new(_fbb);
+            builder.add_fee(args.fee);
+            if let Some(x) = args.txouts {
+                builder.add_txouts(x);
+            }
+            if let Some(x) = args.txins {
+                builder.add_txins(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> BTCTxT {
+            let txins = self.txins().map(|x| x.iter().map(|t| t.unpack()).collect());
+            let txouts = self
+                .txouts()
+                .map(|x| x.iter().map(|t| t.unpack()).collect());
+            let fee = self.fee();
+            BTCTxT { txins, txouts, fee }
+        }
+
+        #[inline]
+        pub fn txins(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<BTCInput<'a>>>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<BTCInput>>,
+                >>(BTCTx::VT_TXINS, None)
+            }
+        }
+        #[inline]
+        pub fn txouts(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<BTCOutput<'a>>>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<BTCOutput>>,
+                >>(BTCTx::VT_TXOUTS, None)
+            }
+        }
+        #[inline]
+        pub fn fee(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u64>(BTCTx::VT_FEE, Some(0)).unwrap() }
+        }
+    }
+
+    impl flatbuffers::Verifiable for BTCTx<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<BTCInput>>,
+                >>("txins", Self::VT_TXINS, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<BTCOutput>>,
+                >>("txouts", Self::VT_TXOUTS, false)?
+                .visit_field::<u64>("fee", Self::VT_FEE, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct BTCTxArgs<'a> {
+        pub txins: Option<
+            flatbuffers::WIPOffset<
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<BTCInput<'a>>>,
+            >,
+        >,
+        pub txouts: Option<
+            flatbuffers::WIPOffset<
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<BTCOutput<'a>>>,
+            >,
+        >,
+        pub fee: u64,
+    }
+    impl<'a> Default for BTCTxArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            BTCTxArgs {
+                txins: None,
+                txouts: None,
+                fee: 0,
+            }
+        }
+    }
+
+    pub struct BTCTxBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> BTCTxBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_txins(
+            &mut self,
+            txins: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<BTCInput<'b>>>,
+            >,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(BTCTx::VT_TXINS, txins);
+        }
+        #[inline]
+        pub fn add_txouts(
+            &mut self,
+            txouts: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<BTCOutput<'b>>>,
+            >,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(BTCTx::VT_TXOUTS, txouts);
+        }
+        #[inline]
+        pub fn add_fee(&mut self, fee: u64) {
+            self.fbb_.push_slot::<u64>(BTCTx::VT_FEE, fee, 0);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> BTCTxBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            BTCTxBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<BTCTx<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for BTCTx<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("BTCTx");
+            ds.field("txins", &self.txins());
+            ds.field("txouts", &self.txouts());
+            ds.field("fee", &self.fee());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct BTCTxT {
+        pub txins: Option<Vec<BTCInputT>>,
+        pub txouts: Option<Vec<BTCOutputT>>,
+        pub fee: u64,
+    }
+    impl Default for BTCTxT {
+        fn default() -> Self {
+            Self {
+                txins: None,
+                txouts: None,
+                fee: 0,
+            }
+        }
+    }
+    impl BTCTxT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<BTCTx<'b>> {
+            let txins = self.txins.as_ref().map(|x| {
+                let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();
+                _fbb.create_vector(&w)
+            });
+            let txouts = self.txouts.as_ref().map(|x| {
+                let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();
+                _fbb.create_vector(&w)
+            });
+            let fee = self.fee;
+            BTCTx::create(_fbb, &BTCTxArgs { txins, txouts, fee })
         }
     }
     pub enum MessageOffset {}

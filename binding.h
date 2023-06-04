@@ -100,6 +100,16 @@ typedef struct CResult_bool {
 
 #define ShieldedTxVec_VT_TXS 4
 
+#define PlainNote_VT_VOUT 12
+
+#define BTCOutput_VT_SCRIPT_PUBKEY 4
+
+#define BTCTx_VT_TXINS 4
+
+#define BTCTx_VT_TXOUTS 6
+
+#define BTCTx_VT_FEE 8
+
 #define Message_VT_ID_MSG 4
 
 #define Message_VT_ID_TX 6
@@ -188,8 +198,6 @@ typedef struct CResult_bool {
 
 #define TxReport_VT_NET_ORCHARD 14
 
-#define TxReport_VT_FEE 16
-
 #define TxReport_VT_PRIVACY_LEVEL 18
 
 void dummy_export(void);
@@ -250,13 +258,13 @@ bool valid_address(uint8_t coin, char *address);
 
 struct CResult_____c_char get_diversified_address(uint8_t ua_type, uint32_t time);
 
-struct CResult_u32 get_latest_height(void);
+struct CResult_u32 get_latest_height(uint8_t coin);
 
 void skip_to_last_height(uint8_t coin);
 
 struct CResult_u32 rewind_to(uint32_t height);
 
-void rescan_from(uint32_t height);
+void rescan_from(uint8_t coin, uint32_t height);
 
 struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t id_account);
 
@@ -291,7 +299,7 @@ struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx_plan, in
 
 struct CResult_____c_char sign_and_broadcast(uint8_t coin, uint32_t account, char *tx_plan);
 
-struct CResult_____c_char broadcast_tx(char *tx_str);
+struct CResult_____c_char broadcast_tx(uint8_t coin, char *tx_str);
 
 bool is_valid_tkey(char *sk);
 
@@ -304,7 +312,7 @@ struct CResult_u32 get_activation_date(void);
 
 struct CResult_u32 get_block_by_time(uint32_t time);
 
-struct CResult_u32 sync_historical_prices(int64_t now, uint32_t days, char *currency);
+struct CResult_u32 sync_historical_prices(uint8_t coin, int64_t now, uint32_t days, char *currency);
 
 void store_contact(uint32_t id, char *name, char *address, bool dirty);
 

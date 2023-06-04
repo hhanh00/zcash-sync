@@ -1,6 +1,6 @@
 use crate::db::data_generated::fb::{Recipient, Recipients};
 use crate::db::ZMessage;
-use crate::{AccountData, CoinConfig};
+use crate::{AccountData, CoinConfig, RecipientT, RecipientsT};
 use serde::Deserialize;
 use std::str::FromStr;
 use zcash_primitives::memo::Memo;
@@ -106,4 +106,18 @@ pub fn parse_recipients(recipients: &Recipients) -> anyhow::Result<Vec<Recipient
         .map(|r| RecipientMemo::from_recipient(&address, &r))
         .collect();
     recipient_memos
+}
+
+pub fn make_recipient(address: &str, amount: u64) -> RecipientT {
+    RecipientT {
+        address: Some(address.to_string()),
+        amount,
+        ..RecipientT::default()
+    }
+}
+
+pub fn make_recipients(rs: &[RecipientT]) -> RecipientsT {
+    RecipientsT {
+        values: Some(rs.to_vec()),
+    }
 }

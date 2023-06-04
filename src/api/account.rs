@@ -238,12 +238,6 @@ pub fn get_diversified_address(ua_type: u8, time: u32) -> anyhow::Result<String>
     Ok(address)
 }
 
-/// Retrieve the transparent balance for the current account from the LWD server
-pub async fn get_taddr_balance_default() -> anyhow::Result<u64> {
-    let c = CoinConfig::get_active();
-    get_taddr_balance(c.coin, c.id_account).await
-}
-
 /// Retrieve the transparent balance from the LWD server
 /// # Arguments
 /// * `coin`: 0 for zcash, 1 for ycash

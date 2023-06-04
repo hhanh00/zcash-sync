@@ -2,7 +2,7 @@
 
 use crate::api::payment_v2::build_tx_plan;
 use crate::api::recipient::RecipientMemo;
-use crate::api::sync::get_latest_height;
+use crate::chain::get_latest_height;
 use crate::coinconfig::CoinConfig;
 use crate::contact::{serialize_contacts, Contact};
 use crate::db::AccountData;
@@ -39,7 +39,8 @@ pub async fn commit_unsaved_contacts(anchor_offset: u32) -> anyhow::Result<Trans
 
 async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get_active();
-    let last_height = get_latest_height().await?;
+    let mut client = c.connect_lwd().await?;
+    let last_height = get_latest_height(&mut client).await?;
     let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
     let recipients: Vec<_> = memos
         .iter()

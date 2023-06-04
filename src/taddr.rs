@@ -288,6 +288,7 @@ pub async fn sweep_tkey(
     confirmations: u32,
 ) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
+    let coin = c.coin;
     let network = c.chain.network();
     let (seckey, from_address) = derive_taddr(network, sk)?;
 
@@ -355,7 +356,7 @@ pub async fn sweep_tkey(
     println!("build_tx");
     let tx = build_tx(network, &skeys, &tx_plan, OsRng)?;
     println!("broadcast_tx");
-    let txid = broadcast_tx(&tx).await?;
+    let txid = broadcast_tx(coin, &tx).await?;
     Ok(txid)
 }
 

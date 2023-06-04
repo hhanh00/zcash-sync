@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
-use std::sync::Mutex;
+
 use std::time::Duration;
 use std::time::Instant;
 use sysinfo::{System, SystemExt};

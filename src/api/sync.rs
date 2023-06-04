@@ -5,7 +5,7 @@ use crate::scan::{AMProgressCallback, Progress};
 use crate::sync::CTree;
 use crate::{AccountData, BlockId, CompactTxStreamerClient, DbAdapter};
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_primitives::sapling::Note;
@@ -36,7 +36,15 @@ pub async fn coin_sync(
     });
 
     let p_cb = Arc::new(Mutex::new(progress_callback));
-    coin_sync_impl(coin, get_tx, anchor_offset, max_cost, p_cb.clone(), rx_cancel1).await?;
+    coin_sync_impl(
+        coin,
+        get_tx,
+        anchor_offset,
+        max_cost,
+        p_cb.clone(),
+        rx_cancel1,
+    )
+    .await?;
     coin_sync_impl(coin, get_tx, 0, u32::MAX, p_cb.clone(), rx_cancel2).await?;
     Ok(())
 }
@@ -58,14 +66,6 @@ async fn coin_sync_impl(
         cancel,
     )
     .await
-}
-
-/// Return the latest block height
-pub async fn get_latest_height() -> anyhow::Result<u32> {
-    let c = CoinConfig::get_active();
-    let mut client = c.connect_lwd().await?;
-    let last_height = crate::chain::get_latest_height(&mut client).await?;
-    Ok(last_height)
 }
 
 /// Return the latest block height synchronized
@@ -98,8 +98,8 @@ pub async fn rewind_to(height: u32) -> anyhow::Result<u32> {
 }
 
 /// Synchronize from a given height
-pub async fn rescan_from(height: u32) -> anyhow::Result<()> {
-    let c = CoinConfig::get_active();
+pub async fn rescan_from(coin: u8, height: u32) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
     c.db()?.truncate_sync_data()?;
     let mut client = c.connect_lwd().await?;
     fetch_and_store_tree_state(c.coin, &mut client, height).await?;

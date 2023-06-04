@@ -2,10 +2,9 @@ use crate::chain::Nf;
 use crate::contact::Contact;
 use crate::note_selection::{Source, UTXO};
 use crate::orchard::{derive_orchard_keys, OrchardKeyBytes, OrchardViewKey};
-use crate::prices::Quote;
 use crate::sapling::SaplingViewKey;
 use crate::sync::tree::{CTree, TreeCheckpoint};
-use crate::taddr::{derive_tkeys, TransparentTxInfo};
+use crate::taddr::derive_tkeys;
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Hash};
@@ -32,6 +31,7 @@ pub mod data_generated;
 mod migration;
 pub mod read;
 
+use crate::api::historical_prices::Quote;
 use crate::db::cipher::set_db_passwd;
 use crate::db::data_generated::fb::SendTemplate;
 pub use backup::FullEncryptedBackup;
@@ -497,14 +497,6 @@ impl DbAdapter {
             params![details.address, details.memo, details.id_tx],
         )?;
         Ok(())
-    }
-
-    pub fn store_transparent_tx(
-        _account: u32,
-        _tx: &TransparentTxInfo,
-        _db_tx: &Transaction,
-    ) -> anyhow::Result<()> {
-        todo!()
     }
 
     pub fn add_value(id_tx: u32, value: i64, db_tx: &Transaction) -> anyhow::Result<()> {

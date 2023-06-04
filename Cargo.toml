@@ -24,6 +24,10 @@ required-features = ["rpc"]
 #path = "src/main/ledger.rs"
 
 #[[bin]]
+#name = "trp"
+#path = "src/main/trp.rs"
+
+#[[bin]]
 #name = "sign"
 #path = "src/main/sign.rs"
 
@@ -94,6 +98,8 @@ base64 = "^0.13"
 base58check = "0.1.0"
 raptorq = "1.7.0"
 sysinfo = "0.28"
+
+electrum-client = "0.15"
 
 ledger-transport-hid = { version = "0.10", optional = true }
 ledger-apdu = { version = "0.10", optional = true }

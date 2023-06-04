@@ -1,8 +1,7 @@
 use crate::api::account::get_unified_address;
 use crate::api::recipient::RecipientMemo;
-use crate::api::sync::get_latest_height;
 pub use crate::broadcast_tx;
-use crate::chain::{get_checkpoint_height, EXPIRY_HEIGHT_OFFSET};
+use crate::chain::{get_checkpoint_height, get_latest_height, EXPIRY_HEIGHT_OFFSET};
 use crate::note_selection::{FeeFlat, Order, UTXO};
 use crate::{
     build_tx, fetch_utxos, get_secret_keys, note_selection, AccountData, CoinConfig,
@@ -108,7 +107,9 @@ pub async fn build_tx_plan(
         let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
         checkpoint_height
     };
-    let expiry_height = get_latest_height().await? + EXPIRY_HEIGHT_OFFSET;
+    let c = CoinConfig::get(coin);
+    let mut client = c.connect_lwd().await?;
+    let expiry_height = get_latest_height(&mut client).await? + EXPIRY_HEIGHT_OFFSET;
     let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;
     let tx_plan = build_tx_plan_with_utxos(
         coin,
@@ -156,7 +157,7 @@ pub async fn sign_and_broadcast(
     tx_plan: &TransactionPlan,
 ) -> anyhow::Result<String> {
     let tx = sign_plan(coin, account, tx_plan)?;
-    let txid = broadcast_tx(&tx).await?;
+    let txid = broadcast_tx(coin, &tx).await?;
     let id_notes: Vec<_> = tx_plan
         .spends
         .iter()
@@ -215,6 +216,8 @@ pub async fn transfer_pools(
     split_amount: u64,
     confirmations: u32,
 ) -> anyhow::Result<TransactionPlan> {
+    let c = CoinConfig::get(coin);
+    let mut client = c.connect_lwd().await?;
     let address = get_unified_address(coin, account, to_pool)?; // get our own unified address
     let recipient = RecipientMemo {
         address,
@@ -223,7 +226,7 @@ pub async fn transfer_pools(
         memo: Memo::from_str(memo)?,
         max_amount_per_note: split_amount,
     };
-    let last_height = get_latest_height().await?;
+    let last_height = get_latest_height(&mut client).await?;
     let tx_plan = build_tx_plan(
         coin,
         account,

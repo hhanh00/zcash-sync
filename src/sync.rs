@@ -1,5 +1,5 @@
 use crate::chain::Nf;
-use crate::db::{DbAdapterBuilder, ReceivedNote, ReceivedNoteShort};
+use crate::db::{ReceivedNote, ReceivedNoteShort};
 use crate::{CompactBlock, DbAdapter};
 use anyhow::Result;
 use rayon::prelude::*;

@@ -125,12 +125,21 @@ pub fn update_account_name(connection: &Connection, id: u32, name: &str) -> Resu
     Ok(())
 }
 
-pub fn get_balances(connection: &Connection, id: u32, confirmed_height: u32, filter_excluded: bool) -> Result<Vec<u8>> {
-    let excluded_cond = if filter_excluded { " AND (excluded IS NULL OR NOT(excluded))" } else { "" };
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_balances(
+    connection: &Connection,
+    id: u32,
+    confirmed_height: u32,
+    filter_excluded: bool,
+) -> Result<BalanceT> {
+    let excluded_cond = if filter_excluded {
+        " AND (excluded IS NULL OR NOT(excluded))"
+    } else {
+        ""
+    };
     let shielded = connection.query_row(
-        &("SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent IS NULL".to_owned()
-        + excluded_cond),
+        &("SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent IS NULL"
+            .to_owned()
+            + excluded_cond),
         params![id],
         |row| {
             let value: Option<i64> = row.get(0)?;
@@ -138,8 +147,9 @@ pub fn get_balances(connection: &Connection, id: u32, confirmed_height: u32, fil
         },
     )?; // funds not spent yet
     let unconfirmed_spent = connection.query_row(
-        &("SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent = 0".to_owned()
-        + excluded_cond),
+        &("SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent = 0"
+            .to_owned()
+            + excluded_cond),
         params![id],
         |row| {
             let value: Option<i64> = row.get(0)?;
@@ -178,83 +188,57 @@ pub fn get_balances(connection: &Connection, id: u32, confirmed_height: u32, fil
             Ok(value.unwrap_or(0) as u64)
         })?;
 
-    let balance = Balance::create(
-        &mut builder,
-        &BalanceArgs {
-            shielded,
-            unconfirmed_spent,
-            balance,
-            under_confirmed,
-            excluded,
-            sapling,
-            orchard,
-        },
-    );
-    builder.finish(balance, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let balance = BalanceT {
+        shielded,
+        unconfirmed_spent,
+        balance,
+        under_confirmed,
+        excluded,
+        sapling,
+        orchard,
+    };
+    Ok(balance)
 }
 
-pub fn get_db_height(connection: &Connection) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_db_height(connection: &Connection) -> Result<Option<HeightT>> {
     let height = connection
         .query_row(
             "SELECT height, timestamp FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)",
             [],
             |row| {
-                let height: u32 = row.get(0)?;
-                let timestamp: u32 = row.get(1)?;
-                let height = Height::create(&mut builder, &HeightArgs { height, timestamp });
-                Ok(height)
+                Ok(HeightT {
+                    height: row.get(0)?,
+                    timestamp: row.get(1)?,
+                })
             },
         )
         .optional()?;
-    let data = height
-        .map(|h| {
-            builder.finish(h, None);
-            builder.finished_data().to_vec()
-        })
-        .unwrap_or(vec![]);
-    Ok(data)
+    Ok(height)
 }
 
-pub fn get_notes(connection: &Connection, id: u32) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_notes(connection: &Connection, id: u32) -> Result<ShieldedNoteVecT> {
     let mut stmt = connection.prepare(
         "SELECT n.id_note, n.height, n.value, t.timestamp, n.orchard, n.excluded, n.spent FROM received_notes n, transactions t \
            WHERE n.account = ?1 AND (n.spent IS NULL OR n.spent = 0) \
            AND n.tx = t.id_tx ORDER BY n.height DESC")?;
-    let rows = stmt.query_map(params![id], |row| {
-        let id: u32 = row.get("id_note")?;
-        let height: u32 = row.get("height")?;
-        let value: i64 = row.get("value")?;
-        let timestamp: u32 = row.get("timestamp")?;
-        let orchard: u8 = row.get("orchard")?;
-        let excluded: Option<bool> = row.get("excluded")?;
-        let spent: Option<u32> = row.get("spent")?;
-        let note = ShieldedNote::create(
-            &mut builder,
-            &ShieldedNoteArgs {
-                id,
-                height,
-                value: value as u64,
-                timestamp,
-                orchard: orchard == 1,
-                excluded: excluded.unwrap_or(false),
-                spent: spent.is_some(),
-            },
-        );
-        Ok(note)
+    let rows = stmt.query_map([id], |r| {
+        let excluded = r.get::<_, Option<bool>>("excluded")?.unwrap_or(false);
+        let spent = r.get::<_, Option<bool>>("spent")?.unwrap_or(false);
+        Ok(ShieldedNoteT {
+            id: r.get("id_note")?,
+            height: r.get("height")?,
+            value: r.get("value")?,
+            timestamp: r.get("timestamp")?,
+            orchard: r.get("orchard")?,
+            excluded,
+            spent,
+        })
     })?;
-    let mut notes = vec![];
-    for r in rows {
-        notes.push(r?);
-    }
-    let notes = builder.create_vector(&notes);
-    let notes = ShieldedNoteVec::create(&mut builder, &ShieldedNoteVecArgs { notes: Some(notes) });
-    builder.finish(notes, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let notes: Result<Vec<_>, _> = rows.collect();
+    let notes = ShieldedNoteVecT {
+        notes: Some(notes?),
+    };
+    Ok(notes)
 }
 
 pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<ShieldedTxVecT> {
@@ -282,7 +266,7 @@ pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<Sh
             short_tx_id: Some(short_tx_id),
             timestamp,
             name,
-            value: value as u64,
+            value,
             address,
             memo,
         };
@@ -432,102 +416,61 @@ pub fn get_templates(connection: &Connection) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-pub fn get_contacts(connection: &Connection) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_contacts(connection: &Connection) -> Result<ContactVecT> {
     let mut stmt = connection
         .prepare("SELECT id, name, address FROM contacts WHERE address <> '' ORDER BY name")?;
     let rows = stmt.query_map([], |row| {
         let id: u32 = row.get("id")?;
         let name: String = row.get("name")?;
         let address: String = row.get("address")?;
-        let name = builder.create_string(&name);
-        let address = builder.create_string(&address);
-        let contact = Contact::create(
-            &mut builder,
-            &ContactArgs {
-                id,
-                name: Some(name),
-                address: Some(address),
-            },
-        );
-        Ok(contact)
+        Ok(ContactT {
+            id,
+            name: Some(name),
+            address: Some(address),
+        })
     })?;
-    let mut contacts = vec![];
-    for r in rows {
-        contacts.push(r?);
-    }
-    let contacts = builder.create_vector(&contacts);
-    let contacts = ContactVec::create(
-        &mut builder,
-        &ContactVecArgs {
-            contacts: Some(contacts),
-        },
-    );
-    builder.finish(contacts, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let contacts: Result<Vec<_>, _> = rows.collect();
+    let contacts = ContactVecT {
+        contacts: Some(contacts?),
+    };
+    Ok(contacts)
 }
 
-pub fn get_pnl_txs(connection: &Connection, id: u32, timestamp: u32) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_pnl_txs(connection: &Connection, id: u32, timestamp: u32) -> Result<TxTimeValueVecT> {
     let mut stmt = connection.prepare(
         "SELECT timestamp, value FROM transactions WHERE timestamp >= ?2 AND account = ?1 ORDER BY timestamp DESC")?;
     let rows = stmt.query_map([id, timestamp], |row| {
         let timestamp: u32 = row.get(0)?;
         let value: i64 = row.get(1)?;
-        let tx = TxTimeValue::create(
-            &mut builder,
-            &TxTimeValueArgs {
-                timestamp,
-                value: value as u64,
-            },
-        );
-        Ok(tx)
+        Ok(TxTimeValueT {
+            timestamp,
+            value: value as u64,
+        })
     })?;
-    let mut txs = vec![];
-    for r in rows {
-        txs.push(r?);
-    }
-    let txs = builder.create_vector(&txs);
-    let txs = TxTimeValueVec::create(&mut builder, &TxTimeValueVecArgs { values: Some(txs) });
-    builder.finish(txs, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let txs: Result<Vec<_>, _> = rows.collect();
+    Ok(TxTimeValueVecT { values: Some(txs?) })
 }
 
 pub fn get_historical_prices(
     connection: &Connection,
     timestamp: u32,
     currency: &str,
-) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+) -> Result<QuoteVecT> {
     let mut stmt = connection.prepare(
         "SELECT timestamp, price FROM historical_prices WHERE timestamp >= ?2 AND currency = ?1",
     )?;
     let rows = stmt.query_map(params![currency, timestamp], |row| {
         let timestamp: u32 = row.get(0)?;
         let price: f64 = row.get(1)?;
-        let quote = Quote::create(&mut builder, &QuoteArgs { timestamp, price });
-        Ok(quote)
+        Ok(QuoteT { timestamp, price })
     })?;
-    let mut quotes = vec![];
-    for r in rows {
-        quotes.push(r?);
-    }
-    let quotes = builder.create_vector(&quotes);
-    let quotes = QuoteVec::create(
-        &mut builder,
-        &QuoteVecArgs {
-            values: Some(quotes),
-        },
-    );
-    builder.finish(quotes, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let quotes: Result<Vec<_>, _> = rows.collect();
+    Ok(QuoteVecT {
+        values: Some(quotes?),
+    })
 }
 
-pub fn get_spendings(connection: &Connection, id: u32, timestamp: u32) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_spendings(connection: &Connection, id: u32, timestamp: u32) -> Result<SpendingVecT> {
     let mut stmt = connection.prepare(
         "SELECT SUM(value) as v, t.address, c.name FROM transactions t LEFT JOIN contacts c ON t.address = c.address \
         WHERE account = ?1 AND timestamp >= ?2 AND value < 0 GROUP BY t.address ORDER BY v ASC LIMIT 5")?;
@@ -535,34 +478,17 @@ pub fn get_spendings(connection: &Connection, id: u32, timestamp: u32) -> Result
         let value: i64 = row.get(0)?;
         let address: Option<String> = row.get(1)?;
         let name: Option<String> = row.get(2)?;
+        let recipient = name.or(address).or(Some(String::new()));
 
-        let recipient = name.or(address);
-        let recipient = recipient.unwrap_or(String::new());
-        let recipient = builder.create_string(&recipient);
-
-        let spending = Spending::create(
-            &mut builder,
-            &SpendingArgs {
-                recipient: Some(recipient),
-                amount: (-value) as u64,
-            },
-        );
-        Ok(spending)
+        Ok(SpendingT {
+            recipient,
+            amount: (-value) as u64,
+        })
     })?;
-    let mut spendings = vec![];
-    for r in rows {
-        spendings.push(r?);
-    }
-    let spendings = builder.create_vector(&spendings);
-    let spendings = SpendingVec::create(
-        &mut builder,
-        &SpendingVecArgs {
-            values: Some(spendings),
-        },
-    );
-    builder.finish(spendings, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let spendings: Result<Vec<_>, _> = rows.collect();
+    Ok(SpendingVecT {
+        values: Some(spendings?),
+    })
 }
 
 pub fn update_excluded(connection: &Connection, id: u32, excluded: bool) -> Result<()> {
