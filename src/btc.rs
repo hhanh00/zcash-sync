@@ -15,13 +15,15 @@ use std::sync::{Mutex, MutexGuard};
 pub const BTCNET: Network = Network::Testnet;
 
 pub struct BTCHandler {
+    pub db_path: String,
     pub connection: Mutex<Connection>,
     pub url: String,
 }
 
 impl BTCHandler {
-    pub fn new(connection: Connection) -> Self {
+    pub fn new(connection: Connection, db_path: &str) -> Self {
         Self {
+            db_path: db_path.to_string(),
             connection: Mutex::new(connection),
             url: "".to_string(),
         }
@@ -29,6 +31,10 @@ impl BTCHandler {
 }
 
 impl CoinApi for BTCHandler {
+    fn db_path(&self) -> &str {
+        &self.db_path
+    }
+
     fn coingecko_id(&self) -> &'static str {
         "bitcoin"
     }

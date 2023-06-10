@@ -47,7 +47,6 @@ pub fn spawn(account_id: AccountId,
         };
 
         let mut client = c.connect_lwd().await?;
-        println!("get_mempool_stream");
         let mut mempool_stream = client
             .get_mempool_stream(Request::new(Empty {}))
             .await?

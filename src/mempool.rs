@@ -15,6 +15,7 @@ pub enum MPCtl {
 }
 
 pub struct MemPool {
+    runtime: Runtime,
     tx: mpsc::Sender<MPCtl>,
 }
 
@@ -45,6 +46,7 @@ impl MemPool {
             Ok::<_, anyhow::Error>(())
         });
         Ok(MemPool {
+            runtime,
             tx: tx_ctl,
         })
     }

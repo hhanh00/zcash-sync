@@ -166,7 +166,7 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
         if coin == 2 {
             let connection = Connection::open(&*db_path)?;
             init_btc_db(&connection)?;
-            let handler = BTCHandler::new(connection);
+            let handler = BTCHandler::new(connection, &*db_path);
             *BTC_HANDLER.lock().unwrap() = Box::new(handler);
         } else {
             init_coin(coin, &db_path)?;
@@ -953,6 +953,9 @@ pub unsafe extern "C" fn zip_backup(key: *mut c_char, dst_dir: *mut c_char) -> C
             let db_name = db_path.file_name().unwrap().to_string_lossy();
             backup.add(&db.connection, &db_name)?;
         }
+        let h = BTC_HANDLER.lock().unwrap();
+        let db_path = Path::new(h.db_path());
+        backup.add(&h.connection(), &db_path.file_name().unwrap().to_string_lossy())?;
         backup.close(&key)?;
         Ok(0)
     };

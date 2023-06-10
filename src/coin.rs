@@ -7,6 +7,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 
 pub trait CoinApi: Send {
+    fn db_path(&self) -> &str;
     fn coingecko_id(&self) -> &'static str;
     fn get_url(&self) -> String;
     fn set_url(&mut self, url: &str);
@@ -60,6 +61,10 @@ pub trait CoinApi: Send {
 pub struct NoCoin;
 
 impl CoinApi for NoCoin {
+    fn db_path(&self) -> &str {
+        unimplemented!()
+    }
+
     fn coingecko_id(&self) -> &'static str {
         unimplemented!()
     }
