@@ -1,6 +1,6 @@
 use crate::btc::BTCHandler;
 use crate::coin::CoinApi;
-use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
+use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL};
 use crate::db::data_generated::fb::{
     BalanceT, ContactVecT, MessageVecT, ProgressT, Recipients, SendTemplate, Servers,
     ShieldedNoteT, ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT, SpendingVecT, TxTimeValueVecT,
@@ -20,6 +20,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use tokio::sync::{oneshot, Semaphore};
 use zcash_primitives::transaction::builder::Progress;
+use crate::mempool::MemPool;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -249,26 +250,30 @@ pub unsafe extern "C" fn reset_app() {
 #[tokio::main]
 pub async unsafe extern "C" fn mempool_run(port: i64) {
     try_init_logger();
-    let mut mempool_runner = MEMPOOL_RUNNER.lock().unwrap();
-    let mempool = mempool_runner
-        .run(move |balance: i64| {
+    log::info!("Starting MP");
+    let mut mempool = MEMPOOL.lock().unwrap();
+    let mp = MemPool::spawn(
+        move |balance: i64| {
             let mut balance = balance.into_dart();
             if port != 0 {
                 if let Some(p) = POST_COBJ {
                     p(port, &mut balance);
                 }
             }
-        })
-        .await;
-    let _ = MEMPOOL.fill(mempool);
+        }
+    ).unwrap();
+    *mempool = Some(mp);
     log::info!("end mempool_start");
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn mempool_set_active(coin: u8, id_account: u32) {
-    let mempool = MEMPOOL.borrow().unwrap();
+    let mempool = MEMPOOL.lock().unwrap();
     if coin < 2 {
-        mempool.set_active(coin, id_account);
+        if let Some(mempool) = mempool.as_ref() {
+            log::info!("MP active {coin} {id_account}");
+            mempool.set_active(coin, id_account);
+        }
     }
 }
 
@@ -430,7 +435,16 @@ pub async unsafe extern "C" fn warp(
         log::info!("Sync finished");
 
         match result {
-            Ok(_) => Ok(0),
+            Ok(new_blocks) => {
+                log::info!("New blocks {new_blocks}");
+                if new_blocks != 0 {
+                    let mempool = MEMPOOL.lock().unwrap();
+                    if let Some(mempool) = mempool.as_ref() {
+                        mempool.new_block().await;
+                    }
+                }
+                Ok(0)
+            },
             Err(err) => {
                 if let Some(e) = err.downcast_ref::<ChainError>() {
                     match e {

@@ -1,5 +1,5 @@
 use crate::fountain::FountainCodes;
-use crate::mempool::{MemPool, MemPoolRunner};
+use crate::mempool::MemPool;
 use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter};
 use anyhow::anyhow;
 use lazy_static::lazy_static;
@@ -18,8 +18,7 @@ lazy_static! {
     ];
     pub static ref PROVER: AtomicLazyCell<LocalTxProver> = AtomicLazyCell::new();
     pub static ref RAPTORQ: Mutex<FountainCodes> = Mutex::new(FountainCodes::new());
-    pub static ref MEMPOOL: AtomicLazyCell<MemPool> = AtomicLazyCell::new();
-    pub static ref MEMPOOL_RUNNER: Mutex<MemPoolRunner> = Mutex::new(MemPoolRunner::new());
+    pub static ref MEMPOOL: Mutex<Option<MemPool >> = Mutex::new(None);
 }
 
 pub static ACTIVE_COIN: AtomicU8 = AtomicU8::new(0);
@@ -33,9 +32,6 @@ pub fn set_active(active: u8) {
 pub fn set_active_account(coin: u8, id: u32) {
     let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
     c.id_account = id;
-    if let Some(mempool) = MEMPOOL.borrow() {
-        mempool.set_active(coin, id);
-    }
 }
 
 /// Set the lightwalletd url for a given coin

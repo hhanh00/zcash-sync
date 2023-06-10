@@ -25,7 +25,8 @@ pub async fn coin_sync(
     max_cost: u32,
     progress_callback: impl Fn(Progress) + Send + 'static,
     cancel: oneshot::Receiver<()>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<u32> {
+    let start_height = get_synced_height(coin)?;
     let (tx_cancel1, rx_cancel1) = mpsc::channel::<()>(1);
     let (tx_cancel2, rx_cancel2) = mpsc::channel::<()>(1);
     tokio::spawn(async move {
@@ -46,7 +47,8 @@ pub async fn coin_sync(
     )
     .await?;
     coin_sync_impl(coin, get_tx, 0, u32::MAX, p_cb.clone(), rx_cancel2).await?;
-    Ok(())
+    let end_height = get_synced_height(coin)?;
+    Ok(end_height - start_height)
 }
 
 async fn coin_sync_impl(
@@ -69,8 +71,8 @@ async fn coin_sync_impl(
 }
 
 /// Return the latest block height synchronized
-pub fn get_synced_height() -> anyhow::Result<u32> {
-    let c = CoinConfig::get_active();
+pub fn get_synced_height(coin: u8) -> anyhow::Result<u32> {
+    let c = CoinConfig::get(coin);
     let db = c.db()?;
     db.get_last_sync_height().map(|h| h.unwrap_or(0))
 }

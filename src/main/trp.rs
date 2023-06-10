@@ -1,10 +1,8 @@
+use rusqlite::Connection;
 use std::path::Path;
-use rusqlite::{Connection};
 use std::slice;
 use warp_api_ffi::coin::CoinApi;
-use warp_api_ffi::{
-    btc, make_recipient, make_recipients,
-};
+use warp_api_ffi::{btc, make_recipient, make_recipients};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -36,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
 
     let r = make_recipient("tb1qv7rve3kfp5f6ahhgukcqx9tz2wf3xfswpqhjwa", 1000);
     let rs = make_recipients(slice::from_ref(&r));
-    let tx = btc_handler.prepare_multi_payment(account, &rs, 1)?;
+    let tx = btc_handler.prepare_multi_payment(account, &rs, Some(1))?;
     println!("tx: {tx}");
 
     let raw_tx = btc_handler.sign(account, &tx)?;
