@@ -11,17 +11,33 @@ pub trait CoinApi: Send {
     fn coingecko_id(&self) -> &'static str;
     fn get_url(&self) -> String;
     fn set_url(&mut self, url: &str);
-    fn get_property(&self, name: &str) -> Result<String>;
-    fn set_property(&mut self, name: &str, value: &str) -> Result<()>;
+    fn get_property(&self, name: &str) -> Result<String> {
+        super::btc::get_property(&self.connection(), name)
+    }
+    fn set_property(&mut self, name: &str, value: &str) -> Result<()> {
+        super::btc::set_property(&self.connection(), name, value)
+    }
 
     fn list_accounts(&self) -> Result<AccountVecT>;
-    fn get_account(&self, account: u32) -> Result<AccountT>;
-    fn get_address(&self, account: u32) -> Result<String>;
+    fn get_account(&self, account: u32) -> Result<AccountT> {
+        super::btc::get_account(&self.connection(), account)
+    }
+    fn get_address(&self, account: u32) -> Result<String> {
+        super::btc::get_address(&self.connection(), account)
+    }
     fn new_account(&self, name: &str, key: &str) -> Result<u32>;
-    fn convert_to_view(&self, account: u32) -> Result<()>;
-    fn has_account(&self, account: u32) -> Result<bool>;
-    fn update_name(&self, account: u32, name: &str) -> Result<()>;
-    fn delete_account(&self, account: u32) -> Result<()>;
+    fn convert_to_view(&self, account: u32) -> Result<()> {
+        super::btc::delete_secrets(&self.connection(), account)
+    }
+    fn has_account(&self, account: u32) -> Result<bool> {
+        super::btc::has_account(&self.connection(), account)
+    }
+    fn update_name(&self, account: u32, name: &str) -> Result<()> {
+        super::btc::update_name(&self.connection(), account, name)
+    }
+    fn delete_account(&self, account: u32) -> Result<()> {
+        super::btc::delete_account(&self.connection(), account)
+    }
     fn get_active_account(&self) -> Result<u32> {
         crate::db::read::get_active_account(&self.connection())
     }
@@ -31,12 +47,16 @@ pub trait CoinApi: Send {
 
     fn is_valid_key(&self, key: &str) -> bool;
     fn is_valid_address(&self, key: &str) -> bool;
-    fn get_backup(&self, account: u32) -> Result<BackupT>;
+    fn get_backup(&self, account: u32) -> Result<BackupT> {
+        super::btc::get_backup(&self.connection(), account)
+    }
 
     fn sync(&mut self) -> Result<()>;
     fn cancel_sync(&mut self) -> Result<()>;
     fn get_latest_height(&self) -> Result<u32>;
-    fn get_db_height(&self) -> Result<Option<HeightT>>;
+    fn get_db_height(&self) -> Result<Option<HeightT>> {
+        super::btc::get_db_height(&self.connection())
+    }
     fn skip_to_last_height(&mut self) -> Result<()>;
     fn rewind_to_height(&mut self, height: u32) -> Result<()>;
     fn truncate(&mut self) -> Result<()>;
@@ -77,47 +97,11 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    fn get_property(&self, _name: &str) -> Result<String> {
-        unimplemented!()
-    }
-
-    fn set_property(&mut self, _name: &str, _value: &str) -> Result<()> {
-        unimplemented!()
-    }
-
     fn list_accounts(&self) -> Result<AccountVecT> {
         unimplemented!()
     }
 
-    fn get_account(&self, _account: u32) -> Result<AccountT> {
-        unimplemented!()
-    }
-
-    fn get_address(&self, _account: u32) -> Result<String> {
-        unimplemented!()
-    }
-
     fn new_account(&self, _name: &str, _key: &str) -> Result<u32> {
-        unimplemented!()
-    }
-
-    fn convert_to_view(&self, _account: u32) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn has_account(&self, _account: u32) -> Result<bool> {
-        unimplemented!()
-    }
-
-    fn update_name(&self, _account: u32, _name: &str) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn delete_account(&self, _account: u32) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn get_active_account(&self) -> Result<u32> {
         unimplemented!()
     }
 
@@ -126,10 +110,6 @@ impl CoinApi for NoCoin {
     }
 
     fn is_valid_address(&self, _key: &str) -> bool {
-        unimplemented!()
-    }
-
-    fn get_backup(&self, _account: u32) -> Result<BackupT> {
         unimplemented!()
     }
 
@@ -142,10 +122,6 @@ impl CoinApi for NoCoin {
     }
 
     fn get_latest_height(&self) -> Result<u32> {
-        unimplemented!()
-    }
-
-    fn get_db_height(&self) -> Result<Option<HeightT>> {
         unimplemented!()
     }
 

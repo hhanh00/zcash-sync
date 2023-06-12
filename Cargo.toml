@@ -23,9 +23,9 @@ required-features = ["rpc"]
 #name = "ledger"
 #path = "src/main/ledger.rs"
 
-#[[bin]]
-#name = "trp"
-#path = "src/main/trp.rs"
+[[bin]]
+name = "trp"
+path = "src/main/trp.rs"
 
 #[[bin]]
 #name = "sign"
@@ -33,7 +33,7 @@ required-features = ["rpc"]
 
 [lib]
 name = "warp_api_ffi"
-crate-type = ["rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 nonempty = "0.7"
@@ -100,6 +100,7 @@ raptorq = "1.7.0"
 sysinfo = "0.28"
 
 electrum-client = "0.15"
+ethers = "2.0.7"
 
 ledger-transport-hid = { version = "0.10", optional = true }
 ledger-apdu = { version = "0.10", optional = true }

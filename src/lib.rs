@@ -73,13 +73,14 @@ pub mod lw_rpc;
 pub type Hash = [u8; 32];
 
 pub mod api;
-pub mod btc;
+mod btc;
 mod chain;
 /// accounts, sync, payments, etc.
 pub mod coin;
 mod coinconfig;
 mod contact;
 mod db;
+pub mod eth;
 mod fountain;
 mod hash;
 mod key;
@@ -120,9 +121,10 @@ pub use note_selection::{
 };
 
 pub use api::recipient::{make_recipient, make_recipients};
-pub use btc::init_db as init_btc_db;
+pub use btc::{init_db as init_btc_db, BTCHandler};
 pub use coin::NoCoin;
 pub use db::data_generated::fb::{RecipientT, RecipientsT};
+pub use eth::{init_db as init_eth_db, ETHHandler};
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;

@@ -2,11 +2,7 @@
 
 // @generated
 
-use core::cmp::Ordering;
-use core::mem;
-
 extern crate flatbuffers;
-use self::flatbuffers::{EndianScalar, Follow};
 
 #[allow(unused_imports, dead_code)]
 pub mod fb {
@@ -8653,6 +8649,320 @@ pub mod fb {
                     net_orchard,
                     fee,
                     privacy_level,
+                },
+            )
+        }
+    }
+    pub enum ETHTransactionOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct ETHTransaction<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for ETHTransaction<'a> {
+        type Inner = ETHTransaction<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> ETHTransaction<'a> {
+        pub const VT_CHAIN_ID: flatbuffers::VOffsetT = 4;
+        pub const VT_TO: flatbuffers::VOffsetT = 6;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 8;
+        pub const VT_NONCE: flatbuffers::VOffsetT = 10;
+        pub const VT_GAS: flatbuffers::VOffsetT = 12;
+        pub const VT_MAX_FEE_PER_GAS: flatbuffers::VOffsetT = 14;
+        pub const VT_MAX_PRIORITY_FEE_PER_GAS: flatbuffers::VOffsetT = 16;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            ETHTransaction { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args ETHTransactionArgs<'args>,
+        ) -> flatbuffers::WIPOffset<ETHTransaction<'bldr>> {
+            let mut builder = ETHTransactionBuilder::new(_fbb);
+            builder.add_max_priority_fee_per_gas(args.max_priority_fee_per_gas);
+            builder.add_max_fee_per_gas(args.max_fee_per_gas);
+            builder.add_gas(args.gas);
+            builder.add_value(args.value);
+            builder.add_chain_id(args.chain_id);
+            builder.add_nonce(args.nonce);
+            if let Some(x) = args.to {
+                builder.add_to(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> ETHTransactionT {
+            let chain_id = self.chain_id();
+            let to = self.to().map(|x| x.to_string());
+            let value = self.value();
+            let nonce = self.nonce();
+            let gas = self.gas();
+            let max_fee_per_gas = self.max_fee_per_gas();
+            let max_priority_fee_per_gas = self.max_priority_fee_per_gas();
+            ETHTransactionT {
+                chain_id,
+                to,
+                value,
+                nonce,
+                gas,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+            }
+        }
+
+        #[inline]
+        pub fn chain_id(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(ETHTransaction::VT_CHAIN_ID, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn to(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(ETHTransaction::VT_TO, None)
+            }
+        }
+        #[inline]
+        pub fn value(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(ETHTransaction::VT_VALUE, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn nonce(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u32>(ETHTransaction::VT_NONCE, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn gas(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(ETHTransaction::VT_GAS, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn max_fee_per_gas(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(ETHTransaction::VT_MAX_FEE_PER_GAS, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn max_priority_fee_per_gas(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(ETHTransaction::VT_MAX_PRIORITY_FEE_PER_GAS, Some(0))
+                    .unwrap()
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for ETHTransaction<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<u64>("chain_id", Self::VT_CHAIN_ID, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("to", Self::VT_TO, false)?
+                .visit_field::<u64>("value", Self::VT_VALUE, false)?
+                .visit_field::<u32>("nonce", Self::VT_NONCE, false)?
+                .visit_field::<u64>("gas", Self::VT_GAS, false)?
+                .visit_field::<u64>("max_fee_per_gas", Self::VT_MAX_FEE_PER_GAS, false)?
+                .visit_field::<u64>(
+                    "max_priority_fee_per_gas",
+                    Self::VT_MAX_PRIORITY_FEE_PER_GAS,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct ETHTransactionArgs<'a> {
+        pub chain_id: u64,
+        pub to: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub value: u64,
+        pub nonce: u32,
+        pub gas: u64,
+        pub max_fee_per_gas: u64,
+        pub max_priority_fee_per_gas: u64,
+    }
+    impl<'a> Default for ETHTransactionArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            ETHTransactionArgs {
+                chain_id: 0,
+                to: None,
+                value: 0,
+                nonce: 0,
+                gas: 0,
+                max_fee_per_gas: 0,
+                max_priority_fee_per_gas: 0,
+            }
+        }
+    }
+
+    pub struct ETHTransactionBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> ETHTransactionBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_chain_id(&mut self, chain_id: u64) {
+            self.fbb_
+                .push_slot::<u64>(ETHTransaction::VT_CHAIN_ID, chain_id, 0);
+        }
+        #[inline]
+        pub fn add_to(&mut self, to: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(ETHTransaction::VT_TO, to);
+        }
+        #[inline]
+        pub fn add_value(&mut self, value: u64) {
+            self.fbb_
+                .push_slot::<u64>(ETHTransaction::VT_VALUE, value, 0);
+        }
+        #[inline]
+        pub fn add_nonce(&mut self, nonce: u32) {
+            self.fbb_
+                .push_slot::<u32>(ETHTransaction::VT_NONCE, nonce, 0);
+        }
+        #[inline]
+        pub fn add_gas(&mut self, gas: u64) {
+            self.fbb_.push_slot::<u64>(ETHTransaction::VT_GAS, gas, 0);
+        }
+        #[inline]
+        pub fn add_max_fee_per_gas(&mut self, max_fee_per_gas: u64) {
+            self.fbb_
+                .push_slot::<u64>(ETHTransaction::VT_MAX_FEE_PER_GAS, max_fee_per_gas, 0);
+        }
+        #[inline]
+        pub fn add_max_priority_fee_per_gas(&mut self, max_priority_fee_per_gas: u64) {
+            self.fbb_.push_slot::<u64>(
+                ETHTransaction::VT_MAX_PRIORITY_FEE_PER_GAS,
+                max_priority_fee_per_gas,
+                0,
+            );
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        ) -> ETHTransactionBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            ETHTransactionBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<ETHTransaction<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for ETHTransaction<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("ETHTransaction");
+            ds.field("chain_id", &self.chain_id());
+            ds.field("to", &self.to());
+            ds.field("value", &self.value());
+            ds.field("nonce", &self.nonce());
+            ds.field("gas", &self.gas());
+            ds.field("max_fee_per_gas", &self.max_fee_per_gas());
+            ds.field("max_priority_fee_per_gas", &self.max_priority_fee_per_gas());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct ETHTransactionT {
+        pub chain_id: u64,
+        pub to: Option<String>,
+        pub value: u64,
+        pub nonce: u32,
+        pub gas: u64,
+        pub max_fee_per_gas: u64,
+        pub max_priority_fee_per_gas: u64,
+    }
+    impl Default for ETHTransactionT {
+        fn default() -> Self {
+            Self {
+                chain_id: 0,
+                to: None,
+                value: 0,
+                nonce: 0,
+                gas: 0,
+                max_fee_per_gas: 0,
+                max_priority_fee_per_gas: 0,
+            }
+        }
+    }
+    impl ETHTransactionT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<ETHTransaction<'b>> {
+            let chain_id = self.chain_id;
+            let to = self.to.as_ref().map(|x| _fbb.create_string(x));
+            let value = self.value;
+            let nonce = self.nonce;
+            let gas = self.gas;
+            let max_fee_per_gas = self.max_fee_per_gas;
+            let max_priority_fee_per_gas = self.max_priority_fee_per_gas;
+            ETHTransaction::create(
+                _fbb,
+                &ETHTransactionArgs {
+                    chain_id,
+                    to,
+                    value,
+                    nonce,
+                    gas,
+                    max_fee_per_gas,
+                    max_priority_fee_per_gas,
                 },
             )
         }

@@ -200,6 +200,16 @@ typedef struct CResult_bool {
 
 #define TxReport_VT_PRIVACY_LEVEL 18
 
+#define ETHTransaction_VT_CHAIN_ID 4
+
+#define ETHTransaction_VT_NONCE 10
+
+#define ETHTransaction_VT_GAS 12
+
+#define ETHTransaction_VT_MAX_FEE_PER_GAS 14
+
+#define ETHTransaction_VT_MAX_PRIORITY_FEE_PER_GAS 16
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);

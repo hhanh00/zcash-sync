@@ -1,6 +1,6 @@
+use anyhow::Result;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
-use anyhow::Result;
 
 mod account;
 
@@ -32,10 +32,10 @@ impl MemPool {
                     MPCtl::Open(account_id) => {
                         worker.set(account_id).await;
                         worker.open(tx_ctl2.clone()).await;
-                    },
+                    }
                     MPCtl::NewBlock => {
                         worker.open(tx_ctl2.clone()).await;
-                    },
+                    }
                     MPCtl::Balance(account_id, balance) => {
                         if worker.account_id == Some(account_id) {
                             notify(balance);

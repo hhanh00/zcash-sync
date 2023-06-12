@@ -6,8 +6,10 @@ use crate::db::data_generated::fb::{
     ShieldedNoteT, ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT, SpendingVecT, TxTimeValueVecT,
 };
 use crate::db::FullEncryptedBackup;
+use crate::eth::ETHHandler;
+use crate::mempool::MemPool;
 use crate::note_selection::TransactionReport;
-use crate::{init_btc_db, ChainError, TransactionPlan, Tx};
+use crate::{init_btc_db, init_eth_db, ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use flatbuffers::FlatBufferBuilder;
@@ -20,7 +22,6 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use tokio::sync::{oneshot, Semaphore};
 use zcash_primitives::transaction::builder::Progress;
-use crate::mempool::MemPool;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -149,11 +150,13 @@ pub struct CResult<T> {
 
 lazy_static! {
     static ref BTC_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
+    static ref ETH_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
 }
 
 fn get_coin_handler(coin: u8) -> MutexGuard<'static, Box<dyn CoinApi>> {
     match coin {
         2 => BTC_HANDLER.lock().unwrap(),
+        3 => ETH_HANDLER.lock().unwrap(),
         _ => unreachable!(),
     }
 }
@@ -163,13 +166,22 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
     try_init_logger();
     from_c_str!(db_path);
     let res = || {
-        if coin == 2 {
-            let connection = Connection::open(&*db_path)?;
-            init_btc_db(&connection)?;
-            let handler = BTCHandler::new(connection, &*db_path);
-            *BTC_HANDLER.lock().unwrap() = Box::new(handler);
-        } else {
-            init_coin(coin, &db_path)?;
+        match coin {
+            2 => {
+                let connection = Connection::open(&*db_path)?;
+                init_btc_db(&connection)?;
+                let handler = BTCHandler::new(connection, &*db_path);
+                *BTC_HANDLER.lock().unwrap() = Box::new(handler);
+            }
+            3 => {
+                let connection = Connection::open(&*db_path)?;
+                init_eth_db(&connection)?;
+                let handler = ETHHandler::new(connection, Path::new(&*db_path).to_path_buf());
+                *ETH_HANDLER.lock().unwrap() = Box::new(handler);
+            }
+            _ => {
+                init_coin(coin, &db_path)?;
+            }
         }
         Ok::<_, anyhow::Error>(0)
     };
@@ -252,16 +264,15 @@ pub async unsafe extern "C" fn mempool_run(port: i64) {
     try_init_logger();
     log::info!("Starting MP");
     let mut mempool = MEMPOOL.lock().unwrap();
-    let mp = MemPool::spawn(
-        move |balance: i64| {
-            let mut balance = balance.into_dart();
-            if port != 0 {
-                if let Some(p) = POST_COBJ {
-                    p(port, &mut balance);
-                }
+    let mp = MemPool::spawn(move |balance: i64| {
+        let mut balance = balance.into_dart();
+        if port != 0 {
+            if let Some(p) = POST_COBJ {
+                p(port, &mut balance);
             }
         }
-    ).unwrap();
+    })
+    .unwrap();
     *mempool = Some(mp);
     log::info!("end mempool_start");
 }
@@ -444,7 +455,7 @@ pub async unsafe extern "C" fn warp(
                     }
                 }
                 Ok(0)
-            },
+            }
             Err(err) => {
                 if let Some(e) = err.downcast_ref::<ChainError>() {
                     match e {
@@ -953,9 +964,15 @@ pub unsafe extern "C" fn zip_backup(key: *mut c_char, dst_dir: *mut c_char) -> C
             let db_name = db_path.file_name().unwrap().to_string_lossy();
             backup.add(&db.connection, &db_name)?;
         }
-        let h = BTC_HANDLER.lock().unwrap();
-        let db_path = Path::new(h.db_path());
-        backup.add(&h.connection(), &db_path.file_name().unwrap().to_string_lossy())?;
+        let coin_handlers: &[&Mutex<Box<dyn CoinApi>>] = &[&BTC_HANDLER, &ETH_HANDLER];
+        for h in coin_handlers {
+            let h = h.lock().unwrap();
+            let db_path = Path::new(h.db_path());
+            backup.add(
+                &h.connection(),
+                &db_path.file_name().unwrap().to_string_lossy(),
+            )?;
+        }
         backup.close(&key)?;
         Ok(0)
     };

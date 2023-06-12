@@ -18,7 +18,7 @@ lazy_static! {
     ];
     pub static ref PROVER: AtomicLazyCell<LocalTxProver> = AtomicLazyCell::new();
     pub static ref RAPTORQ: Mutex<FountainCodes> = Mutex::new(FountainCodes::new());
-    pub static ref MEMPOOL: Mutex<Option<MemPool >> = Mutex::new(None);
+    pub static ref MEMPOOL: Mutex<Option<MemPool>> = Mutex::new(None);
 }
 
 pub static ACTIVE_COIN: AtomicU8 = AtomicU8::new(0);

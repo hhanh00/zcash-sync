@@ -5,9 +5,13 @@ mod sync;
 
 use crate::coin::CoinApi;
 use crate::db::data_generated::fb::{
-    AccountT, AccountVecT, BackupT, HeightT, PlainNoteVecT, PlainTxVecT, RecipientsT, TxReportT,
+    AccountVecT, PlainNoteVecT, PlainTxVecT, RecipientsT, TxReportT,
 };
-pub use db::init_db;
+pub use db::{
+    delete_account, delete_secrets, get_account, get_address, get_backup,
+    get_height as get_db_height, get_property, has_account, init_db, list_accounts, set_property,
+    update_name,
+};
 use electrum_client::bitcoin::Network;
 use rusqlite::Connection;
 use std::sync::{Mutex, MutexGuard};
@@ -46,24 +50,8 @@ impl CoinApi for BTCHandler {
         self.url = url.to_string();
     }
 
-    fn get_property(&self, name: &str) -> anyhow::Result<String> {
-        db::get_property(&self.connection.lock().unwrap(), name)
-    }
-
-    fn set_property(&mut self, name: &str, value: &str) -> anyhow::Result<()> {
-        db::set_property(&self.connection.lock().unwrap(), name, value)
-    }
-
     fn list_accounts(&self) -> anyhow::Result<AccountVecT> {
-        db::list_accounts(&self.connection.lock().unwrap())
-    }
-
-    fn get_account(&self, account: u32) -> anyhow::Result<AccountT> {
-        db::get_account(&self.connection.lock().unwrap(), account)
-    }
-
-    fn get_address(&self, account: u32) -> anyhow::Result<String> {
-        db::get_address(&self.connection.lock().unwrap(), account)
+        list_accounts(&self.connection())
     }
 
     fn new_account(&self, name: &str, key: &str) -> anyhow::Result<u32> {
@@ -73,32 +61,12 @@ impl CoinApi for BTCHandler {
         Ok(id_account)
     }
 
-    fn convert_to_view(&self, account: u32) -> anyhow::Result<()> {
-        db::delete_secrets(&self.connection.lock().unwrap(), account)
-    }
-
-    fn has_account(&self, account: u32) -> anyhow::Result<bool> {
-        db::has_account(&self.connection.lock().unwrap(), account)
-    }
-
-    fn update_name(&self, account: u32, name: &str) -> anyhow::Result<()> {
-        db::update_name(&self.connection.lock().unwrap(), account, name)
-    }
-
-    fn delete_account(&self, account: u32) -> anyhow::Result<()> {
-        db::delete_account(&self.connection.lock().unwrap(), account)
-    }
-
     fn is_valid_key(&self, key: &str) -> bool {
         key::derive_key(key).is_ok()
     }
 
     fn is_valid_address(&self, key: &str) -> bool {
         key::derive_address(key).is_ok()
-    }
-
-    fn get_backup(&self, account: u32) -> anyhow::Result<BackupT> {
-        db::get_backup(&self.connection.lock().unwrap(), account)
     }
 
     fn sync(&mut self) -> anyhow::Result<()> {
@@ -111,10 +79,6 @@ impl CoinApi for BTCHandler {
 
     fn get_latest_height(&self) -> anyhow::Result<u32> {
         sync::get_height(&self.url)
-    }
-
-    fn get_db_height(&self) -> anyhow::Result<Option<HeightT>> {
-        db::get_height(&self.connection.lock().unwrap())
     }
 
     fn skip_to_last_height(&mut self) -> anyhow::Result<()> {

@@ -1,7 +1,9 @@
-use std::collections::HashMap;
+use crate::mempool::{AccountId, MPCtl};
+use crate::{AccountData, CoinConfig, Empty, Hash, RawTransaction};
 use anyhow::Result;
 use orchard::keys::{FullViewingKey, IncomingViewingKey, Scope};
 use orchard::note_encryption::OrchardDomain;
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -10,13 +12,12 @@ use zcash_primitives::consensus::{BlockHeight, Network, NetworkUpgrade, Paramete
 use zcash_primitives::sapling::keys::PreparedIncomingViewingKey;
 use zcash_primitives::sapling::note_encryption::try_sapling_note_decryption;
 use zcash_primitives::transaction::Transaction;
-use crate::{AccountData, CoinConfig, Empty, Hash, RawTransaction};
-use crate::mempool::{AccountId, MPCtl};
 
-pub fn spawn(account_id: AccountId,
-             mut rx_close: mpsc::Receiver<()>,
-             tx_balance: mpsc::Sender<MPCtl>,
-    ) -> Result<()> {
+pub fn spawn(
+    account_id: AccountId,
+    mut rx_close: mpsc::Receiver<()>,
+    tx_balance: mpsc::Sender<MPCtl>,
+) -> Result<()> {
     let AccountId(coin, account) = account_id;
     log::info!("Start sub for {coin} {account}");
     tokio::spawn(async move {
@@ -29,7 +30,8 @@ pub fn spawn(account_id: AccountId,
             let fvk = decode_extended_full_viewing_key(
                 network.hrp_sapling_extended_full_viewing_key(),
                 &fvk,
-            ).unwrap();
+            )
+            .unwrap();
             let sapling_ivk = fvk.fvk.vk.ivk();
             let orchard_ivk = db.get_orchard(account)?.map(|k| {
                 let fvk = FullViewingKey::from_bytes(&k.fvk).unwrap();
@@ -43,7 +45,7 @@ pub fn spawn(account_id: AccountId,
             nfs,
             balance: 0,
             pivk,
-            oivk: orchard_ivk
+            oivk: orchard_ivk,
         };
 
         let mut client = c.connect_lwd().await?;

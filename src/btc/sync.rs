@@ -17,7 +17,7 @@ pub fn sync(connection: &Connection, url: &str) -> Result<()> {
             let block_hash = header.block_hash();
             let block_hash: &[u8] = block_hash.as_ref();
             let db_block_hash = db::get_block_hash(connection, db_height)?;
-            if block_hash.as_ref() == &db_block_hash {
+            if block_hash == &db_block_hash {
                 break db_height;
             }
             db::rewind_to(connection, db_height - 1)?;

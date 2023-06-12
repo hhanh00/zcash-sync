@@ -2,14 +2,15 @@ use rusqlite::Connection;
 use std::path::Path;
 use std::slice;
 use warp_api_ffi::coin::CoinApi;
-use warp_api_ffi::{btc, make_recipient, make_recipients};
+use warp_api_ffi::{init_btc_db, make_recipient, make_recipients, BTCHandler};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let home = std::env::var("HOME")?;
-    let connection = Connection::open(Path::new(&home).join("databases/btc.db"))?;
-    btc::init_db(&connection)?;
-    let mut btc_handler = btc::BTCHandler::new(connection);
+    let db_path = Path::new(&home).join("databases/btc.db");
+    let connection = Connection::open(&db_path)?;
+    init_btc_db(&connection)?;
+    let mut btc_handler = BTCHandler::new(connection, &db_path.to_string_lossy().to_string());
     btc_handler.set_url("tcp://blackie.c3-soft.com:57005");
 
     // Create test accounts
