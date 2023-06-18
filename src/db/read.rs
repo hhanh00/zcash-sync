@@ -117,6 +117,22 @@ pub fn get_sk(connection: &Connection, id: u32) -> Result<String> {
     Ok(sk)
 }
 
+pub fn get_backup(connection: &Connection, account: u32, map_sk: fn(Vec<u8>) -> String) -> Result<BackupT> {
+    let backup = connection.query_row(
+        "SELECT name, seed, sk FROM accounts WHERE id_account = ?1",
+        [account],
+        |r| {
+            Ok(BackupT {
+                name: Some(r.get(0)?),
+                seed: r.get(1)?,
+                sk: r.get::<_, Option<Vec<u8>>>(2)?.map(map_sk),
+                ..BackupT::default()
+            })
+        },
+    )?;
+    Ok(backup)
+}
+
 pub fn update_account_name(connection: &Connection, id: u32, name: &str) -> Result<()> {
     connection.execute(
         "UPDATE accounts SET name = ?2 WHERE id_account = ?1",
@@ -301,16 +317,21 @@ pub fn get_messages(network: &Network, connection: &Connection, id: u32) -> Resu
         let incoming: bool = row.get("incoming")?;
 
         let id_tx = id_tx.unwrap_or(0);
-        let from = sender.map(|s| addresses.get(&s).cloned().unwrap_or(String::new()));
-        let to = recipient.map(|s| addresses.get(&s).cloned().unwrap_or(String::new()));
-
+        let from = match sender {
+            None => String::new(),
+            Some(a) => addresses.get(&a).cloned().unwrap_or(a.clone())
+        };
+        let to = match recipient {
+            None => String::new(),
+            Some(a) => addresses.get(&a).cloned().unwrap_or(a.clone())
+        };
         let message = MessageT {
             id_msg,
             id_tx,
             height,
             timestamp,
-            from,
-            to,
+            from: Some(from),
+            to: Some(to),
             subject: Some(subject),
             body: Some(body),
             read,

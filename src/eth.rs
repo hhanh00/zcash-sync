@@ -1,5 +1,5 @@
 use crate::coin::CoinApi;
-use crate::db::data_generated::fb::{AccountVecT, PlainNoteVecT, PlainTxVecT, TxReportT};
+use crate::db::data_generated::fb::{AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, TxReportT};
 use crate::RecipientsT;
 use rusqlite::Connection;
 use std::path::PathBuf;
@@ -60,6 +60,12 @@ impl CoinApi for ETHHandler {
 
     fn is_valid_address(&self, address: &str) -> bool {
         account::is_valid_address(address)
+    }
+
+    fn get_backup(&self, account: u32) -> anyhow::Result<BackupT> {
+        super::db::read::get_backup(&self.connection(), account, |sk| {
+            "0x".to_string() + &hex::encode_upper(&sk)
+        })
     }
 
     fn sync(&mut self) -> anyhow::Result<()> {

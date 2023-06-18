@@ -23,7 +23,7 @@ pub fn derive_key(key: &str) -> Result<AccountKey> {
     }
     if key.contains(" ") {
         derive_passphrase(key)
-    } else if key.starts_with("tb1") {
+    } else if key.starts_with("bc1") {
         derive_address(key)
     } else {
         derive_private_key(key)
@@ -35,7 +35,7 @@ fn derive_passphrase(passphrase: &str) -> Result<AccountKey> {
     let seed = Seed::new(&mnemonic, "");
     let secp = Secp256k1::<All>::new();
     let ext = ExtendedPrivKey::new_master(BTCNET, seed.as_bytes())?;
-    let ext = ext.derive_priv(&secp, &DerivationPath::from_str("m/84'/1'/0'/0/0").unwrap())?;
+    let ext = ext.derive_priv(&secp, &DerivationPath::from_str("m/84'/0'/0'/0/0").unwrap())?;
     let sk = ext.to_priv();
     let AccountKey {
         secret_key,

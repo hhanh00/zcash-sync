@@ -47,9 +47,7 @@ pub trait CoinApi: Send {
 
     fn is_valid_key(&self, key: &str) -> bool;
     fn is_valid_address(&self, key: &str) -> bool;
-    fn get_backup(&self, account: u32) -> Result<BackupT> {
-        super::btc::get_backup(&self.connection(), account)
-    }
+    fn get_backup(&self, account: u32) -> Result<BackupT>;
 
     fn sync(&mut self) -> Result<()>;
     fn cancel_sync(&mut self) -> Result<()>;
@@ -110,6 +108,10 @@ impl CoinApi for NoCoin {
     }
 
     fn is_valid_address(&self, _key: &str) -> bool {
+        unimplemented!()
+    }
+
+    fn get_backup(&self, account: u32) -> Result<BackupT> {
         unimplemented!()
     }
 
