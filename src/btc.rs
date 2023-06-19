@@ -4,16 +4,18 @@ mod pay;
 mod sync;
 
 use crate::coin::CoinApi;
-use crate::db::data_generated::fb::{AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, RecipientsT, TxReportT};
+use crate::db::data_generated::fb::{
+    AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, RecipientsT, TxReportT,
+};
 pub use db::{
     delete_account, delete_secrets, get_account, get_address, get_backup,
     get_height as get_db_height, get_property, has_account, init_db, list_accounts, set_property,
     update_name,
 };
+use electrum_client::bitcoin::secp256k1::SecretKey;
 use electrum_client::bitcoin::{Network, PrivateKey};
 use rusqlite::Connection;
 use std::sync::{Mutex, MutexGuard};
-use electrum_client::bitcoin::secp256k1::SecretKey;
 
 pub const BTCNET: Network = Network::Bitcoin;
 

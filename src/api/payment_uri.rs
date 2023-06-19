@@ -1,6 +1,7 @@
 //! encode and decode Payment URI
 
 use crate::coinconfig::CoinConfig;
+use crate::db::data_generated::fb::PaymentURIT;
 use crate::key::decode_address;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -43,8 +44,8 @@ pub fn make_payment_uri(
 /// Decode a payment uri
 /// # Arguments
 /// * `uri`: payment uri
-pub fn parse_payment_uri(uri: &str) -> anyhow::Result<PaymentURI> {
-    let c = CoinConfig::get_active();
+pub fn parse_payment_uri(coin: u8, uri: &str) -> anyhow::Result<PaymentURIT> {
+    let c = CoinConfig::get(coin);
     let scheme = c.chain.ticker();
     let scheme_len = scheme.len();
     if uri[..scheme_len].ne(scheme) {
@@ -68,10 +69,10 @@ pub fn parse_payment_uri(uri: &str) -> anyhow::Result<PaymentURI> {
         }
         None => Ok(String::new()),
     }?;
-    let payment = PaymentURI {
-        address: payment.recipient_address.encode(c.chain.network()),
+    let payment = PaymentURIT {
+        address: Some(payment.recipient_address.encode(c.chain.network())),
         amount: u64::from(payment.amount),
-        memo,
+        memo: Some(memo),
     };
 
     // let payment_json = serde_json::to_string(&payment)?;

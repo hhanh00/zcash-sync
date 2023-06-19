@@ -237,7 +237,11 @@ pub fn get_accounts(connection: &Connection) -> Result<Vec<u32>> {
     Ok(v?)
 }
 
-pub fn get_backup(connection: &Connection, account: u32, map_sk: fn(Vec<u8>) -> String) -> Result<BackupT> {
+pub fn get_backup(
+    connection: &Connection,
+    account: u32,
+    _map_sk: fn(Vec<u8>) -> String,
+) -> Result<BackupT> {
     let backup = connection.query_row(
         "SELECT name, seed, sk FROM accounts WHERE id_account = ?1",
         [account],

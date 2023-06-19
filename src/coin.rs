@@ -111,7 +111,7 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    fn get_backup(&self, account: u32) -> Result<BackupT> {
+    fn get_backup(&self, _account: u32) -> Result<BackupT> {
         unimplemented!()
     }
 

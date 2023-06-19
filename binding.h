@@ -345,7 +345,7 @@ struct CResult_____c_char make_payment_uri(uint8_t coin,
                                            uint64_t amount,
                                            char *memo);
 
-struct CResult_____c_char parse_payment_uri(char *uri);
+struct CResult______u8 parse_payment_uri(uint8_t coin, char *uri);
 
 struct CResult______u8 generate_key(void);
 

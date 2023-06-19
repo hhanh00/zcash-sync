@@ -59,7 +59,7 @@ pub fn group_orders(orders: &[Order], fee: u64) -> Result<(Vec<OrderInfo>, Order
             6 => {
                 x += info.amount;
             }
-            _ => unreachable!(),
+            _ => panic!("unexpected group type {}", info.group_type),
         }
     }
     log::debug!("{} {} {} {}", t0, s0, o0, x);

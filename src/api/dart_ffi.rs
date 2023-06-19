@@ -932,14 +932,13 @@ pub unsafe extern "C" fn make_payment_uri(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn parse_payment_uri(uri: *mut c_char) -> CResult<*mut c_char> {
+pub unsafe extern "C" fn parse_payment_uri(coin: u8, uri: *mut c_char) -> CResult<*const u8> {
     from_c_str!(uri);
     let payment_json = || {
-        let payment = crate::api::payment_uri::parse_payment_uri(&uri)?;
-        let payment_json = serde_json::to_string(&payment)?;
-        Ok(payment_json)
+        let payment = crate::api::payment_uri::parse_payment_uri(coin, &uri)?;
+        Ok(fb_to_vec!(payment))
     };
-    to_cresult_str(payment_json())
+    to_cresult_bytes(payment_json())
 }
 
 #[no_mangle]

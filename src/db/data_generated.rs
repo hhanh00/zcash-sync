@@ -8967,4 +8967,202 @@ pub mod fb {
             )
         }
     }
+    pub enum PaymentURIOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct PaymentURI<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for PaymentURI<'a> {
+        type Inner = PaymentURI<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> PaymentURI<'a> {
+        pub const VT_ADDRESS: flatbuffers::VOffsetT = 4;
+        pub const VT_AMOUNT: flatbuffers::VOffsetT = 6;
+        pub const VT_MEMO: flatbuffers::VOffsetT = 8;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            PaymentURI { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args PaymentURIArgs<'args>,
+        ) -> flatbuffers::WIPOffset<PaymentURI<'bldr>> {
+            let mut builder = PaymentURIBuilder::new(_fbb);
+            builder.add_amount(args.amount);
+            if let Some(x) = args.memo {
+                builder.add_memo(x);
+            }
+            if let Some(x) = args.address {
+                builder.add_address(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> PaymentURIT {
+            let address = self.address().map(|x| x.to_string());
+            let amount = self.amount();
+            let memo = self.memo().map(|x| x.to_string());
+            PaymentURIT {
+                address,
+                amount,
+                memo,
+            }
+        }
+
+        #[inline]
+        pub fn address(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(PaymentURI::VT_ADDRESS, None)
+            }
+        }
+        #[inline]
+        pub fn amount(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(PaymentURI::VT_AMOUNT, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn memo(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(PaymentURI::VT_MEMO, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for PaymentURI<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "address",
+                    Self::VT_ADDRESS,
+                    false,
+                )?
+                .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("memo", Self::VT_MEMO, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct PaymentURIArgs<'a> {
+        pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub amount: u64,
+        pub memo: Option<flatbuffers::WIPOffset<&'a str>>,
+    }
+    impl<'a> Default for PaymentURIArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            PaymentURIArgs {
+                address: None,
+                amount: 0,
+                memo: None,
+            }
+        }
+    }
+
+    pub struct PaymentURIBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> PaymentURIBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentURI::VT_ADDRESS, address);
+        }
+        #[inline]
+        pub fn add_amount(&mut self, amount: u64) {
+            self.fbb_.push_slot::<u64>(PaymentURI::VT_AMOUNT, amount, 0);
+        }
+        #[inline]
+        pub fn add_memo(&mut self, memo: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentURI::VT_MEMO, memo);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> PaymentURIBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            PaymentURIBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<PaymentURI<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for PaymentURI<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("PaymentURI");
+            ds.field("address", &self.address());
+            ds.field("amount", &self.amount());
+            ds.field("memo", &self.memo());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct PaymentURIT {
+        pub address: Option<String>,
+        pub amount: u64,
+        pub memo: Option<String>,
+    }
+    impl Default for PaymentURIT {
+        fn default() -> Self {
+            Self {
+                address: None,
+                amount: 0,
+                memo: None,
+            }
+        }
+    }
+    impl PaymentURIT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<PaymentURI<'b>> {
+            let address = self.address.as_ref().map(|x| _fbb.create_string(x));
+            let amount = self.amount;
+            let memo = self.memo.as_ref().map(|x| _fbb.create_string(x));
+            PaymentURI::create(
+                _fbb,
+                &PaymentURIArgs {
+                    address,
+                    amount,
+                    memo,
+                },
+            )
+        }
+    }
 } // pub mod fb
