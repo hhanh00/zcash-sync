@@ -264,6 +264,12 @@ struct CResult_u8 warp(uint8_t coin,
 
 int8_t is_valid_key(uint8_t coin, char *key);
 
+struct CResult_u8 transparent_sync(uint8_t coin, uint32_t account);
+
+struct CResult______u8 get_t_txs(uint8_t coin, uint32_t account);
+
+struct CResult______u8 get_t_notes(uint8_t coin, uint32_t account);
+
 bool valid_address(uint8_t coin, char *address);
 
 struct CResult_____c_char get_diversified_address(uint8_t ua_type, uint32_t time);

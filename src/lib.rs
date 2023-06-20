@@ -94,6 +94,7 @@ mod scan;
 mod sync;
 mod taddr;
 mod transaction;
+pub mod transparent;
 mod unified;
 mod zip32;
 

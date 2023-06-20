@@ -52,7 +52,9 @@ impl MemPool {
     }
 
     pub fn set_active(&self, coin: u8, id: u32) {
-        let _ = self.tx.blocking_send(MPCtl::Open(AccountId(coin, id)));
+        if id != 0 {
+            let _ = self.tx.blocking_send(MPCtl::Open(AccountId(coin, id)));
+        }
     }
 
     pub async fn new_block(&self) {

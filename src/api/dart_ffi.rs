@@ -488,6 +488,41 @@ pub unsafe extern "C" fn is_valid_key(coin: u8, key: *mut c_char) -> i8 {
     }
 }
 
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn transparent_sync(coin: u8, account: u32) -> CResult<u8> {
+    if coin >= 2 {
+        return to_cresult(Ok(0));
+    }
+    let res = async {
+        crate::transparent::sync(coin, account).await?;
+        Ok::<_, anyhow::Error>(0)
+    };
+    to_cresult(res.await)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_t_txs(coin: u8, account: u32) -> CResult<*const u8> {
+    let res = || {
+        let txs = with_coin(coin, |connection: &Connection| {
+            crate::transparent::get_txs(connection, account)
+        })?;
+        Ok(fb_to_vec!(txs))
+    };
+    to_cresult_bytes(res())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_t_notes(coin: u8, account: u32) -> CResult<*const u8> {
+    let res = || {
+        let utxos = with_coin(coin, |connection: &Connection| {
+            crate::transparent::get_utxos(connection, account)
+        })?;
+        Ok(fb_to_vec!(utxos))
+    };
+    to_cresult_bytes(res())
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn valid_address(coin: u8, address: *mut c_char) -> bool {
     from_c_str!(address);

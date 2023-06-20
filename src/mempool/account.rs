@@ -71,7 +71,6 @@ pub fn spawn(
                 }
             }
         }
-        println!("MP worker closing");
         Ok::<_, anyhow::Error>(())
     });
     Ok(())

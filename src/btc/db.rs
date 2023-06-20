@@ -310,6 +310,7 @@ pub fn get_tx_txid(connection: &Connection, account: u32, txid: &Txid) -> Result
                     height,
                     timestamp,
                     value,
+                    address: None,
                 })
             },
         )
@@ -381,6 +382,7 @@ pub fn get_txs(connection: &Connection, account: u32) -> Result<PlainTxVecT> {
             height,
             timestamp,
             value,
+            address: None,
         })
     })?;
     let txs: Result<Vec<_>, _> = rows.collect();

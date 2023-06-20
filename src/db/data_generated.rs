@@ -1777,6 +1777,7 @@ pub mod fb {
         pub const VT_HEIGHT: flatbuffers::VOffsetT = 8;
         pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 10;
         pub const VT_VALUE: flatbuffers::VOffsetT = 12;
+        pub const VT_ADDRESS: flatbuffers::VOffsetT = 14;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -1789,6 +1790,9 @@ pub mod fb {
         ) -> flatbuffers::WIPOffset<PlainTx<'bldr>> {
             let mut builder = PlainTxBuilder::new(_fbb);
             builder.add_value(args.value);
+            if let Some(x) = args.address {
+                builder.add_address(x);
+            }
             builder.add_timestamp(args.timestamp);
             builder.add_height(args.height);
             if let Some(x) = args.tx_id {
@@ -1804,12 +1808,14 @@ pub mod fb {
             let height = self.height();
             let timestamp = self.timestamp();
             let value = self.value();
+            let address = self.address().map(|x| x.to_string());
             PlainTxT {
                 id,
                 tx_id,
                 height,
                 timestamp,
                 value,
+                address,
             }
         }
 
@@ -1855,6 +1861,16 @@ pub mod fb {
             // which contains a valid value in this slot
             unsafe { self._tab.get::<i64>(PlainTx::VT_VALUE, Some(0)).unwrap() }
         }
+        #[inline]
+        pub fn address(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(PlainTx::VT_ADDRESS, None)
+            }
+        }
     }
 
     impl flatbuffers::Verifiable for PlainTx<'_> {
@@ -1870,6 +1886,11 @@ pub mod fb {
                 .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
                 .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
                 .visit_field::<i64>("value", Self::VT_VALUE, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "address",
+                    Self::VT_ADDRESS,
+                    false,
+                )?
                 .finish();
             Ok(())
         }
@@ -1880,6 +1901,7 @@ pub mod fb {
         pub height: u32,
         pub timestamp: u32,
         pub value: i64,
+        pub address: Option<flatbuffers::WIPOffset<&'a str>>,
     }
     impl<'a> Default for PlainTxArgs<'a> {
         #[inline]
@@ -1890,6 +1912,7 @@ pub mod fb {
                 height: 0,
                 timestamp: 0,
                 value: 0,
+                address: None,
             }
         }
     }
@@ -1922,6 +1945,11 @@ pub mod fb {
             self.fbb_.push_slot::<i64>(PlainTx::VT_VALUE, value, 0);
         }
         #[inline]
+        pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(PlainTx::VT_ADDRESS, address);
+        }
+        #[inline]
         pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> PlainTxBuilder<'a, 'b> {
             let start = _fbb.start_table();
             PlainTxBuilder {
@@ -1944,6 +1972,7 @@ pub mod fb {
             ds.field("height", &self.height());
             ds.field("timestamp", &self.timestamp());
             ds.field("value", &self.value());
+            ds.field("address", &self.address());
             ds.finish()
         }
     }
@@ -1955,6 +1984,7 @@ pub mod fb {
         pub height: u32,
         pub timestamp: u32,
         pub value: i64,
+        pub address: Option<String>,
     }
     impl Default for PlainTxT {
         fn default() -> Self {
@@ -1964,6 +1994,7 @@ pub mod fb {
                 height: 0,
                 timestamp: 0,
                 value: 0,
+                address: None,
             }
         }
     }
@@ -1977,6 +2008,7 @@ pub mod fb {
             let height = self.height;
             let timestamp = self.timestamp;
             let value = self.value;
+            let address = self.address.as_ref().map(|x| _fbb.create_string(x));
             PlainTx::create(
                 _fbb,
                 &PlainTxArgs {
@@ -1985,6 +2017,7 @@ pub mod fb {
                     height,
                     timestamp,
                     value,
+                    address,
                 },
             )
         }

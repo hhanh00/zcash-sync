@@ -111,6 +111,7 @@ fn resolve_tx(
         height,
         timestamp,
         value: tx_value,
+        address: None,
     };
     Ok(tx)
 }

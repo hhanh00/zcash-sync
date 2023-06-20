@@ -34,7 +34,7 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-const LATEST_VERSION: u32 = 8;
+const LATEST_VERSION: u32 = 9;
 
 pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyhow::Result<()> {
     connection.execute(
@@ -316,6 +316,10 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             ledger BOOL NOT NULL)",
             [],
         )?;
+    }
+
+    if version < 9 {
+        crate::transparent::migrate_db(connection)?;
     }
 
     if version != LATEST_VERSION {
