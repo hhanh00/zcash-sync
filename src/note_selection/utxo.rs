@@ -6,19 +6,19 @@ pub async fn fetch_utxos(
     coin: u8,
     account: u32,
     checkpoint_height: u32,
-    excluded_flags: u8,
+    excluded_pools: u8,
 ) -> anyhow::Result<Vec<UTXO>> {
     let mut utxos = vec![];
-    if excluded_flags & 1 == 0 {
+    if excluded_pools & 1 == 0 {
         utxos.extend(get_transparent_utxos(coin, account).await?);
     }
     let coin = CoinConfig::get(coin);
     let db = coin.db.as_ref().unwrap();
     let db = db.lock().unwrap();
-    if excluded_flags & 2 == 0 {
+    if excluded_pools & 2 == 0 {
         utxos.extend(db.get_unspent_received_notes(account, checkpoint_height, false)?);
     }
-    if excluded_flags & 4 == 0 {
+    if excluded_pools & 4 == 0 {
         utxos.extend(db.get_unspent_received_notes(account, checkpoint_height, true)?);
     }
     Ok(utxos)

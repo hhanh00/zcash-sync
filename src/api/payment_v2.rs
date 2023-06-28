@@ -98,7 +98,7 @@ pub async fn build_tx_plan(
     account: u32,
     last_height: u32,
     recipients: &[RecipientMemo],
-    excluded_flags: u8,
+    excluded_pools: u8,
     confirmations: u32,
 ) -> note_selection::Result<TransactionPlan> {
     let checkpoint_height = {
@@ -110,7 +110,7 @@ pub async fn build_tx_plan(
     let c = CoinConfig::get(coin);
     let mut client = c.connect_lwd().await?;
     let expiry_height = get_latest_height(&mut client).await? + EXPIRY_HEIGHT_OFFSET;
-    let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;
+    let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_pools).await?;
     let tx_plan = build_tx_plan_with_utxos(
         coin,
         account,

@@ -719,6 +719,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
     recipients_bytes: *mut u8,
     recipients_len: u64,
     anchor_offset: u32,
+    excluded_pools: u8,
 ) -> CResult<*mut c_char> {
     let res = async {
         let recipients_bytes: Vec<u8> = Vec::from_raw_parts(
@@ -738,7 +739,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
                 account,
                 last_height,
                 &recipients,
-                0,
+                excluded_pools,
                 anchor_offset,
             )
             .await?;

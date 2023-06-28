@@ -307,7 +307,8 @@ struct CResult_____c_char prepare_multi_payment(uint8_t coin,
                                                 uint32_t account,
                                                 uint8_t *recipients_bytes,
                                                 uint64_t recipients_len,
-                                                uint32_t anchor_offset);
+                                                uint32_t anchor_offset,
+                                                uint8_t excluded_pools);
 
 struct CResult______u8 transaction_report(uint8_t coin, char *plan);
 
