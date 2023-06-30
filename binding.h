@@ -257,6 +257,7 @@ void import_transparent_secret_key(uint8_t coin, uint32_t id_account, char *secr
 void cancel_warp(void);
 
 struct CResult_u8 warp(uint8_t coin,
+                       uint32_t account,
                        bool get_tx,
                        uint32_t anchor_offset,
                        uint32_t max_cost,
@@ -396,7 +397,7 @@ struct CResult______u8 get_balances(uint8_t coin,
                                     uint32_t confirmed_height,
                                     bool filter_excluded);
 
-struct CResult______u8 get_db_height(uint8_t coin);
+struct CResult______u8 get_db_height(uint8_t coin, uint32_t account);
 
 struct CResult______u8 get_notes(uint8_t coin, uint32_t id);
 

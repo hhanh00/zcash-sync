@@ -69,7 +69,10 @@ pub fn truncate_height(connection: &Connection, account: u32, height: u32) -> Re
         "UPDATE t_utxos SET spent = NULL WHERE spent > ?1 AND account = ?2",
         [height, account],
     )?;
-    connection.execute("DELETE FROM t_blocks WHERE height > ?1 AND account = ?2", [height, account])?;
+    connection.execute(
+        "DELETE FROM t_blocks WHERE height > ?1 AND account = ?2",
+        [height, account],
+    )?;
 
     Ok(())
 }

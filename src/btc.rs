@@ -78,7 +78,7 @@ impl CoinApi for BTCHandler {
         })
     }
 
-    fn sync(&mut self) -> anyhow::Result<()> {
+    fn sync(&mut self, _account: u32) -> anyhow::Result<()> {
         sync::sync(&self.connection.lock().unwrap(), &self.url)
     }
 

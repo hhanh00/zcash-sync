@@ -49,10 +49,10 @@ pub trait CoinApi: Send {
     fn is_valid_address(&self, key: &str) -> bool;
     fn get_backup(&self, account: u32) -> Result<BackupT>;
 
-    fn sync(&mut self) -> Result<()>;
+    fn sync(&mut self, account: u32) -> Result<()>;
     fn cancel_sync(&mut self) -> Result<()>;
     fn get_latest_height(&self) -> Result<u32>;
-    fn get_db_height(&self) -> Result<Option<HeightT>> {
+    fn get_db_height(&self, _account: u32) -> Result<Option<HeightT>> {
         super::btc::get_db_height(&self.connection())
     }
     fn skip_to_last_height(&mut self) -> Result<()>;
@@ -115,7 +115,7 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    fn sync(&mut self) -> Result<()> {
+    fn sync(&mut self, _account: u32) -> Result<()> {
         unimplemented!()
     }
 

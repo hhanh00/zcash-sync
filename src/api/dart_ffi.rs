@@ -9,6 +9,7 @@ use crate::db::FullEncryptedBackup;
 use crate::eth::ETHHandler;
 use crate::mempool::MemPool;
 use crate::note_selection::TransactionReport;
+use crate::ton::{init_ton_db, TonHandler};
 use crate::{init_btc_db, init_eth_db, ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
@@ -151,12 +152,14 @@ pub struct CResult<T> {
 lazy_static! {
     static ref BTC_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
     static ref ETH_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
+    static ref TON_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
 }
 
 fn get_coin_handler(coin: u8) -> MutexGuard<'static, Box<dyn CoinApi>> {
     match coin {
         2 => BTC_HANDLER.lock().unwrap(),
         3 => ETH_HANDLER.lock().unwrap(),
+        4 => TON_HANDLER.lock().unwrap(),
         _ => unreachable!(),
     }
 }
@@ -178,6 +181,12 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
                 init_eth_db(&connection)?;
                 let handler = ETHHandler::new(connection, Path::new(&*db_path).to_path_buf());
                 *ETH_HANDLER.lock().unwrap() = Box::new(handler);
+            }
+            4 => {
+                let connection = Connection::open(&*db_path)?;
+                init_ton_db(&connection)?;
+                let handler = TonHandler::new(connection, Path::new(&*db_path).to_path_buf());
+                *TON_HANDLER.lock().unwrap() = Box::new(handler);
             }
             _ => {
                 init_coin(coin, &db_path)?;
@@ -407,13 +416,14 @@ pub unsafe extern "C" fn cancel_warp() {
 #[no_mangle]
 pub async unsafe extern "C" fn warp(
     coin: u8,
+    account: u32,
     get_tx: bool,
     anchor_offset: u32,
     max_cost: u32,
     port: i64,
 ) -> CResult<u8> {
     if coin >= 2 {
-        return to_cresult(get_coin_handler(coin).sync().map(|_| 0));
+        return to_cresult(get_coin_handler(coin).sync(account).map(|_| 0));
     }
 
     let res = async {
@@ -1234,14 +1244,14 @@ pub unsafe extern "C" fn get_balances(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
+pub unsafe extern "C" fn get_db_height(coin: u8, account: u32) -> CResult<*const u8> {
     let res = || {
         let height = if coin < 2 {
             with_coin(coin, |connection: &Connection| {
                 crate::db::read::get_db_height(connection)
             })
         } else {
-            get_coin_handler(coin).get_db_height()
+            get_coin_handler(coin).get_db_height(account)
         }?
         .unwrap_or_default();
         Ok(fb_to_vec!(height))

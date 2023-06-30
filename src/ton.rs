@@ -1,5 +1,7 @@
 use crate::coin::CoinApi;
-use crate::db::data_generated::fb::{AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, TxReportT};
+use crate::db::data_generated::fb::{
+    AccountVecT, BackupT, HeightT, PlainNoteVecT, PlainTxVecT, TxReportT,
+};
 use crate::RecipientsT;
 use rusqlite::Connection;
 use std::path::PathBuf;
@@ -7,21 +9,19 @@ use std::sync::{Mutex, MutexGuard};
 
 mod account;
 mod db;
-mod pay;
 mod sync;
 
-use crate::btc::get_address;
-pub use db::init_db;
+pub use db::init_db as init_ton_db;
 
-pub struct ETHHandler {
+pub struct TonHandler {
     connection: Mutex<Connection>,
     db_path: PathBuf,
     url: String,
 }
 
-impl ETHHandler {
+impl TonHandler {
     pub fn new(connection: Connection, db_path: PathBuf) -> Self {
-        ETHHandler {
+        TonHandler {
             connection: Mutex::new(connection),
             db_path,
             url: String::new(),
@@ -29,13 +29,13 @@ impl ETHHandler {
     }
 }
 
-impl CoinApi for ETHHandler {
+impl CoinApi for TonHandler {
     fn db_path(&self) -> &str {
         self.db_path.to_str().unwrap()
     }
 
     fn coingecko_id(&self) -> &'static str {
-        "ethereum"
+        "the-open-network"
     }
 
     fn get_url(&self) -> String {
@@ -58,18 +58,16 @@ impl CoinApi for ETHHandler {
         account::is_valid_key(key)
     }
 
-    fn is_valid_address(&self, address: &str) -> bool {
-        account::is_valid_address(address)
+    fn is_valid_address(&self, key: &str) -> bool {
+        account::is_valid_address(key)
     }
 
     fn get_backup(&self, account: u32) -> anyhow::Result<BackupT> {
-        super::db::read::get_backup(&self.connection(), account, |sk| {
-            "0x".to_string() + &hex::encode_upper(&sk)
-        })
+        super::db::read::get_backup(&self.connection(), account, |sk| hex::encode_upper(&sk))
     }
 
-    fn sync(&mut self, _account: u32) -> anyhow::Result<()> {
-        sync::sync(&self.connection(), &self.url)
+    fn sync(&mut self, account: u32) -> anyhow::Result<()> {
+        sync::sync(&self.connection(), &self.url, account)
     }
 
     fn cancel_sync(&mut self) -> anyhow::Result<()> {
@@ -77,30 +75,33 @@ impl CoinApi for ETHHandler {
     }
 
     fn get_latest_height(&self) -> anyhow::Result<u32> {
-        sync::get_latest_height(&self.url)
+        sync::latest_height(&self.url)
+    }
+    fn get_db_height(&self, account: u32) -> anyhow::Result<Option<HeightT>> {
+        account::db_height(&self.connection(), account)
     }
 
     fn skip_to_last_height(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn rewind_to_height(&mut self, _height: u32) -> anyhow::Result<()> {
+    fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<()> {
         Ok(())
     }
 
     fn truncate(&mut self) -> anyhow::Result<()> {
-        Ok(())
+        todo!()
     }
 
     fn get_balance(&self, account: u32) -> anyhow::Result<u64> {
-        account::get_balance(&self.connection(), &self.url, account)
+        account::balance(&self.connection(), account)
     }
 
-    fn get_txs(&self, _account: u32) -> anyhow::Result<PlainTxVecT> {
+    fn get_txs(&self, account: u32) -> anyhow::Result<PlainTxVecT> {
         Ok(PlainTxVecT { txs: Some(vec![]) })
     }
 
-    fn get_notes(&self, _account: u32) -> anyhow::Result<PlainNoteVecT> {
+    fn get_notes(&self, account: u32) -> anyhow::Result<PlainNoteVecT> {
         Ok(PlainNoteVecT {
             notes: Some(vec![]),
         })
@@ -110,21 +111,21 @@ impl CoinApi for ETHHandler {
         &self,
         account: u32,
         recipients: &RecipientsT,
-        _feeb: Option<u64>,
+        feeb: Option<u64>,
     ) -> anyhow::Result<String> {
-        pay::prepare(&self.connection(), &self.url, account, recipients)
+        todo!()
     }
 
     fn to_tx_report(&self, tx_plan: &str) -> anyhow::Result<TxReportT> {
-        pay::to_tx_report(tx_plan)
+        todo!()
     }
 
     fn sign(&self, account: u32, tx_plan: &str) -> anyhow::Result<Vec<u8>> {
-        pay::sign(&self.connection(), account, tx_plan)
+        todo!()
     }
 
     fn broadcast(&self, raw_tx: &[u8]) -> anyhow::Result<String> {
-        pay::broadcast(&self.url, raw_tx)
+        todo!()
     }
 
     fn connection(&self) -> MutexGuard<Connection> {

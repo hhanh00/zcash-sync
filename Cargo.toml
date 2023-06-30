@@ -119,6 +119,9 @@ metal = { version = "0.24", optional = true }
 objc = { version = "0.2", features = [ "objc_exception" ], optional = true }
 block = { version = "0.1.6", optional = true }
 
+tonlib = { path = "../../tonlib-rs" }
+ed25519-dalek-bip32 = "0.2.0"
+
 [features]
 ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv", "ureq", "rust_decimal" ]
 dart_ffi = ["allo-isolate", "once_cell", "android_logger"]

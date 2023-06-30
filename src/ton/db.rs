@@ -31,7 +31,9 @@ pub fn init_db(connection: &Connection) -> Result<()> {
             name TEXT NOT NULL,
             seed TEXT,
             sk BLOB,
-            address TEXT NOT NULL UNIQUE)",
+            address TEXT NOT NULL UNIQUE,
+            height INTEGER NOT NULL,
+            balance INTEGER NOT NULL)",
             [],
         )?;
 
@@ -70,11 +72,12 @@ pub fn init_db(connection: &Connection) -> Result<()> {
 }
 
 pub fn list_accounts(connection: &Connection) -> Result<AccountVecT> {
-    let mut s = connection.prepare("SELECT id_account, name FROM accounts")?;
+    let mut s = connection.prepare("SELECT id_account, name, balance FROM accounts")?;
     let rows = s.query_map([], |r| {
         Ok(AccountT {
             id: r.get(0)?,
             name: Some(r.get(1)?),
+            balance: r.get(2)?,
             ..AccountT::default()
         })
     })?;
@@ -93,8 +96,8 @@ pub fn store_keys(
     address: &str,
 ) -> Result<u32> {
     connection.execute(
-        "INSERT INTO accounts(name, seed, sk, address) \
-    VALUES (?1, ?2, ?3, ?4) ON CONFLICT(address) DO NOTHING",
+        "INSERT INTO accounts(name, seed, sk, address, height, balance) \
+    VALUES (?1, ?2, ?3, ?4, 0, 0) ON CONFLICT(address) DO NOTHING",
         params![name, seed, sk, address],
     )?;
     let id = connection.last_insert_rowid() as u32;
