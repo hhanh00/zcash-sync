@@ -210,6 +210,10 @@ typedef struct CResult_bool {
 
 #define ETHTransaction_VT_MAX_PRIORITY_FEE_PER_GAS 16
 
+#define TONTransaction_VT_SEQNO 8
+
+#define TONTransaction_VT_STATE 10
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);

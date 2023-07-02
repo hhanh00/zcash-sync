@@ -423,7 +423,7 @@ pub async unsafe extern "C" fn warp(
     port: i64,
 ) -> CResult<u8> {
     if coin >= 2 {
-        return to_cresult(get_coin_handler(coin).sync(account).map(|_| 0));
+        return to_cresult(get_coin_handler(coin).sync(account).await.map(|_| 0));
     }
 
     let res = async {
@@ -559,7 +559,7 @@ pub async unsafe extern "C" fn get_latest_height(coin: u8) -> CResult<u32> {
             let height = crate::chain::get_latest_height(&mut client).await?;
             Ok(height)
         } else {
-            get_coin_handler(coin).get_latest_height()
+            get_coin_handler(coin).get_latest_height().await
         }
     };
     to_cresult(res.await)

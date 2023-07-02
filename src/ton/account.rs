@@ -1,9 +1,8 @@
 use crate::db::data_generated::fb::HeightT;
 use anyhow::Result;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
-use ed25519_dalek_bip32::{ChildIndex, DerivationPath, ExtendedSecretKey, PublicKey};
+use ed25519_dalek_bip32::{ChildIndex, DerivationPath, ExtendedSecretKey};
 use rusqlite::Connection;
-use std::sync::MutexGuard;
 use tonlib::address::TonAddress;
 use tonlib::crypto::KeyPair as TonKeyPair;
 use tonlib::wallet::{TonWallet, WalletVersion};
@@ -24,10 +23,10 @@ pub fn derive_key(connection: &Connection, name: &str, key: &str) -> Result<u32>
         ChildIndex::hardened(0)?,
     ])?)?;
     let sk = esk.secret_key;
-    let pk = PublicKey::from(&sk);
+    let kp = nacl::sign::generate_keypair(sk.as_bytes());
     let kp = TonKeyPair {
-        secret_key: sk.as_bytes().to_vec(),
-        public_key: pk.as_bytes().to_vec(),
+        secret_key: kp.skey.to_vec(),
+        public_key: kp.pkey.to_vec(),
     };
     let wallet = TonWallet::derive(0, WalletVersion::V3R2, &kp)?;
     let address = wallet.address.to_base64_url();

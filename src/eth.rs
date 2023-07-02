@@ -11,6 +11,7 @@ mod pay;
 mod sync;
 
 use crate::btc::get_address;
+use async_trait::async_trait;
 pub use db::init_db;
 
 pub struct ETHHandler {
@@ -29,6 +30,7 @@ impl ETHHandler {
     }
 }
 
+#[async_trait(?Send)]
 impl CoinApi for ETHHandler {
     fn db_path(&self) -> &str {
         self.db_path.to_str().unwrap()
@@ -68,7 +70,7 @@ impl CoinApi for ETHHandler {
         })
     }
 
-    fn sync(&mut self, _account: u32) -> anyhow::Result<()> {
+    async fn sync(&mut self, _account: u32) -> anyhow::Result<()> {
         sync::sync(&self.connection(), &self.url)
     }
 
@@ -76,7 +78,7 @@ impl CoinApi for ETHHandler {
         Ok(())
     }
 
-    fn get_latest_height(&self) -> anyhow::Result<u32> {
+    async fn get_latest_height(&self) -> anyhow::Result<u32> {
         sync::get_latest_height(&self.url)
     }
 

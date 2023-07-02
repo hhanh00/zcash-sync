@@ -9198,4 +9198,229 @@ pub mod fb {
             )
         }
     }
+    pub enum TONTransactionOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct TONTransaction<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for TONTransaction<'a> {
+        type Inner = TONTransaction<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> TONTransaction<'a> {
+        pub const VT_TO: flatbuffers::VOffsetT = 4;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 6;
+        pub const VT_SEQNO: flatbuffers::VOffsetT = 8;
+        pub const VT_STATE: flatbuffers::VOffsetT = 10;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            TONTransaction { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args TONTransactionArgs<'args>,
+        ) -> flatbuffers::WIPOffset<TONTransaction<'bldr>> {
+            let mut builder = TONTransactionBuilder::new(_fbb);
+            builder.add_value(args.value);
+            if let Some(x) = args.state {
+                builder.add_state(x);
+            }
+            builder.add_seqno(args.seqno);
+            if let Some(x) = args.to {
+                builder.add_to(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> TONTransactionT {
+            let to = self.to().map(|x| x.to_string());
+            let value = self.value();
+            let seqno = self.seqno();
+            let state = self.state().map(|x| x.to_string());
+            TONTransactionT {
+                to,
+                value,
+                seqno,
+                state,
+            }
+        }
+
+        #[inline]
+        pub fn to(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(TONTransaction::VT_TO, None)
+            }
+        }
+        #[inline]
+        pub fn value(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(TONTransaction::VT_VALUE, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn seqno(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u32>(TONTransaction::VT_SEQNO, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn state(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(TONTransaction::VT_STATE, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for TONTransaction<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("to", Self::VT_TO, false)?
+                .visit_field::<u64>("value", Self::VT_VALUE, false)?
+                .visit_field::<u32>("seqno", Self::VT_SEQNO, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("state", Self::VT_STATE, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct TONTransactionArgs<'a> {
+        pub to: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub value: u64,
+        pub seqno: u32,
+        pub state: Option<flatbuffers::WIPOffset<&'a str>>,
+    }
+    impl<'a> Default for TONTransactionArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            TONTransactionArgs {
+                to: None,
+                value: 0,
+                seqno: 0,
+                state: None,
+            }
+        }
+    }
+
+    pub struct TONTransactionBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> TONTransactionBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_to(&mut self, to: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(TONTransaction::VT_TO, to);
+        }
+        #[inline]
+        pub fn add_value(&mut self, value: u64) {
+            self.fbb_
+                .push_slot::<u64>(TONTransaction::VT_VALUE, value, 0);
+        }
+        #[inline]
+        pub fn add_seqno(&mut self, seqno: u32) {
+            self.fbb_
+                .push_slot::<u32>(TONTransaction::VT_SEQNO, seqno, 0);
+        }
+        #[inline]
+        pub fn add_state(&mut self, state: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(TONTransaction::VT_STATE, state);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        ) -> TONTransactionBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            TONTransactionBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<TONTransaction<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for TONTransaction<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("TONTransaction");
+            ds.field("to", &self.to());
+            ds.field("value", &self.value());
+            ds.field("seqno", &self.seqno());
+            ds.field("state", &self.state());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct TONTransactionT {
+        pub to: Option<String>,
+        pub value: u64,
+        pub seqno: u32,
+        pub state: Option<String>,
+    }
+    impl Default for TONTransactionT {
+        fn default() -> Self {
+            Self {
+                to: None,
+                value: 0,
+                seqno: 0,
+                state: None,
+            }
+        }
+    }
+    impl TONTransactionT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<TONTransaction<'b>> {
+            let to = self.to.as_ref().map(|x| _fbb.create_string(x));
+            let value = self.value;
+            let seqno = self.seqno;
+            let state = self.state.as_ref().map(|x| _fbb.create_string(x));
+            TONTransaction::create(
+                _fbb,
+                &TONTransactionArgs {
+                    to,
+                    value,
+                    seqno,
+                    state,
+                },
+            )
+        }
+    }
 } // pub mod fb

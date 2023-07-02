@@ -7,6 +7,7 @@ use crate::coin::CoinApi;
 use crate::db::data_generated::fb::{
     AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, RecipientsT, TxReportT,
 };
+use async_trait::async_trait;
 pub use db::{
     delete_account, delete_secrets, get_account, get_address, get_backup,
     get_height as get_db_height, get_property, has_account, init_db, list_accounts, set_property,
@@ -35,6 +36,7 @@ impl BTCHandler {
     }
 }
 
+#[async_trait(?Send)]
 impl CoinApi for BTCHandler {
     fn db_path(&self) -> &str {
         &self.db_path
@@ -78,7 +80,7 @@ impl CoinApi for BTCHandler {
         })
     }
 
-    fn sync(&mut self, _account: u32) -> anyhow::Result<()> {
+    async fn sync(&mut self, _account: u32) -> anyhow::Result<()> {
         sync::sync(&self.connection.lock().unwrap(), &self.url)
     }
 
@@ -86,7 +88,7 @@ impl CoinApi for BTCHandler {
         Ok(())
     }
 
-    fn get_latest_height(&self) -> anyhow::Result<u32> {
+    async fn get_latest_height(&self) -> anyhow::Result<u32> {
         sync::get_height(&self.url)
     }
 

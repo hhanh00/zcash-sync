@@ -43,6 +43,7 @@ thiserror = "1.0.25"
 log = "0.4.14"
 flexi_logger = {version="0.22.3", features = ["compress"]}
 assert_matches = "1.5"
+async-trait = "0.1.68"
 serde = {version = "1.0.126", features = ["derive"]}
 serde_json = "1.0.64"
 serde_with = { version = "2", features = ["hex"] }
@@ -119,8 +120,13 @@ metal = { version = "0.24", optional = true }
 objc = { version = "0.2", features = [ "objc_exception" ], optional = true }
 block = { version = "0.1.6", optional = true }
 
-tonlib = { path = "../../tonlib-rs" }
 ed25519-dalek-bip32 = "0.2.0"
+num-bigint = "0.4"
+nacl = "0.5"
+
+[dependencies.tonlib]
+git = "https://github.com/hhanh00/tonlib-rs.git"
+rev = "46b7545441b0306ecacd91e3ae09f458344c5001"
 
 [features]
 ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv", "ureq", "rust_decimal" ]

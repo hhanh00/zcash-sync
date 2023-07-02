@@ -9,8 +9,10 @@ use std::sync::{Mutex, MutexGuard};
 
 mod account;
 mod db;
+mod pay;
 mod sync;
 
+use async_trait::async_trait;
 pub use db::init_db as init_ton_db;
 
 pub struct TonHandler {
@@ -29,6 +31,7 @@ impl TonHandler {
     }
 }
 
+#[async_trait(?Send)]
 impl CoinApi for TonHandler {
     fn db_path(&self) -> &str {
         self.db_path.to_str().unwrap()
@@ -66,17 +69,18 @@ impl CoinApi for TonHandler {
         super::db::read::get_backup(&self.connection(), account, |sk| hex::encode_upper(&sk))
     }
 
-    fn sync(&mut self, account: u32) -> anyhow::Result<()> {
-        sync::sync(&self.connection(), &self.url, account)
+    async fn sync(&mut self, account: u32) -> anyhow::Result<()> {
+        sync::sync(&self.connection(), &self.url, account).await
     }
 
     fn cancel_sync(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn get_latest_height(&self) -> anyhow::Result<u32> {
-        sync::latest_height(&self.url)
+    async fn get_latest_height(&self) -> anyhow::Result<u32> {
+        sync::latest_height(&self.url).await
     }
+
     fn get_db_height(&self, account: u32) -> anyhow::Result<Option<HeightT>> {
         account::db_height(&self.connection(), account)
     }
@@ -85,7 +89,7 @@ impl CoinApi for TonHandler {
         Ok(())
     }
 
-    fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<()> {
+    fn rewind_to_height(&mut self, _height: u32) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -97,11 +101,11 @@ impl CoinApi for TonHandler {
         account::balance(&self.connection(), account)
     }
 
-    fn get_txs(&self, account: u32) -> anyhow::Result<PlainTxVecT> {
+    fn get_txs(&self, _account: u32) -> anyhow::Result<PlainTxVecT> {
         Ok(PlainTxVecT { txs: Some(vec![]) })
     }
 
-    fn get_notes(&self, account: u32) -> anyhow::Result<PlainNoteVecT> {
+    fn get_notes(&self, _account: u32) -> anyhow::Result<PlainNoteVecT> {
         Ok(PlainNoteVecT {
             notes: Some(vec![]),
         })
@@ -111,21 +115,26 @@ impl CoinApi for TonHandler {
         &self,
         account: u32,
         recipients: &RecipientsT,
-        feeb: Option<u64>,
+        _feeb: Option<u64>,
     ) -> anyhow::Result<String> {
-        todo!()
+        pay::prepare(
+            &self.connection(),
+            &self.url,
+            account,
+            recipients.values.as_ref().unwrap(),
+        )
     }
 
     fn to_tx_report(&self, tx_plan: &str) -> anyhow::Result<TxReportT> {
-        todo!()
+        pay::to_tx_report(tx_plan)
     }
 
     fn sign(&self, account: u32, tx_plan: &str) -> anyhow::Result<Vec<u8>> {
-        todo!()
+        pay::sign(&self.connection(), account, tx_plan)
     }
 
     fn broadcast(&self, raw_tx: &[u8]) -> anyhow::Result<String> {
-        todo!()
+        sync::broadcast(&self.url, raw_tx)
     }
 
     fn connection(&self) -> MutexGuard<Connection> {

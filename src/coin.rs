@@ -4,8 +4,10 @@ use crate::db::data_generated::fb::{
 use std::sync::MutexGuard;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use rusqlite::Connection;
 
+#[async_trait(?Send)]
 pub trait CoinApi: Send {
     fn db_path(&self) -> &str;
     fn coingecko_id(&self) -> &'static str;
@@ -49,9 +51,9 @@ pub trait CoinApi: Send {
     fn is_valid_address(&self, key: &str) -> bool;
     fn get_backup(&self, account: u32) -> Result<BackupT>;
 
-    fn sync(&mut self, account: u32) -> Result<()>;
+    async fn sync(&mut self, account: u32) -> Result<()>;
     fn cancel_sync(&mut self) -> Result<()>;
-    fn get_latest_height(&self) -> Result<u32>;
+    async fn get_latest_height(&self) -> Result<u32>;
     fn get_db_height(&self, _account: u32) -> Result<Option<HeightT>> {
         super::btc::get_db_height(&self.connection())
     }
@@ -78,6 +80,7 @@ pub trait CoinApi: Send {
 
 pub struct NoCoin;
 
+#[async_trait(?Send)]
 impl CoinApi for NoCoin {
     fn db_path(&self) -> &str {
         unimplemented!()
@@ -115,7 +118,7 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    fn sync(&mut self, _account: u32) -> Result<()> {
+    async fn sync(&mut self, _account: u32) -> Result<()> {
         unimplemented!()
     }
 
@@ -123,7 +126,7 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    fn get_latest_height(&self) -> Result<u32> {
+    async fn get_latest_height(&self) -> Result<u32> {
         unimplemented!()
     }
 
