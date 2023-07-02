@@ -3,6 +3,7 @@ name = "warpsync-rust-example"
 version = "1.2.15"
 authors = ["Hanh <hanh425@gmail.com>"]
 edition = "2021"
+license = "MIT"
 
 [[bin]]
 name = "warp-example"
