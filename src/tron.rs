@@ -3,28 +3,26 @@ use crate::db::data_generated::fb::{
     AccountVecT, BackupT, HeightT, PlainNoteVecT, PlainTxVecT, TxReportT,
 };
 use crate::RecipientsT;
+use async_trait::async_trait;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
 mod account;
 mod db;
-mod pay;
 mod sync;
 
-pub use account::db_height;
-use async_trait::async_trait;
-pub use db::init_db as init_ton_db;
+pub use db::init_db as init_tron_db;
 
-pub struct TonHandler {
+pub struct TronHandler {
     connection: Mutex<Connection>,
     db_path: PathBuf,
     url: String,
 }
 
-impl TonHandler {
+impl TronHandler {
     pub fn new(connection: Connection, db_path: PathBuf) -> Self {
-        TonHandler {
+        TronHandler {
             connection: Mutex::new(connection),
             db_path,
             url: String::new(),
@@ -33,13 +31,13 @@ impl TonHandler {
 }
 
 #[async_trait(?Send)]
-impl CoinApi for TonHandler {
+impl CoinApi for TronHandler {
     fn db_path(&self) -> &str {
         self.db_path.to_str().unwrap()
     }
 
     fn coingecko_id(&self) -> &'static str {
-        "the-open-network"
+        "tron"
     }
 
     fn get_url(&self) -> String {
@@ -83,7 +81,7 @@ impl CoinApi for TonHandler {
     }
 
     fn get_db_height(&self, account: u32) -> anyhow::Result<Option<HeightT>> {
-        account::db_height(&self.connection(), account)
+        crate::ton::db_height(&self.connection(), account)
     }
 
     fn skip_to_last_height(&mut self) -> anyhow::Result<()> {
@@ -95,11 +93,11 @@ impl CoinApi for TonHandler {
     }
 
     fn truncate(&mut self, _height: u32) -> anyhow::Result<()> {
-        todo!()
+        Ok(())
     }
 
-    fn get_balance(&self, account: u32) -> anyhow::Result<u64> {
-        account::balance(&self.connection(), account)
+    fn get_balance(&self, _account: u32) -> anyhow::Result<u64> {
+        Ok(0)
     }
 
     fn get_txs(&self, _account: u32) -> anyhow::Result<PlainTxVecT> {
@@ -114,28 +112,23 @@ impl CoinApi for TonHandler {
 
     fn prepare_multi_payment(
         &self,
-        account: u32,
-        recipients: &RecipientsT,
+        _account: u32,
+        _recipients: &RecipientsT,
         _feeb: Option<u64>,
     ) -> anyhow::Result<String> {
-        pay::prepare(
-            &self.connection(),
-            &self.url,
-            account,
-            recipients.values.as_ref().unwrap(),
-        )
+        todo!()
     }
 
-    fn to_tx_report(&self, tx_plan: &str) -> anyhow::Result<TxReportT> {
-        pay::to_tx_report(tx_plan)
+    fn to_tx_report(&self, _tx_plan: &str) -> anyhow::Result<TxReportT> {
+        todo!()
     }
 
-    fn sign(&self, account: u32, tx_plan: &str) -> anyhow::Result<Vec<u8>> {
-        pay::sign(&self.connection(), account, tx_plan)
+    fn sign(&self, _account: u32, _tx_plan: &str) -> anyhow::Result<Vec<u8>> {
+        todo!()
     }
 
-    fn broadcast(&self, raw_tx: &[u8]) -> anyhow::Result<String> {
-        sync::broadcast(&self.url, raw_tx)
+    fn broadcast(&self, _raw_tx: &[u8]) -> anyhow::Result<String> {
+        todo!()
     }
 
     fn connection(&self) -> MutexGuard<Connection> {

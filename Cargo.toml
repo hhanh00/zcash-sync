@@ -123,6 +123,7 @@ block = { version = "0.1.6", optional = true }
 ed25519-dalek-bip32 = "0.2.0"
 num-bigint = "0.4"
 nacl = "0.5"
+sha3 = "0.10"
 
 [dependencies.tonlib]
 git = "https://github.com/hhanh00/tonlib-rs.git"

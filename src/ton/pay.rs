@@ -28,7 +28,7 @@ pub fn prepare(
     let unsigned_tx = thread::spawn(move || {
         let runtime = Runtime::new().unwrap();
         runtime.block_on(async move {
-            let get_address_info = format!("{url}/api/v2/getWalletInformation?address={address}");
+            let get_address_info = format!("{url}/getWalletInformation?address={address}");
             let rep = reqwest::get(&get_address_info).await?;
             let rep_json = rep.json::<Value>().await?;
             let ok = rep_json["ok"].as_bool().unwrap_or(false);
@@ -90,18 +90,20 @@ pub fn sign(connection: &Connection, account: u32, tx_plan: &str) -> Result<Vec<
         "uninitialized" => {
             let data = wallet_version.initial_data(0, &kp)?;
             let code = wallet_version.code();
-            Some(CellBuilder::new()
-                .store_bit(false)? //Split depth
-                .store_bit(false)? //Ticktock
-                .store_bit(true)? //Code
-                .store_bit(true)? //Data
-                .store_bit(false)? //Library
-                .store_reference(code.single_root()?)?
-                .store_reference(data.single_root()?)?
-                .build()?)
+            Some(
+                CellBuilder::new()
+                    .store_bit(false)? //Split depth
+                    .store_bit(false)? //Ticktock
+                    .store_bit(true)? //Code
+                    .store_bit(true)? //Data
+                    .store_bit(false)? //Library
+                    .store_reference(code.single_root()?)?
+                    .store_reference(data.single_root()?)?
+                    .build()?,
+            )
         }
         "active" => None,
-        _ => anyhow::bail!("Unknown address state {}", tx.state.unwrap())
+        _ => anyhow::bail!("Unknown address state {}", tx.state.unwrap()),
     };
     let internal_message = CellBuilder::new()
         .store_u8(6, 0x10)
@@ -137,8 +139,7 @@ pub fn sign(connection: &Connection, account: u32, tx_plan: &str) -> Result<Vec<
                 .store_child(state_init)?;
         }
         None => {
-            external_message
-                .store_bit(false)?; // no state
+            external_message.store_bit(false)?; // no state
         }
     }
     let external_message = external_message

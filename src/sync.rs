@@ -1,17 +1,22 @@
 use crate::chain::Nf;
 use crate::db::{ReceivedNote, ReceivedNoteShort};
 use crate::{CompactBlock, DbAdapter};
+use allo_isolate::IntoDart;
 use anyhow::Result;
+use flatbuffers::FlatBufferBuilder;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
+use tokio::sync::oneshot;
 use zcash_note_encryption::BatchDomain;
 use zcash_primitives::consensus::Parameters;
 
 pub mod tree;
 pub mod trial_decrypt;
 
+use crate::api::dart_ffi::POST_COBJ;
+use crate::db::data_generated::fb::ProgressT;
 use crate::sync::tree::TreeCheckpoint;
 pub use tree::{CTree, Hasher, Node, WarpProcessor, Witness};
 pub use trial_decrypt::{
@@ -181,6 +186,43 @@ impl<
         db_tx.commit()?;
         Ok(count_outputs * self.vks.len())
     }
+}
+
+pub async fn warp(
+    coin: u8,
+    get_tx: bool,
+    anchor_offset: u32,
+    max_cost: u32,
+    port: i64,
+    rx_cancel: oneshot::Receiver<()>,
+) -> Result<u32> {
+    crate::api::sync::coin_sync(
+        coin,
+        get_tx,
+        anchor_offset,
+        max_cost,
+        move |progress| {
+            let progress = ProgressT {
+                height: progress.height,
+                trial_decryptions: progress.trial_decryptions,
+                downloaded: progress.downloaded as u64,
+            };
+            let mut builder = FlatBufferBuilder::new();
+            let root = progress.pack(&mut builder);
+            builder.finish(root, None);
+            let v = builder.finished_data().to_vec();
+            let mut progress = v.into_dart();
+            if port != 0 {
+                unsafe {
+                    if let Some(p) = POST_COBJ {
+                        p(port, &mut progress);
+                    }
+                }
+            }
+        },
+        rx_cancel,
+    )
+    .await
 }
 
 #[cfg(test)]

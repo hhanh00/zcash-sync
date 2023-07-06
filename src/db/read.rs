@@ -668,6 +668,7 @@ pub fn get_available_addrs(connection: &Connection, account: u32) -> anyhow::Res
     Ok(res)
 }
 
+#[allow(dead_code)]
 pub fn get_account_by_address(connection: &Connection, address: &str) -> Result<Option<u32>> {
     let id = connection
         .query_row(

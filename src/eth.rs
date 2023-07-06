@@ -52,7 +52,7 @@ impl CoinApi for ETHHandler {
         db::list_accounts(&self.connection())
     }
 
-    fn new_account(&self, name: &str, key: &str) -> anyhow::Result<u32> {
+    fn new_account(&self, name: &str, key: &str, _index: Option<u32>) -> anyhow::Result<u32> {
         account::derive_key(&self.connection(), name, key)
     }
 
@@ -70,7 +70,7 @@ impl CoinApi for ETHHandler {
         })
     }
 
-    async fn sync(&mut self, _account: u32) -> anyhow::Result<()> {
+    async fn sync(&mut self, _account: u32, _params: Vec<u8>) -> anyhow::Result<()> {
         sync::sync(&self.connection(), &self.url)
     }
 
@@ -86,11 +86,11 @@ impl CoinApi for ETHHandler {
         Ok(())
     }
 
-    fn rewind_to_height(&mut self, _height: u32) -> anyhow::Result<()> {
-        Ok(())
+    fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<u32> {
+        Ok(height)
     }
 
-    fn truncate(&mut self) -> anyhow::Result<()> {
+    fn truncate(&mut self, _height: u32) -> anyhow::Result<()> {
         Ok(())
     }
 

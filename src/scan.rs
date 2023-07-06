@@ -93,7 +93,7 @@ pub async fn sync_async<'a>(
     )
     .await;
     if let Err(ref e) = result {
-        if let Some(ChainError::Reorg) = e.downcast_ref::<ChainError>() {
+        if let Some(ChainError::Reorg(_)) = e.downcast_ref::<ChainError>() {
             log::info!("Drop latest checkpoint");
             let c = CoinConfig::get(coin);
             let mut db = c.db()?;

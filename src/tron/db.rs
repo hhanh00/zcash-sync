@@ -64,12 +64,11 @@ pub fn init_db(connection: &Connection) -> Result<()> {
 }
 
 pub fn list_accounts(connection: &Connection) -> Result<AccountVecT> {
-    let mut s = connection.prepare("SELECT id_account, name, balance FROM accounts")?;
+    let mut s = connection.prepare("SELECT id_account, name FROM accounts")?;
     let rows = s.query_map([], |r| {
         Ok(AccountT {
             id: r.get(0)?,
             name: Some(r.get(1)?),
-            balance: r.get(2)?,
             ..AccountT::default()
         })
     })?;
@@ -94,22 +93,4 @@ pub fn store_keys(
     )?;
     let id = connection.last_insert_rowid() as u32;
     Ok(id)
-}
-
-pub fn get_address(connection: &Connection, account: u32) -> Result<String> {
-    let sk: String = connection.query_row(
-        "SELECT address FROM accounts WHERE id_account = ?1",
-        [account],
-        |r| r.get(0),
-    )?;
-    Ok(sk)
-}
-
-pub fn get_sk(connection: &Connection, account: u32) -> Result<Vec<u8>> {
-    let sk: Vec<u8> = connection.query_row(
-        "SELECT sk FROM accounts WHERE id_account = ?1",
-        [account],
-        |r| r.get(0),
-    )?;
-    Ok(sk)
 }

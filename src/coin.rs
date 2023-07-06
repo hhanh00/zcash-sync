@@ -27,7 +27,7 @@ pub trait CoinApi: Send {
     fn get_address(&self, account: u32) -> Result<String> {
         super::btc::get_address(&self.connection(), account)
     }
-    fn new_account(&self, name: &str, key: &str) -> Result<u32>;
+    fn new_account(&self, name: &str, key: &str, index: Option<u32>) -> Result<u32>;
     fn convert_to_view(&self, account: u32) -> Result<()> {
         super::btc::delete_secrets(&self.connection(), account)
     }
@@ -51,15 +51,15 @@ pub trait CoinApi: Send {
     fn is_valid_address(&self, key: &str) -> bool;
     fn get_backup(&self, account: u32) -> Result<BackupT>;
 
-    async fn sync(&mut self, account: u32) -> Result<()>;
+    async fn sync(&mut self, account: u32, params: Vec<u8>) -> Result<()>;
     fn cancel_sync(&mut self) -> Result<()>;
     async fn get_latest_height(&self) -> Result<u32>;
     fn get_db_height(&self, _account: u32) -> Result<Option<HeightT>> {
         super::btc::get_db_height(&self.connection())
     }
     fn skip_to_last_height(&mut self) -> Result<()>;
-    fn rewind_to_height(&mut self, height: u32) -> Result<()>;
-    fn truncate(&mut self) -> Result<()>;
+    fn rewind_to_height(&mut self, height: u32) -> Result<u32>;
+    fn truncate(&mut self, height: u32) -> Result<()>;
 
     fn get_balance(&self, account: u32) -> Result<u64>;
     fn get_txs(&self, account: u32) -> Result<PlainTxVecT>;
@@ -102,7 +102,7 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    fn new_account(&self, _name: &str, _key: &str) -> Result<u32> {
+    fn new_account(&self, _name: &str, _key: &str, _index: Option<u32>) -> Result<u32> {
         unimplemented!()
     }
 
@@ -118,7 +118,7 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    async fn sync(&mut self, _account: u32) -> Result<()> {
+    async fn sync(&mut self, _account: u32, _params: Vec<u8>) -> Result<()> {
         unimplemented!()
     }
 
@@ -134,11 +134,11 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    fn rewind_to_height(&mut self, _height: u32) -> Result<()> {
+    fn rewind_to_height(&mut self, _height: u32) -> Result<u32> {
         unimplemented!()
     }
 
-    fn truncate(&mut self) -> Result<()> {
+    fn truncate(&mut self, _height: u32) -> Result<()> {
         unimplemented!()
     }
 

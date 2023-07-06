@@ -214,6 +214,14 @@ typedef struct CResult_bool {
 
 #define TONTransaction_VT_STATE 10
 
+#define ZcashSyncParams_VT_GET_TX 4
+
+#define ZcashSyncParams_VT_ANCHOR_OFFSET 6
+
+#define ZcashSyncParams_VT_MAX_COST 8
+
+#define ZcashSyncParams_VT_PORT 10
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -258,7 +266,7 @@ void import_transparent_key(uint8_t coin, uint32_t id_account, char *path);
 
 void import_transparent_secret_key(uint8_t coin, uint32_t id_account, char *secret_key);
 
-void cancel_warp(void);
+void cancel_warp(uint8_t coin);
 
 struct CResult_u8 warp(uint8_t coin,
                        uint32_t account,
@@ -281,7 +289,7 @@ struct CResult_____c_char get_diversified_address(uint8_t ua_type, uint32_t time
 
 struct CResult_u32 get_latest_height(uint8_t coin);
 
-void skip_to_last_height(uint8_t coin);
+struct CResult_u8 skip_to_last_height(uint8_t coin);
 
 struct CResult_u32 rewind_to(uint32_t height);
 

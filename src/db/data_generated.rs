@@ -2,7 +2,11 @@
 
 // @generated
 
+
+
+
 extern crate flatbuffers;
+
 
 #[allow(unused_imports, dead_code)]
 pub mod fb {
@@ -9419,6 +9423,229 @@ pub mod fb {
                     value,
                     seqno,
                     state,
+                },
+            )
+        }
+    }
+    pub enum ZcashSyncParamsOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct ZcashSyncParams<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for ZcashSyncParams<'a> {
+        type Inner = ZcashSyncParams<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> ZcashSyncParams<'a> {
+        pub const VT_GET_TX: flatbuffers::VOffsetT = 4;
+        pub const VT_ANCHOR_OFFSET: flatbuffers::VOffsetT = 6;
+        pub const VT_MAX_COST: flatbuffers::VOffsetT = 8;
+        pub const VT_PORT: flatbuffers::VOffsetT = 10;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            ZcashSyncParams { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args ZcashSyncParamsArgs,
+        ) -> flatbuffers::WIPOffset<ZcashSyncParams<'bldr>> {
+            let mut builder = ZcashSyncParamsBuilder::new(_fbb);
+            builder.add_port(args.port);
+            builder.add_max_cost(args.max_cost);
+            builder.add_anchor_offset(args.anchor_offset);
+            builder.add_get_tx(args.get_tx);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> ZcashSyncParamsT {
+            let get_tx = self.get_tx();
+            let anchor_offset = self.anchor_offset();
+            let max_cost = self.max_cost();
+            let port = self.port();
+            ZcashSyncParamsT {
+                get_tx,
+                anchor_offset,
+                max_cost,
+                port,
+            }
+        }
+
+        #[inline]
+        pub fn get_tx(&self) -> bool {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<bool>(ZcashSyncParams::VT_GET_TX, Some(false))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn anchor_offset(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u32>(ZcashSyncParams::VT_ANCHOR_OFFSET, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn max_cost(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u32>(ZcashSyncParams::VT_MAX_COST, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn port(&self) -> i64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<i64>(ZcashSyncParams::VT_PORT, Some(0))
+                    .unwrap()
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for ZcashSyncParams<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<bool>("get_tx", Self::VT_GET_TX, false)?
+                .visit_field::<u32>("anchor_offset", Self::VT_ANCHOR_OFFSET, false)?
+                .visit_field::<u32>("max_cost", Self::VT_MAX_COST, false)?
+                .visit_field::<i64>("port", Self::VT_PORT, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct ZcashSyncParamsArgs {
+        pub get_tx: bool,
+        pub anchor_offset: u32,
+        pub max_cost: u32,
+        pub port: i64,
+    }
+    impl<'a> Default for ZcashSyncParamsArgs {
+        #[inline]
+        fn default() -> Self {
+            ZcashSyncParamsArgs {
+                get_tx: false,
+                anchor_offset: 0,
+                max_cost: 0,
+                port: 0,
+            }
+        }
+    }
+
+    pub struct ZcashSyncParamsBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> ZcashSyncParamsBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_get_tx(&mut self, get_tx: bool) {
+            self.fbb_
+                .push_slot::<bool>(ZcashSyncParams::VT_GET_TX, get_tx, false);
+        }
+        #[inline]
+        pub fn add_anchor_offset(&mut self, anchor_offset: u32) {
+            self.fbb_
+                .push_slot::<u32>(ZcashSyncParams::VT_ANCHOR_OFFSET, anchor_offset, 0);
+        }
+        #[inline]
+        pub fn add_max_cost(&mut self, max_cost: u32) {
+            self.fbb_
+                .push_slot::<u32>(ZcashSyncParams::VT_MAX_COST, max_cost, 0);
+        }
+        #[inline]
+        pub fn add_port(&mut self, port: i64) {
+            self.fbb_
+                .push_slot::<i64>(ZcashSyncParams::VT_PORT, port, 0);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        ) -> ZcashSyncParamsBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            ZcashSyncParamsBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<ZcashSyncParams<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for ZcashSyncParams<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("ZcashSyncParams");
+            ds.field("get_tx", &self.get_tx());
+            ds.field("anchor_offset", &self.anchor_offset());
+            ds.field("max_cost", &self.max_cost());
+            ds.field("port", &self.port());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct ZcashSyncParamsT {
+        pub get_tx: bool,
+        pub anchor_offset: u32,
+        pub max_cost: u32,
+        pub port: i64,
+    }
+    impl Default for ZcashSyncParamsT {
+        fn default() -> Self {
+            Self {
+                get_tx: false,
+                anchor_offset: 0,
+                max_cost: 0,
+                port: 0,
+            }
+        }
+    }
+    impl ZcashSyncParamsT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<ZcashSyncParams<'b>> {
+            let get_tx = self.get_tx;
+            let anchor_offset = self.anchor_offset;
+            let max_cost = self.max_cost;
+            let port = self.port;
+            ZcashSyncParams::create(
+                _fbb,
+                &ZcashSyncParamsArgs {
+                    get_tx,
+                    anchor_offset,
+                    max_cost,
+                    port,
                 },
             )
         }

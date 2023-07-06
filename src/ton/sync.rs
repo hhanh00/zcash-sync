@@ -1,7 +1,7 @@
-use std::thread;
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
+use std::thread;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
@@ -12,11 +12,12 @@ pub async fn sync(connection: &Connection, url: &str, account: u32) -> Result<()
         [account],
         |r| r.get::<_, String>(0),
     )?;
-    let get_balance = format!("{url}/api/v2/getAddressBalance?address={address}");
+    let get_balance = format!("{url}/getAddressBalance?address={address}");
     tokio::time::sleep(Duration::from_secs(1)).await;
     let rep = reqwest::get(&get_balance).await?;
     let rep_json = rep.json::<Value>().await?;
     let ok = rep_json["ok"].as_bool().unwrap_or(false);
+    println!("{:?}", rep_json);
     if !ok {
         anyhow::bail!("Request failed");
     }
@@ -30,7 +31,7 @@ pub async fn sync(connection: &Connection, url: &str, account: u32) -> Result<()
 }
 
 pub async fn latest_height(url: &str) -> Result<u32> {
-    let get_consensus_block = format!("{url}/api/v2/getConsensusBlock");
+    let get_consensus_block = format!("{url}/getConsensusBlock");
     let rep = reqwest::get(&get_consensus_block).await?;
     let rep_json = rep.json::<Value>().await?;
     let ok = rep_json["ok"].as_bool().unwrap_or(false);
@@ -49,15 +50,17 @@ pub fn broadcast(url: &str, raw_tx: &[u8]) -> Result<String> {
     let rep_json = thread::spawn(move || {
         let runtime = Runtime::new().unwrap();
         runtime.block_on(async move {
-            let mut client = reqwest::Client::new();
-            let post_boc = format!("{url}/api/v2/sendBoc");
+            let client = reqwest::Client::new();
+            let post_boc = format!("{url}/sendBoc");
             let req = client.post(&post_boc).json(&body).build()?;
             let rep = client.execute(req).await?;
             let body: Value = rep.json().await?;
             println!("{:?}", body);
             Ok::<_, anyhow::Error>(body)
         })
-    }).join().unwrap()?;
+    })
+    .join()
+    .unwrap()?;
     let ok = rep_json["ok"].as_bool().unwrap_or(false);
     if !ok {
         anyhow::bail!("Request failed");

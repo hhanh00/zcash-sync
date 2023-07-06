@@ -1,14 +1,13 @@
 use crate::btc::key::AccountKey;
-use crate::btc::BTCNET;
 use crate::db::data_generated::fb::{
-    AccountT, AccountVecT, BackupT, HeightT, PlainNoteT, PlainNoteVecT, PlainTxT, PlainTxVecT,
+    AccountT, AccountVecT, HeightT, PlainNoteT, PlainNoteVecT, PlainTxT, PlainTxVecT,
 };
 use anyhow::Result;
 use electrum_client::bitcoin::address::{WitnessProgram, WitnessVersion};
 use electrum_client::bitcoin::block::Header;
 use electrum_client::bitcoin::script::PushBytesBuf;
 use electrum_client::bitcoin::secp256k1::SecretKey;
-use electrum_client::bitcoin::{PrivateKey, Transaction, Txid};
+use electrum_client::bitcoin::{Transaction, Txid};
 use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn init_db(connection: &Connection) -> anyhow::Result<()> {
@@ -211,12 +210,12 @@ pub fn get_block_hash(connection: &Connection, height: u32) -> Result<Vec<u8>> {
     Ok(h)
 }
 
-pub fn rewind_to(connection: &Connection, height: u32) -> Result<()> {
+pub fn rewind_to(connection: &Connection, height: u32) -> Result<u32> {
     connection.execute("DELETE FROM blocks WHERE height > ?1", [height])?;
     connection.execute("DELETE FROM transactions WHERE height > ?1", [height])?;
     connection.execute("DELETE FROM utxos WHERE height > ?1", [height])?;
     connection.execute("UPDATE utxos SET spent = NULL WHERE spent > ?1", [height])?;
-    Ok(())
+    Ok(height)
 }
 
 pub fn store_header(connection: &Connection, height: u32, header: &Header) -> Result<()> {
@@ -235,30 +234,6 @@ pub fn get_accounts(connection: &Connection) -> Result<Vec<u32>> {
     let m = s.query_map([], |r| r.get::<_, u32>(0))?;
     let v: std::result::Result<Vec<_>, _> = m.collect();
     Ok(v?)
-}
-
-pub fn get_backup(
-    connection: &Connection,
-    account: u32,
-    _map_sk: fn(Vec<u8>) -> String,
-) -> Result<BackupT> {
-    let backup = connection.query_row(
-        "SELECT name, seed, sk FROM accounts WHERE id_account = ?1",
-        [account],
-        |r| {
-            Ok(BackupT {
-                name: Some(r.get(0)?),
-                seed: r.get(1)?,
-                sk: r.get::<_, Option<Vec<u8>>>(2)?.map(|sk| {
-                    let sk = SecretKey::from_slice(&sk).unwrap();
-                    let privk = PrivateKey::new(sk, BTCNET);
-                    privk.to_wif()
-                }),
-                ..BackupT::default()
-            })
-        },
-    )?;
-    Ok(backup)
 }
 
 pub fn get_sk(connection: &Connection, account: u32) -> Result<Option<SecretKey>> {

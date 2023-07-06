@@ -100,9 +100,7 @@ pub async fn get_block_by_time(
 #[derive(Error, Debug)]
 pub enum ChainError {
     #[error("Blockchain reorganization")]
-    Reorg,
-    #[error("Synchronizer busy")]
-    Busy,
+    Reorg(u32),
 }
 
 fn get_mem_per_output() -> usize {
@@ -190,7 +188,7 @@ pub async fn download_chain(
                                 hex::encode(block.prev_hash.as_slice()),
                                 hex::encode(prev_hash.unwrap())
                             );
-                            anyhow::bail!(ChainError::Reorg);
+                            anyhow::bail!(ChainError::Reorg(start_height));
                         }
                         let mut ph = [0u8; 32];
                         ph.copy_from_slice(&block.hash);

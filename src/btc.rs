@@ -9,9 +9,8 @@ use crate::db::data_generated::fb::{
 };
 use async_trait::async_trait;
 pub use db::{
-    delete_account, delete_secrets, get_account, get_address, get_backup,
-    get_height as get_db_height, get_property, has_account, init_db, list_accounts, set_property,
-    update_name,
+    delete_account, delete_secrets, get_account, get_address, get_height as get_db_height,
+    get_property, has_account, init_db, list_accounts, set_property, update_name,
 };
 use electrum_client::bitcoin::secp256k1::SecretKey;
 use electrum_client::bitcoin::{Network, PrivateKey};
@@ -57,7 +56,7 @@ impl CoinApi for BTCHandler {
         list_accounts(&self.connection())
     }
 
-    fn new_account(&self, name: &str, key: &str) -> anyhow::Result<u32> {
+    fn new_account(&self, name: &str, key: &str, _index: Option<u32>) -> anyhow::Result<u32> {
         let keys = key::derive_key(key)?;
         println!("{keys:?}");
         let id_account = db::store_keys(&self.connection.lock().unwrap(), name, &keys)?;
@@ -80,7 +79,7 @@ impl CoinApi for BTCHandler {
         })
     }
 
-    async fn sync(&mut self, _account: u32) -> anyhow::Result<()> {
+    async fn sync(&mut self, _account: u32, _params: Vec<u8>) -> anyhow::Result<()> {
         sync::sync(&self.connection.lock().unwrap(), &self.url)
     }
 
@@ -96,11 +95,11 @@ impl CoinApi for BTCHandler {
         Ok(())
     }
 
-    fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<()> {
+    fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<u32> {
         db::rewind_to(&self.connection.lock().unwrap(), height)
     }
 
-    fn truncate(&mut self) -> anyhow::Result<()> {
+    fn truncate(&mut self, _height: u32) -> anyhow::Result<()> {
         db::truncate(&self.connection.lock().unwrap())
     }
 

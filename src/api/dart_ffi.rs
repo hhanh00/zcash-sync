@@ -2,15 +2,16 @@ use crate::btc::BTCHandler;
 use crate::coin::CoinApi;
 use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL};
 use crate::db::data_generated::fb::{
-    BalanceT, ContactVecT, MessageVecT, ProgressT, Recipients, SendTemplate, Servers,
-    ShieldedNoteT, ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT, SpendingVecT, TxTimeValueVecT,
+    BalanceT, ContactVecT, MessageVecT, Recipients, SendTemplate, Servers, ShieldedNoteT,
+    ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT, SpendingVecT, TxTimeValueVecT, ZcashSyncParamsT,
 };
 use crate::db::FullEncryptedBackup;
 use crate::eth::ETHHandler;
 use crate::mempool::MemPool;
 use crate::note_selection::TransactionReport;
 use crate::ton::{init_ton_db, TonHandler};
-use crate::{init_btc_db, init_eth_db, ChainError, TransactionPlan, Tx};
+use crate::tron::{init_tron_db, TronHandler};
+use crate::{init_btc_db, init_eth_db, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use flatbuffers::FlatBufferBuilder;
@@ -24,7 +25,7 @@ use std::sync::{Mutex, MutexGuard};
 use tokio::sync::{oneshot, Semaphore};
 use zcash_primitives::transaction::builder::Progress;
 
-static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
+pub static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
 const MAX_COINS: u8 = 2;
 
@@ -153,6 +154,7 @@ lazy_static! {
     static ref BTC_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
     static ref ETH_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
     static ref TON_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
+    static ref TRON_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
 }
 
 fn get_coin_handler(coin: u8) -> MutexGuard<'static, Box<dyn CoinApi>> {
@@ -160,6 +162,7 @@ fn get_coin_handler(coin: u8) -> MutexGuard<'static, Box<dyn CoinApi>> {
         2 => BTC_HANDLER.lock().unwrap(),
         3 => ETH_HANDLER.lock().unwrap(),
         4 => TON_HANDLER.lock().unwrap(),
+        5 => TRON_HANDLER.lock().unwrap(),
         _ => unreachable!(),
     }
 }
@@ -187,6 +190,12 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
                 init_ton_db(&connection)?;
                 let handler = TonHandler::new(connection, Path::new(&*db_path).to_path_buf());
                 *TON_HANDLER.lock().unwrap() = Box::new(handler);
+            }
+            5 => {
+                let connection = Connection::open(&*db_path)?;
+                init_tron_db(&connection)?;
+                let handler = TronHandler::new(connection, Path::new(&*db_path).to_path_buf());
+                *TRON_HANDLER.lock().unwrap() = Box::new(handler);
             }
             _ => {
                 init_coin(coin, &db_path)?;
@@ -306,19 +315,15 @@ pub unsafe extern "C" fn new_account(
 ) -> CResult<u32> {
     from_c_str!(name);
     from_c_str!(data);
-    let key = if !data.is_empty() {
-        Some(data.to_string())
-    } else {
-        None
-    };
     let index = if index >= 0 { Some(index as u32) } else { None };
 
     let res = || {
-        let id_account = if coin < 2 {
-            crate::api::account::new_account(coin, &name, key, index)
+        let data = if data.is_empty() {
+            None
         } else {
-            get_coin_handler(coin).new_account(&name, &data)
-        }?;
+            Some(data.to_string())
+        };
+        let id_account = crate::api::account::new_account(coin, &name, data, index)?;
         Ok(id_account)
     };
     to_cresult(res())
@@ -402,14 +407,9 @@ lazy_static! {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn cancel_warp() {
+pub async unsafe extern "C" fn cancel_warp(coin: u8) {
     log::info!("Sync canceled");
-    let mut tx = TX_CANCEL.lock().unwrap();
-    let tx = tx.take();
-    tx.map(|tx| {
-        log::info!("Cancellation sent");
-        let _ = tx.send(());
-    });
+    let _ = get_coin_handler(coin).cancel_sync();
 }
 
 #[tokio::main]
@@ -422,79 +422,29 @@ pub async unsafe extern "C" fn warp(
     max_cost: u32,
     port: i64,
 ) -> CResult<u8> {
-    if coin >= 2 {
-        return to_cresult(get_coin_handler(coin).sync(account).await.map(|_| 0));
-    }
-
-    let res = async {
-        let _permit = SYNC_LOCK.acquire().await?;
-        log::info!("Sync started");
-        let (tx_cancel, rx_cancel) = oneshot::channel::<()>();
-        *TX_CANCEL.lock().unwrap() = Some(tx_cancel);
-        let result = crate::api::sync::coin_sync(
-            coin,
-            get_tx,
-            anchor_offset,
-            max_cost,
-            move |progress| {
-                let progress = ProgressT {
-                    height: progress.height,
-                    trial_decryptions: progress.trial_decryptions,
-                    downloaded: progress.downloaded as u64,
-                };
-                let v = fb_to_vec!(progress);
-                let mut progress = v.into_dart();
-                if port != 0 {
-                    if let Some(p) = POST_COBJ {
-                        p(port, &mut progress);
-                    }
-                }
-            },
-            rx_cancel,
-        )
-        .await;
-        log::info!("Sync finished");
-
-        match result {
-            Ok(new_blocks) => {
-                log::info!("New blocks {new_blocks}");
-                if new_blocks != 0 {
-                    let mempool = MEMPOOL.lock().unwrap();
-                    if let Some(mempool) = mempool.as_ref() {
-                        mempool.new_block().await;
-                    }
-                }
-                Ok(0)
-            }
-            Err(err) => {
-                if let Some(e) = err.downcast_ref::<ChainError>() {
-                    match e {
-                        ChainError::Reorg => Ok(1),
-                        ChainError::Busy => Ok(2),
-                    }
-                } else {
-                    log::error!("{}", err);
-                    Ok(0xFF)
-                }
-            }
-        }
+    let sync_params = ZcashSyncParamsT {
+        get_tx,
+        anchor_offset,
+        max_cost,
+        port,
     };
-    let r = res.await;
-    *TX_CANCEL.lock().unwrap() = None;
-    to_cresult(r)
+    let sync_params = fb_to_vec!(sync_params);
+    to_cresult(
+        get_coin_handler(coin)
+            .sync(account, sync_params)
+            .await
+            .map(|_| 0),
+    )
+    // TODO: Mempool clear
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn is_valid_key(coin: u8, key: *mut c_char) -> i8 {
     from_c_str!(key);
-    if coin < 2 {
-        crate::key::is_valid_key(coin, &key)
+    if get_coin_handler(coin).is_valid_key(&key) {
+        0
     } else {
-        if get_coin_handler(coin).is_valid_key(&key) {
-            0
-        } else {
-            -1
-        }
+        -1
     }
 }
 
@@ -536,11 +486,7 @@ pub unsafe extern "C" fn get_t_notes(coin: u8, account: u32) -> CResult<*const u
 #[no_mangle]
 pub unsafe extern "C" fn valid_address(coin: u8, address: *mut c_char) -> bool {
     from_c_str!(address);
-    if coin < 2 {
-        crate::key::decode_address(coin, &address).is_some()
-    } else {
-        get_coin_handler(coin).is_valid_address(&address)
-    }
+    get_coin_handler(coin).is_valid_address(&address)
 }
 
 #[no_mangle]
@@ -552,16 +498,7 @@ pub unsafe extern "C" fn get_diversified_address(ua_type: u8, time: u32) -> CRes
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn get_latest_height(coin: u8) -> CResult<u32> {
-    let res = async {
-        if coin < 2 {
-            let c = CoinConfig::get(coin);
-            let mut client = c.connect_lwd().await?;
-            let height = crate::chain::get_latest_height(&mut client).await?;
-            Ok(height)
-        } else {
-            get_coin_handler(coin).get_latest_height().await
-        }
-    };
+    let res = async { get_coin_handler(coin).get_latest_height().await };
     to_cresult(res.await)
 }
 
@@ -581,78 +518,36 @@ fn report_progress(progress: Progress, port: i64) {
     }
 }
 
-// #[tokio::main]
-// #[no_mangle]
-// pub async unsafe extern "C" fn send_multi_payment(
-//     coin: u8,
-//     account: u32,
-//     recipients_json: *mut c_char,
-//     anchor_offset: u32,
-//     port: i64,
-// ) -> CResult<*mut c_char> {
-//     from_c_str!(recipients_json);
-//     let res = async move {
-//         let height = crate::api::sync::get_latest_height().await?;
-//         let recipients = crate::api::recipient::parse_recipients(&recipients_json)?;
-//         let res = crate::api::payment_v2::build_sign_send_multi_payment(
-//             coin,
-//             account,
-//             height,
-//             &recipients,
-//             anchor_offset,
-//             Box::new(move |progress| {
-//                 report_progress(progress, port);
-//             }),
-//         )
-//         .await?;
-//         Ok(res)
-//     };
-//     to_cresult_str(res.await)
-// }
-
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn skip_to_last_height(coin: u8) {
-    let res = if coin < 2 {
-        crate::api::sync::skip_to_last_height(coin).await
-    } else {
-        Ok(())
+pub async unsafe extern "C" fn skip_to_last_height(coin: u8) -> CResult<u8> {
+    let res = || {
+        get_coin_handler(coin).skip_to_last_height()?;
+        Ok(0)
     };
-    log_error(res)
+    to_cresult(res())
 }
 
-#[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn rewind_to(height: u32) -> CResult<u32> {
-    let res = crate::api::sync::rewind_to(height).await;
+pub unsafe extern "C" fn rewind_to(height: u32) -> CResult<u32> {
+    let res = crate::api::sync::rewind_to(height);
     to_cresult(res)
 }
 
-#[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn rescan_from(coin: u8, height: u32) {
-    let res = async {
-        if coin < 2 {
-            crate::api::sync::rescan_from(coin, height).await
-        } else {
-            let mut h = get_coin_handler(coin);
-            h.truncate()
-        }
+pub unsafe extern "C" fn rescan_from(coin: u8, height: u32) {
+    let res = || {
+        let mut h = get_coin_handler(coin);
+        h.truncate(height)
     };
-    log_error(res.await)
+    log_error(res())
 }
 
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn get_taddr_balance(coin: u8, id_account: u32) -> CResult<u64> {
-    let res = async {
-        if coin < 2 {
-            crate::api::account::get_taddr_balance(coin, id_account).await
-        } else {
-            get_coin_handler(coin).get_balance(id_account)
-        }
-    };
-    to_cresult(res.await)
+    let res = || get_coin_handler(coin).get_balance(id_account);
+    to_cresult(res())
 }
 
 #[tokio::main]
@@ -1129,13 +1024,7 @@ pub unsafe extern "C" fn clear_tx_details(coin: u8, account: u32) -> CResult<u8>
 #[no_mangle]
 pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
     let res = || {
-        let accounts = if coin >= 2 {
-            get_coin_handler(coin).list_accounts()
-        } else {
-            with_coin(coin, |connection: &Connection| {
-                crate::db::read::get_account_list(connection)
-            })
-        }?;
+        let accounts = get_coin_handler(coin).list_accounts()?;
         Ok(fb_to_vec!(accounts))
     };
     to_cresult_bytes(res())
@@ -1143,31 +1032,14 @@ pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
 
 #[no_mangle]
 pub unsafe extern "C" fn get_active_account(coin: u8) -> CResult<u32> {
-    let res = || {
-        if coin < 2 {
-            with_coin(coin, |connection: &Connection| {
-                let new_id = crate::db::read::get_active_account(connection)?;
-                Ok(new_id)
-            })
-        } else {
-            get_coin_handler(coin).get_active_account()
-        }
-    };
+    let res = || get_coin_handler(coin).get_active_account();
     to_cresult(res())
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn set_active_account(coin: u8, id: u32) -> CResult<u8> {
     let res = || {
-        if coin < 2 {
-            with_coin(coin, |connection: &Connection| {
-                coinconfig::set_active_account(coin, id);
-                crate::db::read::set_active_account(connection, id)?;
-                Ok(())
-            })?;
-        } else {
-            get_coin_handler(coin).set_active_account(id)?;
-        }
+        get_coin_handler(coin).set_active_account(id)?;
         Ok(0)
     };
     to_cresult(res())
@@ -1191,14 +1063,8 @@ pub unsafe extern "C" fn get_t_addr(coin: u8, id: u32) -> CResult<*mut c_char> {
 #[no_mangle]
 pub unsafe extern "C" fn get_sk(coin: u8, id: u32) -> CResult<*mut c_char> {
     let res = || {
-        if coin < 2 {
-            with_coin(coin, |connection: &Connection| {
-                crate::db::read::get_sk(connection, id)
-            })
-        } else {
-            let b = get_coin_handler(coin).get_backup(id)?;
-            Ok(b.sk.unwrap_or_default())
-        }
+        let b = get_coin_handler(coin).get_backup(id)?;
+        Ok(b.sk.unwrap_or_default())
     };
     to_cresult_str(res())
 }

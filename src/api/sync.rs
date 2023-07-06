@@ -93,7 +93,7 @@ pub async fn skip_to_last_height(coin: u8) -> anyhow::Result<()> {
 ///
 /// Height is snapped to a closest earlier checkpoint.
 /// The effective height is returned
-pub async fn rewind_to(height: u32) -> anyhow::Result<u32> {
+pub fn rewind_to(height: u32) -> anyhow::Result<u32> {
     let c = CoinConfig::get_active();
     let height = c.db()?.trim_to_height(height)?;
     Ok(height)

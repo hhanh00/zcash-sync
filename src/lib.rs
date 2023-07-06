@@ -96,7 +96,9 @@ mod taddr;
 mod ton;
 mod transaction;
 pub mod transparent;
+mod tron;
 mod unified;
+mod zcash;
 mod zip32;
 
 #[cfg(feature = "ledger")]
