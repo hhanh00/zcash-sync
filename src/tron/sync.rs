@@ -10,11 +10,11 @@ pub async fn latest_height(url: &str) -> Result<u32> {
     Ok(height as u32)
 }
 
-pub async fn sync(connection: &Connection, url: &str, account: u32) -> Result<()> {
+pub async fn sync(connection: &Connection, url: &str, account: u32) -> Result<u32> {
     let height = latest_height(url).await?;
     connection.execute(
         "UPDATE accounts SET height = ?1 WHERE id_account = ?2",
         params![height, account],
     )?;
-    Ok(())
+    Ok(height)
 }

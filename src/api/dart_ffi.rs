@@ -22,12 +22,15 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
-use tokio::sync::{oneshot, Semaphore};
+
 use zcash_primitives::transaction::builder::Progress;
 
 pub static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
 const MAX_COINS: u8 = 2;
+
+#[no_mangle]
+pub unsafe extern "C" fn dummy_export() {}
 
 fn with_coin<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, f: F) -> anyhow::Result<T> {
     let c = CoinConfig::get(coin);
@@ -35,9 +38,6 @@ fn with_coin<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, f: F) -> anyh
     let connection = &db.connection;
     f(connection)
 }
-
-#[no_mangle]
-pub unsafe extern "C" fn dummy_export() {}
 
 macro_rules! fb_to_vec {
     ($v: ident) => {{
@@ -48,15 +48,28 @@ macro_rules! fb_to_vec {
     }};
 }
 
+macro_rules! from_c_str {
+    ($v: ident) => {
+        let $v = CStr::from_ptr($v).to_string_lossy();
+    };
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn dart_post_cobject(ptr: ffi::DartPostCObjectFnType) {
     POST_COBJ = Some(ptr);
 }
 
-macro_rules! from_c_str {
-    ($v: ident) => {
-        let $v = CStr::from_ptr($v).to_string_lossy();
-    };
+#[repr(C)]
+pub struct CResult<T> {
+    value: T,
+    error: *mut c_char,
+    pub len: u32,
+}
+
+#[repr(C)]
+pub struct CResultUnit {
+    error: *mut c_char,
+    pub len: u32,
 }
 
 fn to_c_str(s: String) -> *mut c_char {
@@ -87,11 +100,17 @@ fn to_cresult_str(res: Result<String, anyhow::Error>) -> CResult<*mut c_char> {
     to_cresult(res)
 }
 
-fn log_error(res: Result<(), anyhow::Error>) {
-    if let Err(e) = res {
-        log::error!("{}", e.to_string());
-    }
+fn to_cresult_unit(res: Result<(), anyhow::Error>) -> CResult<u8> {
+    let res = res.map(|_| 0u8);
+    to_cresult(res)
 }
+
+// TODO
+// fn log_error(res: Result<(), anyhow::Error>) {
+//     if let Err(e) = res {
+//         log::error!("{}", e.to_string());
+//     }
+// }
 
 fn to_cresult_bytes(res: Result<Vec<u8>, anyhow::Error>) -> CResult<*const u8> {
     match res {
@@ -143,13 +162,6 @@ fn try_init_logger() {
     let _ = env_logger::try_init();
 }
 
-#[repr(C)]
-pub struct CResult<T> {
-    value: T,
-    error: *mut c_char,
-    pub len: u32,
-}
-
 lazy_static! {
     static ref BTC_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
     static ref ETH_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
@@ -172,27 +184,26 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
     try_init_logger();
     from_c_str!(db_path);
     let res = || {
+        let connection = Connection::open(&*db_path)?;
         match coin {
+            0 => {}
+            1 => {}
             2 => {
-                let connection = Connection::open(&*db_path)?;
                 init_btc_db(&connection)?;
                 let handler = BTCHandler::new(connection, &*db_path);
                 *BTC_HANDLER.lock().unwrap() = Box::new(handler);
             }
             3 => {
-                let connection = Connection::open(&*db_path)?;
                 init_eth_db(&connection)?;
                 let handler = ETHHandler::new(connection, Path::new(&*db_path).to_path_buf());
                 *ETH_HANDLER.lock().unwrap() = Box::new(handler);
             }
             4 => {
-                let connection = Connection::open(&*db_path)?;
                 init_ton_db(&connection)?;
                 let handler = TonHandler::new(connection, Path::new(&*db_path).to_path_buf());
                 *TON_HANDLER.lock().unwrap() = Box::new(handler);
             }
             5 => {
-                let connection = Connection::open(&*db_path)?;
                 init_tron_db(&connection)?;
                 let handler = TronHandler::new(connection, Path::new(&*db_path).to_path_buf());
                 *TRON_HANDLER.lock().unwrap() = Box::new(handler);
@@ -208,33 +219,31 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
 
 #[no_mangle]
 pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<u8> {
-    try_init_logger();
     from_c_str!(db_path);
     let res = || {
         if coin < 2 {
             coinconfig::migrate_db(coin, &db_path)?;
         }
-        Ok(0u8)
+        Ok(())
     };
-    to_cresult(res())
+    to_cresult_unit(res())
 }
 
 #[no_mangle]
 #[tokio::main]
 pub async unsafe extern "C" fn migrate_data_db(coin: u8) -> CResult<u8> {
-    try_init_logger();
     let res = async {
         if coin < 2 {
             coinconfig::migrate_data(coin).await?;
         }
-        Ok(0u8)
+        Ok(())
     };
-    to_cresult(res.await)
+    to_cresult_unit(res.await)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn set_active(active: u8) {
-    crate::coinconfig::set_active(active);
+    coinconfig::set_active(active);
 }
 
 #[no_mangle]
@@ -266,14 +275,14 @@ pub unsafe extern "C" fn set_coin_passwd(coin: u8, passwd: *mut c_char) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn reset_app() {
+pub unsafe extern "C" fn reset_app() -> CResult<u8> {
     let res = || {
         for i in 0..MAX_COINS {
             crate::api::account::reset_db(i)?;
         }
         Ok(())
     };
-    log_error(res())
+    to_cresult_unit(res())
 }
 
 #[no_mangle]
@@ -330,17 +339,17 @@ pub unsafe extern "C" fn new_account(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32, count: u32) {
+pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32, count: u32) -> CResult<u8> {
     from_c_str!(name);
     let index = if index >= 0 { Some(index as u32) } else { None };
     let res = crate::api::account::new_sub_account(&name, index, count);
-    log_error(res)
+    to_cresult_unit(res)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn convert_to_watchonly(coin: u8, id_account: u32) -> CResult<u8> {
     let res = crate::api::account::convert_to_watchonly(coin, id_account);
-    to_cresult(res.and_then(|()| Ok(0u8)))
+    to_cresult_unit(res)
 }
 
 #[no_mangle]
@@ -384,10 +393,14 @@ pub unsafe extern "C" fn get_address(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn import_transparent_key(coin: u8, id_account: u32, path: *mut c_char) {
+pub unsafe extern "C" fn import_transparent_key(
+    coin: u8,
+    id_account: u32,
+    path: *mut c_char,
+) -> CResult<u8> {
     from_c_str!(path);
     let res = crate::api::account::import_transparent_key(coin, id_account, &path);
-    log_error(res)
+    to_cresult_unit(res)
 }
 
 #[no_mangle]
@@ -395,15 +408,10 @@ pub unsafe extern "C" fn import_transparent_secret_key(
     coin: u8,
     id_account: u32,
     secret_key: *mut c_char,
-) {
+) -> CResult<u8> {
     from_c_str!(secret_key);
     let res = crate::api::account::import_transparent_secret_key(coin, id_account, &secret_key);
-    log_error(res)
-}
-
-lazy_static! {
-    static ref SYNC_LOCK: Semaphore = Semaphore::new(1);
-    static ref TX_CANCEL: Mutex<Option<oneshot::Sender<()>>> = Mutex::new(None);
+    to_cresult_unit(res)
 }
 
 #[no_mangle]
@@ -421,7 +429,7 @@ pub async unsafe extern "C" fn warp(
     anchor_offset: u32,
     max_cost: u32,
     port: i64,
-) -> CResult<u8> {
+) -> CResult<u32> {
     let sync_params = ZcashSyncParamsT {
         get_tx,
         anchor_offset,
@@ -429,12 +437,7 @@ pub async unsafe extern "C" fn warp(
         port,
     };
     let sync_params = fb_to_vec!(sync_params);
-    to_cresult(
-        get_coin_handler(coin)
-            .sync(account, sync_params)
-            .await
-            .map(|_| 0),
-    )
+    to_cresult(get_coin_handler(coin).sync(account, sync_params).await)
     // TODO: Mempool clear
 }
 
@@ -535,12 +538,12 @@ pub unsafe extern "C" fn rewind_to(height: u32) -> CResult<u32> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn rescan_from(coin: u8, height: u32) {
+pub unsafe extern "C" fn rescan_from(coin: u8, height: u32) -> CResult<u8> {
     let res = || {
         let mut h = get_coin_handler(coin);
         h.truncate(height)
     };
-    log_error(res())
+    to_cresult_unit(res())
 }
 
 #[tokio::main]
@@ -798,11 +801,11 @@ pub unsafe extern "C" fn store_contact(
     name: *mut c_char,
     address: *mut c_char,
     dirty: bool,
-) {
+) -> CResult<u8> {
     from_c_str!(name);
     from_c_str!(address);
     let res = crate::api::contact::store_contact(id, &name, &address, dirty);
-    log_error(res)
+    to_cresult_unit(res)
 }
 
 #[tokio::main]
@@ -817,28 +820,28 @@ pub async unsafe extern "C" fn commit_unsaved_contacts(anchor_offset: u32) -> CR
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn mark_message_read(message: u32, read: bool) {
+pub unsafe extern "C" fn mark_message_read(message: u32, read: bool) -> CResult<u8> {
     let res = crate::api::message::mark_message_read(message, read);
-    log_error(res)
+    to_cresult_unit(res)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn mark_all_messages_read(read: bool) {
+pub unsafe extern "C" fn mark_all_messages_read(read: bool) -> CResult<u8> {
     let res = crate::api::message::mark_all_messages_read(read);
-    log_error(res)
+    to_cresult_unit(res)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn truncate_data() {
+pub unsafe extern "C" fn truncate_data() -> CResult<u8> {
     let res = crate::api::account::truncate_data();
-    log_error(res)
+    to_cresult_unit(res)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn truncate_sync_data() {
-    let res = crate::api::account::truncate_sync_data();
-    log_error(res)
-}
+// #[no_mangle]
+// pub unsafe extern "C" fn truncate_sync_data() -> CResult<u8> {
+//     let res = crate::api::account::truncate_sync_data();
+//     log_error(res)
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn check_account(coin: u8, account: u32) -> bool {
@@ -850,13 +853,13 @@ pub unsafe extern "C" fn check_account(coin: u8, account: u32) -> bool {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn delete_account(coin: u8, account: u32) {
+pub unsafe extern "C" fn delete_account(coin: u8, account: u32) -> CResult<u8> {
     let res = if coin < 2 {
         crate::api::account::delete_account(coin, account)
     } else {
         get_coin_handler(coin).delete_account(account)
     };
-    log_error(res)
+    to_cresult_unit(res)
 }
 
 #[no_mangle]
@@ -985,11 +988,15 @@ pub async unsafe extern "C" fn get_best_server(servers: *mut u8, len: u64) -> CR
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn import_from_zwl(coin: u8, name: *mut c_char, data: *mut c_char) {
+pub unsafe extern "C" fn import_from_zwl(
+    coin: u8,
+    name: *mut c_char,
+    data: *mut c_char,
+) -> CResult<u8> {
     from_c_str!(name);
     from_c_str!(data);
     let res = crate::api::account::import_from_zwl(coin, &name, &data);
-    log_error(res)
+    to_cresult_unit(res)
 }
 
 #[no_mangle]

@@ -51,7 +51,7 @@ pub trait CoinApi: Send {
     fn is_valid_address(&self, key: &str) -> bool;
     fn get_backup(&self, account: u32) -> Result<BackupT>;
 
-    async fn sync(&mut self, account: u32, params: Vec<u8>) -> Result<()>;
+    async fn sync(&mut self, account: u32, params: Vec<u8>) -> Result<u32>;
     fn cancel_sync(&mut self) -> Result<()>;
     async fn get_latest_height(&self) -> Result<u32>;
     fn get_db_height(&self, _account: u32) -> Result<Option<HeightT>> {
@@ -118,7 +118,7 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    async fn sync(&mut self, _account: u32, _params: Vec<u8>) -> Result<()> {
+    async fn sync(&mut self, _account: u32, _params: Vec<u8>) -> Result<u32> {
         unimplemented!()
     }
 

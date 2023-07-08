@@ -70,7 +70,7 @@ impl CoinApi for TonHandler {
         super::db::read::get_backup(&self.connection(), account, |sk| hex::encode_upper(&sk))
     }
 
-    async fn sync(&mut self, account: u32, _params: Vec<u8>) -> anyhow::Result<()> {
+    async fn sync(&mut self, account: u32, _params: Vec<u8>) -> anyhow::Result<u32> {
         sync::sync(&self.connection(), &self.url, account).await
     }
 

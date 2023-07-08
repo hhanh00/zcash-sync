@@ -80,9 +80,9 @@ impl CoinApi for ZcashHandler {
         crate::api::account::get_backup_package(self.coin, account)
     }
 
-    async fn sync(&mut self, _account: u32, params: Vec<u8>) -> anyhow::Result<()> {
+    async fn sync(&mut self, _account: u32, params: Vec<u8>) -> anyhow::Result<u32> {
         if self.cancel.lock().unwrap().is_some() {
-            return Ok(());
+            anyhow::bail!("Sync already in progress");
         }
         log::info!("Sync started");
         let root = flatbuffers::root::<ZcashSyncParams>(&params)?;
@@ -92,7 +92,7 @@ impl CoinApi for ZcashHandler {
             *self.cancel.lock().unwrap() = Some(tx_cancel);
         }
         let coin = self.coin;
-        let res = std::thread::spawn(move || {
+        let new_height = std::thread::spawn(move || {
             let runtime = Runtime::new().unwrap();
             runtime.block_on(async move {
                 crate::sync::warp(
@@ -104,21 +104,21 @@ impl CoinApi for ZcashHandler {
                     rx_cancel,
                 )
                 .await
-            })?;
-            Ok::<_, anyhow::Error>(())
+            })
         })
         .join()
         .unwrap();
-        if let Err(err) = &res {
+        if let Err(err) = &new_height {
             if let Some(ChainError::Reorg(height)) = err.downcast_ref::<ChainError>() {
-                self.rewind_to_height(*height - 1)?;
+                let reorg_height = self.rewind_to_height(*height - 1)?;
+                return Ok(reorg_height);
             }
         }
         {
             *self.cancel.lock().unwrap() = None;
         }
         log::info!("Sync finished");
-        Ok(())
+        new_height
     }
 
     fn cancel_sync(&mut self) -> anyhow::Result<()> {

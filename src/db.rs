@@ -8,8 +8,8 @@ use crate::taddr::derive_tkeys;
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Hash};
+use ::orchard::keys::FullViewingKey;
 use anyhow::anyhow;
-use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde::Serialize;
@@ -25,19 +25,27 @@ use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
+pub mod account;
 mod backup;
+pub mod checkpoint;
 pub mod cipher;
+pub mod contact;
 pub mod data_generated;
+pub mod historical_prices;
+pub mod message;
 mod migration;
+pub mod orchard;
+pub mod payment_tpl;
+pub mod property;
+pub mod purge;
 pub mod read;
+pub mod transaction;
+pub mod transparent;
 
 use crate::api::historical_prices::Quote;
 use crate::db::cipher::set_db_passwd;
 use crate::db::data_generated::fb::SendTemplate;
 pub use backup::FullEncryptedBackup;
-
-#[allow(dead_code)]
-pub const DEFAULT_DB_PATH: &str = "zec.db";
 
 #[derive(Clone)]
 pub struct DbAdapterBuilder {

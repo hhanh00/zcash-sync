@@ -7,7 +7,7 @@ use electrum_client::bitcoin::{Address, ScriptBuf, Txid};
 use electrum_client::{Client, ElectrumApi};
 use rusqlite::{params, Connection, OptionalExtension};
 
-pub fn sync(connection: &Connection, url: &str) -> Result<()> {
+pub fn sync(connection: &Connection, url: &str) -> Result<u32> {
     let client = Client::new(url)?;
     // check reorg
     let db_height = loop {
@@ -52,7 +52,7 @@ pub fn sync(connection: &Connection, url: &str) -> Result<()> {
         }
         db::store_header(connection, new_height, &header_notification.header)?;
     }
-    Ok(())
+    Ok(new_height)
 }
 
 fn resolve_tx(

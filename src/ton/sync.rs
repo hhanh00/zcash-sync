@@ -5,7 +5,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
-pub async fn sync(connection: &Connection, url: &str, account: u32) -> Result<()> {
+pub async fn sync(connection: &Connection, url: &str, account: u32) -> Result<u32> {
     let height = latest_height(url).await?;
     let address = connection.query_row(
         "SELECT address FROM accounts WHERE id_account = ?1",
@@ -27,7 +27,7 @@ pub async fn sync(connection: &Connection, url: &str, account: u32) -> Result<()
         "UPDATE accounts SET balance = ?1, height = ?2 WHERE id_account = ?3",
         params![balance, height, account],
     )?;
-    Ok(())
+    Ok(height)
 }
 
 pub async fn latest_height(url: &str) -> Result<u32> {

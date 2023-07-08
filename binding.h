@@ -156,6 +156,8 @@ typedef struct CResult_bool {
 
 #define AddressBalance_VT_INDEX 4
 
+#define CheckpointVec_VT_CHECKPOINTS 4
+
 #define Backup_VT_SEED 6
 
 #define Backup_VT_SK 10
@@ -222,6 +224,14 @@ typedef struct CResult_bool {
 
 #define ZcashSyncParams_VT_PORT 10
 
+#define AccountDetails_VT_AINDEX 10
+
+#define AccountDetails_VT_IVK 14
+
+#define ZcashTransaction_VT_ACCOUNT 6
+
+#define ZcashTransaction_VT_TXID 8
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -244,7 +254,7 @@ char *get_lwd_url(uint8_t coin);
 
 void set_coin_passwd(uint8_t coin, char *passwd);
 
-void reset_app(void);
+struct CResult_u8 reset_app(void);
 
 void mempool_run(int64_t port);
 
@@ -252,7 +262,7 @@ void mempool_set_active(uint8_t coin, uint32_t id_account);
 
 struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t index);
 
-void new_sub_account(char *name, int32_t index, uint32_t count);
+struct CResult_u8 new_sub_account(char *name, int32_t index, uint32_t count);
 
 struct CResult_u8 convert_to_watchonly(uint8_t coin, uint32_t id_account);
 
@@ -262,18 +272,20 @@ struct CResult_u8 get_available_addrs(uint8_t coin, uint32_t account);
 
 struct CResult_____c_char get_address(uint8_t coin, uint32_t id_account, uint8_t ua_type);
 
-void import_transparent_key(uint8_t coin, uint32_t id_account, char *path);
+struct CResult_u8 import_transparent_key(uint8_t coin, uint32_t id_account, char *path);
 
-void import_transparent_secret_key(uint8_t coin, uint32_t id_account, char *secret_key);
+struct CResult_u8 import_transparent_secret_key(uint8_t coin,
+                                                uint32_t id_account,
+                                                char *secret_key);
 
 void cancel_warp(uint8_t coin);
 
-struct CResult_u8 warp(uint8_t coin,
-                       uint32_t account,
-                       bool get_tx,
-                       uint32_t anchor_offset,
-                       uint32_t max_cost,
-                       int64_t port);
+struct CResult_u32 warp(uint8_t coin,
+                        uint32_t account,
+                        bool get_tx,
+                        uint32_t anchor_offset,
+                        uint32_t max_cost,
+                        int64_t port);
 
 int8_t is_valid_key(uint8_t coin, char *key);
 
@@ -293,7 +305,7 @@ struct CResult_u8 skip_to_last_height(uint8_t coin);
 
 struct CResult_u32 rewind_to(uint32_t height);
 
-void rescan_from(uint8_t coin, uint32_t height);
+struct CResult_u8 rescan_from(uint8_t coin, uint32_t height);
 
 struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t id_account);
 
@@ -344,21 +356,19 @@ struct CResult_u32 get_block_by_time(uint32_t time);
 
 struct CResult_u32 sync_historical_prices(uint8_t coin, int64_t now, uint32_t days, char *currency);
 
-void store_contact(uint32_t id, char *name, char *address, bool dirty);
+struct CResult_u8 store_contact(uint32_t id, char *name, char *address, bool dirty);
 
 struct CResult_____c_char commit_unsaved_contacts(uint32_t anchor_offset);
 
-void mark_message_read(uint32_t message, bool read);
+struct CResult_u8 mark_message_read(uint32_t message, bool read);
 
-void mark_all_messages_read(bool read);
+struct CResult_u8 mark_all_messages_read(bool read);
 
-void truncate_data(void);
-
-void truncate_sync_data(void);
+struct CResult_u8 truncate_data(void);
 
 bool check_account(uint8_t coin, uint32_t account);
 
-void delete_account(uint8_t coin, uint32_t account);
+struct CResult_u8 delete_account(uint8_t coin, uint32_t account);
 
 struct CResult_____c_char make_payment_uri(uint8_t coin,
                                            char *address,
@@ -381,7 +391,7 @@ struct CResult_____c_char get_tx_summary(char *tx);
 
 struct CResult_____c_char get_best_server(uint8_t *servers, uint64_t len);
 
-void import_from_zwl(uint8_t coin, char *name, char *data);
+struct CResult_u8 import_from_zwl(uint8_t coin, char *name, char *data);
 
 struct CResult______u8 derive_zip32(uint8_t coin,
                                     uint32_t id_account,

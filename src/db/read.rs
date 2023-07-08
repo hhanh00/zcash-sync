@@ -156,58 +156,50 @@ pub fn get_balances(
     } else {
         ""
     };
-    let shielded = connection.query_row(
-        &("SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent IS NULL"
-            .to_owned()
-            + excluded_cond),
-        params![id],
-        |row| {
-            let value: Option<i64> = row.get(0)?;
-            Ok(value.unwrap_or(0) as u64)
-        },
-    )?; // funds not spent yet
-    let unconfirmed_spent = connection.query_row(
-        &("SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent = 0"
-            .to_owned()
-            + excluded_cond),
-        params![id],
-        |row| {
-            let value: Option<i64> = row.get(0)?;
-            Ok(value.unwrap_or(0) as u64)
-        },
-    )?; // funds used in unconfirmed tx
+    let shielded = connection
+        .query_row(
+            &("SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent IS NULL"
+                .to_owned() + excluded_cond),
+            [id],
+            |row| row.get::<_, Option<u64>>(0),
+        )?
+        .unwrap_or_default();
+    let unconfirmed_spent = connection
+        .query_row(
+            &("SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent = 0"
+                .to_owned()
+                + excluded_cond),
+            [id],
+            |row| row.get::<_, Option<u64>>(0),
+        )?
+        .unwrap_or_default();
     let balance = shielded + unconfirmed_spent;
     let under_confirmed = connection.query_row(
         &("SELECT SUM(value) AS value FROM received_notes WHERE account = ?1 AND spent IS NULL AND height > ?2".to_owned()
         + excluded_cond),
-        params![id, confirmed_height], |row| {
-            let value: Option<i64> = row.get(0)?;
-            Ok(value.unwrap_or(0) as u64)
-        })?; // funds received but not old enough
-    let excluded = connection.query_row(
-        "SELECT SUM(value) FROM received_notes WHERE account = ?1 AND spent IS NULL \
-        AND height <= ?2 AND excluded",
         params![id, confirmed_height],
-        |row| {
-            let value: Option<i64> = row.get(0)?;
-            Ok(value.unwrap_or(0) as u64)
-        },
-    )?; // funds excluded from spending
+        |row| row.get::<_, Option<u64>>(0)
+    )?.unwrap_or_default();
+    let excluded = connection
+        .query_row(
+            "SELECT SUM(value) FROM received_notes WHERE account = ?1 AND spent IS NULL \
+        AND height <= ?2 AND excluded",
+            params![id, confirmed_height],
+            |row| row.get::<_, Option<u64>>(0),
+        )?
+        .unwrap_or_default();
     let sapling = connection.query_row(
         &("SELECT SUM(value) FROM received_notes WHERE account = ?1 AND spent IS NULL AND orchard = 0 AND height <= ?2".to_owned()
         + excluded_cond),
-        params![id, confirmed_height], |row| {
-            let value: Option<i64> = row.get(0)?;
-            Ok(value.unwrap_or(0) as u64)
-        })?;
+        params![id, confirmed_height],
+        |row| row.get::<_, Option<u64>>(0)
+    )?.unwrap_or_default();
     let orchard = connection.query_row(
         &("SELECT SUM(value) FROM received_notes WHERE account = ?1 AND spent IS NULL AND orchard = 1 AND height <= ?2".to_owned()
         + excluded_cond),
-        params![id, confirmed_height], |row| {
-            let value: Option<i64> = row.get(0)?;
-            Ok(value.unwrap_or(0) as u64)
-        })?;
-
+        params![id, confirmed_height],
+        |row| row.get::<_, Option<u64>>(0)
+    )?.unwrap_or_default();
     let balance = BalanceT {
         shielded,
         unconfirmed_spent,
@@ -550,7 +542,7 @@ pub fn get_checkpoints(connection: &Connection) -> Result<Vec<u8>> {
     let checkpoints = CheckpointVec::create(
         &mut builder,
         &CheckpointVecArgs {
-            values: Some(checkpoints),
+            checkpoints: Some(checkpoints),
         },
     );
     builder.finish(checkpoints, None);
