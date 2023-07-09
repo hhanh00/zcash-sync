@@ -7,6 +7,8 @@ use lazycell::AtomicLazyCell;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tonic::transport::Channel;
+use zcash_primitives::consensus::Network;
+use zcash_primitives::consensus::Network::{MainNetwork, YCashMainNetwork};
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_proofs::prover::LocalTxProver;

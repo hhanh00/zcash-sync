@@ -10,14 +10,13 @@ pub fn get_transparent(
 ) -> Result<Option<TransparentDetailsT>> {
     let details = connection
         .query_row(
-            "SELECT name, sk, address FROM taddrs WHERE account = ?1",
+            "SELECT sk, address FROM taddrs WHERE account = ?1",
             [account],
             |r| {
                 Ok(TransparentDetailsT {
                     id: account,
-                    name: r.get(0)?,
-                    sk: r.get(1)?,
-                    address: r.get(2)?,
+                    sk: r.get(0)?,
+                    address: r.get(1)?,
                 })
             },
         )

@@ -7,7 +7,7 @@ use crate::sync::{CTree, Witness};
 use crate::transaction::TransactionDetails;
 use crate::{Hash, Source};
 use anyhow::Result;
-use rusqlite::{params, Connection, Row, Statement, Transaction};
+use rusqlite::{params, Connection, Row, Statement, Transaction, OptionalExtension};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 
 pub fn get_last_sync_height(
@@ -129,38 +129,34 @@ pub fn store_received_note(
     Ok(id_note)
 }
 
-pub fn store_witness(
-    shielded_pool: &'static str,
+pub fn store_witness<const POOL: char>(
     witness: &Witness,
     height: u32,
     id_note: u32,
     db_tx: &Transaction,
 ) -> Result<()> {
+    let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
     let mut bb: Vec<u8> = vec![];
     witness.write(&mut bb)?;
     db_tx.execute(
         &format!(
-            "INSERT INTO {}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)",
-            shielded_pool
+            "INSERT INTO {shielded_pool}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)"
         ),
         params![id_note, height, bb],
     )?;
     Ok(())
 }
 
-pub fn store_tree(
-    shielded_pool: &'static str,
+pub fn store_tree<const POOL: char>(
     height: u32,
     tree: &CTree,
     db_tx: &Transaction,
 ) -> Result<()> {
+    let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
     let mut bb: Vec<u8> = vec![];
     tree.write(&mut bb)?;
     db_tx.execute(
-        &format!(
-            "INSERT INTO {}_tree(height, tree) VALUES (?1,?2)",
-            shielded_pool
-        ),
+        &format!("INSERT INTO {shielded_pool}_tree(height, tree) VALUES (?1,?2)"),
         params![height, &bb],
     )?;
     Ok(())
@@ -187,7 +183,7 @@ pub struct BlockHash {
 
 /// Blocks
 ///
-pub fn get_block(connection: &Connection, height: u32) -> Result<BlockHash> {
+pub fn get_block(connection: &Connection, height: u32) -> Result<Option<BlockHash>> {
     let block = connection.query_row(
         "SELECT hash, timestamp FROM blocks WHERE height = ?1",
         [height],
@@ -197,7 +193,7 @@ pub fn get_block(connection: &Connection, height: u32) -> Result<BlockHash> {
                 timestamp: r.get(1)?,
             })
         },
-    )?;
+    ).optional()?;
     Ok(block)
 }
 
@@ -404,7 +400,7 @@ pub fn purge_old_witnesses(connection: &mut Connection, height: u32) -> Result<(
 }
 
 // Only keep the oldest checkpoint in [low, high)
-fn prune_interval(low: u32, high: u32, db_tx: &Transaction) -> anyhow::Result<()> {
+fn prune_interval(low: u32, high: u32, db_tx: &Transaction) -> Result<()> {
     let keep_height = db_tx.query_row(
         "SELECT MIN(height) FROM blocks WHERE height >= ?1 AND height < ?2",
         params![low, high],

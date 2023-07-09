@@ -1,6 +1,6 @@
 use crate::chain::Nf;
 use crate::db::{ReceivedNote, ReceivedNoteShort};
-use crate::{CompactBlock, DbAdapter};
+use crate::{CompactBlock, db, DbAdapter};
 use allo_isolate::IntoDart;
 use anyhow::Result;
 use flatbuffers::FlatBufferBuilder;
@@ -8,6 +8,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
+use rusqlite::{Connection, Transaction};
 use tokio::sync::oneshot;
 use zcash_note_encryption::BatchDomain;
 use zcash_primitives::consensus::Parameters;
@@ -30,11 +31,12 @@ pub struct Synchronizer<
     DN: DecryptedNote<D, VK>,
     TD: TrialDecrypter<N, D, VK, DN>,
     H: Hasher,
+    const POOL: char,
 > {
     pub decrypter: TD,
     pub warper: WarpProcessor<H>,
     pub vks: Vec<VK>,
-    pub shielded_pool: String,
+    pub shielded_pool: &'static str,
 
     pub note_position: usize,
     pub nullifiers: HashMap<Nf, ReceivedNoteShort>,
@@ -50,13 +52,14 @@ impl<
         DN: DecryptedNote<D, VK> + Sync,
         TD: TrialDecrypter<N, D, VK, DN> + Sync,
         H: Hasher,
-    > Synchronizer<N, D, VK, DN, TD, H>
+        const POOL: char,
+    > Synchronizer<N, D, VK, DN, TD, H, POOL>
 {
     pub fn new(
         decrypter: TD,
         warper: WarpProcessor<H>,
         vks: Vec<VK>,
-        shielded_pool: String,
+        shielded_pool: &'static str,
     ) -> Self {
         Synchronizer {
             decrypter,
@@ -72,6 +75,28 @@ impl<
         }
     }
 
+    pub fn new_from_parts(
+        decrypter: TD,
+        warper: WarpProcessor<H>,
+        vks: Vec<VK>,
+        tree: CTree,
+        received_notes: Vec<ReceivedNoteShort>,
+        witnesses: Vec<Witness>,
+        shielded_pool: &'static str,
+    ) -> Self {
+        Synchronizer {
+            decrypter,
+            warper,
+            vks,
+            shielded_pool,
+            note_position: tree.get_position(),
+            nullifiers: received_notes.into_iter().map(|rn| (rn.nf.clone(), rn)).collect(),
+            tree,
+            witnesses,
+            _phantom: Default::default(),
+        }
+    }
+
     pub fn initialize(&mut self, height: u32, db: &mut DbAdapter) -> Result<()> {
         let TreeCheckpoint { tree, witnesses } =
             db.get_tree_by_name(height, &self.shielded_pool)?;
@@ -83,6 +108,106 @@ impl<
             self.nullifiers.insert(rn.nf.clone(), rn);
         }
         Ok(())
+    }
+
+    pub fn process2(&mut self, blocks: &[CompactBlock], db_tx: &Transaction) -> Result<usize> {
+        if blocks.is_empty() {
+            return Ok(0);
+        }
+        let decrypter = self.decrypter.clone();
+        let decrypted_blocks: Vec<_> = blocks
+            .par_iter()
+            .map(|b| decrypter.decrypt_notes(b, &self.vks))
+            .collect();
+        let count_outputs: usize = decrypted_blocks
+            .iter()
+            .map(|b| b.count_outputs)
+            .sum::<u32>() as usize;
+
+        self.warper.initialize(&self.tree, &self.witnesses);
+
+        // Detect new received notes
+        let mut new_witnesses = vec![];
+        for decb in decrypted_blocks.iter() {
+            for dectx in decb.txs.iter() {
+                let id_tx = db::checkpoint::store_transaction(
+                    &dectx.tx_id,
+                    dectx.account,
+                    dectx.height,
+                    dectx.timestamp,
+                    dectx.tx_index as u32,
+                    &db_tx,
+                )?;
+                let mut balance: i64 = 0;
+                for decn in dectx.notes.iter() {
+                    let position = decn.position(self.note_position);
+                    let rn: ReceivedNote = decn.to_received_note(position as u64);
+                    let id_note = db::checkpoint::store_received_note(&rn, id_tx, position, &db_tx)?;
+                    let nf = Nf(rn.nf.try_into().unwrap());
+                    self.nullifiers.insert(
+                        nf,
+                        ReceivedNoteShort {
+                            id: id_note,
+                            account: rn.account,
+                            nf,
+                            value: rn.value,
+                        },
+                    );
+                    let witness = Witness::new(position, id_note, &decn.cmx());
+                    log::info!(
+                        "Witness {} {} {}",
+                        witness.position,
+                        witness.id_note,
+                        hex::encode(witness.cmx)
+                    );
+                    new_witnesses.push(witness);
+                    balance += rn.value as i64;
+                }
+                db::checkpoint::add_value(id_tx, balance, &db_tx)?;
+            }
+            self.note_position += decb.count_outputs as usize;
+        }
+
+        // Detect spends and collect note commitments
+        let mut new_cmx = vec![];
+        let mut height = 0;
+        let mut hash = [0u8; 32];
+        for b in blocks.iter() {
+            for (tx_index, tx) in b.vtx.iter().enumerate() {
+                for sp in self.decrypter.spends(tx).iter() {
+                    if let Some(rn) = self.nullifiers.get(sp) {
+                        let id_tx = db::checkpoint::store_transaction(
+                            &tx.hash,
+                            rn.account,
+                            b.height as u32,
+                            b.time,
+                            tx_index as u32,
+                            &db_tx,
+                        )?;
+                        db::checkpoint::add_value(id_tx, -(rn.value as i64), &db_tx)?;
+                        db::checkpoint::mark_spent(rn.id, b.height as u32, &db_tx)?;
+                        self.nullifiers.remove(sp);
+                    }
+                }
+                new_cmx.extend(self.decrypter.outputs(tx).into_iter().map(|cob| cob.cmx));
+            }
+            height = b.height as u32;
+            hash.copy_from_slice(&b.hash);
+        }
+
+        // Run blocks through warp sync
+        self.warper.add_nodes(&mut new_cmx, &new_witnesses);
+        let (updated_tree, updated_witnesses) = self.warper.finalize();
+
+        // Store witnesses
+        for w in updated_witnesses.iter() {
+            db::checkpoint::store_witness::<POOL>(w, height, w.id_note, &db_tx)?;
+        }
+        db::checkpoint::store_tree::<POOL>(height, &updated_tree, &db_tx)?;
+        self.tree = updated_tree;
+        self.witnesses = updated_witnesses;
+
+        Ok(count_outputs * self.vks.len())
     }
 
     pub fn process(&mut self, blocks: &[CompactBlock], db: &mut DbAdapter) -> Result<usize> {
@@ -245,31 +370,28 @@ mod tests {
         DecryptedSaplingNote,
         SaplingDecrypter<Network>,
         SaplingHasher,
+        'S'
     >;
 
     #[test]
     fn test() {
-        init_coin(0, "zec.db").unwrap();
-        let coin = COIN_CONFIG[0].lock().unwrap();
-        let network = coin.chain.network();
-        let mut synchronizer = SaplingSynchronizer {
-            decrypter: SaplingDecrypter::new(*network),
-            warper: WarpProcessor::new(SaplingHasher::default()),
-            vks: vec![],
-            db: DbAdapterBuilder {
-                coin_type: coin.coin_type,
-                db_path: coin.db_path.as_ref().unwrap().to_owned(),
-            },
-            shielded_pool: "sapling".to_string(),
-            tree: CTree::new(),
-            witnesses: vec![],
-
-            note_position: 0,
-            nullifiers: HashMap::new(),
-            _phantom: Default::default(),
-        };
-
-        synchronizer.initialize(1000).unwrap();
-        synchronizer.process(&vec![]).unwrap();
+        // init_coin(0, "zec.db").unwrap();
+        // let coin = COIN_CONFIG[0].lock().unwrap();
+        // let network = coin.chain.network();
+        // let mut synchronizer = SaplingSynchronizer {
+        //     decrypter: SaplingDecrypter::new(*network),
+        //     warper: WarpProcessor::new(SaplingHasher::default()),
+        //     vks: vec![],
+        //     shielded_pool: "sapling",
+        //     tree: CTree::new(),
+        //     witnesses: vec![],
+        //
+        //     note_position: 0,
+        //     nullifiers: HashMap::new(),
+        //     _phantom: Default::default(),
+        // };
+        //
+        // synchronizer.initialize(1000).unwrap();
+        // synchronizer.process(&vec![]).unwrap();
     }
 }

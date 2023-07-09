@@ -1,33 +1,57 @@
 use crate::coin::CoinApi;
-use crate::db::data_generated::fb::{
-    AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, TxReportT, ZcashSyncParams,
-};
-use crate::{connect_lightwalletd, ChainError, RecipientsT};
+use crate::db::data_generated::fb::{AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, ProgressT, TxReportT, ZcashSyncParams};
+use crate::{connect_lightwalletd, ChainError, RecipientsT, Progress};
 use async_trait::async_trait;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
-use tokio::runtime::Runtime;
-use tokio::sync::oneshot;
+use allo_isolate::IntoDart;
+use flatbuffers::FlatBufferBuilder;
+use tokio::runtime::{Handle, Runtime};
+use tokio::sync::mpsc;
+use zcash_primitives::consensus::Network;
+use crate::api::dart_ffi::POST_COBJ;
 
 pub struct ZcashHandler {
     coin: u8,
+    network: Network,
     coingecko_id: &'static str,
     connection: Mutex<Connection>,
     db_path: PathBuf,
     url: String,
-    cancel: Mutex<Option<oneshot::Sender<()>>>,
+    cancel: Mutex<Option<mpsc::Sender<()>>>,
+}
+
+fn progress(port: i64) -> impl Fn(Progress) {
+    move |progress| {
+        unsafe {
+            if let Some(p) = POST_COBJ {
+                let progress = ProgressT {
+                    height: progress.height,
+                    trial_decryptions: progress.trial_decryptions,
+                    downloaded: progress.downloaded as u64,
+                };
+                let mut builder = FlatBufferBuilder::new();
+                let root = progress.pack(&mut builder);
+                builder.finish(root, None);
+                let mut progress = builder.finished_data().to_vec().into_dart();
+                p(port, &mut progress);
+            }
+        }
+    }
 }
 
 impl ZcashHandler {
     pub fn new(
         coin: u8,
-        coingecko_id: &'static &str,
+        network: Network,
+        coingecko_id: &'static str,
         connection: Connection,
         db_path: PathBuf,
     ) -> Self {
         ZcashHandler {
             coin,
+            network,
             coingecko_id,
             connection: Mutex::new(connection),
             db_path,
@@ -87,27 +111,23 @@ impl CoinApi for ZcashHandler {
         log::info!("Sync started");
         let root = flatbuffers::root::<ZcashSyncParams>(&params)?;
         let params = root.unpack();
-        let (tx_cancel, rx_cancel) = oneshot::channel::<()>();
+        let progress_callback = progress(params.port);
+        let (tx_cancel, rx_cancel) = mpsc::channel::<()>(1);
         {
             *self.cancel.lock().unwrap() = Some(tx_cancel);
         }
-        let coin = self.coin;
-        let new_height = std::thread::spawn(move || {
-            let runtime = Runtime::new().unwrap();
-            runtime.block_on(async move {
-                crate::sync::warp(
-                    coin,
-                    params.get_tx,
-                    params.anchor_offset,
-                    params.max_cost,
-                    params.port,
-                    rx_cancel,
-                )
-                .await
-            })
-        })
-        .join()
-        .unwrap();
+        let mut connection = Connection::open(&self.db_path)?;
+        let new_height = crate::sync2::warp_sync_inner(
+            self.network.clone(),
+            &mut connection,
+            &self.url,
+            params.anchor_offset,
+            params.max_cost,
+            &progress_callback,
+            self.coin == 0,
+            rx_cancel,
+        )
+        .await;
         if let Err(err) = &new_height {
             if let Some(ChainError::Reorg(height)) = err.downcast_ref::<ChainError>() {
                 let reorg_height = self.rewind_to_height(*height - 1)?;
@@ -118,6 +138,7 @@ impl CoinApi for ZcashHandler {
             *self.cancel.lock().unwrap() = None;
         }
         log::info!("Sync finished");
+        // TODO: Get tx details
         new_height
     }
 
@@ -160,13 +181,10 @@ impl CoinApi for ZcashHandler {
     }
 
     fn get_balance(&self, account: u32) -> anyhow::Result<u64> {
-        let coin = self.coin;
-        std::thread::spawn(move || {
-            let runtime = Runtime::new().unwrap();
-            runtime.block_on(crate::api::account::get_taddr_balance(coin, account))
+        tokio::task::block_in_place(move || {
+            Handle::current().block_on(
+                crate::transparent::get_balance(&self.connection(), &self.url, account))
         })
-        .join()
-        .unwrap()
     }
 
     // All these methods are specialized for zcash

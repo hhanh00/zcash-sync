@@ -64,6 +64,7 @@ type SaplingSynchronizer = Synchronizer<
     DecryptedSaplingNote,
     SaplingDecrypter<Network>,
     SaplingHasher,
+    'S',
 >;
 
 type OrchardSynchronizer = Synchronizer<
@@ -73,6 +74,7 @@ type OrchardSynchronizer = Synchronizer<
     DecryptedOrchardNote,
     OrchardDecrypter<Network>,
     OrchardHasher,
+    'O',
 >;
 
 pub async fn sync_async<'a>(
@@ -183,7 +185,7 @@ async fn sync_async_inner<'a>(
                     decrypter,
                     warper,
                     sapling_vks.clone(),
-                    "sapling".to_string(),
+                    "sapling",
                 );
                 synchronizer.initialize(height, &mut db)?;
                 progress.trial_decryptions += synchronizer.process(&blocks.0, &mut db)? as u64;
@@ -199,7 +201,7 @@ async fn sync_async_inner<'a>(
                         decrypter,
                         warper,
                         orchard_vks.clone(),
-                        "orchard".to_string(),
+                        "orchard",
                     );
                     synchronizer.initialize(height, &mut db)?;
                     log::info!("Process orchard start");

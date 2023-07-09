@@ -11,7 +11,7 @@ use crate::mempool::MemPool;
 use crate::note_selection::TransactionReport;
 use crate::ton::{init_ton_db, TonHandler};
 use crate::tron::{init_tron_db, TronHandler};
-use crate::{init_btc_db, init_eth_db, TransactionPlan, Tx};
+use crate::{db, init_btc_db, init_eth_db, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use flatbuffers::FlatBufferBuilder;
@@ -22,8 +22,10 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
+use zcash_primitives::consensus::Network::{MainNetwork, YCashMainNetwork};
 
 use zcash_primitives::transaction::builder::Progress;
+use crate::zcash::ZcashHandler;
 
 pub static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -163,6 +165,8 @@ fn try_init_logger() {
 }
 
 lazy_static! {
+    static ref ZCASH_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
+    static ref YCASH_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
     static ref BTC_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
     static ref ETH_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
     static ref TON_HANDLER: Mutex<Box<dyn CoinApi>> = Mutex::new(Box::new(crate::NoCoin {}));
@@ -171,6 +175,8 @@ lazy_static! {
 
 fn get_coin_handler(coin: u8) -> MutexGuard<'static, Box<dyn CoinApi>> {
     match coin {
+        0 => ZCASH_HANDLER.lock().unwrap(),
+        1 => YCASH_HANDLER.lock().unwrap(),
         2 => BTC_HANDLER.lock().unwrap(),
         3 => ETH_HANDLER.lock().unwrap(),
         4 => TON_HANDLER.lock().unwrap(),
@@ -186,8 +192,16 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
     let res = || {
         let connection = Connection::open(&*db_path)?;
         match coin {
-            0 => {}
-            1 => {}
+            0 => {
+                db::migration::init_db(&connection, &MainNetwork, true)?;
+                let handler = ZcashHandler::new(coin, MainNetwork, "zcash", connection, (&*db_path).into());
+                *ZCASH_HANDLER.lock().unwrap() = Box::new(handler);
+            }
+            1 => {
+                db::migration::init_db(&connection, &YCashMainNetwork, false)?;
+                let handler = ZcashHandler::new(coin, YCashMainNetwork, "ycash", connection, (&*db_path).into());
+                *YCASH_HANDLER.lock().unwrap() = Box::new(handler);
+            }
             2 => {
                 init_btc_db(&connection)?;
                 let handler = BTCHandler::new(connection, &*db_path);
@@ -195,17 +209,17 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
             }
             3 => {
                 init_eth_db(&connection)?;
-                let handler = ETHHandler::new(connection, Path::new(&*db_path).to_path_buf());
+                let handler = ETHHandler::new(connection, (&*db_path).into());
                 *ETH_HANDLER.lock().unwrap() = Box::new(handler);
             }
             4 => {
                 init_ton_db(&connection)?;
-                let handler = TonHandler::new(connection, Path::new(&*db_path).to_path_buf());
+                let handler = TonHandler::new(connection, (&*db_path).into());
                 *TON_HANDLER.lock().unwrap() = Box::new(handler);
             }
             5 => {
                 init_tron_db(&connection)?;
-                let handler = TronHandler::new(connection, Path::new(&*db_path).to_path_buf());
+                let handler = TronHandler::new(connection, (&*db_path).into());
                 *TRON_HANDLER.lock().unwrap() = Box::new(handler);
             }
             _ => {
@@ -232,13 +246,15 @@ pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<u
 #[no_mangle]
 #[tokio::main]
 pub async unsafe extern "C" fn migrate_data_db(coin: u8) -> CResult<u8> {
-    let res = async {
-        if coin < 2 {
-            coinconfig::migrate_data(coin).await?;
-        }
-        Ok(())
-    };
-    to_cresult_unit(res.await)
+    // TODO
+    // let res = async {
+    //     if coin < 2 {
+    //         coinconfig::migrate_data(coin).await?;
+    //     }
+    //     Ok(())
+    // };
+    // to_cresult_unit(res.await)
+    to_cresult_unit(Ok(()))
 }
 
 #[no_mangle]
@@ -249,20 +265,12 @@ pub unsafe extern "C" fn set_active(active: u8) {
 #[no_mangle]
 pub unsafe extern "C" fn set_coin_lwd_url(coin: u8, lwd_url: *mut c_char) {
     from_c_str!(lwd_url);
-    if coin < 2 {
-        coinconfig::set_coin_lwd_url(coin, &lwd_url);
-    } else {
-        get_coin_handler(coin).set_url(&lwd_url);
-    }
+    get_coin_handler(coin).set_url(&lwd_url);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn get_lwd_url(coin: u8) -> *mut c_char {
-    let server = if coin < 2 {
-        coinconfig::get_coin_lwd_url(coin)
-    } else {
-        get_coin_handler(coin).get_url()
-    };
+    let server = get_coin_handler(coin).get_url();
     to_c_str(server)
 }
 
@@ -1388,14 +1396,7 @@ pub unsafe extern "C" fn clone_db_with_passwd(
 #[no_mangle]
 pub unsafe extern "C" fn get_property(coin: u8, name: *mut c_char) -> CResult<*mut c_char> {
     from_c_str!(name);
-    if coin >= 2 {
-        return to_cresult_str(get_coin_handler(coin).get_property(&name));
-    }
-    let res = |connection: &Connection| {
-        let value = crate::db::read::get_property(connection, &name)?;
-        Ok(value)
-    };
-    to_cresult_str(with_coin(coin, res))
+    to_cresult_str(get_coin_handler(coin).get_property(&name))
 }
 
 #[no_mangle]
@@ -1406,18 +1407,8 @@ pub unsafe extern "C" fn set_property(
 ) -> CResult<u8> {
     from_c_str!(name);
     from_c_str!(value);
-    if coin >= 2 {
-        return to_cresult(
-            get_coin_handler(coin)
-                .set_property(&name, &value)
-                .map(|_| 0),
-        );
-    }
-    let res = |connection: &Connection| {
-        crate::db::read::set_property(connection, &name, &value)?;
-        Ok(0)
-    };
-    to_cresult(with_coin(coin, res))
+    to_cresult_unit(
+            get_coin_handler(coin).set_property(&name, &value))
 }
 
 #[no_mangle]

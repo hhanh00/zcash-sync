@@ -33,7 +33,7 @@ pub mod contact;
 pub mod data_generated;
 pub mod historical_prices;
 pub mod message;
-mod migration;
+pub mod migration;
 pub mod orchard;
 pub mod payment_tpl;
 pub mod property;

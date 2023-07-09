@@ -242,6 +242,7 @@ pub fn get_diversified_address(ua_type: u8, time: u32) -> anyhow::Result<String>
 /// # Arguments
 /// * `coin`: 0 for zcash, 1 for ycash
 /// * `id_account`: account id as returned from [new_account]
+/// TODO: REMOVE
 pub async fn get_taddr_balance(coin: u8, id_account: u32) -> anyhow::Result<u64> {
     let c = CoinConfig::get(coin);
     let mut client = c.connect_lwd().await?;

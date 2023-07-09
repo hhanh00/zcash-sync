@@ -92,6 +92,7 @@ mod pay;
 mod sapling;
 mod scan;
 mod sync;
+pub mod sync2;
 mod taddr;
 mod ton;
 mod transaction;
@@ -129,6 +130,7 @@ pub use btc::{init_db as init_btc_db, BTCHandler};
 pub use coin::NoCoin;
 pub use db::data_generated::fb::{RecipientT, RecipientsT};
 pub use eth::{init_db as init_eth_db, ETHHandler};
+pub use scan::Progress;
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;

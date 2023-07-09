@@ -9111,9 +9111,8 @@ impl<'a> flatbuffers::Follow<'a> for TransparentDetails<'a> {
 
 impl<'a> TransparentDetails<'a> {
   pub const VT_ID: flatbuffers::VOffsetT = 4;
-  pub const VT_NAME: flatbuffers::VOffsetT = 6;
-  pub const VT_SK: flatbuffers::VOffsetT = 8;
-  pub const VT_ADDRESS: flatbuffers::VOffsetT = 10;
+  pub const VT_SK: flatbuffers::VOffsetT = 6;
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 8;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -9127,16 +9126,12 @@ impl<'a> TransparentDetails<'a> {
     let mut builder = TransparentDetailsBuilder::new(_fbb);
     if let Some(x) = args.address { builder.add_address(x); }
     if let Some(x) = args.sk { builder.add_sk(x); }
-    if let Some(x) = args.name { builder.add_name(x); }
     builder.add_id(args.id);
     builder.finish()
   }
 
   pub fn unpack(&self) -> TransparentDetailsT {
     let id = self.id();
-    let name = self.name().map(|x| {
-      x.to_string()
-    });
     let sk = self.sk().map(|x| {
       x.to_string()
     });
@@ -9145,7 +9140,6 @@ impl<'a> TransparentDetails<'a> {
     });
     TransparentDetailsT {
       id,
-      name,
       sk,
       address,
     }
@@ -9157,13 +9151,6 @@ impl<'a> TransparentDetails<'a> {
     // Created from valid Table for this object
     // which contains a valid value in this slot
     unsafe { self._tab.get::<u32>(TransparentDetails::VT_ID, Some(0)).unwrap()}
-  }
-  #[inline]
-  pub fn name(&self) -> Option<&'a str> {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(TransparentDetails::VT_NAME, None)}
   }
   #[inline]
   pub fn sk(&self) -> Option<&'a str> {
@@ -9189,7 +9176,6 @@ impl flatbuffers::Verifiable for TransparentDetails<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<u32>("id", Self::VT_ID, false)?
-     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("sk", Self::VT_SK, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
      .finish();
@@ -9198,7 +9184,6 @@ impl flatbuffers::Verifiable for TransparentDetails<'_> {
 }
 pub struct TransparentDetailsArgs<'a> {
     pub id: u32,
-    pub name: Option<flatbuffers::WIPOffset<&'a str>>,
     pub sk: Option<flatbuffers::WIPOffset<&'a str>>,
     pub address: Option<flatbuffers::WIPOffset<&'a str>>,
 }
@@ -9207,7 +9192,6 @@ impl<'a> Default for TransparentDetailsArgs<'a> {
   fn default() -> Self {
     TransparentDetailsArgs {
       id: 0,
-      name: None,
       sk: None,
       address: None,
     }
@@ -9222,10 +9206,6 @@ impl<'a: 'b, 'b> TransparentDetailsBuilder<'a, 'b> {
   #[inline]
   pub fn add_id(&mut self, id: u32) {
     self.fbb_.push_slot::<u32>(TransparentDetails::VT_ID, id, 0);
-  }
-  #[inline]
-  pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b  str>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransparentDetails::VT_NAME, name);
   }
   #[inline]
   pub fn add_sk(&mut self, sk: flatbuffers::WIPOffset<&'b  str>) {
@@ -9254,7 +9234,6 @@ impl core::fmt::Debug for TransparentDetails<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("TransparentDetails");
       ds.field("id", &self.id());
-      ds.field("name", &self.name());
       ds.field("sk", &self.sk());
       ds.field("address", &self.address());
       ds.finish()
@@ -9264,7 +9243,6 @@ impl core::fmt::Debug for TransparentDetails<'_> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransparentDetailsT {
   pub id: u32,
-  pub name: Option<String>,
   pub sk: Option<String>,
   pub address: Option<String>,
 }
@@ -9272,7 +9250,6 @@ impl Default for TransparentDetailsT {
   fn default() -> Self {
     Self {
       id: 0,
-      name: None,
       sk: None,
       address: None,
     }
@@ -9284,9 +9261,6 @@ impl TransparentDetailsT {
     _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
   ) -> flatbuffers::WIPOffset<TransparentDetails<'b>> {
     let id = self.id;
-    let name = self.name.as_ref().map(|x|{
-      _fbb.create_string(x)
-    });
     let sk = self.sk.as_ref().map(|x|{
       _fbb.create_string(x)
     });
@@ -9295,7 +9269,6 @@ impl TransparentDetailsT {
     });
     TransparentDetails::create(_fbb, &TransparentDetailsArgs{
       id,
-      name,
       sk,
       address,
     })

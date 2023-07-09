@@ -241,7 +241,7 @@ pub async fn download_chain(
             let _ = handler.send(blocks).await;
         }
     }
-    println!("Download finished");
+    log::info!("Download finished");
     Ok(())
 }
 

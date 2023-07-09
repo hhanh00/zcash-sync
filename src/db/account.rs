@@ -152,15 +152,15 @@ pub fn convert_to_watchonly(connection: &Connection, id_account: u32) -> Result<
 }
 
 pub struct AccountViewKey {
-    account: u32,
-    sfvk: ExtendedFullViewingKey,
-    sivk: SaplingIvk,
-    ofvk: Option<FullViewingKey>,
+    pub account: u32,
+    pub sfvk: ExtendedFullViewingKey,
+    pub sivk: SaplingIvk,
+    pub ofvk: Option<FullViewingKey>,
 }
 
 /// List Full Viewing Keys
 ///
-pub fn get_sapling_fvks(connection: &Connection, network: &Network) -> Result<Vec<AccountViewKey>> {
+pub fn get_fvks(connection: &Connection, network: &Network) -> Result<Vec<AccountViewKey>> {
     let hrp_fvk = network.hrp_sapling_extended_full_viewing_key();
     let mut statement = connection
         .prepare("SELECT a.id_account, a.ivk, o.fvk FROM accounts a LEFT JOIN orchard_addrs o ON a.id_account = o.account")?;
