@@ -1,8 +1,26 @@
-use crate::orchard::derive_orchard_keys;
+use crate::orchard::{derive_orchard_keys, OrchardKeyBytes};
 use crate::unified::UnifiedAddressType;
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use zcash_primitives::consensus::{Network, Parameters};
+
+pub fn get_orchard(connection: &Connection, account: u32) -> Result<Option<OrchardKeyBytes>> {
+    let key = connection
+        .query_row(
+            "SELECT sk, fvk FROM orchard_addrs WHERE account = ?1",
+            [account],
+            |row| {
+                let sk = row.get::<_, Option<Vec<u8>>>(0)?;
+                let fvk = row.get::<_, Vec<u8>>(1)?;
+                Ok(OrchardKeyBytes {
+                    sk: sk.map(|sk| sk.try_into().unwrap()),
+                    fvk: fvk.try_into().unwrap(),
+                })
+            },
+        )
+        .optional()?;
+    Ok(key)
+}
 
 pub fn create_orchard(connection: &Connection, network: &Network, account: u32) -> Result<()> {
     let account_details = super::account::get_account(connection, account)?;

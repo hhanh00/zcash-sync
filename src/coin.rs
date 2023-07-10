@@ -6,9 +6,16 @@ use std::sync::MutexGuard;
 use anyhow::Result;
 use async_trait::async_trait;
 use rusqlite::Connection;
+use zcash_primitives::consensus::Network;
+use crate::{BTCHandler, ETHHandler};
+use crate::ton::TonHandler;
+use crate::tron::TronHandler;
+use crate::zcash::ZcashHandler;
 
 #[async_trait(?Send)]
-pub trait CoinApi: Send {
+#[enum_delegate::register]
+pub trait CoinApi {
+    fn is_private(&self) -> bool { false }
     fn db_path(&self) -> &str;
     fn coingecko_id(&self) -> &'static str;
     fn get_url(&self) -> String;
@@ -76,6 +83,16 @@ pub trait CoinApi: Send {
     fn broadcast(&self, raw_tx: &[u8]) -> Result<String>;
 
     fn connection(&self) -> MutexGuard<Connection>;
+}
+
+#[async_trait(?Send)]
+pub trait ZcashApi: Send {
+    fn network(&self) -> Network;
+    fn new_sub_account(&self, name: &str, parent: u32, index: Option<u32>, count: u32) -> Result<()>;
+    fn get_available_addrs(&self, account: u32) -> Result<u8>;
+    fn get_ua(&self, account: u32, ua_type: u8) -> Result<String>;
+    async fn transparent_sync(&self, account: u32) -> Result<()>;
+    fn get_diversified_address(&self, account: u32, ua_type: u8, time: u32) -> Result<String>;
 }
 
 pub struct NoCoin;
@@ -177,5 +194,66 @@ impl CoinApi for NoCoin {
 
     fn connection(&self) -> MutexGuard<Connection> {
         unimplemented!()
+    }
+}
+
+#[enum_delegate::implement(CoinApi)]
+pub enum CoinHandler {
+    NoCoin(NoCoin),
+    Zcash(ZcashHandler),
+    // Ycash(ZcashHandler),
+    BTC(BTCHandler),
+    ETH(ETHHandler),
+    TON(TonHandler),
+    TRON(TronHandler),
+}
+
+impl Default for CoinHandler {
+    fn default() -> Self {
+        CoinHandler::NoCoin(NoCoin {})
+    }
+}
+
+impl ZcashApi for CoinHandler {
+    fn network(&self) -> Network {
+        match self {
+            CoinHandler::Zcash(zcash) => zcash.network(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn new_sub_account(&self, name: &str, parent: u32, index: Option<u32>, count: u32) -> Result<()> {
+        match self {
+            CoinHandler::Zcash(zcash) => zcash.new_sub_account(name, parent, index, count),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn get_available_addrs(&self, account: u32) -> Result<u8> {
+        match self {
+            CoinHandler::Zcash(zcash) => zcash.get_available_addrs(account),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn get_ua(&self, account: u32, ua_type: u8) -> Result<String> {
+        match self {
+            CoinHandler::Zcash(zcash) => zcash.get_ua(account, ua_type),
+            _ => unimplemented!(),
+        }
+    }
+
+    async fn transparent_sync(&self, account: u32) -> Result<()> {
+        match self {
+            CoinHandler::Zcash(zcash) => zcash.transparent_sync(account).await,
+            _ => unimplemented!(),
+        }
+    }
+
+    fn get_diversified_address(&self, account: u32, ua_type: u8, time: u32) -> Result<String> {
+        match self {
+            CoinHandler::Zcash(zcash) => zcash.get_diversified_address(account, ua_type, time).await,
+            _ => unimplemented!(),
+        }
     }
 }

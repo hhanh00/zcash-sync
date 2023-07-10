@@ -258,25 +258,19 @@ struct CResult_u8 reset_app(void);
 
 void mempool_run(int64_t port);
 
-void mempool_set_active(uint8_t coin, uint32_t id_account);
+void mempool_set_active(uint8_t coin, uint32_t account);
 
 struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t index);
 
-struct CResult_u8 new_sub_account(char *name, int32_t index, uint32_t count);
+struct CResult_u8 new_sub_account(char *name, uint32_t account, int32_t index, uint32_t count);
 
-struct CResult_u8 convert_to_watchonly(uint8_t coin, uint32_t id_account);
+struct CResult_u8 convert_to_watchonly(uint8_t coin, uint32_t account);
 
-struct CResult______u8 get_backup(uint8_t coin, uint32_t id_account);
+struct CResult______u8 get_backup(uint8_t coin, uint32_t account);
 
 struct CResult_u8 get_available_addrs(uint8_t coin, uint32_t account);
 
-struct CResult_____c_char get_address(uint8_t coin, uint32_t id_account, uint8_t ua_type);
-
-struct CResult_u8 import_transparent_key(uint8_t coin, uint32_t id_account, char *path);
-
-struct CResult_u8 import_transparent_secret_key(uint8_t coin,
-                                                uint32_t id_account,
-                                                char *secret_key);
+struct CResult_____c_char get_address(uint8_t coin, uint32_t account, uint8_t ua_type);
 
 void cancel_warp(uint8_t coin);
 
@@ -289,15 +283,18 @@ struct CResult_u32 warp(uint8_t coin,
 
 int8_t is_valid_key(uint8_t coin, char *key);
 
-struct CResult_u8 transparent_sync(uint8_t coin, uint32_t account);
+struct CResult_u8 trp_sync(uint8_t coin, uint32_t account);
 
-struct CResult______u8 get_t_txs(uint8_t coin, uint32_t account);
+struct CResult______u8 get_trp_txs(uint8_t coin, uint32_t account);
 
 struct CResult______u8 get_t_notes(uint8_t coin, uint32_t account);
 
 bool valid_address(uint8_t coin, char *address);
 
-struct CResult_____c_char get_diversified_address(uint8_t ua_type, uint32_t time);
+struct CResult_____c_char get_diversified_address(uint8_t coin,
+                                                  uint32_t account,
+                                                  uint8_t ua_type,
+                                                  uint32_t time);
 
 struct CResult_u32 get_latest_height(uint8_t coin);
 
@@ -307,8 +304,12 @@ struct CResult_u32 rewind_to(uint32_t height);
 
 struct CResult_u8 rescan_from(uint8_t coin, uint32_t height);
 
-struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t id_account);
+struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t account);
 
+/**
+ *
+ * TODO RESUME HERE
+ */
 struct CResult_____c_char transfer_pools(uint8_t coin,
                                          uint32_t account,
                                          uint8_t from_pool,
@@ -394,8 +395,8 @@ struct CResult_____c_char get_best_server(uint8_t *servers, uint64_t len);
 struct CResult_u8 import_from_zwl(uint8_t coin, char *name, char *data);
 
 struct CResult______u8 derive_zip32(uint8_t coin,
-                                    uint32_t id_account,
                                     uint32_t account,
+                                    uint32_t index,
                                     uint32_t external,
                                     bool has_address,
                                     uint32_t address);

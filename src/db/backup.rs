@@ -1,6 +1,6 @@
-use crate::db::data_generated::fb::AGEKeysT;
+use crate::db::data_generated::fb::{AccountDetailsT, AGEKeysT, BackupT};
 use age::secrecy::ExposeSecret;
-use anyhow::anyhow;
+use anyhow::{Result, anyhow};
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
 use std::fs::File;
@@ -8,7 +8,12 @@ use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{iter, time};
+use orchard::keys::FullViewingKey;
+use zcash_client_backend::encoding::decode_extended_full_viewing_key;
+use zcash_client_backend::keys::UnifiedFullViewingKey;
+use zcash_primitives::consensus::{Network, Parameters};
 use zip::write::FileOptions;
+use crate::orchard::OrchardKeyBytes;
 
 const YWALLET_BAK: &str = "YWallet.age";
 
@@ -35,7 +40,7 @@ impl FullEncryptedBackup {
         })
     }
 
-    pub fn add(&mut self, src: &Connection, db_name: &str) -> anyhow::Result<()> {
+    pub fn add(&mut self, src: &Connection, db_name: &str) -> Result<()> {
         let dst_path = self.tmp_dir.join(db_name);
         let mut dst = Connection::open(&dst_path)?;
         let backup = Backup::new(src, &mut dst)?;
@@ -44,7 +49,7 @@ impl FullEncryptedBackup {
         Ok(())
     }
 
-    pub fn close(&self, pk: &str) -> anyhow::Result<()> {
+    pub fn close(&self, pk: &str) -> Result<()> {
         let data = self.make_zip()?;
         let pubkey = age::x25519::Recipient::from_str(pk).map_err(|e| anyhow!(e.to_string()))?;
 
@@ -56,7 +61,7 @@ impl FullEncryptedBackup {
         Ok(())
     }
 
-    pub fn restore(&self, cipher_key: &str, data_path: &str) -> anyhow::Result<()> {
+    pub fn restore(&self, cipher_key: &str, data_path: &str) -> Result<()> {
         let key =
             age::x25519::Identity::from_str(cipher_key).map_err(|e| anyhow!(e.to_string()))?;
         let mut cipher_text = Vec::new();
@@ -79,7 +84,7 @@ impl FullEncryptedBackup {
         Ok(())
     }
 
-    fn make_zip(&self) -> anyhow::Result<Vec<u8>> {
+    fn make_zip(&self) -> Result<Vec<u8>> {
         let mut buffer = Vec::new();
         let zip_data = vec![];
         let buff = Cursor::new(zip_data);
@@ -95,7 +100,7 @@ impl FullEncryptedBackup {
         Ok(r.into_inner())
     }
 
-    fn unzip(&self, data: &[u8]) -> anyhow::Result<()> {
+    fn unzip(&self, data: &[u8]) -> Result<()> {
         let buff = Cursor::new(data);
         let mut zip_reader = zip::ZipArchive::new(buff)?;
         let db_names: Vec<_> = zip_reader.file_names().map(|s| s.to_string()).collect();
@@ -106,4 +111,33 @@ impl FullEncryptedBackup {
         }
         Ok(())
     }
+}
+
+pub fn get_backup_package(network: &Network, connection: &Connection, account: u32) -> Result<BackupT> {
+    let AccountDetailsT {
+        id, name,
+        seed,
+        sk,
+        aindex, ivk, address,
+    } = super::account::get_account(connection, account)?;
+    let orchard_keys = super::orchard::get_orchard(connection, account)?;
+    let uvk = orchard_keys.map(|OrchardKeyBytes { fvk: ofvk, .. }| {
+        // orchard sk is not serializable and must derived from seed
+        let sapling_efvk =
+            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
+                .unwrap();
+        let sapling_dfvk = sapling_efvk.to_diversifiable_full_viewing_key();
+        let orchard_fvk = FullViewingKey::from_bytes(&ofvk);
+        let ufvk = UnifiedFullViewingKey::new(Some(sapling_dfvk), orchard_fvk).unwrap();
+        ufvk.encode(network)
+    });
+    let backup = BackupT {
+        name,
+        seed,
+        index: aindex,
+        sk,
+        fvk: Some(fvk),
+        uvk,
+    };
+    Ok(backup)
 }

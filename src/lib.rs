@@ -72,6 +72,7 @@ pub mod lw_rpc;
 
 pub type Hash = [u8; 32];
 
+pub mod account;
 pub mod api;
 mod btc;
 mod chain;
@@ -101,6 +102,7 @@ mod tron;
 mod unified;
 mod zcash;
 mod zip32;
+pub mod pool;
 
 #[cfg(feature = "ledger")]
 pub mod ledger;
@@ -127,7 +129,7 @@ pub use note_selection::{
 
 pub use api::recipient::{make_recipient, make_recipients};
 pub use btc::{init_db as init_btc_db, BTCHandler};
-pub use coin::NoCoin;
+pub use coin::{NoCoin, CoinHandler};
 pub use db::data_generated::fb::{RecipientT, RecipientsT};
 pub use eth::{init_db as init_eth_db, ETHHandler};
 pub use scan::Progress;

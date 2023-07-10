@@ -1,6 +1,6 @@
-use crate::coin::CoinApi;
+use crate::coin::{CoinApi, ZcashApi};
 use crate::db::data_generated::fb::{AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, ProgressT, TxReportT, ZcashSyncParams};
-use crate::{connect_lightwalletd, ChainError, RecipientsT, Progress};
+use crate::{connect_lightwalletd, ChainError, RecipientsT, Progress, BTCHandler, db};
 use async_trait::async_trait;
 use rusqlite::Connection;
 use std::path::PathBuf;
@@ -11,6 +11,7 @@ use tokio::runtime::{Handle, Runtime};
 use tokio::sync::mpsc;
 use zcash_primitives::consensus::Network;
 use crate::api::dart_ffi::POST_COBJ;
+use anyhow::Result;
 
 pub struct ZcashHandler {
     coin: u8,
@@ -63,6 +64,8 @@ impl ZcashHandler {
 
 #[async_trait(?Send)]
 impl CoinApi for ZcashHandler {
+    fn is_private(&self) -> bool { true }
+
     fn db_path(&self) -> &str {
         self.db_path.to_str().unwrap()
     }
@@ -79,11 +82,11 @@ impl CoinApi for ZcashHandler {
         self.url = url.to_string();
     }
 
-    fn list_accounts(&self) -> anyhow::Result<AccountVecT> {
+    fn list_accounts(&self) -> Result<AccountVecT> {
         crate::db::read::get_account_list(&self.connection())
     }
 
-    fn new_account(&self, name: &str, key: &str, index: Option<u32>) -> anyhow::Result<u32> {
+    fn new_account(&self, name: &str, key: &str, index: Option<u32>) -> Result<u32> {
         let key = if !key.is_empty() {
             Some(key.to_owned())
         } else {
@@ -100,11 +103,11 @@ impl CoinApi for ZcashHandler {
         crate::key::decode_address(self.coin, &address).is_some()
     }
 
-    fn get_backup(&self, account: u32) -> anyhow::Result<BackupT> {
-        crate::api::account::get_backup_package(self.coin, account)
+    fn get_backup(&self, account: u32) -> Result<BackupT> {
+        crate::db::backup::get_backup_package(&self.network(), &self.connection(), account)
     }
 
-    async fn sync(&mut self, _account: u32, params: Vec<u8>) -> anyhow::Result<u32> {
+    async fn sync(&mut self, _account: u32, params: Vec<u8>) -> Result<u32> {
         if self.cancel.lock().unwrap().is_some() {
             anyhow::bail!("Sync already in progress");
         }
@@ -142,7 +145,7 @@ impl CoinApi for ZcashHandler {
         new_height
     }
 
-    fn cancel_sync(&mut self) -> anyhow::Result<()> {
+    fn cancel_sync(&mut self) -> Result<()> {
         let cancel = self.cancel.lock().unwrap().take();
         if let Some(cancel) = cancel {
             let _ = cancel.send(());
@@ -150,13 +153,13 @@ impl CoinApi for ZcashHandler {
         Ok(())
     }
 
-    async fn get_latest_height(&self) -> anyhow::Result<u32> {
+    async fn get_latest_height(&self) -> Result<u32> {
         let mut client = connect_lightwalletd(&self.url).await?;
         let height = crate::chain::get_latest_height(&mut client).await?;
         Ok(height)
     }
 
-    fn skip_to_last_height(&mut self) -> anyhow::Result<()> {
+    fn skip_to_last_height(&mut self) -> Result<()> {
         let coin = self.coin;
         std::thread::spawn(move || {
             let runtime = Runtime::new().unwrap();
@@ -166,11 +169,11 @@ impl CoinApi for ZcashHandler {
         .unwrap()
     }
 
-    fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<u32> {
+    fn rewind_to_height(&mut self, height: u32) -> Result<u32> {
         crate::api::sync::rewind_to(height)
     }
 
-    fn truncate(&mut self, height: u32) -> anyhow::Result<()> {
+    fn truncate(&mut self, height: u32) -> Result<()> {
         let coin = self.coin;
         std::thread::spawn(move || {
             let runtime = Runtime::new().unwrap();
@@ -180,7 +183,7 @@ impl CoinApi for ZcashHandler {
         .unwrap()
     }
 
-    fn get_balance(&self, account: u32) -> anyhow::Result<u64> {
+    fn get_balance(&self, account: u32) -> Result<u64> {
         tokio::task::block_in_place(move || {
             Handle::current().block_on(
                 crate::transparent::get_balance(&self.connection(), &self.url, account))
@@ -189,11 +192,11 @@ impl CoinApi for ZcashHandler {
 
     // All these methods are specialized for zcash
 
-    fn get_txs(&self, _account: u32) -> anyhow::Result<PlainTxVecT> {
+    fn get_txs(&self, _account: u32) -> Result<PlainTxVecT> {
         unimplemented!()
     }
 
-    fn get_notes(&self, _account: u32) -> anyhow::Result<PlainNoteVecT> {
+    fn get_notes(&self, _account: u32) -> Result<PlainNoteVecT> {
         unimplemented!()
     }
 
@@ -202,23 +205,50 @@ impl CoinApi for ZcashHandler {
         _account: u32,
         _recipients: &RecipientsT,
         _feeb: Option<u64>,
-    ) -> anyhow::Result<String> {
+    ) -> Result<String> {
         unimplemented!()
     }
 
-    fn to_tx_report(&self, _tx_plan: &str) -> anyhow::Result<TxReportT> {
+    fn to_tx_report(&self, _tx_plan: &str) -> Result<TxReportT> {
         unimplemented!()
     }
 
-    fn sign(&self, _account: u32, _tx_plan: &str) -> anyhow::Result<Vec<u8>> {
+    fn sign(&self, _account: u32, _tx_plan: &str) -> Result<Vec<u8>> {
         unimplemented!()
     }
 
-    fn broadcast(&self, _raw_tx: &[u8]) -> anyhow::Result<String> {
+    fn broadcast(&self, _raw_tx: &[u8]) -> Result<String> {
         unimplemented!()
     }
 
     fn connection(&self) -> MutexGuard<Connection> {
         self.connection.lock().unwrap()
+    }
+}
+
+#[async_trait]
+impl ZcashApi for ZcashHandler {
+    fn network(&self) -> Network {
+        self.network.clone()
+    }
+
+    fn new_sub_account(&self, name: &str, parent: u32, index: Option<u32>, count: u32) -> Result<()> {
+        todo!()
+    }
+
+    fn get_available_addrs(&self, account: u32) -> Result<u8> {
+        db::account::get_available_addrs(&self.connection(), account)
+    }
+
+    fn get_ua(&self, account: u32, ua_type: u8) -> Result<String> {
+        crate::account::get_unified_address(&self.network(), &self.connection(), account, ua_type)
+    }
+
+    async fn transparent_sync(&self, account: u32) -> Result<()> {
+        crate::transparent::sync(&self.network(), &self.connection(), account).await
+    }
+
+    fn get_diversified_address(&self, account: u32, ua_type: u8, time: u32) -> Result<String> {
+        crate::unified::get_diversified_address(&self.network(), &self.connection(), account, ua_type, time)
     }
 }

@@ -26,7 +26,7 @@ use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
 pub mod account;
-mod backup;
+pub mod backup;
 pub mod checkpoint;
 pub mod cipher;
 pub mod contact;

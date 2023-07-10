@@ -2,21 +2,14 @@ mod db;
 
 use crate::db::data_generated::fb::{PlainNoteT, PlainNoteVecT, PlainTxT, PlainTxVecT};
 use crate::{CoinConfig, connect_lightwalletd};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 pub use db::migrate_db;
 use rusqlite::Connection;
+use zcash_primitives::consensus::Network;
 
-pub async fn sync(coin: u8, account: u32) -> Result<()> {
-    let c = CoinConfig::get(coin);
-    let url = c.lwd_url.as_ref().unwrap();
-    let db = c.db()?;
-    let connection = &db.connection;
-    let network = c.chain.network();
-    let address: String = connection.query_row(
-        "SELECT address FROM taddrs WHERE account = ?1",
-        [account],
-        |r| r.get(0),
-    )?;
+pub async fn sync(network: &Network, connection: &Connection, account: u32) -> Result<()> {
+    let transparent_details = crate::db::transparent::get_transparent(connection, account)?.ok_or(anyhow!("No taddr"))?;
+    let address = transparent_details.address.unwrap();
     db::fetch_txs(network, connection, url, account, &address)?;
     db::update_timestamps(connection, url).await?;
     Ok(())
