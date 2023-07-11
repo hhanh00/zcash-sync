@@ -8,17 +8,6 @@ use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::sapling::SaplingIvk;
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
-pub fn get_id_by_address(connection: &Connection, address: &str) -> Result<Option<u32>> {
-    let id = connection
-        .query_row(
-            "SELECT id_account accounts WHERE address = ?1",
-            params![address],
-            |row| row.get(0),
-        )
-        .map_err(wrap_query_no_rows("get_account_info"))?;
-    Ok(id)
-}
-
 pub fn get_account(connection: &Connection, id: u32) -> Result<Option<AccountDetailsT>> {
     assert_ne!(id, 0);
     let r = connection
@@ -337,6 +326,17 @@ pub fn get_available_account_id(connection: &Connection, id: u32) -> Result<u32>
         })
         .optional()?
         .unwrap_or(0);
+    Ok(id)
+}
+
+pub fn get_account_by_address(connection: &Connection, address: &str) -> Result<Option<u32>> {
+    let id = connection
+        .query_row(
+            "SELECT id_account FROM accounts WHERE address = ?1",
+            [address],
+            |row| row.get::<_, u32>(0),
+        )
+        .optional()?;
     Ok(id)
 }
 

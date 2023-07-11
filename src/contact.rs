@@ -1,7 +1,13 @@
+use anyhow::Result;
 use prost::bytes::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use rusqlite::Connection;
+use zcash_primitives::consensus::Network;
 use zcash_primitives::memo::{Memo, MemoBytes};
+use crate::api::recipient::RecipientMemo;
+use crate::{db, TransactionPlan};
+use crate::db::data_generated::fb::AccountDetailsT;
 
 const CONTACT_COOKIE: u32 = 0x434E5440;
 
@@ -83,4 +89,43 @@ impl ContactDecoder {
         let data = &bb[0..len];
         Ok((n, data.to_vec()))
     }
+}
+
+pub async fn commit_unsaved_contacts(connection: &Connection, anchor_offset: u32) -> Result<TransactionPlan> {
+    let contacts = crate::db::contact::list_unsaved_contacts(connection)?;
+    let memos = serialize_contacts(&contacts)?;
+    let tx_plan = save_contacts_tx(&memos, anchor_offset).await?;
+    Ok(tx_plan)
+}
+
+async fn save_contacts_tx(
+    network: &Network,
+    connection: &Connection,
+    url: &str,
+    account: u32,
+    memos: &[Memo],
+    confirmations: u32) -> Result<TransactionPlan> {
+    let last_height = crate::chain::latest_height(url).await?;
+    let AccountDetailsT { address, .. } = db::account::get_account(connection, account)?.ok_or("No account")?;
+    let recipients: Vec<_> = memos
+        .iter()
+        .map(|m| RecipientMemo {
+            address: address.unwrap(),
+            amount: 0,
+            fee_included: false,
+            memo: m.clone(),
+            max_amount_per_note: 0,
+        })
+        .collect();
+
+    let tx_plan = crate::pay::build_tx_plan(
+        network,
+        connection,
+        account,
+        last_height,
+        &recipients,
+        0,
+        confirmations,
+    ).await?;
+    Ok(tx_plan)
 }

@@ -22,7 +22,7 @@ pub fn get_orchard(connection: &Connection, account: u32) -> Result<Option<Orcha
     Ok(key)
 }
 
-pub fn create_orchard(connection: &Connection, network: &Network, account: u32) -> Result<()> {
+pub fn create_orchard(network: &Network, connection: &Connection, account: u32) -> Result<()> {
     let account_details = super::account::get_account(connection, account)?;
     if let Some(account_details) = account_details {
         let keys = derive_orchard_keys(

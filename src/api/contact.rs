@@ -37,30 +37,3 @@ pub async fn commit_unsaved_contacts(anchor_offset: u32) -> anyhow::Result<Trans
     Ok(tx_plan)
 }
 
-async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<TransactionPlan> {
-    let c = CoinConfig::get_active();
-    let mut client = c.connect_lwd().await?;
-    let last_height = get_latest_height(&mut client).await?;
-    let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
-    let recipients: Vec<_> = memos
-        .iter()
-        .map(|m| RecipientMemo {
-            address: address.clone(),
-            amount: 0,
-            fee_included: false,
-            memo: m.clone(),
-            max_amount_per_note: 0,
-        })
-        .collect();
-
-    let tx_plan = build_tx_plan(
-        c.coin,
-        c.id_account,
-        last_height,
-        &recipients,
-        1,
-        anchor_offset,
-    )
-    .await?;
-    Ok(tx_plan)
-}

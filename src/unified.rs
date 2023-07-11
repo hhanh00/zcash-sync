@@ -1,16 +1,18 @@
-use crate::{AccountData, db, DbAdapter};
+use crate::db::data_generated::fb::AccountDetailsT;
+use crate::{db, AccountData, DbAdapter};
 use anyhow::anyhow;
 use orchard::keys::{FullViewingKey, Scope};
 use orchard::Address;
 use rusqlite::Connection;
 use zcash_address::unified::{Container, Encoding, Receiver};
 use zcash_address::{unified, ToAddress, ZcashAddress};
-use zcash_client_backend::encoding::{decode_payment_address, encode_payment_address, AddressCodec, decode_extended_full_viewing_key};
+use zcash_client_backend::encoding::{
+    decode_extended_full_viewing_key, decode_payment_address, encode_payment_address, AddressCodec,
+};
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::sapling::PaymentAddress;
 use zcash_primitives::zip32::DiversifierIndex;
-use crate::db::data_generated::fb::AccountDetailsT;
 
 #[derive(Debug)]
 pub struct UnifiedAddressType {
@@ -60,7 +62,8 @@ pub fn get_unified_address(
     if transparent_details.is_none() {
         tpe.transparent = false;
     }
-    let sapling_details = db::account::get_account(connection, account)?.ok_or(anyhow!("No zaddr"))?;
+    let sapling_details =
+        db::account::get_account(connection, account)?.ok_or(anyhow!("No zaddr"))?;
     let orchard_details = db::orchard::get_orchard(connection, account)?;
     if orchard_details.is_none() {
         tpe.orchard = false;
@@ -150,7 +153,13 @@ pub fn orchard_as_unified(network: &Network, address: &Address) -> ZcashAddress 
 }
 
 /// Generate a new diversified address
-pub fn get_diversified_address(network: &Network, connection: &Connection, account: u32, ua_type: u8, time: u32) -> anyhow::Result<String> {
+pub fn get_diversified_address(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    ua_type: u8,
+    time: u32,
+) -> anyhow::Result<String> {
     let ua_type = ua_type & 6; // don't include transparent component
     if ua_type == 0 {
         anyhow::bail!("Must include a shielded receiver");
@@ -159,10 +168,9 @@ pub fn get_diversified_address(network: &Network, connection: &Connection, accou
     let orchard_keys = db::orchard::get_orchard(connection, account)?;
     let mut receivers = vec![];
     if let Some(ivk) = ivk {
-        let fvk = decode_extended_full_viewing_key(
-            network.hrp_sapling_extended_full_viewing_key(),
-            &ivk,
-        ).unwrap();
+        let fvk =
+            decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &ivk)
+                .unwrap();
         let mut di = [0u8; 11];
         di[4..8].copy_from_slice(&time.to_le_bytes());
         let diversifier_index = DiversifierIndex(di);
@@ -192,10 +200,11 @@ pub fn get_diversified_address(network: &Network, connection: &Connection, accou
     }
 
     let unified_address = UA(receivers);
-    let address = ZcashAddress::from_unified(
-        network.address_network().unwrap(),
-        unified_address,
-    );
+    let address = ZcashAddress::from_unified(network.address_network().unwrap(), unified_address);
     let address = address.encode();
     Ok(address)
+}
+
+pub fn has_unified(network: &Network) -> bool {
+    network == Network::MainNetwork || network == Network::TestNetwork
 }

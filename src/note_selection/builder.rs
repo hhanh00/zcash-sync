@@ -31,12 +31,6 @@ use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_primitives::transaction::{Transaction, TransactionData, TxVersion};
 use zcash_primitives::zip32::ExtendedSpendingKey;
 
-pub struct SecretKeys {
-    pub transparent: Option<SecretKey>,
-    pub sapling: Option<ExtendedSpendingKey>,
-    pub orchard: Option<SpendingKey>,
-}
-
 pub struct TxBuilderContext {
     pub height: u32,
     pub sapling_anchor: [u8; 32],
@@ -296,30 +290,3 @@ pub fn build_tx(
     Ok(tx_bytes)
 }
 
-pub fn get_secret_keys(coin: u8, account: u32) -> anyhow::Result<SecretKeys> {
-    let c = CoinConfig::get(coin);
-    let db = c.db()?;
-
-    let transparent_sk = db
-        .get_tsk(account)?
-        .map(|tsk| SecretKey::from_str(&tsk).unwrap());
-
-    let AccountData { sk, .. } = db.get_account_info(account)?;
-    let sapling_sk = sk.ok_or(anyhow!("No secret key"))?;
-    let sapling_sk = decode_extended_spending_key(
-        c.chain.network().hrp_sapling_extended_spending_key(),
-        &sapling_sk,
-    )
-    .unwrap();
-
-    let orchard_sk = db
-        .get_orchard(account)?
-        .and_then(|ob| ob.sk.map(|sk| SpendingKey::from_bytes(sk).unwrap()));
-
-    let sk = SecretKeys {
-        transparent: transparent_sk,
-        sapling: Some(sapling_sk),
-        orchard: orchard_sk,
-    };
-    Ok(sk)
-}

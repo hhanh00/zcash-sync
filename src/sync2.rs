@@ -1,17 +1,17 @@
+use crate::chain::{download_chain, get_latest_height};
+use crate::orchard::{DecryptedOrchardNote, OrchardDecrypter, OrchardHasher, OrchardViewKey};
+use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
+use crate::scan::{AMProgressCallback, Blocks, Progress};
+use crate::sync::tree::TreeCheckpoint;
+use crate::sync::{Synchronizer, WarpProcessor};
+use crate::transaction::get_transaction_details;
+use crate::{connect_lightwalletd, db};
 use anyhow::Result;
 use orchard::note_encryption::OrchardDomain;
 use rusqlite::Connection;
 use tokio::sync::mpsc;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
-use crate::{connect_lightwalletd, db};
-use crate::chain::{download_chain, get_latest_height};
-use crate::orchard::{DecryptedOrchardNote, OrchardDecrypter, OrchardHasher, OrchardViewKey};
-use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
-use crate::scan::{AMProgressCallback, Blocks, Progress};
-use crate::sync::{Synchronizer, WarpProcessor};
-use crate::sync::tree::TreeCheckpoint;
-use crate::transaction::get_transaction_details;
 
 type ProgressCallback = dyn Fn(Progress);
 
@@ -72,7 +72,8 @@ pub async fn warp_sync_inner<'a>(
             max_cost,
             cancel,
             blocks_tx,
-        ).await?;
+        )
+        .await?;
         Ok::<_, anyhow::Error>(())
     });
 
@@ -82,16 +83,23 @@ pub async fn warp_sync_inner<'a>(
         downloaded: 0,
     };
 
-    let sapling_vks: Vec<_> = vks.iter().map(|vk|
-        SaplingViewKey {
+    let sapling_vks: Vec<_> = vks
+        .iter()
+        .map(|vk| SaplingViewKey {
             account: vk.account,
             fvk: vk.sfvk.clone(),
             ivk: vk.sivk.clone(),
-        }
-    ).collect();
-    let orchard_vks: Vec<_> = vks.iter().filter_map(
-        |vk| vk.ofvk.as_ref().map(|ofvk| OrchardViewKey { account: vk.account, fvk: ofvk.clone() })
-    ).collect();
+        })
+        .collect();
+    let orchard_vks: Vec<_> = vks
+        .iter()
+        .filter_map(|vk| {
+            vk.ofvk.as_ref().map(|ofvk| OrchardViewKey {
+                account: vk.account,
+                fvk: ofvk.clone(),
+            })
+        })
+        .collect();
 
     while let Some(blocks) = blocks_rx.recv().await {
         let first_block = blocks.0.first().unwrap(); // cannot be empty because blocks are not
@@ -108,7 +116,8 @@ pub async fn warp_sync_inner<'a>(
         {
             // Sapling
             let mut sapling_synchronizer = {
-                let TreeCheckpoint { tree, witnesses } = db::checkpoint::get_tree::<'S'>(connection, height)?;
+                let TreeCheckpoint { tree, witnesses } =
+                    db::checkpoint::get_tree::<'S'>(connection, height)?;
                 let decrypter = SaplingDecrypter::new(network);
                 let warper = WarpProcessor::new(SaplingHasher::default());
                 SaplingSynchronizer::new_from_parts(
@@ -124,7 +133,8 @@ pub async fn warp_sync_inner<'a>(
             let orchard_synchronizer = {
                 if has_orchard {
                     // Orchard
-                    let TreeCheckpoint { tree, witnesses } = db::checkpoint::get_tree::<'O'>(connection, height)?;
+                    let TreeCheckpoint { tree, witnesses } =
+                        db::checkpoint::get_tree::<'O'>(connection, height)?;
                     let decrypter = OrchardDecrypter::new(network);
                     let warper = WarpProcessor::new(OrchardHasher::new());
                     let synchronizer = OrchardSynchronizer::new_from_parts(
@@ -134,11 +144,12 @@ pub async fn warp_sync_inner<'a>(
                         tree,
                         unspent_notes,
                         witnesses,
-                        "orchard"
+                        "orchard",
                     );
                     Some(synchronizer)
+                } else {
+                    None
                 }
-                else { None }
             };
 
             let db_tx = connection.transaction()?;
@@ -147,7 +158,8 @@ pub async fn warp_sync_inner<'a>(
             log::info!("Process sapling end");
             if let Some(mut orchard_synchronizer) = orchard_synchronizer {
                 log::info!("Process orchard start");
-                progress.trial_decryptions += orchard_synchronizer.process2(&blocks.0, &db_tx)? as u64;
+                progress.trial_decryptions +=
+                    orchard_synchronizer.process2(&blocks.0, &db_tx)? as u64;
                 log::info!("Process orchard end");
             }
             db::checkpoint::store_block_timestamp(last_height, &last_hash, last_timestamp, &db_tx)?;

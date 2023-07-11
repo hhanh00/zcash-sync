@@ -262,7 +262,11 @@ void mempool_set_active(uint8_t coin, uint32_t account);
 
 struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t index);
 
-struct CResult_u8 new_sub_account(char *name, uint32_t account, int32_t index, uint32_t count);
+struct CResult_u8 new_sub_account(uint8_t coin,
+                                  char *name,
+                                  uint32_t account,
+                                  int32_t index,
+                                  uint32_t count);
 
 struct CResult_u8 convert_to_watchonly(uint8_t coin, uint32_t account);
 
@@ -340,9 +344,9 @@ struct CResult______u8 transaction_report(uint8_t coin, char *plan);
 
 struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx_plan, int64_t _port);
 
-struct CResult_____c_char sign_and_broadcast(uint8_t coin, uint32_t account, char *tx_plan);
-
 struct CResult_____c_char broadcast_tx(uint8_t coin, char *tx_str);
+
+struct CResult_____c_char sign_and_broadcast(uint8_t coin, uint32_t account, char *tx_plan);
 
 bool is_valid_tkey(char *sk);
 
@@ -351,21 +355,21 @@ struct CResult_____c_char sweep_tkey(uint32_t last_height,
                                      uint8_t pool,
                                      uint32_t confirmations);
 
-struct CResult_u32 get_activation_date(void);
+struct CResult_u32 get_activation_date(uint8_t coin);
 
-struct CResult_u32 get_block_by_time(uint32_t time);
+struct CResult_u32 get_block_by_time(uint8_t coin, uint32_t time);
 
 struct CResult_u32 sync_historical_prices(uint8_t coin, int64_t now, uint32_t days, char *currency);
 
-struct CResult_u8 store_contact(uint32_t id, char *name, char *address, bool dirty);
+struct CResult_u8 store_contact(uint8_t coin, uint32_t id, char *name, char *address, bool dirty);
 
 struct CResult_____c_char commit_unsaved_contacts(uint32_t anchor_offset);
 
-struct CResult_u8 mark_message_read(uint32_t message, bool read);
+struct CResult_u8 mark_message_read(uint8_t coin, uint32_t message, bool read);
 
-struct CResult_u8 mark_all_messages_read(bool read);
+struct CResult_u8 mark_all_messages_read(uint8_t coin, bool read);
 
-struct CResult_u8 truncate_data(void);
+struct CResult_u8 truncate_data(uint8_t coin);
 
 bool check_account(uint8_t coin, uint32_t account);
 

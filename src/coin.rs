@@ -3,22 +3,24 @@ use crate::db::data_generated::fb::{
 };
 use std::sync::MutexGuard;
 
+use crate::ton::TonHandler;
+use crate::tron::TronHandler;
+use crate::zcash::ZcashHandler;
+use crate::{BTCHandler, ETHHandler};
 use anyhow::Result;
 use async_trait::async_trait;
 use rusqlite::Connection;
 use zcash_primitives::consensus::Network;
-use crate::{BTCHandler, ETHHandler};
-use crate::ton::TonHandler;
-use crate::tron::TronHandler;
-use crate::zcash::ZcashHandler;
 
 #[async_trait(?Send)]
 #[enum_delegate::register]
 pub trait CoinApi {
-    fn is_private(&self) -> bool { false }
+    fn is_private(&self) -> bool {
+        false
+    }
     fn db_path(&self) -> &str;
     fn coingecko_id(&self) -> &'static str;
-    fn get_url(&self) -> String;
+    fn url(&self) -> String;
     fn set_url(&mut self, url: &str);
     fn get_property(&self, name: &str) -> Result<String> {
         super::btc::get_property(&self.connection(), name)
@@ -81,6 +83,7 @@ pub trait CoinApi {
     fn to_tx_report(&self, tx_plan: &str) -> Result<TxReportT>;
     fn sign(&self, account: u32, tx_plan: &str) -> Result<Vec<u8>>;
     fn broadcast(&self, raw_tx: &[u8]) -> Result<String>;
+    fn mark_inputs_spent(&self, _tx_plan: &str, _height: u32) -> Result<()> { Ok(()) }
 
     fn connection(&self) -> MutexGuard<Connection>;
 }
@@ -88,11 +91,11 @@ pub trait CoinApi {
 #[async_trait(?Send)]
 pub trait ZcashApi: Send {
     fn network(&self) -> Network;
-    fn new_sub_account(&self, name: &str, parent: u32, index: Option<u32>, count: u32) -> Result<()>;
-    fn get_available_addrs(&self, account: u32) -> Result<u8>;
-    fn get_ua(&self, account: u32, ua_type: u8) -> Result<String>;
-    async fn transparent_sync(&self, account: u32) -> Result<()>;
-    fn get_diversified_address(&self, account: u32, ua_type: u8, time: u32) -> Result<String>;
+    // fn new_sub_account(&self, name: &str, parent: u32, index: Option<u32>, count: u32) -> Result<()>;
+    // fn get_available_addrs(&self, account: u32) -> Result<u8>;
+    // fn get_ua(&self, account: u32, ua_type: u8) -> Result<String>;
+    // async fn transparent_sync(&self, account: u32) -> Result<()>;
+    // fn get_diversified_address(&self, account: u32, ua_type: u8, time: u32) -> Result<String>;
 }
 
 pub struct NoCoin;
@@ -107,7 +110,7 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    fn get_url(&self) -> String {
+    fn url(&self) -> String {
         unimplemented!()
     }
 
@@ -201,7 +204,6 @@ impl CoinApi for NoCoin {
 pub enum CoinHandler {
     NoCoin(NoCoin),
     Zcash(ZcashHandler),
-    // Ycash(ZcashHandler),
     BTC(BTCHandler),
     ETH(ETHHandler),
     TON(TonHandler),
@@ -218,41 +220,6 @@ impl ZcashApi for CoinHandler {
     fn network(&self) -> Network {
         match self {
             CoinHandler::Zcash(zcash) => zcash.network(),
-            _ => unimplemented!(),
-        }
-    }
-
-    fn new_sub_account(&self, name: &str, parent: u32, index: Option<u32>, count: u32) -> Result<()> {
-        match self {
-            CoinHandler::Zcash(zcash) => zcash.new_sub_account(name, parent, index, count),
-            _ => unimplemented!(),
-        }
-    }
-
-    fn get_available_addrs(&self, account: u32) -> Result<u8> {
-        match self {
-            CoinHandler::Zcash(zcash) => zcash.get_available_addrs(account),
-            _ => unimplemented!(),
-        }
-    }
-
-    fn get_ua(&self, account: u32, ua_type: u8) -> Result<String> {
-        match self {
-            CoinHandler::Zcash(zcash) => zcash.get_ua(account, ua_type),
-            _ => unimplemented!(),
-        }
-    }
-
-    async fn transparent_sync(&self, account: u32) -> Result<()> {
-        match self {
-            CoinHandler::Zcash(zcash) => zcash.transparent_sync(account).await,
-            _ => unimplemented!(),
-        }
-    }
-
-    fn get_diversified_address(&self, account: u32, ua_type: u8, time: u32) -> Result<String> {
-        match self {
-            CoinHandler::Zcash(zcash) => zcash.get_diversified_address(account, ua_type, time).await,
             _ => unimplemented!(),
         }
     }

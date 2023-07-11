@@ -37,6 +37,11 @@ use crate::gpu::cuda::{CudaProcessor, CUDA_CONTEXT};
 use crate::gpu::metal::MetalProcessor;
 use crate::gpu::USE_GPU;
 
+pub async fn latest_height(url: &str) -> anyhow::Result<u32> {
+    let mut client = connect_lightwalletd(url).await?;
+    get_latest_height(&mut client).await
+}
+
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
 ) -> anyhow::Result<u32> {

@@ -9,19 +9,19 @@ use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::AddressCodec;
 use zcash_primitives::consensus::Network;
 
-pub fn store_contact(connection: &Connection, contact: &Contact, dirty: bool) -> Result<()> {
+pub fn store_contact(connection: &Connection, contact: &ContactT, dirty: bool) -> Result<()> {
     if contact.id == 0 {
         connection.execute(
             "INSERT INTO contacts(name, address, dirty)
                 VALUES (?1, ?2, ?3)",
-            params![&contact.name, &contact.address, dirty],
+            params![&contact.name.unwrap(), &contact.address.unwrap(), dirty],
         )?;
     } else {
         connection.execute(
             "INSERT INTO contacts(id, name, address, dirty)
                 VALUES (?1, ?2, ?3, ?4) ON CONFLICT (id) DO UPDATE SET
                 name = excluded.name, address = excluded.address, dirty = excluded.dirty",
-            params![contact.id, &contact.name, &contact.address, dirty],
+            params![contact.id, &contact.name.unwrap(), &contact.address.unwrap(), dirty],
         )?;
     }
     Ok(())

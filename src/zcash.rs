@@ -1,17 +1,19 @@
+use crate::api::dart_ffi::POST_COBJ;
 use crate::coin::{CoinApi, ZcashApi};
-use crate::db::data_generated::fb::{AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, ProgressT, TxReportT, ZcashSyncParams};
-use crate::{connect_lightwalletd, ChainError, RecipientsT, Progress, BTCHandler, db};
+use crate::db::data_generated::fb::{
+    AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, ProgressT, TxReportT, ZcashSyncParams,
+};
+use crate::{connect_lightwalletd, db, BTCHandler, ChainError, Progress, RecipientsT, TransactionPlan};
+use allo_isolate::IntoDart;
+use anyhow::Result;
 use async_trait::async_trait;
+use flatbuffers::FlatBufferBuilder;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
-use allo_isolate::IntoDart;
-use flatbuffers::FlatBufferBuilder;
 use tokio::runtime::{Handle, Runtime};
 use tokio::sync::mpsc;
 use zcash_primitives::consensus::Network;
-use crate::api::dart_ffi::POST_COBJ;
-use anyhow::Result;
 
 pub struct ZcashHandler {
     coin: u8,
@@ -24,20 +26,18 @@ pub struct ZcashHandler {
 }
 
 fn progress(port: i64) -> impl Fn(Progress) {
-    move |progress| {
-        unsafe {
-            if let Some(p) = POST_COBJ {
-                let progress = ProgressT {
-                    height: progress.height,
-                    trial_decryptions: progress.trial_decryptions,
-                    downloaded: progress.downloaded as u64,
-                };
-                let mut builder = FlatBufferBuilder::new();
-                let root = progress.pack(&mut builder);
-                builder.finish(root, None);
-                let mut progress = builder.finished_data().to_vec().into_dart();
-                p(port, &mut progress);
-            }
+    move |progress| unsafe {
+        if let Some(p) = POST_COBJ {
+            let progress = ProgressT {
+                height: progress.height,
+                trial_decryptions: progress.trial_decryptions,
+                downloaded: progress.downloaded as u64,
+            };
+            let mut builder = FlatBufferBuilder::new();
+            let root = progress.pack(&mut builder);
+            builder.finish(root, None);
+            let mut progress = builder.finished_data().to_vec().into_dart();
+            p(port, &mut progress);
         }
     }
 }
@@ -64,7 +64,9 @@ impl ZcashHandler {
 
 #[async_trait(?Send)]
 impl CoinApi for ZcashHandler {
-    fn is_private(&self) -> bool { true }
+    fn is_private(&self) -> bool {
+        true
+    }
 
     fn db_path(&self) -> &str {
         self.db_path.to_str().unwrap()
@@ -83,7 +85,7 @@ impl CoinApi for ZcashHandler {
     }
 
     fn list_accounts(&self) -> Result<AccountVecT> {
-        crate::db::read::get_account_list(&self.connection())
+        db::read::get_account_list(&self.connection())
     }
 
     fn new_account(&self, name: &str, key: &str, index: Option<u32>) -> Result<u32> {
@@ -104,7 +106,7 @@ impl CoinApi for ZcashHandler {
     }
 
     fn get_backup(&self, account: u32) -> Result<BackupT> {
-        crate::db::backup::get_backup_package(&self.network(), &self.connection(), account)
+        db::backup::get_backup_package(&self.network(), &self.connection(), account)
     }
 
     async fn sync(&mut self, _account: u32, params: Vec<u8>) -> Result<u32> {
@@ -185,8 +187,11 @@ impl CoinApi for ZcashHandler {
 
     fn get_balance(&self, account: u32) -> Result<u64> {
         tokio::task::block_in_place(move || {
-            Handle::current().block_on(
-                crate::transparent::get_balance(&self.connection(), &self.url, account))
+            Handle::current().block_on(crate::transparent::get_balance(
+                &self.connection(),
+                &self.url,
+                account,
+            ))
         })
     }
 
@@ -213,12 +218,18 @@ impl CoinApi for ZcashHandler {
         unimplemented!()
     }
 
-    fn sign(&self, _account: u32, _tx_plan: &str) -> Result<Vec<u8>> {
-        unimplemented!()
+    fn sign(&self, account: u32, tx_plan: &str) -> Result<Vec<u8>> {
+        let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
+        crate::pay::sign_plan(&self.network(), &self.connection(), account, &tx_plan)
     }
 
     fn broadcast(&self, _raw_tx: &[u8]) -> Result<String> {
-        unimplemented!()
+        crate::pay::broadcast_tx(coin, &tx).await
+    }
+
+    fn mark_inputs_spent(&self, tx_plan: &str, height: u32) -> Result<()> {
+        let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
+        crate::pay::mark_inputs_spent(&self.connection(), &tx_plan, height)
     }
 
     fn connection(&self) -> MutexGuard<Connection> {
@@ -232,23 +243,7 @@ impl ZcashApi for ZcashHandler {
         self.network.clone()
     }
 
-    fn new_sub_account(&self, name: &str, parent: u32, index: Option<u32>, count: u32) -> Result<()> {
-        todo!()
-    }
-
-    fn get_available_addrs(&self, account: u32) -> Result<u8> {
-        db::account::get_available_addrs(&self.connection(), account)
-    }
-
-    fn get_ua(&self, account: u32, ua_type: u8) -> Result<String> {
-        crate::account::get_unified_address(&self.network(), &self.connection(), account, ua_type)
-    }
-
-    async fn transparent_sync(&self, account: u32) -> Result<()> {
-        crate::transparent::sync(&self.network(), &self.connection(), account).await
-    }
-
-    fn get_diversified_address(&self, account: u32, ua_type: u8, time: u32) -> Result<String> {
-        crate::unified::get_diversified_address(&self.network(), &self.connection(), account, ua_type, time)
-    }
+    // fn new_sub_account(&self, name: &str, parent: u32, index: Option<u32>, count: u32) -> Result<()> {
+    //     todo!()
+    // }
 }

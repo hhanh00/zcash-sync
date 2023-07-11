@@ -1,6 +1,8 @@
-use crate::db::data_generated::fb::{AccountDetailsT, AGEKeysT, BackupT};
+use crate::db::data_generated::fb::{AGEKeysT, AccountDetailsT, BackupT};
+use crate::orchard::OrchardKeyBytes;
 use age::secrecy::ExposeSecret;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use orchard::keys::FullViewingKey;
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
 use std::fs::File;
@@ -8,12 +10,10 @@ use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{iter, time};
-use orchard::keys::FullViewingKey;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::{Network, Parameters};
 use zip::write::FileOptions;
-use crate::orchard::OrchardKeyBytes;
 
 const YWALLET_BAK: &str = "YWallet.age";
 
@@ -113,12 +113,19 @@ impl FullEncryptedBackup {
     }
 }
 
-pub fn get_backup_package(network: &Network, connection: &Connection, account: u32) -> Result<BackupT> {
+pub fn get_backup_package(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+) -> Result<BackupT> {
     let AccountDetailsT {
-        id, name,
+        id,
+        name,
         seed,
         sk,
-        aindex, ivk, address,
+        aindex,
+        ivk,
+        address,
     } = super::account::get_account(connection, account)?;
     let orchard_keys = super::orchard::get_orchard(connection, account)?;
     let uvk = orchard_keys.map(|OrchardKeyBytes { fvk: ofvk, .. }| {

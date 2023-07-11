@@ -181,12 +181,8 @@ async fn sync_async_inner<'a>(
             {
                 let decrypter = SaplingDecrypter::new(network);
                 let warper = WarpProcessor::new(SaplingHasher::default());
-                let mut synchronizer = SaplingSynchronizer::new(
-                    decrypter,
-                    warper,
-                    sapling_vks.clone(),
-                    "sapling",
-                );
+                let mut synchronizer =
+                    SaplingSynchronizer::new(decrypter, warper, sapling_vks.clone(), "sapling");
                 synchronizer.initialize(height, &mut db)?;
                 progress.trial_decryptions += synchronizer.process(&blocks.0, &mut db)? as u64;
             }
@@ -197,12 +193,8 @@ async fn sync_async_inner<'a>(
                 {
                     let decrypter = OrchardDecrypter::new(network);
                     let warper = WarpProcessor::new(OrchardHasher::new());
-                    let mut synchronizer = OrchardSynchronizer::new(
-                        decrypter,
-                        warper,
-                        orchard_vks.clone(),
-                        "orchard",
-                    );
+                    let mut synchronizer =
+                        OrchardSynchronizer::new(decrypter, warper, orchard_vks.clone(), "orchard");
                     synchronizer.initialize(height, &mut db)?;
                     log::info!("Process orchard start");
                     progress.trial_decryptions += synchronizer.process(&blocks.0, &mut db)? as u64;

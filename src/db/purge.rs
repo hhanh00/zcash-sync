@@ -2,6 +2,14 @@ use anyhow::Result;
 use rusqlite::Connection;
 use zcash_primitives::consensus::Network;
 
+pub fn mark_spent(connection: &Connection, id: u32, height: u32) -> anyhow::Result<()> {
+    connection.execute(
+        "UPDATE received_notes SET spent = ?1 WHERE id_note = ?2",
+        [height, id],
+    )?;
+    Ok(())
+}
+
 pub fn truncate_data(connection: &Connection) -> Result<()> {
     truncate_sync_data(connection)?;
     connection.execute("DELETE FROM diversifiers", [])?;
@@ -45,5 +53,14 @@ pub fn delete_account(connection: &Connection, account: u32) -> anyhow::Result<(
 pub fn delete_orphan_transactions(connection: &Connection) -> anyhow::Result<()> {
     connection.execute("DELETE FROM transactions WHERE id_tx IN (SELECT tx.id_tx FROM transactions tx LEFT JOIN accounts a ON tx.account = a.id_account WHERE a.id_account IS NULL)",
                             [])?;
+    Ok(())
+}
+
+pub fn clear_tx_details(connection: &Connection, account: u32) -> Result<()> {
+    connection.execute(
+        "UPDATE transactions SET address = NULL, memo = NULL WHERE account = ?1",
+        [account],
+    )?;
+    connection.execute("DELETE FROM messages WHERE account = ?1", [account])?;
     Ok(())
 }

@@ -24,7 +24,7 @@ pub fn get_transparent(
     Ok(details)
 }
 
-pub fn create_taddr(connection: &Connection, network: &Network, account: u32) -> Result<()> {
+pub fn create_taddr(network: &Network, connection: &Connection, account: u32) -> Result<()> {
     let account_details = super::account::get_account(connection, account)?;
     if let Some(account_details) = account_details {
         let bip44_path = format!(

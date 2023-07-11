@@ -25,9 +25,9 @@ pub async fn sync_historical_prices_inner(
     days: u32,
     currency: &str,
 ) -> Result<u32> {
-    let latest_quote = get_latest_quote(connection, currency)?;
+    let latest_quote = crate::db::historical_prices::get_latest_quote(connection, currency)?;
     let quotes = fetch_historical_prices(ticker, latest_quote, now, days, currency).await?;
-    store_historical_prices(connection, &quotes, currency)?;
+    crate::db::historical_prices::store_historical_prices(connection, &quotes, currency)?;
     Ok(quotes.len() as u32)
 }
 

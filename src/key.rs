@@ -6,6 +6,7 @@ use bech32::FromBase32;
 use bip39::{Language, Mnemonic, Seed};
 use byteorder::ReadBytesExt;
 use orchard::keys::FullViewingKey;
+use rusqlite::Connection;
 
 use crate::taddr::derive_from_pubkey;
 use zcash_client_backend::address::RecipientAddress;
@@ -34,7 +35,7 @@ pub fn split_key(key: &str) -> (String, String) {
 }
 
 pub fn decode_key(
-    coin: u8,
+    network: &Network,
     key: &str,
     index: u32,
 ) -> anyhow::Result<(
@@ -44,8 +45,6 @@ pub fn decode_key(
     String,
     Option<FullViewingKey>,
 )> {
-    let c = CoinConfig::get(coin);
-    let network = c.chain.network();
     let (phrase, password) = split_key(key);
     let res = if let Ok(mnemonic) = Mnemonic::from_phrase(&phrase, Language::English) {
         let (sk, ivk, pa) = derive_secret_key(network, &mnemonic, &password, index)?;
@@ -145,7 +144,7 @@ fn derive_address(network: &Network, fvk: &ExtendedFullViewingKey) -> anyhow::Re
     Ok(address)
 }
 
-pub fn import_uvk(coin: u8, name: &str, uvk: &str) -> anyhow::Result<()> {
+pub fn import_uvk(network: &Network, connection: &Connection, name: &str, uvk: &str) -> anyhow::Result<()> {
     let (hrp, data, _) = bech32::decode(uvk)?;
     if hrp != "yfvk" {
         anyhow::bail!("Invalid HRP");
@@ -154,9 +153,6 @@ pub fn import_uvk(coin: u8, name: &str, uvk: &str) -> anyhow::Result<()> {
     let data = f4jumble::f4jumble_inv(&data)?;
     let data_len = data.len() as u64;
     let mut c = Cursor::new(data);
-    let coin = CoinConfig::get(coin);
-    let network = coin.chain.network();
-    let db = coin.db().unwrap();
     let mut id_account = 0u32;
     while c.position() != data_len {
         let tpe = c.read_u8()?;

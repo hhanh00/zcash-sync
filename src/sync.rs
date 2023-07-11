@@ -1,14 +1,14 @@
 use crate::chain::Nf;
 use crate::db::{ReceivedNote, ReceivedNoteShort};
-use crate::{CompactBlock, db, DbAdapter};
+use crate::{db, CompactBlock, DbAdapter};
 use allo_isolate::IntoDart;
 use anyhow::Result;
 use flatbuffers::FlatBufferBuilder;
 use rayon::prelude::*;
+use rusqlite::{Connection, Transaction};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
-use rusqlite::{Connection, Transaction};
 use tokio::sync::oneshot;
 use zcash_note_encryption::BatchDomain;
 use zcash_primitives::consensus::Parameters;
@@ -90,7 +90,10 @@ impl<
             vks,
             shielded_pool,
             note_position: tree.get_position(),
-            nullifiers: received_notes.into_iter().map(|rn| (rn.nf.clone(), rn)).collect(),
+            nullifiers: received_notes
+                .into_iter()
+                .map(|rn| (rn.nf.clone(), rn))
+                .collect(),
             tree,
             witnesses,
             _phantom: Default::default(),
@@ -142,7 +145,8 @@ impl<
                 for decn in dectx.notes.iter() {
                     let position = decn.position(self.note_position);
                     let rn: ReceivedNote = decn.to_received_note(position as u64);
-                    let id_note = db::checkpoint::store_received_note(&rn, id_tx, position, &db_tx)?;
+                    let id_note =
+                        db::checkpoint::store_received_note(&rn, id_tx, position, &db_tx)?;
                     let nf = Nf(rn.nf.try_into().unwrap());
                     self.nullifiers.insert(
                         nf,
@@ -370,7 +374,7 @@ mod tests {
         DecryptedSaplingNote,
         SaplingDecrypter<Network>,
         SaplingHasher,
-        'S'
+        'S',
     >;
 
     #[test]

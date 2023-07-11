@@ -1,13 +1,14 @@
 use crate::db::SpendableNote;
 // use crate::wallet::RecipientMemo;
 use crate::api::recipient::RecipientMemo;
-use crate::chain::get_latest_height;
+use crate::chain::{get_checkpoint_height, get_latest_height, EXPIRY_HEIGHT_OFFSET};
 use crate::coinconfig::CoinConfig;
-use crate::{GetAddressUtxosReply, RawTransaction};
-use anyhow::anyhow;
+use crate::{build_tx, connect_lightwalletd, db, GetAddressUtxosReply, RawTransaction, TransactionPlan};
+use anyhow::{anyhow, Result};
 use jubjub::Fr;
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
+use rusqlite::Connection;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
@@ -16,8 +17,9 @@ use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, encode_extended_full_viewing_key, encode_payment_address,
 };
+use zcash_client_backend::zip321::{Payment, TransactionRequest};
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
-use zcash_primitives::consensus::{BlockHeight, Parameters};
+use zcash_primitives::consensus::{BlockHeight, Network, Parameters};
 use zcash_primitives::keys::OutgoingViewingKey;
 use zcash_primitives::legacy::Script;
 use zcash_primitives::memo::{Memo, MemoBytes};
@@ -29,6 +31,8 @@ use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut as ZTxOut};
 use zcash_primitives::transaction::fees::fixed::FeeRule;
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+use crate::db::data_generated::fb::PaymentURIT;
+use crate::key::decode_address;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
@@ -122,7 +126,7 @@ impl TxBuilder {
         amount: Amount,
         rseed: &[u8],
         witness: &[u8],
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         let tx_in = TxIn {
             diversifier: hex::encode(diversifier.0),
             fvk: encode_extended_full_viewing_key(
@@ -139,7 +143,7 @@ impl TxBuilder {
         Ok(())
     }
 
-    fn add_t_output(&mut self, address: &str, amount: Amount) -> anyhow::Result<()> {
+    fn add_t_output(&mut self, address: &str, amount: Amount) -> Result<()> {
         let tx_out = TxOut {
             addr: address.to_string(),
             amount: u64::from(amount),
@@ -156,7 +160,7 @@ impl TxBuilder {
         ovk: &OutgoingViewingKey,
         amount: Amount,
         memo: &Memo,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         let tx_out = TxOut {
             addr: address.to_string(),
             amount: u64::from(amount),
@@ -171,7 +175,7 @@ impl TxBuilder {
         &mut self,
         ovk: &OutgoingViewingKey,
         address: &PaymentAddress,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         self.tx.change = encode_payment_address(
             self.chain().network().hrp_sapling_payment_address(),
             address,
@@ -192,7 +196,7 @@ impl TxBuilder {
         notes: &[SpendableNote],
         utxos: &[GetAddressUtxosReply],
         target_amount: u64,
-    ) -> anyhow::Result<Vec<u32>> {
+    ) -> Result<Vec<u32>> {
         let mut selected_notes: Vec<u32> = vec![];
         let target_amount = Amount::from_u64(target_amount).unwrap();
         let mut t_amount = Amount::zero();
@@ -260,7 +264,7 @@ impl TxBuilder {
         &mut self,
         fvk: &ExtendedFullViewingKey,
         recipients: &[RecipientMemo],
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         let ovk = &fvk.fvk.ovk;
         let (_, change) = fvk.default_address();
         self.set_change(ovk, &change)?;
@@ -318,7 +322,7 @@ impl Tx {
         zsk: &ExtendedSpendingKey,
         prover: &impl TxProver,
         progress_callback: impl Fn(Progress) + Send + 'static,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> Result<Vec<u8>> {
         let chain = get_coin_chain(self.coin_type);
         let last_height = BlockHeight::from_u32(self.height as u32);
         let mut builder = Builder::new(*chain.network(), last_height);
@@ -414,9 +418,8 @@ impl Tx {
 }
 
 /// Broadcast a raw signed transaction to the network
-pub async fn broadcast_tx(coin: u8, tx: &[u8]) -> anyhow::Result<String> {
-    let c = CoinConfig::get(coin);
-    let mut client = c.connect_lwd().await?;
+pub async fn broadcast_tx(url: &str, tx: &[u8]) -> Result<String> {
+    let mut client = connect_lightwalletd(url).await?;
     let latest_height = get_latest_height(&mut client).await?;
     let raw_tx = RawTransaction {
         data: tx.to_vec(),
@@ -435,7 +438,7 @@ pub async fn broadcast_tx(coin: u8, tx: &[u8]) -> anyhow::Result<String> {
     }
 }
 
-pub fn get_tx_summary(tx: &Tx) -> anyhow::Result<TxSummary> {
+pub fn get_tx_summary(tx: &Tx) -> Result<TxSummary> {
     let mut recipients = vec![];
     for tx_out in tx.outputs.iter() {
         recipients.push(RecipientSummary {
@@ -444,4 +447,149 @@ pub fn get_tx_summary(tx: &Tx) -> anyhow::Result<TxSummary> {
         });
     }
     Ok(TxSummary { recipients })
+}
+
+pub async fn build_tx_plan(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    last_height: u32,
+    recipients: &[RecipientMemo],
+    excluded_pools: u8,
+    confirmations: u32,
+) -> crate::note_selection::Result<TransactionPlan> {
+    let max_height = last_height.saturating_sub(confirmations);
+    let checkpoint_height =
+        db::checkpoint::get_last_sync_height(connection, network, Some(max_height))?;
+    let expiry_height = last_height + EXPIRY_HEIGHT_OFFSET;
+    let utxos = crate::fetch_utxos(coin, account, checkpoint_height, excluded_pools).await?;
+    let tx_plan = crate::build_tx_plan_with_utxos(
+        network,
+        connection,
+        account,
+        checkpoint_height,
+        expiry_height,
+        recipients,
+        &utxos,
+    )
+    .await?;
+    Ok(tx_plan)
+}
+
+pub fn sign_plan(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    tx_plan: &TransactionPlan,
+) -> Result<Vec<u8>> {
+    let z_details = crate::db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
+    let fvk = z_details.ivk.ok_or(anyhow!("No FVK"))?;
+    let fvk =
+        decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
+            .unwrap()
+            .to_diversifiable_full_viewing_key();
+    let tx_plan_fvk = decode_extended_full_viewing_key(
+        network.hrp_sapling_extended_full_viewing_key(),
+        &tx_plan.fvk,
+    )
+    .unwrap()
+    .to_diversifiable_full_viewing_key();
+
+    if fvk.to_bytes() != tx_plan_fvk.to_bytes() {
+        return Err(anyhow::anyhow!("Account does not match transaction"));
+    }
+
+    let keys = db::key::get_secret_keys(connection, account)?;
+    let tx = build_tx(network, &keys, &tx_plan, OsRng)?;
+    Ok(tx)
+}
+
+pub fn mark_inputs_spent(
+    connection: &Connection,
+    tx_plan: &TransactionPlan,
+    spent_height: u32,
+) -> Result<()> {
+    let id_notes: Vec<_> = tx_plan
+        .spends
+        .iter()
+        .filter_map(|n| if n.id != 0 { Some(n.id) } else { None })
+        .collect();
+    for id in id_notes {
+        db::purge::mark_spent(connection, id, spent_height)?;
+    }
+    Ok(())
+}
+
+/// Build a payment URI
+/// # Arguments
+/// * `address`: recipient address
+/// * `amount`: amount in zats
+/// * `memo`: memo text
+pub fn make_payment_uri(
+    network: &Network,
+    address: &str,
+    amount: u64,
+    memo: &str,
+) -> anyhow::Result<String> {
+    let c = CoinConfig::get(coin);
+    let addr = decode_address(coin, address).ok_or_else(|| anyhow::anyhow!("Invalid address"))?;
+    let payment = Payment {
+        recipient_address: addr,
+        amount: Amount::from_u64(amount).map_err(|_| anyhow::anyhow!("Invalid amount"))?,
+        memo: Some(Memo::from_str(memo)?.into()),
+        label: None,
+        message: None,
+        other_params: vec![],
+    };
+    let treq = TransactionRequest {
+        payments: vec![payment],
+    };
+    let uri = treq
+        .to_uri(network)
+        .ok_or_else(|| anyhow::anyhow!("Cannot build Payment URI"))?;
+    let uri = format!("{}{}", c.chain.ticker(), &uri[5..]); // hack to replace the URI scheme
+    Ok(uri)
+}
+
+/// Decode a payment uri
+/// # Arguments
+/// * `uri`: payment uri
+pub fn parse_payment_uri(network: &Network, scheme: &str, uri: &str) -> anyhow::Result<PaymentURIT> {
+    let c = CoinConfig::get(coin);
+    let scheme_len = scheme.len();
+    if uri[..scheme_len].ne(scheme) {
+        anyhow::bail!("Invalid Payment URI: Invalid scheme");
+    }
+    let uri = format!("zcash{}", &uri[scheme_len..]); // hack to replace the URI scheme
+    let treq = TransactionRequest::from_uri(network, &uri)
+        .map_err(|e| anyhow::anyhow!("Invalid Payment URI: {:?}", e))?;
+    if treq.payments.len() != 1 {
+        anyhow::bail!("Invalid Payment URI: Exactly one payee expected")
+    }
+    let payment = &treq.payments[0];
+    let memo = match payment.memo {
+        Some(ref memo) => {
+            let memo = Memo::try_from(memo.clone())?;
+            match memo {
+                Memo::Text(text) => Ok(text.to_string()),
+                Memo::Empty => Ok(String::new()),
+                _ => Err(anyhow::anyhow!("Invalid Memo")),
+            }
+        }
+        None => Ok(String::new()),
+    }?;
+    let payment = PaymentURIT {
+        address: Some(payment.recipient_address.encode(c.chain.network())),
+        amount: u64::from(payment.amount),
+        memo: Some(memo),
+    };
+
+    Ok(payment)
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PaymentURI {
+    pub address: String,
+    pub amount: u64,
+    pub memo: String,
 }

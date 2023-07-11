@@ -41,6 +41,7 @@ pub mod purge;
 pub mod read;
 pub mod transaction;
 pub mod transparent;
+pub mod key;
 
 use crate::api::historical_prices::Quote;
 use crate::db::cipher::set_db_passwd;

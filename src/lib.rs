@@ -90,6 +90,7 @@ mod misc;
 mod note_selection;
 mod orchard;
 mod pay;
+pub mod pool;
 mod sapling;
 mod scan;
 mod sync;
@@ -102,7 +103,6 @@ mod tron;
 mod unified;
 mod zcash;
 mod zip32;
-pub mod pool;
 
 #[cfg(feature = "ledger")]
 pub mod ledger;
@@ -116,23 +116,24 @@ pub use crate::fountain::{FountainCodes, RaptorQDrops};
 // pub use crate::key::KeyHelpers;
 pub use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use crate::lw_rpc::*;
-pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
+// pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
 
 pub use crate::orchard::decode_merkle_path as decode_orchard_merkle_path;
 pub use crate::unified::{decode_unified_address, get_unified_address};
 pub use note_selection::{
-    build_tx, build_tx_plan, fetch_utxos, get_secret_keys, Destination, Source,
+    build_tx, build_tx_plan, fetch_utxos, Destination, Source,
     TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
     MAX_ATTEMPTS,
 };
 
 pub use api::recipient::{make_recipient, make_recipients};
 pub use btc::{init_db as init_btc_db, BTCHandler};
-pub use coin::{NoCoin, CoinHandler};
+pub use coin::{CoinHandler, NoCoin};
 pub use db::data_generated::fb::{RecipientT, RecipientsT};
 pub use eth::{init_db as init_eth_db, ETHHandler};
 pub use scan::Progress;
+pub use unified::has_unified;
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;

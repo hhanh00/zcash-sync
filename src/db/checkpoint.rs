@@ -7,7 +7,7 @@ use crate::sync::{CTree, Witness};
 use crate::transaction::TransactionDetails;
 use crate::{Hash, Source};
 use anyhow::Result;
-use rusqlite::{params, Connection, Row, Statement, Transaction, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Row, Statement, Transaction};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 
 pub fn get_last_sync_height(
@@ -147,11 +147,7 @@ pub fn store_witness<const POOL: char>(
     Ok(())
 }
 
-pub fn store_tree<const POOL: char>(
-    height: u32,
-    tree: &CTree,
-    db_tx: &Transaction,
-) -> Result<()> {
+pub fn store_tree<const POOL: char>(height: u32, tree: &CTree, db_tx: &Transaction) -> Result<()> {
     let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
     let mut bb: Vec<u8> = vec![];
     tree.write(&mut bb)?;
@@ -184,16 +180,18 @@ pub struct BlockHash {
 /// Blocks
 ///
 pub fn get_block(connection: &Connection, height: u32) -> Result<Option<BlockHash>> {
-    let block = connection.query_row(
-        "SELECT hash, timestamp FROM blocks WHERE height = ?1",
-        [height],
-        |r| {
-            Ok(BlockHash {
-                hash: r.get::<_, Vec<u8>>(0)?.try_into().unwrap(),
-                timestamp: r.get(1)?,
-            })
-        },
-    ).optional()?;
+    let block = connection
+        .query_row(
+            "SELECT hash, timestamp FROM blocks WHERE height = ?1",
+            [height],
+            |r| {
+                Ok(BlockHash {
+                    hash: r.get::<_, Vec<u8>>(0)?.try_into().unwrap(),
+                    timestamp: r.get(1)?,
+                })
+            },
+        )
+        .optional()?;
     Ok(block)
 }
 

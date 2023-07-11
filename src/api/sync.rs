@@ -3,11 +3,12 @@
 use crate::coinconfig::CoinConfig;
 use crate::scan::{AMProgressCallback, Progress};
 use crate::sync::CTree;
-use crate::{AccountData, BlockId, CompactTxStreamerClient, DbAdapter};
+use crate::{AccountData, BlockId, CompactTxStreamerClient, connect_lightwalletd, DbAdapter};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tonic::transport::Channel;
 use tonic::Request;
+use zcash_primitives::consensus::Network;
 use zcash_primitives::sapling::Note;
 
 /// Asynchronously perform warp sync
@@ -142,20 +143,18 @@ async fn fetch_and_store_tree_state(
 }
 
 /// Return the date of sapling activation
-pub async fn get_activation_date() -> anyhow::Result<u32> {
-    let c = CoinConfig::get_active();
-    let mut client = c.connect_lwd().await?;
-    let date_time = crate::chain::get_activation_date(c.chain.network(), &mut client).await?;
+pub async fn get_activation_date(network: &Network, url: &str) -> anyhow::Result<u32> {
+    let mut client = connect_lightwalletd(url).await?;
+    let date_time = crate::chain::get_activation_date(network, &mut client).await?;
     Ok(date_time)
 }
 
 /// Return the block height for a given timestamp
 /// # Arguments
 /// * `time`: seconds since epoch
-pub async fn get_block_by_time(time: u32) -> anyhow::Result<u32> {
-    let c = CoinConfig::get_active();
-    let mut client = c.connect_lwd().await?;
-    let date_time = crate::chain::get_block_by_time(c.chain.network(), &mut client, time).await?;
+pub async fn get_block_by_time(network: &Network, url: &str, time: u32) -> anyhow::Result<u32> {
+    let mut client = connect_lightwalletd(url).await?;
+    let date_time = crate::chain::get_block_by_time(network, &mut client, time).await?;
     Ok(date_time)
 }
 

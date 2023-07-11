@@ -1,9 +1,9 @@
+use crate::db::data_generated::fb::{ShieldedNoteT, ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT};
+use crate::transaction::GetTransactionDetailRequest;
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use zcash_primitives::consensus::Network;
 use zcash_primitives::sapling::{PaymentAddress, SaplingIvk};
-use crate::db::data_generated::fb::{ShieldedNoteT, ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT};
-use crate::transaction::GetTransactionDetailRequest;
 
 pub fn clear_tx_details(connection: &Connection, account: u32) -> Result<()> {
     connection.execute(

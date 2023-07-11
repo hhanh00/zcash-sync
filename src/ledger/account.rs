@@ -3,12 +3,11 @@ use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 use zcash_client_backend::encoding::{encode_extended_full_viewing_key, encode_payment_address};
 use zcash_primitives::{consensus::Parameters, zip32::ExtendedFullViewingKey};
+use zcash_primitives::consensus::Network;
 
 use super::transport::*;
 
-pub fn import(coin: u8, name: &str) -> Result<u32> {
-    let c = CoinConfig::get(coin);
-    let network = c.chain.network();
+pub fn import(network: &Network, connection: &mut Connection, name: &str) -> Result<u32> {
     ledger_init()?;
     let dfvk = ledger_get_dfvk()?;
     let fvk = ExtendedFullViewingKey::from_diversifiable_full_viewing_key(&dfvk);
@@ -16,8 +15,7 @@ pub fn import(coin: u8, name: &str) -> Result<u32> {
         encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk);
     let (_, pa) = dfvk.default_address();
     let address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
-    let mut db = c.db()?;
-    if let Some(account) = get_account_by_address(&db.connection, &address)? {
+    if let Some(account) = crate::db::account::get_account_by_address(&db.connection, &address)? {
         return Ok(account);
     }
     let pub_key = ledger_get_pubkey()?;
@@ -25,7 +23,7 @@ pub fn import(coin: u8, name: &str) -> Result<u32> {
 
     let has_orchard = ledger_has_orchard()?;
 
-    let db_transaction = db.begin_transaction()?;
+    let db_transaction = connection.begin_transaction()?;
     db_transaction.execute(
         "INSERT INTO accounts(name, seed, aindex, sk, ivk, address) VALUES 
         (?1, NULL, 0, NULL, ?2, ?3)",
