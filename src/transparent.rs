@@ -1,13 +1,18 @@
 mod db;
 
-use crate::db::data_generated::fb::{PlainNoteT, PlainNoteVecT, PlainTxT, PlainTxVecT};
 use crate::connect_lightwalletd;
+use crate::db::data_generated::fb::{PlainNoteT, PlainNoteVecT, PlainTxT, PlainTxVecT};
 use anyhow::{anyhow, Result};
 pub use db::migrate_db;
 use rusqlite::Connection;
 use zcash_primitives::consensus::Network;
 
-pub async fn sync(network: &Network, connection: &Connection, url: &str, account: u32) -> Result<()> {
+pub async fn sync(
+    network: &Network,
+    connection: &Connection,
+    url: &str,
+    account: u32,
+) -> Result<()> {
     let transparent_details =
         crate::db::transparent::get_transparent(connection, account)?.ok_or(anyhow!("No taddr"))?;
     let address = transparent_details.address.unwrap();

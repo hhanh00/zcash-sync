@@ -1,5 +1,5 @@
 use crate::db::data_generated::fb::{AccountDetailsT, AccountT, AccountVecT, BackupT, BalanceT};
-use crate::db::wrap_query_no_rows;
+
 use anyhow::Result;
 use orchard::keys::FullViewingKey;
 use rusqlite::{params, Connection, OptionalExtension};

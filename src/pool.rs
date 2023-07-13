@@ -1,6 +1,6 @@
 use crate::api::recipient::RecipientMemo;
 use crate::chain::get_latest_height;
-use crate::{connect_lightwalletd, db, TransactionPlan};
+use crate::{connect_lightwalletd, TransactionPlan};
 use anyhow::Result;
 use rusqlite::Connection;
 use std::slice;

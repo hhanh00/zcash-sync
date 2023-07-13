@@ -14,14 +14,23 @@ pub fn store_contact(connection: &Connection, contact: &ContactT, dirty: bool) -
         connection.execute(
             "INSERT INTO contacts(name, address, dirty)
                 VALUES (?1, ?2, ?3)",
-            params![&contact.name.clone().unwrap(), &contact.address.clone().unwrap(), dirty],
+            params![
+                &contact.name.clone().unwrap(),
+                &contact.address.clone().unwrap(),
+                dirty
+            ],
         )?;
     } else {
         connection.execute(
             "INSERT INTO contacts(id, name, address, dirty)
                 VALUES (?1, ?2, ?3, ?4) ON CONFLICT (id) DO UPDATE SET
                 name = excluded.name, address = excluded.address, dirty = excluded.dirty",
-            params![contact.id, &contact.clone().name.unwrap(), &contact.clone().address.unwrap(), dirty],
+            params![
+                contact.id,
+                &contact.clone().name.unwrap(),
+                &contact.clone().address.unwrap(),
+                dirty
+            ],
         )?;
     }
     Ok(())

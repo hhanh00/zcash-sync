@@ -4,7 +4,7 @@ use crate::db::{wrap_query_no_rows, ReceivedNote, ReceivedNoteShort};
 use crate::note_selection::UTXO;
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::{CTree, Witness};
-use crate::transaction::TransactionDetails;
+
 use crate::{Hash, Source};
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension, Row, Statement, Transaction};

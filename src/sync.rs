@@ -1,23 +1,21 @@
 use crate::chain::Nf;
 use crate::db::{ReceivedNote, ReceivedNoteShort};
 use crate::{db, CompactBlock, DbAdapter};
-use allo_isolate::IntoDart;
+
 use anyhow::Result;
-use flatbuffers::FlatBufferBuilder;
+
 use rayon::prelude::*;
-use rusqlite::{Connection, Transaction};
+use rusqlite::Transaction;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
-use tokio::sync::oneshot;
+
 use zcash_note_encryption::BatchDomain;
 use zcash_primitives::consensus::Parameters;
 
 pub mod tree;
 pub mod trial_decrypt;
 
-use crate::api::dart_ffi::POST_COBJ;
-use crate::db::data_generated::fb::ProgressT;
 use crate::sync::tree::TreeCheckpoint;
 pub use tree::{CTree, Hasher, Node, WarpProcessor, Witness};
 pub use trial_decrypt::{
@@ -353,4 +351,3 @@ impl<
 //     )
 //     .await
 // }
-

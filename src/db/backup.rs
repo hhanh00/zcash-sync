@@ -119,13 +119,13 @@ pub fn get_backup_package(
     account: u32,
 ) -> Result<BackupT> {
     let AccountDetailsT {
-        id,
+        id: _,
         name,
         seed,
         sk,
         aindex,
         ivk,
-        address,
+        address: _,
     } = crate::db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
     let fvk = ivk.ok_or(anyhow!("No zFVK"))?;
     let orchard_keys = super::orchard::get_orchard(connection, account)?;

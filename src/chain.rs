@@ -3,7 +3,7 @@ use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
 use anyhow::Result;
-use crate::DbAdapter;
+
 use futures::{future, FutureExt};
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
@@ -12,9 +12,9 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 
+use rusqlite::Connection;
 use std::time::Duration;
 use std::time::Instant;
-use rusqlite::Connection;
 use sysinfo::{System, SystemExt};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -44,30 +44,21 @@ pub async fn latest_height(url: &str) -> Result<u32> {
     get_latest_height(&mut client).await
 }
 
-pub async fn get_latest_height(
-    client: &mut CompactTxStreamerClient<Channel>,
-) -> Result<u32> {
+pub async fn get_latest_height(client: &mut CompactTxStreamerClient<Channel>) -> Result<u32> {
     let chainspec = ChainSpec {};
     let rep = client.get_latest_block(Request::new(chainspec)).await?;
     let block_id = rep.into_inner();
     Ok(block_id.height as u32)
 }
 
-pub async fn get_activation_date(
-    network: &Network,
-    url: &str,
-) -> Result<u32> {
+pub async fn get_activation_date(network: &Network, url: &str) -> Result<u32> {
     let mut client = connect_lightwalletd(url).await?;
     let height = network.activation_height(NetworkUpgrade::Sapling).unwrap();
     let time = get_block_date(&mut client, u32::from(height)).await?;
     Ok(time)
 }
 
-pub async fn get_block_by_time(
-    network: &Network,
-    url: &str,
-    time: u32,
-) -> Result<u32> {
+pub async fn get_block_by_time(network: &Network, url: &str, time: u32) -> Result<u32> {
     let mut client = connect_lightwalletd(url).await?;
     let mut start = u32::from(network.activation_height(NetworkUpgrade::Sapling).unwrap());
     let mut end = get_latest_height(&mut client).await?;
@@ -106,16 +97,13 @@ pub async fn get_block_date(
     Ok(block.time)
 }
 
-pub async fn fetch_tree_state(
-    url: &str,
-    height: u32,
-) -> Result<(CTree, CTree)> {
+pub async fn fetch_tree_state(url: &str, height: u32) -> Result<(CTree, CTree)> {
     let mut client = connect_lightwalletd(url).await?;
     let block_id = BlockId {
         height: height as u64,
         hash: vec![],
     };
-    let block = client.get_block(block_id.clone()).await?.into_inner();
+    let _block = client.get_block(block_id.clone()).await?.into_inner();
     let tree_state = client
         .get_tree_state(Request::new(block_id))
         .await?
@@ -654,6 +642,7 @@ pub fn get_checkpoint_height(
     confirmations: u32,
 ) -> Result<u32> {
     let anchor_height = last_height.saturating_sub(confirmations);
-    let checkpoint_height = crate::db::checkpoint::get_last_sync_height(network, connection, Some(anchor_height))?;
+    let checkpoint_height =
+        crate::db::checkpoint::get_last_sync_height(network, connection, Some(anchor_height))?;
     Ok(checkpoint_height)
 }

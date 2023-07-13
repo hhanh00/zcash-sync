@@ -1,16 +1,22 @@
 use crate::btc::BTCHandler;
 use crate::coin::{CoinApi, ZcashApi};
-use crate::db::data_generated::fb::{BalanceT, ContactT, ContactVecT, MessageVecT, Recipients, SendTemplate, Servers, ShieldedNoteT, ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT, SpendingVecT, TxTimeValueVecT, ZcashSyncParamsT};
+use crate::db::data_generated::fb::{
+    BalanceT, ContactT, ContactVecT, MessageVecT, Recipients, SendTemplate, Servers, ShieldedNoteT,
+    ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT, SpendingVecT, TxTimeValueVecT, ZcashSyncParamsT,
+};
 use crate::db::FullEncryptedBackup;
 use crate::eth::ETHHandler;
 // use crate::mempool::MemPool;
 use crate::note_selection::TransactionReport;
+use crate::pay::Tx;
 use crate::ton::{init_ton_db, TonHandler};
 use crate::tron::{init_tron_db, TronHandler};
+use crate::zcash::ZcashHandler;
 use crate::CoinHandler;
 use crate::{db, init_btc_db, init_eth_db, TransactionPlan};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
+use anyhow::anyhow;
 use flatbuffers::FlatBufferBuilder;
 use lazy_static::lazy_static;
 use log::Level;
@@ -19,11 +25,8 @@ use rusqlite::Connection;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
-use anyhow::anyhow;
 use zcash_primitives::consensus::Network::{MainNetwork, YCashMainNetwork};
-use crate::zcash::ZcashHandler;
 use zcash_primitives::transaction::builder::Progress;
-use crate::pay::Tx;
 
 pub static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -220,7 +223,7 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
                 let handler = TronHandler::new(connection, (&*db_path).into());
                 *TRON_HANDLER.lock() = CoinHandler::TRON(handler);
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
         Ok::<_, anyhow::Error>(0)
     };
@@ -228,7 +231,7 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<u8> {
+pub unsafe extern "C" fn migrate_db(_coin: u8, db_path: *mut c_char) -> CResult<u8> {
     from_c_str!(db_path);
     // TODO
     to_cresult_unit(Ok(()))
@@ -236,7 +239,7 @@ pub unsafe extern "C" fn migrate_db(coin: u8, db_path: *mut c_char) -> CResult<u
 
 #[no_mangle]
 #[tokio::main]
-pub async unsafe extern "C" fn migrate_data_db(coin: u8) -> CResult<u8> {
+pub async unsafe extern "C" fn migrate_data_db(_coin: u8) -> CResult<u8> {
     // TODO
     // let res = async {
     //     if coin < 2 {
@@ -266,7 +269,7 @@ pub unsafe extern "C" fn get_lwd_url(coin: u8) -> *mut c_char {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn set_coin_passwd(coin: u8, passwd: *mut c_char) {
+pub unsafe extern "C" fn set_coin_passwd(_coin: u8, passwd: *mut c_char) {
     from_c_str!(passwd);
     // TODO
 }
@@ -342,7 +345,14 @@ pub unsafe extern "C" fn new_sub_account(
     let index = if index >= 0 { Some(index as u32) } else { None };
     let h = get_coin_handler(coin);
     assert!(h.is_private());
-    let res = crate::account::new_sub_account(&h.network(), &h.connection(), account, &name, index, count);
+    let res = crate::account::new_sub_account(
+        &h.network(),
+        &h.connection(),
+        account,
+        &name,
+        index,
+        count,
+    );
     to_cresult_unit(res)
 }
 
@@ -651,7 +661,8 @@ pub async unsafe extern "C" fn prepare_multi_payment(
         let h = get_coin_handler(coin);
         if h.is_private() {
             let last_height = crate::chain::latest_height(&h.url()).await?;
-            let address = crate::db::account::get_account(&h.connection(), account)?.and_then(|d| d.address);
+            let address =
+                crate::db::account::get_account(&h.connection(), account)?.and_then(|d| d.address);
             let sender = address.ok_or(anyhow!("No account"))?;
             let recipients = crate::api::recipient::parse_recipients(&sender, &recipients)?;
             let tx = crate::pay::build_tx_plan(
@@ -756,7 +767,16 @@ pub async unsafe extern "C" fn sweep_tkey(
 ) -> CResult<*mut c_char> {
     from_c_str!(sk);
     let h = get_coin_handler(coin);
-    let txid = crate::taddr::sweep_tkey(&h.network(), &h.connection(), &h.url(), account, last_height, &sk, pool).await;
+    let txid = crate::taddr::sweep_tkey(
+        &h.network(),
+        &h.connection(),
+        &h.url(),
+        account,
+        last_height,
+        &sk,
+        pool,
+    )
+    .await;
     to_cresult_str(txid)
 }
 
@@ -824,10 +844,21 @@ pub unsafe extern "C" fn store_contact(
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn commit_unsaved_contacts(coin: u8, account: u32, anchor_offset: u32) -> CResult<*mut c_char> {
+pub async unsafe extern "C" fn commit_unsaved_contacts(
+    coin: u8,
+    account: u32,
+    anchor_offset: u32,
+) -> CResult<*mut c_char> {
     let res = async move {
         let h = get_coin_handler(coin);
-        let tx_plan = crate::contact::commit_unsaved_contacts(&h.network(), &h.connection(), &h.url(), account, anchor_offset).await?;
+        let tx_plan = crate::contact::commit_unsaved_contacts(
+            &h.network(),
+            &h.connection(),
+            &h.url(),
+            account,
+            anchor_offset,
+        )
+        .await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };
@@ -1031,7 +1062,14 @@ pub unsafe extern "C" fn derive_zip32(
     let res = || {
         let h = get_coin_handler(coin);
         let address = if has_address { Some(address) } else { None };
-        let kp = crate::key::derive_keys(&h.network(), &h.connection(), account, index, external, address)?;
+        let kp = crate::key::derive_keys(
+            &h.network(),
+            &h.connection(),
+            account,
+            index,
+            external,
+            address,
+        )?;
         Ok(fb_to_vec!(kp))
     };
     to_cresult_bytes(res())
@@ -1120,7 +1158,9 @@ pub unsafe extern "C" fn get_balances(
 #[no_mangle]
 pub unsafe extern "C" fn get_db_height(coin: u8, account: u32) -> CResult<*const u8> {
     let res = || {
-        let height = get_coin_handler(coin).get_db_height(account)?.unwrap_or_default();
+        let height = get_coin_handler(coin)
+            .get_db_height(account)?
+            .unwrap_or_default();
         Ok(fb_to_vec!(height))
     };
     to_cresult_bytes(res())
@@ -1210,7 +1250,8 @@ pub unsafe extern "C" fn get_prev_next_message(
     let res = || {
         let h = get_coin_handler(coin);
         assert!(h.is_private());
-        let data = crate::db::message::get_prev_next_message(&h.connection(), &subject, height, id)?;
+        let data =
+            crate::db::message::get_prev_next_message(&h.connection(), &subject, height, id)?;
         Ok(fb_to_vec!(data))
     };
     to_cresult_bytes(res())
@@ -1292,7 +1333,8 @@ pub unsafe extern "C" fn get_historical_prices(
     from_c_str!(currency);
     let res = || {
         let h = get_coin_handler(coin);
-        let quotes = db::historical_prices::get_historical_prices(&h.connection(), timestamp, &currency)?;
+        let quotes =
+            db::historical_prices::get_historical_prices(&h.connection(), timestamp, &currency)?;
         Ok(fb_to_vec!(quotes))
     };
     to_cresult_bytes(res())
@@ -1412,13 +1454,7 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
         let raw_tx = tokio::task::spawn_blocking(move || {
             let (pubkey, dfvk, ofvk) = crate::ledger::ledger_get_fvks()?;
             let raw_tx = crate::ledger::build_ledger_tx(
-                &network,
-                &tx_plan,
-                &pubkey,
-                &dfvk,
-                ofvk,
-                prover,
-                &pk,
+                &network, &tx_plan, &pubkey, &dfvk, ofvk, prover, &pk,
             )?;
             Ok::<_, anyhow::Error>(raw_tx)
         })

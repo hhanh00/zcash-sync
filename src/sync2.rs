@@ -1,10 +1,11 @@
-use crate::chain::{Blocks, download_chain, get_latest_height};
+use crate::chain::{download_chain, get_latest_height, Blocks};
 use crate::orchard::{DecryptedOrchardNote, OrchardDecrypter, OrchardHasher, OrchardViewKey};
 use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
 // use crate::scan::{AMProgressCallback, Blocks, Progress};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::{Synchronizer, WarpProcessor};
-use crate::transaction::get_transaction_details;
+
+use crate::db::data_generated::fb::ProgressT;
 use crate::{connect_lightwalletd, db};
 use anyhow::Result;
 use orchard::note_encryption::OrchardDomain;
@@ -12,7 +13,6 @@ use rusqlite::Connection;
 use tokio::sync::mpsc;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
-use crate::db::data_generated::fb::ProgressT;
 
 type ProgressCallback = dyn Fn(ProgressT);
 
@@ -185,15 +185,20 @@ pub async fn warp_sync_inner<'a>(
 /// Height is snapped to a closest earlier checkpoint.
 /// The effective height is returned
 pub fn rewind_to(network: &Network, connection: &mut Connection, height: u32) -> Result<u32> {
-    let checkpoint_height = crate::db::checkpoint::get_last_sync_height(network, connection, Some(height))?;
+    let checkpoint_height =
+        crate::db::checkpoint::get_last_sync_height(network, connection, Some(height))?;
     let height = crate::db::checkpoint::trim_to_height(connection, checkpoint_height)?;
     Ok(height)
 }
 
 /// Synchronize from a given height
-pub async fn rescan_from(network: &Network, connection: &mut Connection, url: &str, height: u32) -> anyhow::Result<()> {
+pub async fn rescan_from(
+    _network: &Network,
+    connection: &mut Connection,
+    url: &str,
+    height: u32,
+) -> anyhow::Result<()> {
     crate::db::purge::truncate_data(connection)?;
     crate::chain::fetch_tree_state(url, height).await?;
     Ok(())
 }
-

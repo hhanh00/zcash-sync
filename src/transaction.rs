@@ -1,14 +1,15 @@
 use crate::api::recipient::decode_memo;
 use crate::contact::{Contact, ContactDecoder};
 use crate::unified::orchard_as_unified;
-use crate::{CompactTxStreamerClient, connect_lightwalletd, Hash, TxFilter};
+use crate::{connect_lightwalletd, CompactTxStreamerClient, Hash, TxFilter};
 use orchard::keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope};
 use orchard::note_encryption::OrchardDomain;
-use serde::Serialize;
-use std::collections::HashMap;
-use std::convert::TryFrom;
+
+use crate::db::data_generated::fb::ContactT;
 use anyhow::anyhow;
 use rusqlite::Connection;
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::{
@@ -23,7 +24,6 @@ use zcash_primitives::sapling::note_encryption::{
 };
 use zcash_primitives::sapling::SaplingIvk;
 use zcash_primitives::transaction::Transaction;
-use crate::db::data_generated::fb::ContactT;
 
 #[derive(Debug)]
 pub struct ContactRef {
@@ -32,7 +32,11 @@ pub struct ContactRef {
     pub contact: Contact,
 }
 
-pub async fn get_transaction_details(network: &Network, connection: &Connection, url: &str) -> anyhow::Result<()> {
+pub async fn get_transaction_details(
+    network: &Network,
+    connection: &Connection,
+    url: &str,
+) -> anyhow::Result<()> {
     let mut client = connect_lightwalletd(url).await?;
     let mut keys = HashMap::new();
 
@@ -249,11 +253,14 @@ pub fn decode_transaction(
         timestamp,
         memo,
         incoming,
-        contacts: contacts.into_iter().map(|c| ContactT {
-            id: c.id,
-            name: Some(c.name),
-            address: Some(c.address),
-        }).collect(),
+        contacts: contacts
+            .into_iter()
+            .map(|c| ContactT {
+                id: c.id,
+                name: Some(c.name),
+                address: Some(c.address),
+            })
+            .collect(),
     };
 
     Ok(tx_details)
@@ -264,7 +271,9 @@ fn get_decryption_keys(
     connection: &Connection,
     account: u32,
 ) -> anyhow::Result<DecryptionKeys> {
-    let fvk = crate::db::account::get_account(connection, account)?.and_then(|d| d.ivk).ok_or(anyhow!("No zFVK"))?;
+    let fvk = crate::db::account::get_account(connection, account)?
+        .and_then(|d| d.ivk)
+        .ok_or(anyhow!("No zFVK"))?;
     let fvk =
         decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
             .unwrap();

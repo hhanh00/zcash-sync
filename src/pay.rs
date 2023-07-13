@@ -1,9 +1,14 @@
-use std::str::FromStr;
 use crate::db::SpendableNote;
+use std::str::FromStr;
 // use crate::wallet::RecipientMemo;
 use crate::api::recipient::RecipientMemo;
-use crate::chain::{get_checkpoint_height, get_latest_height, EXPIRY_HEIGHT_OFFSET};
-use crate::{build_tx, connect_lightwalletd, db, GetAddressUtxosReply, RawTransaction, TransactionBuilderError, TransactionPlan};
+use crate::chain::{get_latest_height, EXPIRY_HEIGHT_OFFSET};
+use crate::db::data_generated::fb::PaymentURIT;
+use crate::unified::UnifiedAddressType;
+use crate::{
+    build_tx, connect_lightwalletd, db, GetAddressUtxosReply, RawTransaction,
+    TransactionBuilderError, TransactionPlan,
+};
 use anyhow::{anyhow, Result};
 use jubjub::Fr;
 use rand::prelude::SliceRandom;
@@ -31,8 +36,6 @@ use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
 use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut as ZTxOut};
 use zcash_primitives::transaction::fees::fixed::FeeRule;
 use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
-use crate::db::data_generated::fb::PaymentURIT;
-use crate::unified::UnifiedAddressType;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
@@ -171,11 +174,7 @@ impl TxBuilder {
         Ok(())
     }
 
-    fn set_change(
-        &mut self,
-        ovk: &OutgoingViewingKey,
-        address: &PaymentAddress,
-    ) -> Result<()> {
+    fn set_change(&mut self, ovk: &OutgoingViewingKey, address: &PaymentAddress) -> Result<()> {
         self.tx.change = encode_payment_address(
             self.chain().network().hrp_sapling_payment_address(),
             address,
@@ -468,14 +467,25 @@ pub async fn build_tx_plan_with_utxos(
         }
     }
 
-    let taddr = crate::db::transparent::get_transparent(connection, account)?.and_then(|d| d.address).unwrap_or_default();
-    let fvk = crate::db::account::get_account(connection, account)?.and_then(|d| d.ivk).unwrap_or_default();
-    let orchard_fvk = crate::db::orchard::get_orchard(connection, account)?.map(|d| hex::encode(&d.fvk)).unwrap_or_default();
-    let change_address = crate::unified::get_unified_address(network, connection, account, Some(UnifiedAddressType {
-        transparent: true,
-        sapling: true,
-        orchard: true,
-    }))?;
+    let taddr = crate::db::transparent::get_transparent(connection, account)?
+        .and_then(|d| d.address)
+        .unwrap_or_default();
+    let fvk = crate::db::account::get_account(connection, account)?
+        .and_then(|d| d.ivk)
+        .unwrap_or_default();
+    let orchard_fvk = crate::db::orchard::get_orchard(connection, account)?
+        .map(|d| hex::encode(&d.fvk))
+        .unwrap_or_default();
+    let change_address = crate::unified::get_unified_address(
+        network,
+        connection,
+        account,
+        Some(UnifiedAddressType {
+            transparent: true,
+            sapling: true,
+            orchard: true,
+        }),
+    )?;
     let context = crate::TxBuilderContext::from_height(network, connection, checkpoint_height)?;
 
     let mut orders = vec![];
@@ -490,7 +500,9 @@ pub async fn build_tx_plan_with_utxos(
         loop {
             let a = std::cmp::min(amount, max_amount_per_note);
             let memo_bytes: MemoBytes = r.memo.clone().into();
-            let order = crate::note_selection::Order::new(network, id_order, &r.address, a, false, memo_bytes);
+            let order = crate::note_selection::Order::new(
+                network, id_order, &r.address, a, false, memo_bytes,
+            );
             orders.push(order);
             amount -= a;
             id_order += 1;
@@ -531,7 +543,14 @@ pub async fn build_tx_plan(
     let checkpoint_height =
         db::checkpoint::get_last_sync_height(network, connection, Some(max_height))?;
     let expiry_height = last_height + EXPIRY_HEIGHT_OFFSET;
-    let utxos = crate::note_selection::fetch_utxos(connection, url, account, checkpoint_height, excluded_pools).await?;
+    let utxos = crate::note_selection::fetch_utxos(
+        connection,
+        url,
+        account,
+        checkpoint_height,
+        excluded_pools,
+    )
+    .await?;
     let tx_plan = build_tx_plan_with_utxos(
         network,
         connection,
@@ -551,7 +570,8 @@ pub fn sign_plan(
     account: u32,
     tx_plan: &TransactionPlan,
 ) -> Result<Vec<u8>> {
-    let z_details = crate::db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
+    let z_details =
+        crate::db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
     let fvk = z_details.ivk.ok_or(anyhow!("No FVK"))?;
     let fvk =
         decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
@@ -601,7 +621,8 @@ pub fn make_payment_uri(
     amount: u64,
     memo: &str,
 ) -> Result<String> {
-    let addr = RecipientAddress::decode(network, address).ok_or_else(|| anyhow::anyhow!("Invalid address"))?;
+    let addr = RecipientAddress::decode(network, address)
+        .ok_or_else(|| anyhow::anyhow!("Invalid address"))?;
     let payment = Payment {
         recipient_address: addr,
         amount: Amount::from_u64(amount).map_err(|_| anyhow::anyhow!("Invalid amount"))?,
@@ -623,7 +644,11 @@ pub fn make_payment_uri(
 /// Decode a payment uri
 /// # Arguments
 /// * `uri`: payment uri
-pub fn parse_payment_uri(network: &Network, scheme: &str, uri: &str) -> anyhow::Result<PaymentURIT> {
+pub fn parse_payment_uri(
+    network: &Network,
+    scheme: &str,
+    uri: &str,
+) -> anyhow::Result<PaymentURIT> {
     let scheme_len = scheme.len();
     if uri[..scheme_len].ne(scheme) {
         anyhow::bail!("Invalid Payment URI: Invalid scheme");

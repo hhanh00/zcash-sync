@@ -1,5 +1,5 @@
+use crate::db;
 use crate::db::data_generated::fb::AccountDetailsT;
-use crate::{db, AccountData, DbAdapter};
 use anyhow::anyhow;
 use orchard::keys::{FullViewingKey, Scope};
 use orchard::Address;
@@ -164,7 +164,8 @@ pub fn get_diversified_address(
     if ua_type == 0 {
         anyhow::bail!("Must include a shielded receiver");
     }
-    let AccountDetailsT { ivk, .. } = db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
+    let AccountDetailsT { ivk, .. } =
+        db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
     let orchard_keys = db::orchard::get_orchard(connection, account)?;
     let mut receivers = vec![];
     let mut di = [0u8; 11];

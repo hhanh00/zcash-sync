@@ -8,7 +8,9 @@ use orchard::keys::FullViewingKey;
 use rusqlite::Connection;
 
 use crate::taddr::derive_from_pubkey;
-use zcash_client_backend::address::RecipientAddress;
+
+use crate::db::data_generated::fb::KeyPackT;
+use crate::zip32::derive_zip32;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key,
     encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address,
@@ -18,8 +20,6 @@ use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::zip32::{
     ChildIndex, DiversifiableFullViewingKey, ExtendedFullViewingKey, ExtendedSpendingKey,
 };
-use crate::db::data_generated::fb::KeyPackT;
-use crate::zip32::derive_zip32;
 
 pub fn split_key(key: &str) -> (String, String) {
     let words: Vec<_> = key.split_whitespace().collect();
@@ -140,7 +140,12 @@ fn derive_address(network: &Network, fvk: &ExtendedFullViewingKey) -> anyhow::Re
     Ok(address)
 }
 
-pub fn import_uvk(network: &Network, connection: &Connection, name: &str, uvk: &str) -> anyhow::Result<()> {
+pub fn import_uvk(
+    network: &Network,
+    connection: &Connection,
+    name: &str,
+    uvk: &str,
+) -> anyhow::Result<()> {
     let (hrp, data, _) = bech32::decode(uvk)?;
     if hrp != "yfvk" {
         anyhow::bail!("Invalid HRP");
@@ -166,7 +171,8 @@ pub fn import_uvk(network: &Network, connection: &Connection, name: &str, uvk: &
                 );
                 let (_, pa) = dfvk.default_address();
                 let pa = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
-                id_account = crate::db::account::store_account(connection, name, None, 0, None, &fvk, &pa)?;
+                id_account =
+                    crate::db::account::store_account(connection, name, None, 0, None, &fvk, &pa)?;
             }
             1 => {
                 let mut pubkeyb = [0u8; 33];
@@ -204,7 +210,8 @@ pub fn derive_keys(
     address: Option<u32>,
 ) -> anyhow::Result<KeyPackT> {
     let details = crate::db::account::get_account(connection, id_account)?;
-    let seed = details.and_then(|d| d.seed).ok_or_else(|| anyhow!("Account has no seed"))?;
+    let seed = details
+        .and_then(|d| d.seed)
+        .ok_or_else(|| anyhow!("Account has no seed"))?;
     derive_zip32(network, &seed, account, external, address)
 }
-

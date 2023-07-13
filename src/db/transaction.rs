@@ -3,7 +3,6 @@ use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
 use zcash_primitives::consensus::Network;
-use zcash_primitives::sapling::{PaymentAddress, SaplingIvk};
 
 pub fn clear_tx_details(connection: &Connection, account: u32) -> Result<()> {
     connection.execute(

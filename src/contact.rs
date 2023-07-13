@@ -1,13 +1,13 @@
+use crate::api::recipient::RecipientMemo;
+use crate::db::data_generated::fb::AccountDetailsT;
+use crate::{db, TransactionPlan};
 use anyhow::{anyhow, Result};
 use prost::bytes::{Buf, BufMut};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
-use rusqlite::Connection;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::memo::{Memo, MemoBytes};
-use crate::api::recipient::RecipientMemo;
-use crate::{db, TransactionPlan};
-use crate::db::data_generated::fb::{AccountDetailsT, ContactT};
 
 const CONTACT_COOKIE: u32 = 0x434E5440;
 
@@ -91,10 +91,17 @@ impl ContactDecoder {
     }
 }
 
-pub async fn commit_unsaved_contacts(network: &Network, connection: &Connection, url: &str, account: u32, anchor_offset: u32) -> Result<TransactionPlan> {
+pub async fn commit_unsaved_contacts(
+    network: &Network,
+    connection: &Connection,
+    url: &str,
+    account: u32,
+    anchor_offset: u32,
+) -> Result<TransactionPlan> {
     let contacts = crate::db::contact::list_unsaved_contacts(connection)?;
     let memos = serialize_contacts(&contacts)?;
-    let tx_plan = save_contacts_tx(network, connection, url, account, &memos, anchor_offset).await?;
+    let tx_plan =
+        save_contacts_tx(network, connection, url, account, &memos, anchor_offset).await?;
     Ok(tx_plan)
 }
 
@@ -104,9 +111,11 @@ async fn save_contacts_tx(
     url: &str,
     account: u32,
     memos: &[Memo],
-    confirmations: u32) -> Result<TransactionPlan> {
+    confirmations: u32,
+) -> Result<TransactionPlan> {
     let last_height = crate::chain::latest_height(url).await?;
-    let AccountDetailsT { address, .. } = db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
+    let AccountDetailsT { address, .. } =
+        db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
     let recipients: Vec<_> = memos
         .iter()
         .map(|m| RecipientMemo {
@@ -127,6 +136,7 @@ async fn save_contacts_tx(
         &recipients,
         0,
         confirmations,
-    ).await?;
+    )
+    .await?;
     Ok(tx_plan)
 }

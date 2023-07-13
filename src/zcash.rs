@@ -1,9 +1,11 @@
 use crate::api::dart_ffi::POST_COBJ;
+use crate::chain::latest_height;
 use crate::coin::{CoinApi, ZcashApi};
 use crate::db::data_generated::fb::{
     AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, ProgressT, TxReportT, ZcashSyncParams,
 };
-use crate::{connect_lightwalletd, db, BTCHandler, ChainError, RecipientsT, TransactionPlan};
+use crate::sync2::rescan_from;
+use crate::{connect_lightwalletd, db, ChainError, RecipientsT, TransactionPlan};
 use allo_isolate::IntoDart;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,12 +13,10 @@ use flatbuffers::FlatBufferBuilder;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
-use tokio::runtime::{Handle, Runtime};
+use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_primitives::consensus::Network;
-use crate::chain::latest_height;
-use crate::sync2::rescan_from;
 
 pub struct ZcashHandler {
     coin: u8,

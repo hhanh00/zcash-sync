@@ -1,9 +1,9 @@
 //! Retrieve Historical Prices from coingecko
 
+use crate::db::data_generated::fb::QuoteT;
 use anyhow::{anyhow, Result};
 use chrono::NaiveDateTime;
 use rusqlite::{params, Connection, OptionalExtension};
-use crate::db::data_generated::fb::QuoteT;
 
 pub async fn sync_historical_prices(
     connection: &mut Connection,

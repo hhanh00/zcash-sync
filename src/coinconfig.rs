@@ -1,16 +1,13 @@
 use crate::fountain::FountainCodes;
 // use crate::mempool::MemPool;
-use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter};
-use anyhow::anyhow;
+
 use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
-use tonic::transport::Channel;
-use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
+use std::sync::Mutex;
+
 use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
-use zcash_primitives::consensus::Network;
-use zcash_primitives::consensus::Network::{MainNetwork, YCashMainNetwork};
+
 use zcash_proofs::prover::LocalTxProver;
 
 lazy_static! {

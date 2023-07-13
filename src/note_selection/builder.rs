@@ -8,18 +8,18 @@ use anyhow::anyhow;
 use jubjub::Fr;
 use orchard::builder::Builder as OrchardBuilder;
 use orchard::bundle::Flags;
-use orchard::keys::{FullViewingKey, Scope, SpendAuthorizingKey, SpendingKey};
+use orchard::keys::{FullViewingKey, Scope, SpendAuthorizingKey};
 use orchard::note::Nullifier;
 use orchard::value::NoteValue;
 use orchard::{Address, Anchor, Bundle};
 use rand::{CryptoRng, RngCore};
 use ripemd::{Digest, Ripemd160};
-use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
+use secp256k1::{All, PublicKey, Secp256k1};
 use sha2::Sha256;
-use std::str::FromStr;
+
 use rusqlite::Connection;
-use zcash_client_backend::encoding::decode_extended_spending_key;
-use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
+
+use zcash_primitives::consensus::{BlockHeight, BranchId, Network};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::prover::TxProver;
@@ -29,7 +29,6 @@ use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut};
 use zcash_primitives::transaction::sighash::{signature_hash, SignableInput};
 use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_primitives::transaction::{Transaction, TransactionData, TxVersion};
-use zcash_primitives::zip32::ExtendedSpendingKey;
 
 pub struct TxBuilderContext {
     pub height: u32,
@@ -38,13 +37,19 @@ pub struct TxBuilderContext {
 }
 
 impl TxBuilderContext {
-    pub fn from_height(network: &Network, connection: &Connection, height: u32) -> anyhow::Result<Self> {
-        let TreeCheckpoint { tree, .. } = crate::db::checkpoint::get_tree::<'S'>(connection, height)?;
+    pub fn from_height(
+        network: &Network,
+        connection: &Connection,
+        height: u32,
+    ) -> anyhow::Result<Self> {
+        let TreeCheckpoint { tree, .. } =
+            crate::db::checkpoint::get_tree::<'S'>(connection, height)?;
         let hasher = SaplingHasher {};
         let sapling_anchor = tree.root(32, &SAPLING_ROOTS, &hasher);
 
         let orchard_anchor = if crate::has_unified(network) {
-            let TreeCheckpoint { tree, .. } = crate::db::checkpoint::get_tree::<'O'>(connection, height)?;
+            let TreeCheckpoint { tree, .. } =
+                crate::db::checkpoint::get_tree::<'O'>(connection, height)?;
             let hasher = OrchardHasher::new();
             Some(tree.root(32, &ORCHARD_ROOTS, &hasher))
         } else {
@@ -286,4 +291,3 @@ pub fn build_tx(
 
     Ok(tx_bytes)
 }
-

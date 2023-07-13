@@ -1,9 +1,9 @@
-use crate::{db::read::get_account_by_address, taddr::derive_from_pubkey};
+use crate::taddr::derive_from_pubkey;
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 use zcash_client_backend::encoding::{encode_extended_full_viewing_key, encode_payment_address};
-use zcash_primitives::{consensus::Parameters, zip32::ExtendedFullViewingKey};
 use zcash_primitives::consensus::Network;
+use zcash_primitives::{consensus::Parameters, zip32::ExtendedFullViewingKey};
 
 use super::transport::*;
 

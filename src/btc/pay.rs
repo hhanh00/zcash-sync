@@ -16,13 +16,6 @@ use electrum_client::bitcoin::{
 use flatbuffers::FlatBufferBuilder;
 use rusqlite::Connection;
 use std::str::FromStr;
-use zcash_primitives::consensus::Network;
-use zcash_primitives::memo::MemoBytes;
-use crate::api::recipient::RecipientMemo;
-use crate::{connect_lightwalletd, TransactionBuilderError, TransactionPlan};
-use crate::chain::EXPIRY_HEIGHT_OFFSET;
-use crate::note_selection::UTXO;
-use crate::unified::UnifiedAddressType;
 
 pub fn sign(connection: &Connection, account: u32, tx_plan: &str) -> Result<Vec<u8>> {
     let sk = db::get_sk(connection, account)?.ok_or(anyhow!("No secret key"))?;

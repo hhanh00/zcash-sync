@@ -242,9 +242,9 @@ void deallocate_bytes(uint8_t *ptr, uint32_t len);
 
 struct CResult_u8 init_wallet(uint8_t coin, char *db_path);
 
-struct CResult_u8 migrate_db(uint8_t coin, char *db_path);
+struct CResult_u8 migrate_db(uint8_t _coin, char *db_path);
 
-struct CResult_u8 migrate_data_db(uint8_t coin);
+struct CResult_u8 migrate_data_db(uint8_t _coin);
 
 void set_active(uint8_t active);
 
@@ -252,7 +252,7 @@ void set_coin_lwd_url(uint8_t coin, char *lwd_url);
 
 char *get_lwd_url(uint8_t coin);
 
-void set_coin_passwd(uint8_t coin, char *passwd);
+void set_coin_passwd(uint8_t _coin, char *passwd);
 
 struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t index);
 

@@ -1,9 +1,12 @@
 use crate::api::recipient::RecipientMemo;
-use crate::chain::{get_checkpoint_height, get_latest_height, EXPIRY_HEIGHT_OFFSET};
+use crate::chain::{get_latest_height, EXPIRY_HEIGHT_OFFSET};
 use crate::key::split_key;
 use crate::note_selection::{SecretKeys, Source, UTXO};
 use crate::unified::orchard_as_unified;
-use crate::{build_tx, AddressList, BlockId, BlockRange, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter, connect_lightwalletd};
+use crate::{
+    build_tx, connect_lightwalletd, AddressList, BlockId, BlockRange, CompactTxStreamerClient,
+    GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
+};
 use anyhow::anyhow;
 use base58check::FromBase58Check;
 use bip39::{Language, Mnemonic, Seed};
@@ -11,10 +14,10 @@ use core::slice;
 use futures::StreamExt;
 use rand::rngs::OsRng;
 use ripemd::{Digest, Ripemd160};
+use rusqlite::Connection;
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use std::collections::HashMap;
-use rusqlite::Connection;
 use tiny_hderive::bip32::ExtendedPrivKey;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -288,21 +291,17 @@ pub async fn sweep_tkey(
     let (seckey, from_address) = derive_taddr(network, sk)?;
 
     let (checkpoint_height, to_address) = {
-        let checkpoint_height = crate::db::checkpoint::get_last_sync_height(network, connection, None)?;
+        let checkpoint_height =
+            crate::db::checkpoint::get_last_sync_height(network, connection, None)?;
 
         let to_address = match pool {
-            0 => {
-                crate::db::transparent::get_transparent(connection, account)?.and_then(|d| d.address)
-            },
-            1 => {
-                crate::db::account::get_account(connection, account)?.and_then(|d| d.address)
-            }
-            2 => {
-                crate::db::orchard::get_orchard(connection, account)?.map(|okeys| {
-                    let address = okeys.get_address(0);
-                    orchard_as_unified(network, &address).encode()
-                })
-            }
+            0 => crate::db::transparent::get_transparent(connection, account)?
+                .and_then(|d| d.address),
+            1 => crate::db::account::get_account(connection, account)?.and_then(|d| d.address),
+            2 => crate::db::orchard::get_orchard(connection, account)?.map(|okeys| {
+                let address = okeys.get_address(0);
+                orchard_as_unified(network, &address).encode()
+            }),
             _ => unreachable!(),
         };
         let to_address = to_address.ok_or(anyhow!("Account has no address of this type"))?;

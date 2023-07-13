@@ -93,6 +93,7 @@ mod pay;
 pub mod pool;
 mod sapling;
 // mod scan;
+pub mod historical_prices;
 mod sync;
 pub mod sync2;
 mod taddr;
@@ -103,7 +104,6 @@ mod tron;
 mod unified;
 mod zcash;
 mod zip32;
-pub mod historical_prices;
 
 #[cfg(feature = "ledger")]
 pub mod ledger;
@@ -121,9 +121,8 @@ pub use crate::lw_rpc::*;
 pub use crate::orchard::decode_merkle_path as decode_orchard_merkle_path;
 pub use crate::unified::{decode_unified_address, get_unified_address};
 pub use note_selection::{
-    build_tx, build_tx_plan, Destination, Source,
-    TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
-    MAX_ATTEMPTS,
+    build_tx, build_tx_plan, Destination, Source, TransactionBuilderConfig,
+    TransactionBuilderError, TransactionPlan, TxBuilderContext, MAX_ATTEMPTS,
 };
 
 pub use api::recipient::{make_recipient, make_recipients};

@@ -1,13 +1,13 @@
-use crate::{connect_lightwalletd, has_unified};
-use crate::db::data_generated::fb::{AccountDetailsT, AddressBalanceT, AddressBalanceVecT};
+use crate::db::data_generated::fb::{AddressBalanceT, AddressBalanceVecT};
+use crate::key::decode_key;
 use crate::unified::UnifiedAddressType;
+use crate::{connect_lightwalletd, has_unified};
 use anyhow::{anyhow, Result};
 use bip39::{Language, Mnemonic};
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
 use rusqlite::Connection;
 use zcash_primitives::consensus::Network;
-use crate::key::decode_key;
 
 pub fn get_unified_address(
     network: &Network,
@@ -35,8 +35,8 @@ pub async fn scan_transparent_accounts(
     account: u32,
     gap_limit: usize,
 ) -> Result<AddressBalanceVecT> {
-    let details = crate::db::account::get_account(connection, account)?
-        .ok_or(anyhow!("No account"))?;
+    let details =
+        crate::db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
     let seed = details.seed.ok_or(anyhow!("No seed"))?;
     let aindex = details.aindex;
     let mut client = connect_lightwalletd(url).await?;
@@ -62,12 +62,25 @@ pub async fn scan_transparent_accounts(
 /// * `coin`: 0 for zcash, 1 for ycash
 /// * `name`: prefix for the imported accounts
 /// * `data`: data file
-pub fn import_from_zwl(network: &Network, connection: &Connection, name: &str, data: &str) -> anyhow::Result<()> {
+pub fn import_from_zwl(
+    network: &Network,
+    connection: &Connection,
+    name: &str,
+    data: &str,
+) -> anyhow::Result<()> {
     let sks = crate::misc::read_zwl(data)?;
     for (i, key) in sks.iter().enumerate() {
         let name = format!("{}-{}", name, i + 1);
         let (seed, sk, ivk, pa, _ufvk) = decode_key(network, key, 0)?;
-        crate::db::account::store_account(connection, &name, seed.as_deref(), 0, sk.as_deref(), &ivk, &pa)?;
+        crate::db::account::store_account(
+            connection,
+            &name,
+            seed.as_deref(),
+            0,
+            sk.as_deref(),
+            &ivk,
+            &pa,
+        )?;
     }
     Ok(())
 }
@@ -83,8 +96,16 @@ pub fn import_from_zwl(network: &Network, connection: &Connection, name: &str, d
 /// * `name`: name of the sub accounts. Every sub account will have the same name
 /// * `index`: Starting index. If `None`, use the index following the highest used index
 /// * `count`: Number of subaccounts to create
-pub fn new_sub_account(network: &Network, connection: &Connection, account: u32, name: &str, index: Option<u32>, count: u32) -> Result<()> {
-    let details = crate::db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
+pub fn new_sub_account(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    name: &str,
+    index: Option<u32>,
+    count: u32,
+) -> Result<()> {
+    let details =
+        crate::db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
     let seed = details.seed.ok_or_else(|| anyhow!("No seed"))?;
     let index = match index {
         Some(index) => index,
@@ -110,7 +131,8 @@ pub fn new_sub_account(network: &Network, connection: &Connection, account: u32,
 /// # Returns
 /// `account id`
 pub fn new_account(
-    network: &Network, connection: &Connection,
+    network: &Network,
+    connection: &Connection,
     name: &str,
     key: Option<String>,
     index: Option<u32>,
@@ -128,22 +150,41 @@ pub fn new_account(
     Ok(id_account)
 }
 
-fn new_account_with_seed(network: &Network, connection: &Connection, name: &str, seed: &str, index: u32) -> anyhow::Result<u32> {
+fn new_account_with_seed(
+    network: &Network,
+    connection: &Connection,
+    name: &str,
+    seed: &str,
+    index: u32,
+) -> anyhow::Result<u32> {
     // derive the address for this seed at this index
     let (_, sk, fvk, address, _) = decode_key(network, seed, index)?;
     let account = crate::db::account::get_account_by_address(connection, &address)?;
     let account = match account {
         Some(account) => account,
         None => {
-            let account = crate::db::account::store_account(connection, name, Some(seed), index, sk.as_deref(), &fvk, &address)?;
+            let account = crate::db::account::store_account(
+                connection,
+                name,
+                Some(seed),
+                index,
+                sk.as_deref(),
+                &fvk,
+                &address,
+            )?;
             crate::db::transparent::create_taddr(network, connection, account)?;
             if has_unified(network) {
                 crate::db::orchard::create_orchard(network, connection, account)?;
             }
-            crate::db::orchard::store_ua_settings(connection, account, true, true, has_unified(network))?;
+            crate::db::orchard::store_ua_settings(
+                connection,
+                account,
+                true,
+                true,
+                has_unified(network),
+            )?;
             account
         }
     };
     Ok(account)
 }
-

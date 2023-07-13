@@ -83,7 +83,9 @@ pub trait CoinApi {
     fn to_tx_report(&self, tx_plan: &str) -> Result<TxReportT>;
     fn sign(&self, account: u32, tx_plan: &str) -> Result<Vec<u8>>;
     fn broadcast(&self, raw_tx: &[u8]) -> Result<String>;
-    fn mark_inputs_spent(&self, _tx_plan: &str, _height: u32) -> Result<()> { Ok(()) }
+    fn mark_inputs_spent(&self, _tx_plan: &str, _height: u32) -> Result<()> {
+        Ok(())
+    }
 
     fn connection(&self) -> MutexGuard<Connection>;
 }
@@ -239,7 +241,7 @@ impl CoinApi for CoinHandler {
         todo!()
     }
 
-    fn set_url(&mut self, url: &str) {
+    fn set_url(&mut self, _url: &str) {
         todo!()
     }
 
@@ -247,23 +249,23 @@ impl CoinApi for CoinHandler {
         todo!()
     }
 
-    fn new_account(&self, name: &str, key: &str, index: Option<u32>) -> Result<u32> {
+    fn new_account(&self, _name: &str, _key: &str, _index: Option<u32>) -> Result<u32> {
         todo!()
     }
 
-    fn is_valid_key(&self, key: &str) -> bool {
+    fn is_valid_key(&self, _key: &str) -> bool {
         todo!()
     }
 
-    fn is_valid_address(&self, key: &str) -> bool {
+    fn is_valid_address(&self, _key: &str) -> bool {
         todo!()
     }
 
-    fn get_backup(&self, account: u32) -> Result<BackupT> {
+    fn get_backup(&self, _account: u32) -> Result<BackupT> {
         todo!()
     }
 
-    async fn sync(&mut self, account: u32, params: Vec<u8>) -> Result<u32> {
+    async fn sync(&mut self, _account: u32, _params: Vec<u8>) -> Result<u32> {
         todo!()
     }
 
@@ -279,39 +281,44 @@ impl CoinApi for CoinHandler {
         todo!()
     }
 
-    fn rewind_to_height(&mut self, height: u32) -> Result<u32> {
+    fn rewind_to_height(&mut self, _height: u32) -> Result<u32> {
         todo!()
     }
 
-    fn truncate(&mut self, height: u32) -> Result<()> {
+    fn truncate(&mut self, _height: u32) -> Result<()> {
         todo!()
     }
 
-    fn get_balance(&self, account: u32) -> Result<u64> {
+    fn get_balance(&self, _account: u32) -> Result<u64> {
         todo!()
     }
 
-    fn get_txs(&self, account: u32) -> Result<PlainTxVecT> {
+    fn get_txs(&self, _account: u32) -> Result<PlainTxVecT> {
         todo!()
     }
 
-    fn get_notes(&self, account: u32) -> Result<PlainNoteVecT> {
+    fn get_notes(&self, _account: u32) -> Result<PlainNoteVecT> {
         todo!()
     }
 
-    fn prepare_multi_payment(&self, account: u32, recipients: &RecipientsT, feeb: Option<u64>) -> Result<String> {
+    fn prepare_multi_payment(
+        &self,
+        _account: u32,
+        _recipients: &RecipientsT,
+        _feeb: Option<u64>,
+    ) -> Result<String> {
         todo!()
     }
 
-    fn to_tx_report(&self, tx_plan: &str) -> Result<TxReportT> {
+    fn to_tx_report(&self, _tx_plan: &str) -> Result<TxReportT> {
         todo!()
     }
 
-    fn sign(&self, account: u32, tx_plan: &str) -> Result<Vec<u8>> {
+    fn sign(&self, _account: u32, _tx_plan: &str) -> Result<Vec<u8>> {
         todo!()
     }
 
-    fn broadcast(&self, raw_tx: &[u8]) -> Result<String> {
+    fn broadcast(&self, _raw_tx: &[u8]) -> Result<String> {
         todo!()
     }
 
