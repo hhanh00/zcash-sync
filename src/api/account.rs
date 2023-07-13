@@ -2,7 +2,6 @@
 
 // Account creation
 
-use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::{AddressBalanceT, AddressBalanceVecT, BackupT, KeyPackT};
 use crate::db::AccountData;
 use crate::key::decode_key;
@@ -237,16 +236,16 @@ pub fn get_diversified_address(ua_type: u8, time: u32) -> anyhow::Result<String>
 /// * `coin`: 0 for zcash, 1 for ycash
 /// * `id_account`: account id as returned from [new_account]
 /// TODO: REMOVE
-pub async fn get_taddr_balance(coin: u8, id_account: u32) -> anyhow::Result<u64> {
-    let c = CoinConfig::get(coin);
-    let mut client = c.connect_lwd().await?;
-    let address = c.db()?.get_taddr(id_account)?;
-    let balance = match address {
-        None => 0u64,
-        Some(address) => crate::taddr::get_taddr_balance(&mut client, &address).await?,
-    };
-    Ok(balance)
-}
+// pub async fn get_taddr_balance(coin: u8, id_account: u32) -> anyhow::Result<u64> {
+//     let c = CoinConfig::get(coin);
+//     let mut client = c.connect_lwd().await?;
+//     let address = c.db()?.get_taddr(id_account)?;
+//     let balance = match address {
+//         None => 0u64,
+//         Some(address) => crate::taddr::get_taddr_balance(&mut client, &address).await?,
+//     };
+//     Ok(balance)
+// }
 
 /// Look for accounts that have some transparent balance. Stop when the gap limit
 /// is exceeded and no balance was found

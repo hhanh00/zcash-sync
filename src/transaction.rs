@@ -1,12 +1,14 @@
 use crate::api::recipient::decode_memo;
 use crate::contact::{Contact, ContactDecoder};
 use crate::unified::orchard_as_unified;
-use crate::{AccountData, CoinConfig, CompactTxStreamerClient, DbAdapter, Hash, TxFilter};
+use crate::{CompactTxStreamerClient, connect_lightwalletd, Hash, TxFilter};
 use orchard::keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope};
 use orchard::note_encryption::OrchardDomain;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use anyhow::anyhow;
+use rusqlite::Connection;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::{
@@ -21,6 +23,7 @@ use zcash_primitives::sapling::note_encryption::{
 };
 use zcash_primitives::sapling::SaplingIvk;
 use zcash_primitives::transaction::Transaction;
+use crate::db::data_generated::fb::ContactT;
 
 #[derive(Debug)]
 pub struct ContactRef {
@@ -29,19 +32,15 @@ pub struct ContactRef {
     pub contact: Contact,
 }
 
-pub async fn get_transaction_details(coin: u8) -> anyhow::Result<()> {
-    let c = CoinConfig::get(coin);
-    let network = c.chain.network();
-    let mut client = c.connect_lwd().await?;
+pub async fn get_transaction_details(network: &Network, connection: &Connection, url: &str) -> anyhow::Result<()> {
+    let mut client = connect_lightwalletd(url).await?;
     let mut keys = HashMap::new();
 
     let reqs = {
-        let db = c.db.as_ref().unwrap();
-        let db = db.lock().unwrap();
-        let reqs = db.get_txid_without_memo()?;
+        let reqs = crate::db::transaction::list_txid_without_memo(connection)?;
         for req in reqs.iter() {
             if !keys.contains_key(&req.account) {
-                let decryption_keys = get_decryption_keys(network, req.account, &db)?;
+                let decryption_keys = get_decryption_keys(network, connection, req.account)?;
                 keys.insert(req.account, decryption_keys);
             }
         }
@@ -56,12 +55,10 @@ pub async fn get_transaction_details(coin: u8) -> anyhow::Result<()> {
         details.push(tx_details);
     }
 
-    let db = c.db.as_ref().unwrap();
-    let db = db.lock().unwrap();
     for tx_details in details.iter() {
-        db.update_transaction_with_memo(tx_details)?;
+        crate::db::transaction::update_transaction_with_memo(connection, tx_details)?;
         for c in tx_details.contacts.iter() {
-            db.store_contact(c, false)?;
+            crate::db::contact::store_contact(connection, c, false)?;
         }
         let z_msg = decode_memo(
             tx_details.id_tx,
@@ -72,7 +69,7 @@ pub async fn get_transaction_details(coin: u8) -> anyhow::Result<()> {
             tx_details.incoming,
         );
         if !z_msg.is_empty() {
-            db.store_message(tx_details.account, &z_msg)?;
+            crate::db::message::store_message(connection, tx_details.account, &z_msg)?;
         }
     }
 
@@ -214,7 +211,7 @@ pub fn decode_transaction(
                     }
                 }
             }
-            contacts.extend(&mut contact_decoder.finalize()?.into_iter());
+            contacts.extend(contact_decoder.finalize()?);
         }
     }
 
@@ -252,7 +249,11 @@ pub fn decode_transaction(
         timestamp,
         memo,
         incoming,
-        contacts,
+        contacts: contacts.into_iter().map(|c| ContactT {
+            id: c.id,
+            name: Some(c.name),
+            address: Some(c.address),
+        }).collect(),
     };
 
     Ok(tx_details)
@@ -260,22 +261,22 @@ pub fn decode_transaction(
 
 fn get_decryption_keys(
     network: &Network,
+    connection: &Connection,
     account: u32,
-    db: &DbAdapter,
 ) -> anyhow::Result<DecryptionKeys> {
-    let AccountData { fvk, .. } = db.get_account_info(account)?;
+    let fvk = crate::db::account::get_account(connection, account)?.and_then(|d| d.ivk).ok_or(anyhow!("No zFVK"))?;
     let fvk =
         decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
             .unwrap();
-    let (sapling_ivk, sapling_ovk) = (fvk.fvk.vk.ivk(), fvk.fvk.ovk);
+    let skey = (fvk.fvk.vk.ivk(), fvk.fvk.ovk);
 
-    let okey = db.get_orchard(account)?;
+    let okey = crate::db::orchard::get_orchard(connection, account)?;
     let okey = okey.map(|okey| {
         let fvk = FullViewingKey::from_bytes(&okey.fvk).unwrap();
         (fvk.to_ivk(Scope::External), fvk.to_ovk(Scope::External))
     });
     let decryption_keys = DecryptionKeys {
-        sapling_keys: (sapling_ivk, sapling_ovk),
+        sapling_keys: skey,
         orchard_keys: okey,
     };
     Ok(decryption_keys)
@@ -311,7 +312,7 @@ pub struct GetTransactionDetailRequest {
     pub value: i64,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Debug)]
 pub struct TransactionDetails {
     pub account: u32,
     pub id_tx: u32,
@@ -320,12 +321,5 @@ pub struct TransactionDetails {
     pub address: String,
     pub memo: String,
     pub incoming: bool,
-    pub contacts: Vec<Contact>,
-}
-
-#[tokio::test]
-async fn test_get_transaction_details() {
-    crate::init_test();
-
-    get_transaction_details(0).await.unwrap();
+    pub contacts: Vec<ContactT>,
 }

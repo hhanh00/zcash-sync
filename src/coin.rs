@@ -200,7 +200,7 @@ impl CoinApi for NoCoin {
     }
 }
 
-#[enum_delegate::implement(CoinApi)]
+// #[enum_delegate::implement(CoinApi)]
 pub enum CoinHandler {
     NoCoin(NoCoin),
     Zcash(ZcashHandler),
@@ -222,5 +222,100 @@ impl ZcashApi for CoinHandler {
             CoinHandler::Zcash(zcash) => zcash.network(),
             _ => unimplemented!(),
         }
+    }
+}
+
+#[async_trait(?Send)]
+impl CoinApi for CoinHandler {
+    fn db_path(&self) -> &str {
+        todo!()
+    }
+
+    fn coingecko_id(&self) -> &'static str {
+        todo!()
+    }
+
+    fn url(&self) -> String {
+        todo!()
+    }
+
+    fn set_url(&mut self, url: &str) {
+        todo!()
+    }
+
+    fn list_accounts(&self) -> Result<AccountVecT> {
+        todo!()
+    }
+
+    fn new_account(&self, name: &str, key: &str, index: Option<u32>) -> Result<u32> {
+        todo!()
+    }
+
+    fn is_valid_key(&self, key: &str) -> bool {
+        todo!()
+    }
+
+    fn is_valid_address(&self, key: &str) -> bool {
+        todo!()
+    }
+
+    fn get_backup(&self, account: u32) -> Result<BackupT> {
+        todo!()
+    }
+
+    async fn sync(&mut self, account: u32, params: Vec<u8>) -> Result<u32> {
+        todo!()
+    }
+
+    fn cancel_sync(&mut self) -> Result<()> {
+        todo!()
+    }
+
+    async fn get_latest_height(&self) -> Result<u32> {
+        todo!()
+    }
+
+    fn skip_to_last_height(&mut self) -> Result<()> {
+        todo!()
+    }
+
+    fn rewind_to_height(&mut self, height: u32) -> Result<u32> {
+        todo!()
+    }
+
+    fn truncate(&mut self, height: u32) -> Result<()> {
+        todo!()
+    }
+
+    fn get_balance(&self, account: u32) -> Result<u64> {
+        todo!()
+    }
+
+    fn get_txs(&self, account: u32) -> Result<PlainTxVecT> {
+        todo!()
+    }
+
+    fn get_notes(&self, account: u32) -> Result<PlainNoteVecT> {
+        todo!()
+    }
+
+    fn prepare_multi_payment(&self, account: u32, recipients: &RecipientsT, feeb: Option<u64>) -> Result<String> {
+        todo!()
+    }
+
+    fn to_tx_report(&self, tx_plan: &str) -> Result<TxReportT> {
+        todo!()
+    }
+
+    fn sign(&self, account: u32, tx_plan: &str) -> Result<Vec<u8>> {
+        todo!()
+    }
+
+    fn broadcast(&self, raw_tx: &[u8]) -> Result<String> {
+        todo!()
+    }
+
+    fn connection(&self) -> MutexGuard<Connection> {
+        todo!()
     }
 }

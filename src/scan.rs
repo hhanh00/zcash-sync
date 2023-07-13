@@ -4,7 +4,7 @@ use crate::db::AccountViewKey;
 use crate::chain::{download_chain, DecryptNode};
 use crate::transaction::get_transaction_details;
 use crate::{
-    connect_lightwalletd, ChainError, CoinConfig, CompactBlock, CompactSaplingOutput, CompactTx,
+    connect_lightwalletd, ChainError, CompactBlock, CompactSaplingOutput, CompactTx,
     DbAdapterBuilder,
 };
 

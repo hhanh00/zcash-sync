@@ -167,7 +167,7 @@ impl<
                     new_witnesses.push(witness);
                     balance += rn.value as i64;
                 }
-                db::checkpoint::add_value(id_tx, balance, &db_tx)?;
+                db::transaction::add_value(id_tx, balance, &db_tx)?;
             }
             self.note_position += decb.count_outputs as usize;
         }
@@ -188,8 +188,8 @@ impl<
                             tx_index as u32,
                             &db_tx,
                         )?;
-                        db::checkpoint::add_value(id_tx, -(rn.value as i64), &db_tx)?;
-                        db::checkpoint::mark_spent(rn.id, b.height as u32, &db_tx)?;
+                        db::transaction::add_value(id_tx, -(rn.value as i64), &db_tx)?;
+                        db::transaction::mark_spent(rn.id, b.height as u32, &db_tx)?;
                         self.nullifiers.remove(sp);
                     }
                 }
@@ -317,85 +317,40 @@ impl<
     }
 }
 
-pub async fn warp(
-    coin: u8,
-    get_tx: bool,
-    anchor_offset: u32,
-    max_cost: u32,
-    port: i64,
-    rx_cancel: oneshot::Receiver<()>,
-) -> Result<u32> {
-    crate::api::sync::coin_sync(
-        coin,
-        get_tx,
-        anchor_offset,
-        max_cost,
-        move |progress| {
-            let progress = ProgressT {
-                height: progress.height,
-                trial_decryptions: progress.trial_decryptions,
-                downloaded: progress.downloaded as u64,
-            };
-            let mut builder = FlatBufferBuilder::new();
-            let root = progress.pack(&mut builder);
-            builder.finish(root, None);
-            let v = builder.finished_data().to_vec();
-            let mut progress = v.into_dart();
-            if port != 0 {
-                unsafe {
-                    if let Some(p) = POST_COBJ {
-                        p(port, &mut progress);
-                    }
-                }
-            }
-        },
-        rx_cancel,
-    )
-    .await
-}
+// pub async fn warp(
+//     coin: u8,
+//     get_tx: bool,
+//     anchor_offset: u32,
+//     max_cost: u32,
+//     port: i64,
+//     rx_cancel: oneshot::Receiver<()>,
+// ) -> Result<u32> {
+//     crate::api::sync::coin_sync(
+//         coin,
+//         get_tx,
+//         anchor_offset,
+//         max_cost,
+//         move |progress| {
+//             let progress = ProgressT {
+//                 height: progress.height,
+//                 trial_decryptions: progress.trial_decryptions,
+//                 downloaded: progress.downloaded as u64,
+//             };
+//             let mut builder = FlatBufferBuilder::new();
+//             let root = progress.pack(&mut builder);
+//             builder.finish(root, None);
+//             let v = builder.finished_data().to_vec();
+//             let mut progress = v.into_dart();
+//             if port != 0 {
+//                 unsafe {
+//                     if let Some(p) = POST_COBJ {
+//                         p(port, &mut progress);
+//                     }
+//                 }
+//             }
+//         },
+//         rx_cancel,
+//     )
+//     .await
+// }
 
-#[cfg(test)]
-mod tests {
-    use super::Synchronizer;
-    use crate::coinconfig::COIN_CONFIG;
-    use crate::db::DbAdapterBuilder;
-    use crate::init_coin;
-    use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
-    use crate::sync::tree::WarpProcessor;
-    use crate::sync::CTree;
-    use std::collections::HashMap;
-    use zcash_primitives::consensus::Network;
-    use zcash_primitives::sapling::note_encryption::SaplingDomain;
-
-    type SaplingSynchronizer = Synchronizer<
-        Network,
-        SaplingDomain<Network>,
-        SaplingViewKey,
-        DecryptedSaplingNote,
-        SaplingDecrypter<Network>,
-        SaplingHasher,
-        'S',
-    >;
-
-    #[test]
-    fn test() {
-        // init_coin(0, "zec.db").unwrap();
-        // let coin = COIN_CONFIG[0].lock().unwrap();
-        // let network = coin.chain.network();
-        // let mut synchronizer = SaplingSynchronizer {
-        //     decrypter: SaplingDecrypter::new(*network),
-        //     warper: WarpProcessor::new(SaplingHasher::default()),
-        //     vks: vec![],
-        //     shielded_pool: "sapling",
-        //     tree: CTree::new(),
-        //     witnesses: vec![],
-        //
-        //     note_position: 0,
-        //     nullifiers: HashMap::new(),
-        //     _phantom: Default::default(),
-        // };
-        //
-        // synchronizer.initialize(1000).unwrap();
-        // synchronizer.process(&vec![]).unwrap();
-    }
-}

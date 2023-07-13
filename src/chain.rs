@@ -2,7 +2,7 @@ use crate::db::data_generated::fb::Servers as fbServers;
 use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
 use crate::lw_rpc::*;
-use crate::scan::Blocks;
+use anyhow::Result;
 use crate::DbAdapter;
 use futures::{future, FutureExt};
 use rand::prelude::SliceRandom;
@@ -14,6 +14,7 @@ use std::marker::PhantomData;
 
 use std::time::Duration;
 use std::time::Instant;
+use rusqlite::Connection;
 use sysinfo::{System, SystemExt};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -36,15 +37,16 @@ use crate::gpu::cuda::{CudaProcessor, CUDA_CONTEXT};
 #[cfg(feature = "apple_metal")]
 use crate::gpu::metal::MetalProcessor;
 use crate::gpu::USE_GPU;
+use crate::sync::CTree;
 
-pub async fn latest_height(url: &str) -> anyhow::Result<u32> {
+pub async fn latest_height(url: &str) -> Result<u32> {
     let mut client = connect_lightwalletd(url).await?;
     get_latest_height(&mut client).await
 }
 
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
-) -> anyhow::Result<u32> {
+) -> Result<u32> {
     let chainspec = ChainSpec {};
     let rep = client.get_latest_block(Request::new(chainspec)).await?;
     let block_id = rep.into_inner();
@@ -53,17 +55,47 @@ pub async fn get_latest_height(
 
 pub async fn get_activation_date(
     network: &Network,
-    client: &mut CompactTxStreamerClient<Channel>,
-) -> anyhow::Result<u32> {
+    url: &str,
+) -> Result<u32> {
+    let mut client = connect_lightwalletd(url).await?;
     let height = network.activation_height(NetworkUpgrade::Sapling).unwrap();
-    let time = get_block_date(client, u32::from(height)).await?;
+    let time = get_block_date(&mut client, u32::from(height)).await?;
     Ok(time)
+}
+
+pub async fn get_block_by_time(
+    network: &Network,
+    url: &str,
+    time: u32,
+) -> Result<u32> {
+    let mut client = connect_lightwalletd(url).await?;
+    let mut start = u32::from(network.activation_height(NetworkUpgrade::Sapling).unwrap());
+    let mut end = get_latest_height(&mut client).await?;
+    if time <= get_block_date(&mut client, start).await? {
+        return Ok(0);
+    }
+    if time >= get_block_date(&mut client, end).await? {
+        return Ok(end);
+    }
+    let mut block_mid;
+    while end - start >= 1000 {
+        block_mid = (start + end) / 2;
+        let mid = get_block_date(&mut client, block_mid).await?;
+        if time < mid {
+            end = block_mid - 1;
+        } else if time > mid {
+            start = block_mid + 1;
+        } else {
+            return Ok(block_mid);
+        }
+    }
+    Ok(start)
 }
 
 pub async fn get_block_date(
     client: &mut CompactTxStreamerClient<Channel>,
     height: u32,
-) -> anyhow::Result<u32> {
+) -> Result<u32> {
     let block = client
         .get_block(Request::new(BlockId {
             height: height as u64,
@@ -74,32 +106,27 @@ pub async fn get_block_date(
     Ok(block.time)
 }
 
-pub async fn get_block_by_time(
-    network: &Network,
-    client: &mut CompactTxStreamerClient<Channel>,
-    time: u32,
-) -> anyhow::Result<u32> {
-    let mut start = u32::from(network.activation_height(NetworkUpgrade::Sapling).unwrap());
-    let mut end = get_latest_height(client).await?;
-    if time <= get_block_date(client, start).await? {
-        return Ok(0);
-    }
-    if time >= get_block_date(client, end).await? {
-        return Ok(end);
-    }
-    let mut block_mid;
-    while end - start >= 1000 {
-        block_mid = (start + end) / 2;
-        let mid = get_block_date(client, block_mid).await?;
-        if time < mid {
-            end = block_mid - 1;
-        } else if time > mid {
-            start = block_mid + 1;
-        } else {
-            return Ok(block_mid);
-        }
-    }
-    Ok(start)
+pub async fn fetch_tree_state(
+    url: &str,
+    height: u32,
+) -> Result<(CTree, CTree)> {
+    let mut client = connect_lightwalletd(url).await?;
+    let block_id = BlockId {
+        height: height as u64,
+        hash: vec![],
+    };
+    let block = client.get_block(block_id.clone()).await?.into_inner();
+    let tree_state = client
+        .get_tree_state(Request::new(block_id))
+        .await?
+        .into_inner();
+    let sapling_tree = CTree::read(&*hex::decode(&tree_state.sapling_tree)?)?; // retrieve orchard state and store it too
+    let orchard_tree = if !tree_state.orchard_tree.is_empty() {
+        CTree::read(&*hex::decode(&tree_state.orchard_tree)?)? // retrieve orchard state and store it too
+    } else {
+        CTree::new()
+    };
+    Ok((sapling_tree, orchard_tree))
 }
 
 #[derive(Error, Debug)]
@@ -117,7 +144,7 @@ fn get_mem_per_output() -> usize {
 }
 
 #[cfg(feature = "cuda")]
-fn get_available_memory() -> anyhow::Result<usize> {
+fn get_available_memory() -> Result<usize> {
     let cuda = CUDA_CONTEXT.lock().unwrap();
     if let Some(cuda) = cuda.as_ref() {
         cuda.total_memory()
@@ -127,11 +154,11 @@ fn get_available_memory() -> anyhow::Result<usize> {
 }
 
 #[cfg(not(feature = "cuda"))]
-fn get_available_memory() -> anyhow::Result<usize> {
+fn get_available_memory() -> Result<usize> {
     get_system_available_memory()
 }
 
-fn get_system_available_memory() -> anyhow::Result<usize> {
+fn get_system_available_memory() -> Result<usize> {
     let mut sys = System::new();
     sys.refresh_memory();
     log::info!("{:?}", sys);
@@ -140,6 +167,8 @@ fn get_system_available_memory() -> anyhow::Result<usize> {
 }
 
 const MAX_OUTPUTS_PER_CHUNKS: usize = 200_000;
+
+pub struct Blocks(pub Vec<CompactBlock>, pub usize);
 
 /* download [start_height+1, end_height] inclusive */
 #[allow(unused_variables)]
@@ -151,7 +180,7 @@ pub async fn download_chain(
     max_cost: u32,
     mut cancel: mpsc::Receiver<()>,
     handler: Sender<Blocks>,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     let outputs_per_chunk = get_available_memory()? / get_mem_per_output();
     let outputs_per_chunk = outputs_per_chunk.min(MAX_OUTPUTS_PER_CHUNKS);
     log::info!("Outputs per chunk = {}", outputs_per_chunk);
@@ -575,7 +604,7 @@ fn calculate_tree_state_v1(
 }
 
 /// Connect to a lightwalletd server
-pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
+pub async fn connect_lightwalletd(url: &str) -> Result<CompactTxStreamerClient<Channel>> {
     log::info!("LWD URL: {}", url);
     let mut channel = tonic::transport::Channel::from_shared(url.to_owned())?;
     if url.starts_with("https") {
@@ -597,7 +626,7 @@ async fn get_height(server: String) -> Option<(String, u32)> {
 
 /// Return the URL of the best server given a list of servers
 /// The best server is the one that has the highest height
-pub async fn get_best_server(servers: fbServers<'_>) -> anyhow::Result<String> {
+pub async fn get_best_server(servers: fbServers<'_>) -> Result<String> {
     let mut server_heights = vec![];
     let urls = servers.urls().unwrap();
     for s in urls.iter() {
@@ -619,13 +648,12 @@ pub async fn get_best_server(servers: fbServers<'_>) -> anyhow::Result<String> {
 pub const EXPIRY_HEIGHT_OFFSET: u32 = 50;
 
 pub fn get_checkpoint_height(
-    db: &DbAdapter,
+    network: &Network,
+    connection: &Connection,
     last_height: u32,
     confirmations: u32,
-) -> anyhow::Result<u32> {
+) -> Result<u32> {
     let anchor_height = last_height.saturating_sub(confirmations);
-    let checkpoint_height = db
-        .get_checkpoint_height(anchor_height)?
-        .unwrap_or_else(|| db.sapling_activation_height()); // get the latest checkpoint before the requested anchor height
+    let checkpoint_height = crate::db::checkpoint::get_last_sync_height(network, connection, Some(anchor_height))?;
     Ok(checkpoint_height)
 }

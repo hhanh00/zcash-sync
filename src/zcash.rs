@@ -3,7 +3,7 @@ use crate::coin::{CoinApi, ZcashApi};
 use crate::db::data_generated::fb::{
     AccountVecT, BackupT, PlainNoteVecT, PlainTxVecT, ProgressT, TxReportT, ZcashSyncParams,
 };
-use crate::{connect_lightwalletd, db, BTCHandler, ChainError, Progress, RecipientsT, TransactionPlan};
+use crate::{connect_lightwalletd, db, BTCHandler, ChainError, RecipientsT, TransactionPlan};
 use allo_isolate::IntoDart;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -13,7 +13,10 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use tokio::runtime::{Handle, Runtime};
 use tokio::sync::mpsc;
+use zcash_client_backend::address::RecipientAddress;
 use zcash_primitives::consensus::Network;
+use crate::chain::latest_height;
+use crate::sync2::rescan_from;
 
 pub struct ZcashHandler {
     coin: u8,
@@ -25,14 +28,9 @@ pub struct ZcashHandler {
     cancel: Mutex<Option<mpsc::Sender<()>>>,
 }
 
-fn progress(port: i64) -> impl Fn(Progress) {
+fn progress(port: i64) -> impl Fn(ProgressT) {
     move |progress| unsafe {
         if let Some(p) = POST_COBJ {
-            let progress = ProgressT {
-                height: progress.height,
-                trial_decryptions: progress.trial_decryptions,
-                downloaded: progress.downloaded as u64,
-            };
             let mut builder = FlatBufferBuilder::new();
             let root = progress.pack(&mut builder);
             builder.finish(root, None);
@@ -76,7 +74,7 @@ impl CoinApi for ZcashHandler {
         self.coingecko_id
     }
 
-    fn get_url(&self) -> String {
+    fn url(&self) -> String {
         self.url.clone()
     }
 
@@ -94,15 +92,15 @@ impl CoinApi for ZcashHandler {
         } else {
             None
         };
-        crate::api::account::new_account(self.coin, &name, key, index)
+        crate::account::new_account(&self.network(), &self.connection(), &name, key, index)
     }
 
     fn is_valid_key(&self, key: &str) -> bool {
-        crate::key::is_valid_key(self.coin, &key) >= 0
+        crate::key::is_valid_key(&self.network(), &key) >= 0
     }
 
     fn is_valid_address(&self, address: &str) -> bool {
-        crate::key::decode_address(self.coin, &address).is_some()
+        RecipientAddress::decode(&self.network(), address).is_some()
     }
 
     fn get_backup(&self, account: u32) -> Result<BackupT> {
@@ -162,27 +160,24 @@ impl CoinApi for ZcashHandler {
     }
 
     fn skip_to_last_height(&mut self) -> Result<()> {
-        let coin = self.coin;
-        std::thread::spawn(move || {
-            let runtime = Runtime::new().unwrap();
-            runtime.block_on(crate::api::sync::skip_to_last_height(coin))
+        let network = self.network();
+        let mut connection = self.connection();
+        let url = self.url().to_string();
+
+        tokio::task::block_in_place(|| {
+            Handle::current().block_on(async {
+                let height = latest_height(&url).await?;
+                rescan_from(&network, &mut connection, &url, height).await
+            })
         })
-        .join()
-        .unwrap()
     }
 
     fn rewind_to_height(&mut self, height: u32) -> Result<u32> {
-        crate::api::sync::rewind_to(height)
+        crate::sync2::rewind_to(&self.network(), &mut self.connection(), height)
     }
 
-    fn truncate(&mut self, height: u32) -> Result<()> {
-        let coin = self.coin;
-        std::thread::spawn(move || {
-            let runtime = Runtime::new().unwrap();
-            runtime.block_on(crate::api::sync::rescan_from(coin, height))
-        })
-        .join()
-        .unwrap()
+    fn truncate(&mut self, _height: u32) -> Result<()> {
+        crate::db::purge::truncate_data(&self.connection())
     }
 
     fn get_balance(&self, account: u32) -> Result<u64> {
@@ -223,8 +218,11 @@ impl CoinApi for ZcashHandler {
         crate::pay::sign_plan(&self.network(), &self.connection(), account, &tx_plan)
     }
 
-    fn broadcast(&self, _raw_tx: &[u8]) -> Result<String> {
-        crate::pay::broadcast_tx(coin, &tx).await
+    fn broadcast(&self, raw_tx: &[u8]) -> Result<String> {
+        let url = self.url().to_string();
+        tokio::task::block_in_place(move || {
+            Handle::current().block_on(crate::pay::broadcast_tx(&url, raw_tx))
+        })
     }
 
     fn mark_inputs_spent(&self, tx_plan: &str, height: u32) -> Result<()> {

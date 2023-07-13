@@ -7,7 +7,7 @@ use crate::sync::tree::{CTree, TreeCheckpoint};
 use crate::taddr::derive_tkeys;
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
-use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Hash};
+use crate::{sync, BlockId, CompactTxStreamerClient, Hash};
 use ::orchard::keys::FullViewingKey;
 use anyhow::anyhow;
 use rusqlite::Error::QueryReturnedNoRows;
@@ -43,9 +43,8 @@ pub mod transaction;
 pub mod transparent;
 pub mod key;
 
-use crate::api::historical_prices::Quote;
 use crate::db::cipher::set_db_passwd;
-use crate::db::data_generated::fb::SendTemplate;
+use crate::db::data_generated::fb::{QuoteT, SendTemplate};
 pub use backup::FullEncryptedBackup;
 
 #[derive(Clone)]
@@ -140,43 +139,44 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub async fn migrate_data(&self, coin: u8) -> anyhow::Result<()> {
-        let cc = CoinConfig::get(coin);
-        if cc.chain.has_unified() {
-            let mut client: Option<CompactTxStreamerClient<Channel>> = None;
-            let mut stmt = self.connection.prepare("select s.height from sapling_tree s LEFT JOIN orchard_tree o ON s.height = o.height WHERE o.height IS NULL")?;
-            let rows = stmt.query_map([], |row| {
-                let height: u32 = row.get(0)?;
-                Ok(height)
-            })?;
-            let mut trees = HashMap::new();
-            for r in rows {
-                trees.insert(r?, vec![]);
-            }
-            for (height, tree) in trees.iter_mut() {
-                if client.is_none() {
-                    client = Some(cc.connect_lwd().await?);
-                }
-                let client = client.as_mut().unwrap();
-                let tree_state = client
-                    .get_tree_state(Request::new(BlockId {
-                        height: *height as u64,
-                        hash: vec![],
-                    }))
-                    .await?
-                    .into_inner();
-                let orchard_tree = hex::decode(&tree_state.orchard_tree).unwrap();
-                tree.extend(orchard_tree);
-            }
-            for (height, tree) in trees.iter() {
-                self.connection.execute(
-                    "INSERT INTO orchard_tree(height, tree) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
-                    params![height, tree],
-                )?;
-            }
-        }
-        Ok(())
-    }
+    // TODO
+    // pub async fn migrate_data(&self, coin: u8) -> anyhow::Result<()> {
+    //     let cc = CoinConfig::get(coin);
+    //     if cc.chain.has_unified() {
+    //         let mut client: Option<CompactTxStreamerClient<Channel>> = None;
+    //         let mut stmt = self.connection.prepare("select s.height from sapling_tree s LEFT JOIN orchard_tree o ON s.height = o.height WHERE o.height IS NULL")?;
+    //         let rows = stmt.query_map([], |row| {
+    //             let height: u32 = row.get(0)?;
+    //             Ok(height)
+    //         })?;
+    //         let mut trees = HashMap::new();
+    //         for r in rows {
+    //             trees.insert(r?, vec![]);
+    //         }
+    //         for (height, tree) in trees.iter_mut() {
+    //             if client.is_none() {
+    //                 client = Some(cc.connect_lwd().await?);
+    //             }
+    //             let client = client.as_mut().unwrap();
+    //             let tree_state = client
+    //                 .get_tree_state(Request::new(BlockId {
+    //                     height: *height as u64,
+    //                     hash: vec![],
+    //                 }))
+    //                 .await?
+    //                 .into_inner();
+    //             let orchard_tree = hex::decode(&tree_state.orchard_tree).unwrap();
+    //             tree.extend(orchard_tree);
+    //         }
+    //         for (height, tree) in trees.iter() {
+    //             self.connection.execute(
+    //                 "INSERT INTO orchard_tree(height, tree) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
+    //                 params![height, tree],
+    //             )?;
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
     pub fn begin_transaction(&mut self) -> anyhow::Result<Transaction> {
         let tx = self.connection.transaction()?;
@@ -1015,7 +1015,7 @@ impl DbAdapter {
 
     pub fn store_historical_prices(
         &mut self,
-        prices: &[Quote],
+        prices: &[QuoteT],
         currency: &str,
     ) -> anyhow::Result<()> {
         let db_transaction = self.connection.transaction()?;
@@ -1032,14 +1032,14 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn get_latest_quote(&self, currency: &str) -> anyhow::Result<Option<Quote>> {
+    pub fn get_latest_quote(&self, currency: &str) -> anyhow::Result<Option<QuoteT>> {
         let quote = self.connection.query_row(
             "SELECT timestamp, price FROM historical_prices WHERE currency = ?1 ORDER BY timestamp DESC",
             params![currency],
             |row| {
-                let timestamp: i64 = row.get(0)?;
+                let timestamp: u32 = row.get(0)?;
                 let price: f64 = row.get(1)?;
-                Ok(Quote { timestamp, price })
+                Ok(QuoteT { timestamp, price })
             }).optional()?;
         Ok(quote)
     }
@@ -1305,17 +1305,4 @@ pub struct AccountData {
     pub fvk: String,
     pub address: String,
     pub aindex: u32,
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::db::{DbAdapter, DEFAULT_DB_PATH};
-    use zcash_params::coin::CoinType;
-
-    #[test]
-    fn test_balance() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, "").unwrap();
-        let balance = db.get_balance(1).unwrap();
-        println!("{}", balance);
-    }
 }

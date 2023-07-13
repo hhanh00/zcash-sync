@@ -1,6 +1,8 @@
 use anyhow::Result;
+use rusqlite::Connection;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
+use zcash_primitives::consensus::Network;
 
 mod account;
 
@@ -80,12 +82,12 @@ impl MPWorker {
         self.account_id = Some(account_id);
     }
 
-    async fn open(&mut self, tx_balance: mpsc::Sender<MPCtl>) {
+    async fn open(&mut self, network: &Network, connection: &Connection, url: &str, tx_balance: mpsc::Sender<MPCtl>) {
         self.close().await;
         if let Some(account_id) = self.account_id {
             let (tx, rx) = mpsc::channel::<()>(1);
             self.tx_close = Some(tx);
-            account::spawn(account_id, rx, tx_balance).unwrap();
+            account::spawn(network, connection, url, account_id.0, account_id.1, rx, tx_balance).unwrap();
         }
     }
 

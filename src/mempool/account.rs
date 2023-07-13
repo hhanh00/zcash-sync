@@ -1,9 +1,10 @@
 use crate::mempool::{AccountId, MPCtl};
-use crate::{AccountData, CoinConfig, Empty, Hash, RawTransaction};
-use anyhow::Result;
+use crate::{connect_lightwalletd, Empty, Hash, RawTransaction};
+use anyhow::{anyhow, Result};
 use orchard::keys::{FullViewingKey, IncomingViewingKey, Scope};
 use orchard::note_encryption::OrchardDomain;
 use std::collections::HashMap;
+use rusqlite::Connection;
 use tokio::sync::mpsc;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -14,46 +15,43 @@ use zcash_primitives::sapling::note_encryption::try_sapling_note_decryption;
 use zcash_primitives::transaction::Transaction;
 
 pub fn spawn(
-    account_id: AccountId,
+    network: &Network,
+    connection: &Connection,
+    url: &str,
+    coin: u8,
+    account: u32,
     mut rx_close: mpsc::Receiver<()>,
     tx_balance: mpsc::Sender<MPCtl>,
 ) -> Result<()> {
-    let AccountId(coin, account) = account_id;
-    log::info!("Start sub for {coin} {account}");
+    log::info!("Start sub for {account}");
+    let nullifiers = crate::db::checkpoint::list_nullifier_amounts(connection, account, true)?;
+    let fvk = crate::db::account::get_account(connection, account)?.and_then(|d| d.ivk).ok_or(anyhow!("No zFVK"))?;
+    let ofvk = crate::db::orchard::get_orchard(connection, account)?.map(|d| FullViewingKey::from_bytes(&d.fvk).unwrap().to_ivk(Scope::External));
+
     tokio::spawn(async move {
-        let c = CoinConfig::get(coin);
-        let network = c.chain.network();
-        let (nfs, sapling_ivk, orchard_ivk) = {
-            let db = c.db()?;
-            let nfs = db.get_nullifier_amounts(account, true)?;
-            let AccountData { fvk, .. } = db.get_account_info(account)?;
-            let fvk = decode_extended_full_viewing_key(
-                network.hrp_sapling_extended_full_viewing_key(),
-                &fvk,
-            )
-            .unwrap();
-            let sapling_ivk = fvk.fvk.vk.ivk();
-            let orchard_ivk = db.get_orchard(account)?.map(|k| {
-                let fvk = FullViewingKey::from_bytes(&k.fvk).unwrap();
-                fvk.to_ivk(Scope::External)
-            });
-            (nfs, sapling_ivk, orchard_ivk)
-        };
+        let fvk = decode_extended_full_viewing_key(
+            network.hrp_sapling_extended_full_viewing_key(),
+            &fvk,
+        )
+        .unwrap();
+        let sapling_ivk = fvk.fvk.vk.ivk();
+        let nfs = nullifiers.into_iter().collect();
         let pivk = PreparedIncomingViewingKey::new(&sapling_ivk);
         let mut handler = AccountHandler {
             network: network.clone(),
             nfs,
             balance: 0,
             pivk,
-            oivk: orchard_ivk,
+            oivk: ofvk,
         };
 
-        let mut client = c.connect_lwd().await?;
+        let mut client = connect_lightwalletd(url).await?;
         let mut mempool_stream = client
             .get_mempool_stream(Request::new(Empty {}))
             .await?
             .into_inner();
 
+        let account_id = AccountId(coin, account);
         let _ = tx_balance.send(MPCtl::Balance(account_id, 0)).await;
         loop {
             tokio::select! {

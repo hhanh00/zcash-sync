@@ -4,7 +4,6 @@ use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::Witness;
-use crate::{AccountData, CoinConfig};
 use anyhow::anyhow;
 use jubjub::Fr;
 use orchard::builder::Builder as OrchardBuilder;
@@ -18,6 +17,7 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use std::str::FromStr;
+use rusqlite::Connection;
 use zcash_client_backend::encoding::decode_extended_spending_key;
 use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
@@ -38,16 +38,13 @@ pub struct TxBuilderContext {
 }
 
 impl TxBuilderContext {
-    pub fn from_height(coin: u8, height: u32) -> anyhow::Result<Self> {
-        let c = CoinConfig::get(coin);
-        let db = c.db.as_ref().unwrap();
-        let db = db.lock().unwrap();
-        let TreeCheckpoint { tree, .. } = db.get_tree_by_name(height, "sapling")?;
+    pub fn from_height(network: &Network, connection: &Connection, height: u32) -> anyhow::Result<Self> {
+        let TreeCheckpoint { tree, .. } = crate::db::checkpoint::get_tree::<'S'>(connection, height)?;
         let hasher = SaplingHasher {};
         let sapling_anchor = tree.root(32, &SAPLING_ROOTS, &hasher);
 
-        let orchard_anchor = if c.chain.has_unified() {
-            let TreeCheckpoint { tree, .. } = db.get_tree_by_name(height, "orchard")?;
+        let orchard_anchor = if crate::has_unified(network) {
+            let TreeCheckpoint { tree, .. } = crate::db::checkpoint::get_tree::<'O'>(connection, height)?;
             let hasher = OrchardHasher::new();
             Some(tree.root(32, &ORCHARD_ROOTS, &hasher))
         } else {
@@ -64,7 +61,7 @@ impl TxBuilderContext {
 
 pub fn build_tx(
     network: &Network,
-    skeys: &SecretKeys,
+    skeys: &crate::note_selection::SecretKeys,
     plan: &TransactionPlan,
     mut rng: impl RngCore + CryptoRng + Clone,
 ) -> anyhow::Result<Vec<u8>> {

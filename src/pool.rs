@@ -1,4 +1,3 @@
-use crate::api::payment_v2::build_tx_plan;
 use crate::api::recipient::RecipientMemo;
 use crate::chain::get_latest_height;
 use crate::{connect_lightwalletd, db, TransactionPlan};
@@ -43,6 +42,7 @@ pub async fn transfer_pools(
     let tx_plan = crate::pay::build_tx_plan(
         network,
         connection,
+        url,
         account,
         last_height,
         slice::from_ref(&recipient),

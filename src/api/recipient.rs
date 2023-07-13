@@ -1,6 +1,6 @@
 use crate::db::data_generated::fb::{Recipient, Recipients};
 use crate::db::ZMessage;
-use crate::{AccountData, CoinConfig, RecipientT, RecipientsT};
+use crate::{AccountData, RecipientT, RecipientsT};
 use serde::Deserialize;
 use std::str::FromStr;
 use zcash_primitives::memo::Memo;
@@ -97,13 +97,11 @@ pub fn decode_memo(
 }
 
 /// Parse a json document that contains a list of recipients
-pub fn parse_recipients(recipients: &Recipients) -> anyhow::Result<Vec<RecipientMemo>> {
-    let c = CoinConfig::get_active();
-    let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
+pub fn parse_recipients(sender: &str, recipients: &Recipients) -> anyhow::Result<Vec<RecipientMemo>> {
     let recipients = recipients.values().unwrap();
     let recipient_memos: anyhow::Result<Vec<_>> = recipients
         .iter()
-        .map(|r| RecipientMemo::from_recipient(&address, &r))
+        .map(|r| RecipientMemo::from_recipient(sender, &r))
         .collect();
     recipient_memos
 }

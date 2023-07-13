@@ -45,7 +45,7 @@ impl CoinApi for BTCHandler {
         "bitcoin"
     }
 
-    fn get_url(&self) -> String {
+    fn url(&self) -> String {
         self.url.clone()
     }
     fn set_url(&mut self, url: &str) {

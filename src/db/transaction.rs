@@ -1,7 +1,7 @@
 use crate::db::data_generated::fb::{ShieldedNoteT, ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT};
-use crate::transaction::GetTransactionDetailRequest;
+use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, Transaction};
 use zcash_primitives::consensus::Network;
 use zcash_primitives::sapling::{PaymentAddress, SaplingIvk};
 
@@ -103,6 +103,35 @@ pub fn invert_excluded(connection: &Connection, id: u32) -> Result<()> {
     connection.execute(
         "UPDATE received_notes SET excluded = NOT(COALESCE(excluded, 0)) WHERE account = ?1",
         [id],
+    )?;
+    Ok(())
+}
+
+/// Transactions
+///
+pub fn update_transaction_with_memo(
+    connection: &Connection,
+    details: &TransactionDetails,
+) -> Result<()> {
+    connection.execute(
+        "UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3",
+        params![details.address, details.memo, details.id_tx],
+    )?;
+    Ok(())
+}
+
+pub fn add_value(id_tx: u32, value: i64, db_tx: &Transaction) -> Result<()> {
+    db_tx.execute(
+        "UPDATE transactions SET value = value + ?2 WHERE id_tx = ?1",
+        params![id_tx, value],
+    )?;
+    Ok(())
+}
+
+pub fn mark_spent(id: u32, height: u32, db_tx: &Transaction) -> Result<()> {
+    db_tx.execute(
+        "UPDATE received_notes SET spent = ?1 WHERE id_note = ?2",
+        [height, id],
     )?;
     Ok(())
 }

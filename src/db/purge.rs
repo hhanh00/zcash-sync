@@ -32,7 +32,7 @@ pub fn truncate_sync_data(connection: &Connection) -> Result<()> {
 }
 
 pub fn delete_incomplete_scan(connection: &mut Connection, network: &Network) -> Result<()> {
-    let synced_height = super::checkpoint::get_last_sync_height(connection, network, None)?;
+    let synced_height = super::checkpoint::get_last_sync_height(network, connection, None)?;
     super::checkpoint::trim_to_height(connection, synced_height)?;
     Ok(())
 }

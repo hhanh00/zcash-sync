@@ -164,16 +164,16 @@ pub fn get_diversified_address(
     if ua_type == 0 {
         anyhow::bail!("Must include a shielded receiver");
     }
-    let AccountDetailsT { ivk, .. } = db::account::get_account_info(connection, account)?;
+    let AccountDetailsT { ivk, .. } = db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
     let orchard_keys = db::orchard::get_orchard(connection, account)?;
     let mut receivers = vec![];
+    let mut di = [0u8; 11];
+    di[4..8].copy_from_slice(&time.to_le_bytes());
+    let diversifier_index = DiversifierIndex(di);
     if let Some(ivk) = ivk {
         let fvk =
             decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &ivk)
                 .unwrap();
-        let mut di = [0u8; 11];
-        di[4..8].copy_from_slice(&time.to_le_bytes());
-        let diversifier_index = DiversifierIndex(di);
         let (_, pa) = fvk
             .find_address(diversifier_index)
             .ok_or_else(|| anyhow::anyhow!("Cannot generate new address"))?;
@@ -181,7 +181,7 @@ pub fn get_diversified_address(
         if ua_type == 2 || orchard_keys.is_none() {
             // sapling only
             return Ok(encode_payment_address(
-                c.chain.network().hrp_sapling_payment_address(),
+                network.hrp_sapling_payment_address(),
                 &pa,
             ));
         }
@@ -199,12 +199,12 @@ pub fn get_diversified_address(
         }
     }
 
-    let unified_address = UA(receivers);
+    let unified_address = unified::Address(receivers);
     let address = ZcashAddress::from_unified(network.address_network().unwrap(), unified_address);
     let address = address.encode();
     Ok(address)
 }
 
 pub fn has_unified(network: &Network) -> bool {
-    network == Network::MainNetwork || network == Network::TestNetwork
+    network == &Network::MainNetwork || network == &Network::TestNetwork
 }

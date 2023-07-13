@@ -1,6 +1,5 @@
 use std::io::{Cursor, Read};
 
-use crate::coinconfig::CoinConfig;
 use anyhow::anyhow;
 use bech32::FromBase32;
 use bip39::{Language, Mnemonic, Seed};
@@ -19,6 +18,8 @@ use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::zip32::{
     ChildIndex, DiversifiableFullViewingKey, ExtendedFullViewingKey, ExtendedSpendingKey,
 };
+use crate::db::data_generated::fb::KeyPackT;
+use crate::zip32::derive_zip32;
 
 pub fn split_key(key: &str) -> (String, String) {
     let words: Vec<_> = key.split_whitespace().collect();
@@ -78,10 +79,7 @@ pub fn decode_key(
     res
 }
 
-#[allow(dead_code)] // Used by C FFI
-pub fn is_valid_key(coin: u8, key: &str) -> i8 {
-    let c = CoinConfig::get(coin);
-    let network = c.chain.network();
+pub fn is_valid_key(network: &Network, key: &str) -> i8 {
     let (phrase, _password) = split_key(key);
     if Mnemonic::from_phrase(&phrase, Language::English).is_ok() {
         return 0;
@@ -101,11 +99,9 @@ pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     -1
 }
 
-pub fn decode_address(coin: u8, address: &str) -> Option<RecipientAddress> {
-    let c = CoinConfig::get(coin);
-    let network = c.chain.network();
-    RecipientAddress::decode(network, address)
-}
+// pub fn decode_address(network: &Network, address: &str) -> Option<RecipientAddress> {
+//     RecipientAddress::decode(network, address)
+// }
 
 fn derive_secret_key(
     network: &Network,
@@ -170,20 +166,20 @@ pub fn import_uvk(network: &Network, connection: &Connection, name: &str, uvk: &
                 );
                 let (_, pa) = dfvk.default_address();
                 let pa = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
-                id_account = db.store_account(name, None, 0, None, &fvk, &pa)?;
+                id_account = crate::db::account::store_account(connection, name, None, 0, None, &fvk, &pa)?;
             }
             1 => {
                 let mut pubkeyb = [0u8; 33];
                 c.read_exact(&mut pubkeyb)?;
                 log::info!("PUBK {}", hex::encode(&pubkeyb));
                 let taddr = derive_from_pubkey(network, &pubkeyb)?;
-                db.store_taddr(id_account, &taddr)?;
+                crate::db::transparent::store_taddr(connection, id_account, &taddr)?;
             }
             2 => {
                 let mut ofvkb = [0u8; 96];
                 c.read_exact(&mut ofvkb)?;
                 log::info!("OFVK {}", hex::encode(&ofvkb));
-                db.store_orchard_fvk(id_account, &ofvkb)?;
+                crate::db::orchard::store_orchard_fvk(connection, id_account, &ofvkb)?;
             }
             _ => anyhow::bail!("Invalid type"),
         }
@@ -191,3 +187,24 @@ pub fn import_uvk(network: &Network, connection: &Connection, name: &str, uvk: &
 
     Ok(())
 }
+
+/// Derive keys using Zip-32
+/// # Arguments
+/// * `coin`: 0 for zcash, 1 for ycash
+/// * `id_account`: account id as returned from [new_account]. Must have a passphrase
+/// * `account`: derived account index
+/// * `external`: external/internal
+/// * `address`: address index
+pub fn derive_keys(
+    network: &Network,
+    connection: &Connection,
+    id_account: u32,
+    account: u32,
+    external: u32,
+    address: Option<u32>,
+) -> anyhow::Result<KeyPackT> {
+    let details = crate::db::account::get_account(connection, id_account)?;
+    let seed = details.and_then(|d| d.seed).ok_or_else(|| anyhow!("Account has no seed"))?;
+    derive_zip32(network, &seed, account, external, address)
+}
+

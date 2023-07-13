@@ -126,7 +126,8 @@ pub fn get_backup_package(
         aindex,
         ivk,
         address,
-    } = super::account::get_account(connection, account)?;
+    } = crate::db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
+    let fvk = ivk.ok_or(anyhow!("No zFVK"))?;
     let orchard_keys = super::orchard::get_orchard(connection, account)?;
     let uvk = orchard_keys.map(|OrchardKeyBytes { fvk: ofvk, .. }| {
         // orchard sk is not serializable and must derived from seed

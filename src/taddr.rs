@@ -1,15 +1,9 @@
-use crate::api::payment_v2::build_tx_plan_with_utxos;
 use crate::api::recipient::RecipientMemo;
 use crate::chain::{get_checkpoint_height, get_latest_height, EXPIRY_HEIGHT_OFFSET};
-use crate::coinconfig::CoinConfig;
-use crate::db::AccountData;
 use crate::key::split_key;
 use crate::note_selection::{SecretKeys, Source, UTXO};
 use crate::unified::orchard_as_unified;
-use crate::{
-    broadcast_tx, build_tx, AddressList, BlockId, BlockRange, CompactTxStreamerClient,
-    GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
-};
+use crate::{build_tx, AddressList, BlockId, BlockRange, CompactTxStreamerClient, GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter, connect_lightwalletd};
 use anyhow::anyhow;
 use base58check::FromBase58Check;
 use bip39::{Language, Mnemonic, Seed};
@@ -20,6 +14,7 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use std::collections::HashMap;
+use rusqlite::Connection;
 use tiny_hderive::bip32::ExtendedPrivKey;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -282,29 +277,28 @@ pub fn derive_from_pubkey(network: &Network, pub_key: &[u8]) -> anyhow::Result<S
 }
 
 pub async fn sweep_tkey(
+    network: &Network,
+    connection: &Connection,
+    url: &str,
+    account: u32,
     last_height: u32,
     sk: &str,
     pool: u8,
-    confirmations: u32,
 ) -> anyhow::Result<String> {
-    let c = CoinConfig::get_active();
-    let coin = c.coin;
-    let network = c.chain.network();
     let (seckey, from_address) = derive_taddr(network, sk)?;
 
     let (checkpoint_height, to_address) = {
-        let db = c.db().unwrap();
-        let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
+        let checkpoint_height = crate::db::checkpoint::get_last_sync_height(network, connection, None)?;
 
         let to_address = match pool {
-            0 => db.get_taddr(c.id_account)?,
+            0 => {
+                crate::db::transparent::get_transparent(connection, account)?.and_then(|d| d.address)
+            },
             1 => {
-                let AccountData { address, .. } = db.get_account_info(c.id_account)?;
-                Some(address)
+                crate::db::account::get_account(connection, account)?.and_then(|d| d.address)
             }
             2 => {
-                let okeys = db.get_orchard(c.id_account)?;
-                okeys.map(|okeys| {
+                crate::db::orchard::get_orchard(connection, account)?.map(|okeys| {
                     let address = okeys.get_address(0);
                     orchard_as_unified(network, &address).encode()
                 })
@@ -315,17 +309,17 @@ pub async fn sweep_tkey(
         (checkpoint_height, to_address)
     };
 
-    let mut client = c.connect_lwd().await?;
+    let mut client = connect_lightwalletd(url).await?;
     let utxos = get_utxos(&mut client, &from_address).await?;
     let balance = utxos.iter().map(|utxo| utxo.value_zat).sum::<i64>();
-    println!("balance {}", balance);
+    log::info!("balance = {balance}");
     let utxos: Vec<_> = utxos
-        .iter()
+        .into_iter()
         .enumerate()
         .map(|(i, utxo)| UTXO {
             id: i as u32,
             source: Source::Transparent {
-                txid: utxo.txid.clone().try_into().unwrap(),
+                txid: utxo.txid.try_into().unwrap(),
                 index: utxo.index as u32,
             },
             amount: utxo.value_zat as u64,
@@ -338,10 +332,10 @@ pub async fn sweep_tkey(
         memo: Memo::default(),
         max_amount_per_note: 0,
     };
-    println!("build_tx_plan_with_utxos");
-    let tx_plan = build_tx_plan_with_utxos(
-        c.coin,
-        c.id_account,
+    let tx_plan = crate::pay::build_tx_plan_with_utxos(
+        network,
+        connection,
+        account,
         checkpoint_height,
         last_height + EXPIRY_HEIGHT_OFFSET,
         slice::from_ref(&recipient),
@@ -356,7 +350,7 @@ pub async fn sweep_tkey(
     println!("build_tx");
     let tx = build_tx(network, &skeys, &tx_plan, OsRng)?;
     println!("broadcast_tx");
-    let txid = broadcast_tx(coin, &tx).await?;
+    let txid = crate::pay::broadcast_tx(url, &tx).await?;
     Ok(txid)
 }
 

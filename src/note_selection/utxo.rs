@@ -1,38 +1,37 @@
+use rusqlite::Connection;
 use crate::note_selection::types::Source;
 use crate::note_selection::UTXO;
-use crate::CoinConfig;
+use crate::connect_lightwalletd;
 
 pub async fn fetch_utxos(
-    coin: u8,
+    connection: &Connection,
+    url: &str,
     account: u32,
     checkpoint_height: u32,
     excluded_pools: u8,
 ) -> anyhow::Result<Vec<UTXO>> {
     let mut utxos = vec![];
     if excluded_pools & 1 == 0 {
-        utxos.extend(get_transparent_utxos(coin, account).await?);
+        utxos.extend(crate::note_selection::utxo::get_transparent_utxos(connection, url, account).await?);
     }
-    let coin = CoinConfig::get(coin);
-    let db = coin.db.as_ref().unwrap();
-    let db = db.lock().unwrap();
     if excluded_pools & 2 == 0 {
-        utxos.extend(db.get_unspent_received_notes(account, checkpoint_height, false)?);
+        utxos.extend(
+            crate::db::checkpoint::get_unspent_received_notes::<'S'>(connection, account, checkpoint_height)?);
     }
     if excluded_pools & 4 == 0 {
-        utxos.extend(db.get_unspent_received_notes(account, checkpoint_height, true)?);
+        utxos.extend(
+            crate::db::checkpoint::get_unspent_received_notes::<'O'>(connection, account, checkpoint_height)?);
     }
     Ok(utxos)
 }
 
-async fn get_transparent_utxos(coin: u8, account: u32) -> anyhow::Result<Vec<UTXO>> {
-    let coin = CoinConfig::get(coin);
-    let taddr = {
-        let db = coin.db.as_ref().unwrap();
-        let db = db.lock().unwrap();
-        db.get_taddr(account)?
-    };
+async fn get_transparent_utxos(
+    connection: &Connection,
+    url: &str,
+    account: u32) -> anyhow::Result<Vec<UTXO>> {
+    let taddr = crate::db::transparent::get_transparent(connection, account)?.and_then(|d| d.address);
     if let Some(taddr) = taddr {
-        let mut client = coin.connect_lwd().await?;
+        let mut client = connect_lightwalletd(url).await?;
         let utxos = crate::taddr::get_utxos(&mut client, &taddr).await?;
         let utxos: Vec<_> = utxos
             .iter()

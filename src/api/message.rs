@@ -1,7 +1,5 @@
 //! Mark messages read
 
-use crate::coinconfig::CoinConfig;
-
 /// Mark a given message as read or unread
 /// # Arguments
 /// * `message`: message id

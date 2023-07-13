@@ -11,8 +11,8 @@ use rusqlite::{params, Connection, OptionalExtension, Row, Statement, Transactio
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 
 pub fn get_last_sync_height(
-    connection: &Connection,
     network: &Network,
+    connection: &Connection,
     max_height: Option<u32>,
 ) -> Result<u32> {
     let max_height = max_height.unwrap_or(u32::MAX);
@@ -219,35 +219,6 @@ pub fn get_tree<const POOL: char>(connection: &Connection, height: u32) -> Resul
         tree,
         witnesses: witnesses?,
     })
-}
-
-/// Transactions
-///
-pub fn update_transaction_with_memo(
-    connection: &Connection,
-    details: &TransactionDetails,
-) -> Result<()> {
-    connection.execute(
-        "UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3",
-        params![details.address, details.memo, details.id_tx],
-    )?;
-    Ok(())
-}
-
-pub fn add_value(id_tx: u32, value: i64, db_tx: &Transaction) -> Result<()> {
-    db_tx.execute(
-        "UPDATE transactions SET value = value + ?2 WHERE id_tx = ?1",
-        params![id_tx, value],
-    )?;
-    Ok(())
-}
-
-pub fn mark_spent(id: u32, height: u32, db_tx: &Transaction) -> Result<()> {
-    db_tx.execute(
-        "UPDATE received_notes SET spent = ?1 WHERE id_note = ?2",
-        [height, id],
-    )?;
-    Ok(())
 }
 
 /// Trial Decryption

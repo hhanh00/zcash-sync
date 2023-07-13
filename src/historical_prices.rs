@@ -1,27 +1,14 @@
 //! Retrieve Historical Prices from coingecko
 
-use crate::coinconfig::CoinConfig;
 use anyhow::{anyhow, Result};
 use chrono::NaiveDateTime;
 use rusqlite::{params, Connection, OptionalExtension};
+use crate::db::data_generated::fb::QuoteT;
 
-/// Retrieve historical prices
-/// # Arguments
-/// * `now`: current timestamp
-/// * `days`: how many days to fetch
-/// * `currency`: base currency
-pub async fn sync_historical_prices(coin: u8, now: i64, days: u32, currency: &str) -> Result<u32> {
-    let c = CoinConfig::get(coin);
-    let mut db = c.db()?;
-    let connection = &mut db.connection;
-    let ticker = c.chain.ticker();
-    sync_historical_prices_inner(connection, ticker, now, days, currency).await
-}
-
-pub async fn sync_historical_prices_inner(
+pub async fn sync_historical_prices(
     connection: &mut Connection,
     ticker: &str,
-    now: i64,
+    now: u32,
     days: u32,
     currency: &str,
 ) -> Result<u32> {
@@ -33,14 +20,14 @@ pub async fn sync_historical_prices_inner(
 
 pub async fn fetch_historical_prices(
     ticker: &str,
-    latest_quote: Option<Quote>,
-    now: i64,
+    latest_quote: Option<QuoteT>,
+    now: u32,
     days: u32,
     currency: &str,
-) -> Result<Vec<Quote>> {
+) -> Result<Vec<QuoteT>> {
     let json_error = || anyhow::anyhow!("Invalid JSON");
     let today = now / DAY_SEC;
-    let from_day = today - days as i64;
+    let from_day = today - days;
     let latest_day = if let Some(latest_quote) = latest_quote {
         latest_quote.timestamp / DAY_SEC
     } else {
@@ -48,7 +35,7 @@ pub async fn fetch_historical_prices(
     };
     let latest_day = latest_day.max(from_day);
 
-    let mut quotes: Vec<Quote> = vec![];
+    let mut quotes: Vec<_> = vec![];
     let from = (latest_day + 1) * DAY_SEC;
     let to = today * DAY_SEC;
     if from != to {
@@ -69,7 +56,7 @@ pub async fn fetch_historical_prices(
         let status = &r["status"]["error_code"];
         if status.is_null() {
             let prices = r["prices"].as_array().ok_or_else(json_error)?;
-            let mut prev_timestamp = 0i64;
+            let mut prev_timestamp = 0u32;
             for p in prices.iter() {
                 let p = p.as_array().ok_or_else(json_error)?;
                 let ts = p[0].as_i64().ok_or_else(json_error)? / 1000;
@@ -80,9 +67,9 @@ pub async fn fetch_historical_prices(
                     .date()
                     .and_hms_opt(0, 0, 0)
                     .ok_or(anyhow!("Invalid Date"))?;
-                let timestamp = date.timestamp();
+                let timestamp = date.timestamp() as u32;
                 if timestamp != prev_timestamp {
-                    let quote = Quote { timestamp, price };
+                    let quote = QuoteT { timestamp, price };
                     quotes.push(quote);
                 }
                 prev_timestamp = timestamp;
@@ -93,12 +80,12 @@ pub async fn fetch_historical_prices(
     Ok(quotes)
 }
 
-pub fn get_latest_quote(connection: &Connection, currency: &str) -> Result<Option<Quote>> {
+pub fn get_latest_quote(connection: &Connection, currency: &str) -> Result<Option<QuoteT>> {
     let quote = connection.query_row(
         "SELECT timestamp, price FROM historical_prices WHERE currency = ?1 ORDER BY timestamp DESC",
         [currency],
         |row| {
-            Ok(Quote {
+            Ok(QuoteT {
                 timestamp: row.get(0)?,
                 price: row.get(1)?,
             })
@@ -108,7 +95,7 @@ pub fn get_latest_quote(connection: &Connection, currency: &str) -> Result<Optio
 
 pub fn store_historical_prices(
     connection: &mut Connection,
-    prices: &[Quote],
+    prices: &[QuoteT],
     currency: &str,
 ) -> Result<()> {
     let db_transaction = connection.transaction()?;
@@ -125,10 +112,4 @@ pub fn store_historical_prices(
     Ok(())
 }
 
-const DAY_SEC: i64 = 24 * 3600;
-
-#[derive(Debug)]
-pub struct Quote {
-    pub timestamp: i64,
-    pub price: f64,
-}
+const DAY_SEC: u32 = 24 * 3600;

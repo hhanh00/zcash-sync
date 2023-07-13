@@ -40,7 +40,7 @@ impl CoinApi for ETHHandler {
         "ethereum"
     }
 
-    fn get_url(&self) -> String {
+    fn url(&self) -> String {
         self.url.clone()
     }
 

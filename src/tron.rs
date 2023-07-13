@@ -40,7 +40,7 @@ impl CoinApi for TronHandler {
         "tron"
     }
 
-    fn get_url(&self) -> String {
+    fn url(&self) -> String {
         self.url.clone()
     }
 

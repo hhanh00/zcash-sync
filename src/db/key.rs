@@ -4,6 +4,7 @@ use orchard::keys::SpendingKey;
 use rusqlite::Connection;
 use secp256k1::SecretKey;
 use zcash_client_backend::encoding::decode_extended_spending_key;
+use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::zip32::ExtendedSpendingKey;
 
 pub struct SecretKeys {
@@ -12,7 +13,7 @@ pub struct SecretKeys {
     pub orchard: Option<SpendingKey>,
 }
 
-pub fn get_secret_keys(connection: &Connection, account: u32) -> Result<SecretKeys> {
+pub fn get_secret_keys(network: &Network, connection: &Connection, account: u32) -> Result<SecretKeys> {
     let t_details = super::transparent::get_transparent(connection, account)?;
     let z_details = super::account::get_account(connection, account)?;
     let o_details = super::orchard::get_orchard(connection, account)?;

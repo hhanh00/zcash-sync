@@ -1,4 +1,3 @@
-use crate::api::historical_prices::Quote;
 use crate::db::data_generated::fb::{
     QuoteT, QuoteVecT, SpendingT, SpendingVecT, TxTimeValueT, TxTimeValueVecT,
 };
@@ -7,7 +6,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn store_historical_prices(
     connection: &mut Connection,
-    prices: &[Quote],
+    prices: &[QuoteT],
     currency: &str,
 ) -> Result<()> {
     let db_tx = connection.transaction()?;
@@ -24,12 +23,12 @@ pub fn store_historical_prices(
     Ok(())
 }
 
-pub fn get_latest_quote(connection: &Connection, currency: &str) -> Result<Option<Quote>> {
+pub fn get_latest_quote(connection: &Connection, currency: &str) -> Result<Option<QuoteT>> {
     let quote = connection.query_row(
         "SELECT timestamp, price FROM historical_prices WHERE currency = ?1 ORDER BY timestamp DESC",
         [currency],
         |r| {
-            Ok(Quote { timestamp: r.get(0)?, price: r.get(1)? })
+            Ok(QuoteT { timestamp: r.get(0)?, price: r.get(1)? })
         }).optional()?;
     Ok(quote)
 }

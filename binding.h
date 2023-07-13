@@ -254,12 +254,6 @@ char *get_lwd_url(uint8_t coin);
 
 void set_coin_passwd(uint8_t coin, char *passwd);
 
-struct CResult_u8 reset_app(void);
-
-void mempool_run(int64_t port);
-
-void mempool_set_active(uint8_t coin, uint32_t account);
-
 struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t index);
 
 struct CResult_u8 new_sub_account(uint8_t coin,
@@ -304,7 +298,7 @@ struct CResult_u32 get_latest_height(uint8_t coin);
 
 struct CResult_u8 skip_to_last_height(uint8_t coin);
 
-struct CResult_u32 rewind_to(uint32_t height);
+struct CResult_u32 rewind_to(uint8_t coin, uint32_t height);
 
 struct CResult_u8 rescan_from(uint8_t coin, uint32_t height);
 
@@ -350,20 +344,26 @@ struct CResult_____c_char sign_and_broadcast(uint8_t coin, uint32_t account, cha
 
 bool is_valid_tkey(char *sk);
 
-struct CResult_____c_char sweep_tkey(uint32_t last_height,
+struct CResult_____c_char sweep_tkey(uint8_t coin,
+                                     uint32_t account,
+                                     uint32_t last_height,
                                      char *sk,
-                                     uint8_t pool,
-                                     uint32_t confirmations);
+                                     uint8_t pool);
 
 struct CResult_u32 get_activation_date(uint8_t coin);
 
 struct CResult_u32 get_block_by_time(uint8_t coin, uint32_t time);
 
-struct CResult_u32 sync_historical_prices(uint8_t coin, int64_t now, uint32_t days, char *currency);
+struct CResult_u32 sync_historical_prices(uint8_t coin,
+                                          uint32_t now,
+                                          uint32_t days,
+                                          char *currency);
 
 struct CResult_u8 store_contact(uint8_t coin, uint32_t id, char *name, char *address, bool dirty);
 
-struct CResult_____c_char commit_unsaved_contacts(uint32_t anchor_offset);
+struct CResult_____c_char commit_unsaved_contacts(uint8_t coin,
+                                                  uint32_t account,
+                                                  uint32_t anchor_offset);
 
 struct CResult_u8 mark_message_read(uint8_t coin, uint32_t message, bool read);
 

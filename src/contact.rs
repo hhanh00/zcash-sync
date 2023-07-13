@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use prost::bytes::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -7,7 +7,7 @@ use zcash_primitives::consensus::Network;
 use zcash_primitives::memo::{Memo, MemoBytes};
 use crate::api::recipient::RecipientMemo;
 use crate::{db, TransactionPlan};
-use crate::db::data_generated::fb::AccountDetailsT;
+use crate::db::data_generated::fb::{AccountDetailsT, ContactT};
 
 const CONTACT_COOKIE: u32 = 0x434E5440;
 
@@ -18,7 +18,7 @@ pub struct Contact {
     pub address: String,
 }
 
-pub fn serialize_contacts(contacts: &[Contact]) -> anyhow::Result<Vec<Memo>> {
+pub fn serialize_contacts(contacts: &[Contact]) -> Result<Vec<Memo>> {
     let cs_bin = bincode::serialize(&contacts)?;
     let chunks = cs_bin.chunks(500);
     let memos: Vec<_> = chunks
@@ -65,7 +65,7 @@ impl ContactDecoder {
         Ok(())
     }
 
-    pub fn finalize(&self) -> anyhow::Result<Vec<Contact>> {
+    pub fn finalize(&self) -> Result<Vec<Contact>> {
         if !self.has_contacts {
             return Ok(Vec::new());
         }
@@ -91,10 +91,10 @@ impl ContactDecoder {
     }
 }
 
-pub async fn commit_unsaved_contacts(connection: &Connection, anchor_offset: u32) -> Result<TransactionPlan> {
+pub async fn commit_unsaved_contacts(network: &Network, connection: &Connection, url: &str, account: u32, anchor_offset: u32) -> Result<TransactionPlan> {
     let contacts = crate::db::contact::list_unsaved_contacts(connection)?;
     let memos = serialize_contacts(&contacts)?;
-    let tx_plan = save_contacts_tx(&memos, anchor_offset).await?;
+    let tx_plan = save_contacts_tx(network, connection, url, account, &memos, anchor_offset).await?;
     Ok(tx_plan)
 }
 
@@ -106,11 +106,11 @@ async fn save_contacts_tx(
     memos: &[Memo],
     confirmations: u32) -> Result<TransactionPlan> {
     let last_height = crate::chain::latest_height(url).await?;
-    let AccountDetailsT { address, .. } = db::account::get_account(connection, account)?.ok_or("No account")?;
+    let AccountDetailsT { address, .. } = db::account::get_account(connection, account)?.ok_or(anyhow!("No account"))?;
     let recipients: Vec<_> = memos
         .iter()
         .map(|m| RecipientMemo {
-            address: address.unwrap(),
+            address: address.clone().unwrap(),
             amount: 0,
             fee_included: false,
             memo: m.clone(),
@@ -121,6 +121,7 @@ async fn save_contacts_tx(
     let tx_plan = crate::pay::build_tx_plan(
         network,
         connection,
+        url,
         account,
         last_height,
         &recipients,

@@ -3,7 +3,7 @@ use crate::coin::{CoinApi, ZcashApi};
 use crate::db::data_generated::fb::{BalanceT, ContactT, ContactVecT, MessageVecT, Recipients, SendTemplate, Servers, ShieldedNoteT, ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT, SpendingVecT, TxTimeValueVecT, ZcashSyncParamsT};
 use crate::db::FullEncryptedBackup;
 use crate::eth::ETHHandler;
-use crate::mempool::MemPool;
+// use crate::mempool::MemPool;
 use crate::note_selection::TransactionReport;
 use crate::ton::{init_ton_db, TonHandler};
 use crate::tron::{init_tron_db, TronHandler};
@@ -19,6 +19,7 @@ use rusqlite::Connection;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
+use anyhow::anyhow;
 use zcash_primitives::consensus::Network::{MainNetwork, YCashMainNetwork};
 use crate::zcash::ZcashHandler;
 use zcash_primitives::transaction::builder::Progress;
@@ -270,46 +271,46 @@ pub unsafe extern "C" fn set_coin_passwd(coin: u8, passwd: *mut c_char) {
     // TODO
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn reset_app() -> CResult<u8> {
-    let res = || {
-        for i in 0..MAX_COINS {
-            crate::api::account::reset_db(i)?;
-        }
-        Ok(())
-    };
-    to_cresult_unit(res())
-}
+// #[no_mangle]
+// pub unsafe extern "C" fn reset_app() -> CResult<u8> {
+//     let res = || {
+//         for i in 0..MAX_COINS {
+//             crate::api::account::reset_db(i)?;
+//         }
+//         Ok(())
+//     };
+//     to_cresult_unit(res())
+// }
 
-#[no_mangle]
-#[tokio::main]
-pub async unsafe extern "C" fn mempool_run(port: i64) {
-    try_init_logger();
-    log::info!("Starting MP");
-    let mut mempool = crate::coinconfig::MEMPOOL.lock().unwrap();
-    let mp = MemPool::spawn(move |balance: i64| {
-        let mut balance = balance.into_dart();
-        if port != 0 {
-            if let Some(p) = POST_COBJ {
-                p(port, &mut balance);
-            }
-        }
-    })
-    .unwrap();
-    *mempool = Some(mp);
-    log::info!("end mempool_start");
-}
+// #[no_mangle]
+// #[tokio::main]
+// pub async unsafe extern "C" fn mempool_run(port: i64) {
+//     try_init_logger();
+//     log::info!("Starting MP");
+//     let mut mempool = crate::coinconfig::MEMPOOL.lock().unwrap();
+//     let mp = MemPool::spawn(move |balance: i64| {
+//         let mut balance = balance.into_dart();
+//         if port != 0 {
+//             if let Some(p) = POST_COBJ {
+//                 p(port, &mut balance);
+//             }
+//         }
+//     })
+//     .unwrap();
+//     *mempool = Some(mp);
+//     log::info!("end mempool_start");
+// }
 
-#[no_mangle]
-pub unsafe extern "C" fn mempool_set_active(coin: u8, account: u32) {
-    let mempool = crate::coinconfig::MEMPOOL.lock().unwrap();
-    if coin < 2 {
-        if let Some(mempool) = mempool.as_ref() {
-            log::info!("MP active {coin} {account}");
-            mempool.set_active(coin, account);
-        }
-    }
-}
+// #[no_mangle]
+// pub unsafe extern "C" fn mempool_set_active(coin: u8, account: u32) {
+//     let mempool = crate::coinconfig::MEMPOOL.lock().unwrap();
+//     if coin < 2 {
+//         if let Some(mempool) = mempool.as_ref() {
+//             log::info!("MP active {coin} {account}");
+//             mempool.set_active(coin, account);
+//         }
+//     }
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn new_account(
@@ -430,7 +431,7 @@ pub async unsafe extern "C" fn trp_sync(coin: u8, account: u32) -> CResult<u8> {
     let res = async {
         let h = get_coin_handler(coin);
         if h.is_private() {
-            crate::transparent::sync(&h.network(), &h.connection(), account).await
+            crate::transparent::sync(&h.network(), &h.connection(), &h.url(), account).await
         } else {
             Ok(())
         }
@@ -519,8 +520,9 @@ pub async unsafe extern "C" fn skip_to_last_height(coin: u8) -> CResult<u8> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn rewind_to(height: u32) -> CResult<u32> {
-    let res = crate::api::sync::rewind_to(height);
+pub unsafe extern "C" fn rewind_to(coin: u8, height: u32) -> CResult<u32> {
+    let mut h = get_coin_handler(coin);
+    let res = h.rewind_to_height(height);
     to_cresult(res)
 }
 
@@ -649,10 +651,13 @@ pub async unsafe extern "C" fn prepare_multi_payment(
         let h = get_coin_handler(coin);
         if h.is_private() {
             let last_height = crate::chain::latest_height(&h.url()).await?;
-            let recipients = crate::api::recipient::parse_recipients(&recipients)?;
+            let address = crate::db::account::get_account(&h.connection(), account)?.and_then(|d| d.address);
+            let sender = address.ok_or(anyhow!("No account"))?;
+            let recipients = crate::api::recipient::parse_recipients(&sender, &recipients)?;
             let tx = crate::pay::build_tx_plan(
                 &h.network(),
                 &h.connection(),
+                &h.url(),
                 account,
                 last_height,
                 &recipients,
@@ -743,13 +748,15 @@ pub unsafe extern "C" fn is_valid_tkey(sk: *mut c_char) -> bool {
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn sweep_tkey(
+    coin: u8,
+    account: u32,
     last_height: u32,
     sk: *mut c_char,
     pool: u8,
-    confirmations: u32,
 ) -> CResult<*mut c_char> {
     from_c_str!(sk);
-    let txid = crate::taddr::sweep_tkey(last_height, &sk, pool, confirmations).await;
+    let h = get_coin_handler(coin);
+    let txid = crate::taddr::sweep_tkey(&h.network(), &h.connection(), &h.url(), account, last_height, &sk, pool).await;
     to_cresult_str(txid)
 }
 
@@ -758,7 +765,7 @@ pub async unsafe extern "C" fn sweep_tkey(
 pub async unsafe extern "C" fn get_activation_date(coin: u8) -> CResult<u32> {
     let h = get_coin_handler(coin);
     assert!(h.is_private());
-    let res = crate::api::sync::get_activation_date(&h.network(), &h.url()).await;
+    let res = crate::chain::get_activation_date(&h.network(), &h.url()).await;
     to_cresult(res)
 }
 
@@ -767,7 +774,7 @@ pub async unsafe extern "C" fn get_activation_date(coin: u8) -> CResult<u32> {
 pub async unsafe extern "C" fn get_block_by_time(coin: u8, time: u32) -> CResult<u32> {
     let h = get_coin_handler(coin);
     assert!(h.is_private());
-    let res = crate::api::sync::get_block_by_time(&h.network(), &h.url(), time).await;
+    let res = crate::chain::get_block_by_time(&h.network(), &h.url(), time).await;
     to_cresult(res)
 }
 
@@ -775,7 +782,7 @@ pub async unsafe extern "C" fn get_block_by_time(coin: u8, time: u32) -> CResult
 #[no_mangle]
 pub async unsafe extern "C" fn sync_historical_prices(
     coin: u8,
-    now: i64,
+    now: u32,
     days: u32,
     currency: *mut c_char,
 ) -> CResult<u32> {
@@ -783,7 +790,7 @@ pub async unsafe extern "C" fn sync_historical_prices(
     let res = async {
         let h = get_coin_handler(coin);
         let connection = &mut h.connection();
-        crate::api::historical_prices::sync_historical_prices_inner(
+        crate::historical_prices::sync_historical_prices(
             connection,
             h.coingecko_id(),
             now,
@@ -817,9 +824,10 @@ pub unsafe extern "C" fn store_contact(
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn commit_unsaved_contacts(anchor_offset: u32) -> CResult<*mut c_char> {
+pub async unsafe extern "C" fn commit_unsaved_contacts(coin: u8, account: u32, anchor_offset: u32) -> CResult<*mut c_char> {
     let res = async move {
-        let tx_plan = crate::api::contact::commit_unsaved_contacts(anchor_offset).await?;
+        let h = get_coin_handler(coin);
+        let tx_plan = crate::contact::commit_unsaved_contacts(&h.network(), &h.connection(), &h.url(), account, anchor_offset).await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };
@@ -830,7 +838,8 @@ pub async unsafe extern "C" fn commit_unsaved_contacts(anchor_offset: u32) -> CR
 pub unsafe extern "C" fn mark_message_read(coin: u8, message: u32, read: bool) -> CResult<u8> {
     let res = || {
         let h = get_coin_handler(coin);
-        db::message::mark_message_read(&h.connection(), message, read)
+        db::message::mark_message_read(&h.connection(), message, read)?;
+        Ok(())
     };
     to_cresult_unit(res())
 }
@@ -882,7 +891,7 @@ pub unsafe extern "C" fn make_payment_uri(
     from_c_str!(memo);
     from_c_str!(address);
     let h = get_coin_handler(coin);
-    let res = crate::pay::make_payment_uri(&h.network(), &address, amount, &memo);
+    let res = crate::pay::make_payment_uri(&h.network(), h.coingecko_id(), &address, amount, &memo);
     to_cresult_str(res)
 }
 
@@ -1005,7 +1014,8 @@ pub unsafe extern "C" fn import_from_zwl(
     from_c_str!(name);
     from_c_str!(data);
     let h = get_coin_handler(coin);
-    let res = crate::account::import_from_zwl(&h.connection(), &name, &data);
+    assert!(h.is_private());
+    let res = crate::account::import_from_zwl(&h.network(), &h.connection(), &name, &data);
     to_cresult_unit(res)
 }
 
@@ -1019,8 +1029,9 @@ pub unsafe extern "C" fn derive_zip32(
     address: u32,
 ) -> CResult<*const u8> {
     let res = || {
+        let h = get_coin_handler(coin);
         let address = if has_address { Some(address) } else { None };
-        let kp = crate::api::account::derive_keys(coin, account, index, external, address)?;
+        let kp = crate::key::derive_keys(&h.network(), &h.connection(), account, index, external, address)?;
         Ok(fb_to_vec!(kp))
     };
     to_cresult_bytes(res())

@@ -85,14 +85,14 @@ mod eth;
 mod fountain;
 mod hash;
 mod key;
-mod mempool;
+// mod mempool;
 mod misc;
-mod note_selection;
+pub mod note_selection;
 mod orchard;
 mod pay;
 pub mod pool;
 mod sapling;
-mod scan;
+// mod scan;
 mod sync;
 pub mod sync2;
 mod taddr;
@@ -103,14 +103,13 @@ mod tron;
 mod unified;
 mod zcash;
 mod zip32;
+pub mod historical_prices;
 
 #[cfg(feature = "ledger")]
 pub mod ledger;
 
 pub use crate::chain::{connect_lightwalletd, get_best_server, ChainError};
-pub use crate::coinconfig::{
-    init_coin, set_active, set_active_account, set_coin_lwd_url, CoinConfig, COIN_CONFIG,
-};
+pub use crate::coinconfig::set_active;
 pub use crate::db::{AccountData, AccountRec, DbAdapter, DbAdapterBuilder, TxRec};
 pub use crate::fountain::{FountainCodes, RaptorQDrops};
 // pub use crate::key::KeyHelpers;
@@ -122,7 +121,7 @@ pub use crate::lw_rpc::*;
 pub use crate::orchard::decode_merkle_path as decode_orchard_merkle_path;
 pub use crate::unified::{decode_unified_address, get_unified_address};
 pub use note_selection::{
-    build_tx, build_tx_plan, fetch_utxos, Destination, Source,
+    build_tx, build_tx_plan, Destination, Source,
     TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
     MAX_ATTEMPTS,
 };
@@ -132,7 +131,7 @@ pub use btc::{init_db as init_btc_db, BTCHandler};
 pub use coin::{CoinHandler, NoCoin};
 pub use db::data_generated::fb::{RecipientT, RecipientsT};
 pub use eth::{init_db as init_eth_db, ETHHandler};
-pub use scan::Progress;
+// pub use scan::Progress;
 pub use unified::has_unified;
 
 #[cfg(feature = "nodejs")]
@@ -142,8 +141,9 @@ mod gpu;
 
 pub fn init_test() {
     let _ = env_logger::try_init();
-    init_coin(0, "./zec.db").unwrap();
-    set_coin_lwd_url(0, "http://127.0.0.1:9067");
+    // TODO
+    // init_coin(0, "./zec.db").unwrap();
+    // set_coin_lwd_url(0, "http://127.0.0.1:9067");
 }
 
 pub use taddr::derive_from_secretkey;
