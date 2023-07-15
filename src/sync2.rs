@@ -5,13 +5,14 @@ use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, Sapl
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::{Synchronizer, WarpProcessor};
 
+use crate::db::checkpoint::get_block;
 use crate::db::data_generated::fb::ProgressT;
 use crate::{connect_lightwalletd, db};
 use anyhow::Result;
 use orchard::note_encryption::OrchardDomain;
 use rusqlite::Connection;
 use tokio::sync::mpsc;
-use zcash_primitives::consensus::Network;
+use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
 
 type ProgressCallback = dyn Fn(ProgressT);
@@ -193,12 +194,24 @@ pub fn rewind_to(network: &Network, connection: &mut Connection, height: u32) ->
 
 /// Synchronize from a given height
 pub async fn rescan_from(
-    _network: &Network,
+    network: &Network,
     connection: &mut Connection,
     url: &str,
     height: u32,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     crate::db::purge::truncate_data(connection)?;
-    crate::chain::fetch_tree_state(url, height).await?;
+    let height = std::cmp::max(
+        height,
+        network
+            .activation_height(NetworkUpgrade::Sapling)
+            .unwrap()
+            .into(),
+    );
+    let (block, z, o) = crate::chain::fetch_tree_state(url, height).await?;
+    let db_tx = connection.transaction()?;
+    crate::db::checkpoint::store_tree::<'S'>(height, &z, &db_tx)?;
+    crate::db::checkpoint::store_tree::<'O'>(height, &o, &db_tx)?;
+    crate::db::checkpoint::store_block_timestamp(height, &block.hash, block.time, &db_tx)?;
+    db_tx.commit()?;
     Ok(())
 }

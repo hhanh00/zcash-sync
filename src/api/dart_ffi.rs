@@ -1,19 +1,16 @@
 use crate::btc::BTCHandler;
-use crate::coin::{CoinApi, ZcashApi};
-use crate::db::data_generated::fb::{
-    BalanceT, ContactT, ContactVecT, MessageVecT, Recipients, SendTemplate, Servers, ShieldedNoteT,
-    ShieldedNoteVecT, ShieldedTxT, ShieldedTxVecT, SpendingVecT, TxTimeValueVecT, ZcashSyncParamsT,
-};
+use crate::coin::{Database, CoinApi, ZcashApi};
+use crate::db::data_generated::fb;
 use crate::db::FullEncryptedBackup;
 use crate::eth::ETHHandler;
+use std::collections::HashSet;
 // use crate::mempool::MemPool;
-use crate::note_selection::TransactionReport;
 use crate::pay::Tx;
 use crate::ton::{init_ton_db, TonHandler};
 use crate::tron::{init_tron_db, TronHandler};
 use crate::zcash::ZcashHandler;
 use crate::CoinHandler;
-use crate::{db, init_btc_db, init_eth_db, TransactionPlan};
+use crate::{db, init_btc_db, init_eth_db, TransactionPlan, TransactionReport};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use anyhow::anyhow;
@@ -24,13 +21,12 @@ use parking_lot::{Mutex, MutexGuard};
 use rusqlite::Connection;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::path::Path;
+use std::path::PathBuf;
+use std::str::FromStr;
 use zcash_primitives::consensus::Network::{MainNetwork, YCashMainNetwork};
 use zcash_primitives::transaction::builder::Progress;
 
 pub static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
-
-const MAX_COINS: u8 = 2;
 
 #[no_mangle]
 pub unsafe extern "C" fn dummy_export() {}
@@ -57,7 +53,7 @@ pub unsafe extern "C" fn dart_post_cobject(ptr: ffi::DartPostCObjectFnType) {
 
 #[repr(C)]
 pub struct CResult<T> {
-    value: T,
+    pub value: T,
     error: *mut c_char,
     pub len: u32,
 }
@@ -100,13 +96,6 @@ fn to_cresult_unit(res: Result<(), anyhow::Error>) -> CResult<u8> {
     let res = res.map(|_| 0u8);
     to_cresult(res)
 }
-
-// TODO
-// fn log_error(res: Result<(), anyhow::Error>) {
-//     if let Err(e) = res {
-//         log::error!("{}", e.to_string());
-//     }
-// }
 
 fn to_cresult_bytes(res: Result<Vec<u8>, anyhow::Error>) -> CResult<*const u8> {
     match res {
@@ -165,6 +154,7 @@ lazy_static! {
     static ref ETH_HANDLER: Mutex<CoinHandler> = Mutex::new(CoinHandler::default());
     static ref TON_HANDLER: Mutex<CoinHandler> = Mutex::new(CoinHandler::default());
     static ref TRON_HANDLER: Mutex<CoinHandler> = Mutex::new(CoinHandler::default());
+    static ref REGISTERED_COINS: Mutex<HashSet<u8>> = Mutex::new(HashSet::new());
 }
 
 fn get_coin_handler(coin: u8) -> MutexGuard<'static, CoinHandler> {
@@ -180,47 +170,44 @@ fn get_coin_handler(coin: u8) -> MutexGuard<'static, CoinHandler> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<u8> {
+pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char, passwd: *mut c_char) -> CResult<u8> {
     try_init_logger();
     from_c_str!(db_path);
+    from_c_str!(passwd);
     let res = || {
-        let connection = Connection::open(&*db_path)?;
+        let db_path = PathBuf::from_str(&db_path)?;
+        {
+            let mut coins = REGISTERED_COINS.lock();
+            coins.insert(coin);
+        }
         match coin {
             0 => {
-                db::migration::init_db(&connection, &MainNetwork, true)?;
-                let handler =
-                    ZcashHandler::new(coin, MainNetwork, "zcash", connection, (&*db_path).into());
+                let handler = ZcashHandler::new(coin, MainNetwork, "zcash", db_path, &passwd)?;
                 *ZCASH_HANDLER.lock() = CoinHandler::Zcash(handler);
             }
             1 => {
-                db::migration::init_db(&connection, &YCashMainNetwork, false)?;
-                let handler = ZcashHandler::new(
-                    coin,
-                    YCashMainNetwork,
-                    "ycash",
-                    connection,
-                    (&*db_path).into(),
-                );
+                // db::migration::init_db(&connection, &YCashMainNetwork, false)?;
+                let handler = ZcashHandler::new(coin, YCashMainNetwork, "ycash", db_path, &passwd)?;
                 *YCASH_HANDLER.lock() = CoinHandler::Zcash(handler);
             }
             2 => {
-                init_btc_db(&connection)?;
-                let handler = BTCHandler::new(connection, &*db_path);
+                // init_btc_db(&connection)?;
+                let handler = BTCHandler::new(db_path, &passwd)?;
                 *BTC_HANDLER.lock() = CoinHandler::BTC(handler);
             }
             3 => {
-                init_eth_db(&connection)?;
-                let handler = ETHHandler::new(connection, (&*db_path).into());
+                // init_eth_db(&connection)?;
+                let handler = ETHHandler::new(db_path, &passwd)?;
                 *ETH_HANDLER.lock() = CoinHandler::ETH(handler);
             }
             4 => {
-                init_ton_db(&connection)?;
-                let handler = TonHandler::new(connection, (&*db_path).into());
+                // init_ton_db(&connection)?;
+                let handler = TonHandler::new(db_path, &passwd)?;
                 *TON_HANDLER.lock() = CoinHandler::TON(handler);
             }
             5 => {
-                init_tron_db(&connection)?;
-                let handler = TronHandler::new(connection, (&*db_path).into());
+                // init_tron_db(&connection)?;
+                let handler = TronHandler::new(db_path, &passwd)?;
                 *TRON_HANDLER.lock() = CoinHandler::TRON(handler);
             }
             _ => unreachable!(),
@@ -230,31 +217,10 @@ pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<
     to_cresult(res())
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn migrate_db(_coin: u8, db_path: *mut c_char) -> CResult<u8> {
-    from_c_str!(db_path);
-    // TODO
-    to_cresult_unit(Ok(()))
-}
-
-#[no_mangle]
-#[tokio::main]
-pub async unsafe extern "C" fn migrate_data_db(_coin: u8) -> CResult<u8> {
-    // TODO
-    // let res = async {
-    //     if coin < 2 {
-    //         coinconfig::migrate_data(coin).await?;
-    //     }
-    //     Ok(())
-    // };
-    // to_cresult_unit(res.await)
-    to_cresult_unit(Ok(()))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn set_active(active: u8) {
-    crate::coinconfig::set_active(active);
-}
+// #[no_mangle]
+// pub unsafe extern "C" fn set_active(active: u8) {
+//     crate::coinconfig::set_active(active);
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn set_coin_lwd_url(coin: u8, lwd_url: *mut c_char) {
@@ -408,31 +374,51 @@ pub async unsafe extern "C" fn cancel_warp(coin: u8) {
 #[no_mangle]
 pub async unsafe extern "C" fn warp(
     coin: u8,
-    account: u32,
-    get_tx: bool,
     anchor_offset: u32,
     max_cost: u32,
     port: i64,
 ) -> CResult<u32> {
-    let sync_params = ZcashSyncParamsT {
-        get_tx,
+    let sync_params = fb::ZcashSyncParamsT {
         anchor_offset,
         max_cost,
         port,
     };
     let sync_params = fb_to_vec!(sync_params);
-    to_cresult(get_coin_handler(coin).sync(account, sync_params).await)
+    to_cresult(
+        get_coin_handler(coin)
+            .sync(0 /* all accounts are synced */, sync_params)
+            .await,
+    )
     // TODO: Mempool clear
+    // Mempool is disabled atm
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn fetch_tx_details(coin: u8, account: u32) -> CResult<u8> {
+    let res = async {
+        let h = get_coin_handler(coin);
+        crate::transaction::fetch_transaction_details(
+            &h.network(),
+            &h.connection(),
+            &h.url(),
+            account,
+        )
+        .await
+    };
+    to_cresult_unit(res.await)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn is_valid_key(coin: u8, key: *mut c_char) -> i8 {
+pub unsafe extern "C" fn is_valid_key(coin: u8, key: *mut c_char) -> bool {
     from_c_str!(key);
-    if get_coin_handler(coin).is_valid_key(&key) {
-        0
-    } else {
-        -1
-    }
+    get_coin_handler(coin).is_valid_key(&key)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn is_valid_address(coin: u8, address: *mut c_char) -> bool {
+    from_c_str!(address);
+    get_coin_handler(coin).is_valid_address(&address)
 }
 
 #[tokio::main]
@@ -459,18 +445,12 @@ pub unsafe extern "C" fn get_trp_txs(coin: u8, account: u32) -> CResult<*const u
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_t_notes(coin: u8, account: u32) -> CResult<*const u8> {
+pub unsafe extern "C" fn get_trp_notes(coin: u8, account: u32) -> CResult<*const u8> {
     let res = || {
         let notes = get_coin_handler(coin).get_notes(account)?;
         Ok(fb_to_vec!(notes))
     };
     to_cresult_bytes(res())
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn valid_address(coin: u8, address: *mut c_char) -> bool {
-    from_c_str!(address);
-    get_coin_handler(coin).is_valid_address(&address)
 }
 
 #[no_mangle]
@@ -519,28 +499,21 @@ fn report_progress(progress: Progress, port: i64) {
     }
 }
 
-#[tokio::main]
-#[no_mangle]
-pub async unsafe extern "C" fn skip_to_last_height(coin: u8) -> CResult<u8> {
-    let res = || {
-        get_coin_handler(coin).skip_to_last_height()?;
-        Ok(())
-    };
-    to_cresult_unit(res())
-}
-
 #[no_mangle]
 pub unsafe extern "C" fn rewind_to(coin: u8, height: u32) -> CResult<u32> {
-    let mut h = get_coin_handler(coin);
-    let res = h.rewind_to_height(height);
-    to_cresult(res)
+    let res = || {
+        let h = get_coin_handler(coin);
+        crate::sync2::rewind_to(&h.network(), &mut h.connection(), height)
+    };
+
+    to_cresult(res())
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn rescan_from(coin: u8, height: u32) -> CResult<u8> {
     let res = || {
         let mut h = get_coin_handler(coin);
-        h.truncate(height)
+        h.reset_sync(height)
     };
     to_cresult_unit(res())
 }
@@ -551,9 +524,6 @@ pub async unsafe extern "C" fn get_taddr_balance(coin: u8, account: u32) -> CRes
     let res = || get_coin_handler(coin).get_balance(account);
     to_cresult(res())
 }
-
-///
-/// TODO RESUME HERE
 
 #[tokio::main]
 #[no_mangle]
@@ -657,7 +627,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             recipients_len as usize,
             recipients_len as usize,
         );
-        let recipients = flatbuffers::root::<Recipients>(&recipients_bytes)?;
+        let recipients = flatbuffers::root::<fb::Recipients>(&recipients_bytes)?;
         let h = get_coin_handler(coin);
         if h.is_private() {
             let last_height = crate::chain::latest_height(&h.url()).await?;
@@ -707,7 +677,6 @@ pub async unsafe extern "C" fn sign(
     coin: u8,
     account: u32,
     tx_plan: *mut c_char,
-    _port: i64,
 ) -> CResult<*mut c_char> {
     from_c_str!(tx_plan);
     let res = async {
@@ -833,7 +802,7 @@ pub unsafe extern "C" fn store_contact(
     from_c_str!(name);
     from_c_str!(address);
     let h = get_coin_handler(coin);
-    let contact = ContactT {
+    let contact = fb::ContactT {
         id,
         name: Some(name.to_string()),
         address: Some(address.to_string()),
@@ -876,11 +845,10 @@ pub unsafe extern "C" fn mark_message_read(coin: u8, message: u32, read: bool) -
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn mark_all_messages_read(coin: u8, read: bool) -> CResult<u8> {
+pub unsafe extern "C" fn mark_all_messages_read(coin: u8, account: u32, read: bool) -> CResult<u8> {
     let res = || {
         let h = get_coin_handler(coin);
         let connection = h.connection();
-        let account = db::account::get_active_account(&connection)?;
         db::message::mark_all_messages_read(&connection, account, read)
     };
     to_cresult_unit(res())
@@ -890,7 +858,7 @@ pub unsafe extern "C" fn mark_all_messages_read(coin: u8, read: bool) -> CResult
 pub unsafe extern "C" fn truncate_data(coin: u8) -> CResult<u8> {
     let res = || {
         let mut h = get_coin_handler(coin);
-        h.truncate(0)
+        h.reset_sync(0)
     };
     to_cresult_unit(res())
 }
@@ -952,18 +920,10 @@ pub unsafe extern "C" fn zip_backup(key: *mut c_char, dst_dir: *mut c_char) -> C
     from_c_str!(dst_dir);
     let res = || {
         let mut backup = FullEncryptedBackup::new(&dst_dir);
-        for coin in 0..MAX_COINS {
-            let h = get_coin_handler(coin);
-            backup.add(&h.connection(), &h.db_path())?;
-        }
-        let coin_handlers: &[&Mutex<CoinHandler>] = &[&BTC_HANDLER /*, &ETH_HANDLER */];
-        for h in coin_handlers {
-            let h = h.lock();
-            let db_path = Path::new(h.db_path());
-            backup.add(
-                &h.connection(),
-                &db_path.file_name().unwrap().to_string_lossy(),
-            )?;
+        let coins = REGISTERED_COINS.lock();
+        for coin in coins.iter() {
+            let h = get_coin_handler(*coin);
+            backup.add(&h.connection(), h.db_path().file_name().unwrap())?;
         }
         backup.close(&key)?;
         Ok(0)
@@ -1029,7 +989,7 @@ pub unsafe extern "C" fn get_tx_summary(tx: *mut c_char) -> CResult<*mut c_char>
 pub async unsafe extern "C" fn get_best_server(servers: *mut u8, len: u64) -> CResult<*mut c_char> {
     let servers: Vec<u8> = Vec::from_raw_parts(servers, len as usize, len as usize);
     let res = async {
-        let servers = flatbuffers::root::<Servers>(&servers)?;
+        let servers = flatbuffers::root::<fb::Servers>(&servers)?;
         let best_server = crate::get_best_server(servers).await?;
         Ok(best_server)
     };
@@ -1145,9 +1105,9 @@ pub unsafe extern "C" fn get_balances(
             db::account::get_balances(&h.connection(), id, confirmed_height, filter_excluded)
         } else {
             let balance = get_coin_handler(coin).get_balance(id)?;
-            Ok(BalanceT {
+            Ok(fb::BalanceT {
                 balance,
-                ..BalanceT::default()
+                ..fb::BalanceT::default()
             })
         }?;
         Ok(fb_to_vec!(balances))
@@ -1177,15 +1137,15 @@ pub unsafe extern "C" fn get_notes(coin: u8, id: u32) -> CResult<*const u8> {
                 let notes = ns.notes.unwrap();
                 let notes: Vec<_> = notes
                     .into_iter()
-                    .map(|n| ShieldedNoteT {
+                    .map(|n| fb::ShieldedNoteT {
                         id,
                         height: n.height,
                         value: n.value,
                         timestamp: n.timestamp,
-                        ..ShieldedNoteT::default()
+                        ..fb::ShieldedNoteT::default()
                     })
                     .collect();
-                ShieldedNoteVecT { notes: Some(notes) }
+                fb::ShieldedNoteVecT { notes: Some(notes) }
             })
         }?;
         Ok(fb_to_vec!(notes))
@@ -1205,17 +1165,17 @@ pub unsafe extern "C" fn get_txs(coin: u8, id: u32) -> CResult<*const u8> {
                     .txs
                     .unwrap()
                     .into_iter()
-                    .map(|tx| ShieldedTxT {
+                    .map(|tx| fb::ShieldedTxT {
                         id,
                         tx_id: tx.tx_id.clone(),
                         height: tx.height,
                         short_tx_id: tx.tx_id.clone().map(|id| id[0..4].to_string()),
                         timestamp: tx.timestamp,
                         value: tx.value,
-                        ..ShieldedTxT::default()
+                        ..fb::ShieldedTxT::default()
                     })
                     .collect();
-                ShieldedTxVecT { txs: Some(txs) }
+                fb::ShieldedTxVecT { txs: Some(txs) }
             })
         }?;
         Ok(fb_to_vec!(txs))
@@ -1224,13 +1184,13 @@ pub unsafe extern "C" fn get_txs(coin: u8, id: u32) -> CResult<*const u8> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_messages(coin: u8, id: u32) -> CResult<*const u8> {
+pub unsafe extern "C" fn get_messages(coin: u8, account: u32) -> CResult<*const u8> {
     let res = || {
         let h = get_coin_handler(coin);
         let messages = if h.is_private() {
-            db::message::get_messages(&h.connection(), &h.network(), id)
+            db::message::get_messages(&h.connection(), &h.network(), account)
         } else {
-            Ok(MessageVecT {
+            Ok(fb::MessageVecT {
                 messages: Some(vec![]),
             })
         }?;
@@ -1274,7 +1234,7 @@ pub unsafe extern "C" fn save_send_template(coin: u8, template: *mut u8, len: u6
     let res = || {
         let h = get_coin_handler(coin);
         assert!(h.is_private());
-        let template = flatbuffers::root::<SendTemplate>(&template)?.unpack();
+        let template = flatbuffers::root::<fb::SendTemplate>(&template)?.unpack();
         let id = crate::db::payment_tpl::store_template(&h.connection(), &template)?;
         Ok(id)
     };
@@ -1299,7 +1259,7 @@ pub unsafe extern "C" fn get_contacts(coin: u8) -> CResult<*const u8> {
         let contacts = if h.is_private() {
             db::contact::get_contacts(&h.connection())
         } else {
-            Ok(ContactVecT {
+            Ok(fb::ContactVecT {
                 contacts: Some(vec![]),
             })
         }?;
@@ -1315,7 +1275,7 @@ pub unsafe extern "C" fn get_pnl_txs(coin: u8, id: u32, timestamp: u32) -> CResu
         let timeseries = if h.is_private() {
             db::historical_prices::get_pnl_txs(&h.connection(), id, timestamp)
         } else {
-            Ok(TxTimeValueVecT {
+            Ok(fb::TxTimeValueVecT {
                 values: Some(vec![]),
             })
         }?;
@@ -1347,7 +1307,7 @@ pub unsafe extern "C" fn get_spendings(coin: u8, id: u32, timestamp: u32) -> CRe
         let spendings = if h.is_private() {
             crate::db::historical_prices::get_spendings(&h.connection(), id, timestamp)
         } else {
-            Ok(SpendingVecT {
+            Ok(fb::SpendingVecT {
                 values: Some(vec![]),
             })
         }?;

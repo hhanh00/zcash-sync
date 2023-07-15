@@ -3,7 +3,7 @@ use std::str::FromStr;
 // use crate::wallet::RecipientMemo;
 use crate::api::recipient::RecipientMemo;
 use crate::chain::{get_latest_height, EXPIRY_HEIGHT_OFFSET};
-use crate::db::data_generated::fb::PaymentURIT;
+use crate::fb::PaymentURIT;
 use crate::unified::UnifiedAddressType;
 use crate::{
     build_tx, connect_lightwalletd, db, GetAddressUtxosReply, RawTransaction,

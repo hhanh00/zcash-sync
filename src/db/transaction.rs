@@ -13,18 +13,21 @@ pub fn clear_tx_details(connection: &Connection, account: u32) -> Result<()> {
     Ok(())
 }
 
-pub fn list_txid_without_memo(connection: &Connection) -> Result<Vec<GetTransactionDetailRequest>> {
+pub fn list_txid_without_memo(
+    connection: &Connection,
+    account: u32,
+) -> Result<Vec<GetTransactionDetailRequest>> {
     let mut stmt = connection.prepare(
-        "SELECT account, id_tx, txid, height, timestamp, value FROM transactions WHERE memo IS NULL",
+        "SELECT id_tx, txid, height, timestamp, value FROM transactions WHERE memo IS NULL AND account = ?1",
     )?;
-    let reqs = stmt.query_map([], |r| {
+    let reqs = stmt.query_map([account], |r| {
         Ok(GetTransactionDetailRequest {
-            account: r.get(0)?,
-            id_tx: r.get(1)?,
-            txid: r.get::<_, Vec<u8>>(2)?.try_into().unwrap(),
-            height: r.get(3)?,
-            timestamp: r.get(4)?,
-            value: r.get(5)?,
+            account,
+            id_tx: r.get(0)?,
+            txid: r.get::<_, Vec<u8>>(1)?.try_into().unwrap(),
+            height: r.get(2)?,
+            timestamp: r.get(3)?,
+            value: r.get(4)?,
         })
     })?;
     let reqs: Result<Vec<_>, _> = reqs.collect();

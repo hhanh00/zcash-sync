@@ -2,7 +2,11 @@
 
 // @generated
 
+use core::cmp::Ordering;
+use core::mem;
+
 extern crate flatbuffers;
+use self::flatbuffers::{EndianScalar, Follow};
 
 #[allow(unused_imports, dead_code)]
 pub mod fb {
@@ -9443,10 +9447,9 @@ pub mod fb {
     }
 
     impl<'a> ZcashSyncParams<'a> {
-        pub const VT_GET_TX: flatbuffers::VOffsetT = 4;
-        pub const VT_ANCHOR_OFFSET: flatbuffers::VOffsetT = 6;
-        pub const VT_MAX_COST: flatbuffers::VOffsetT = 8;
-        pub const VT_PORT: flatbuffers::VOffsetT = 10;
+        pub const VT_ANCHOR_OFFSET: flatbuffers::VOffsetT = 4;
+        pub const VT_MAX_COST: flatbuffers::VOffsetT = 6;
+        pub const VT_PORT: flatbuffers::VOffsetT = 8;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -9461,34 +9464,20 @@ pub mod fb {
             builder.add_port(args.port);
             builder.add_max_cost(args.max_cost);
             builder.add_anchor_offset(args.anchor_offset);
-            builder.add_get_tx(args.get_tx);
             builder.finish()
         }
 
         pub fn unpack(&self) -> ZcashSyncParamsT {
-            let get_tx = self.get_tx();
             let anchor_offset = self.anchor_offset();
             let max_cost = self.max_cost();
             let port = self.port();
             ZcashSyncParamsT {
-                get_tx,
                 anchor_offset,
                 max_cost,
                 port,
             }
         }
 
-        #[inline]
-        pub fn get_tx(&self) -> bool {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<bool>(ZcashSyncParams::VT_GET_TX, Some(false))
-                    .unwrap()
-            }
-        }
         #[inline]
         pub fn anchor_offset(&self) -> u32 {
             // Safety:
@@ -9532,7 +9521,6 @@ pub mod fb {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<bool>("get_tx", Self::VT_GET_TX, false)?
                 .visit_field::<u32>("anchor_offset", Self::VT_ANCHOR_OFFSET, false)?
                 .visit_field::<u32>("max_cost", Self::VT_MAX_COST, false)?
                 .visit_field::<i64>("port", Self::VT_PORT, false)?
@@ -9541,7 +9529,6 @@ pub mod fb {
         }
     }
     pub struct ZcashSyncParamsArgs {
-        pub get_tx: bool,
         pub anchor_offset: u32,
         pub max_cost: u32,
         pub port: i64,
@@ -9550,7 +9537,6 @@ pub mod fb {
         #[inline]
         fn default() -> Self {
             ZcashSyncParamsArgs {
-                get_tx: false,
                 anchor_offset: 0,
                 max_cost: 0,
                 port: 0,
@@ -9563,11 +9549,6 @@ pub mod fb {
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
     }
     impl<'a: 'b, 'b> ZcashSyncParamsBuilder<'a, 'b> {
-        #[inline]
-        pub fn add_get_tx(&mut self, get_tx: bool) {
-            self.fbb_
-                .push_slot::<bool>(ZcashSyncParams::VT_GET_TX, get_tx, false);
-        }
         #[inline]
         pub fn add_anchor_offset(&mut self, anchor_offset: u32) {
             self.fbb_
@@ -9603,7 +9584,6 @@ pub mod fb {
     impl core::fmt::Debug for ZcashSyncParams<'_> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("ZcashSyncParams");
-            ds.field("get_tx", &self.get_tx());
             ds.field("anchor_offset", &self.anchor_offset());
             ds.field("max_cost", &self.max_cost());
             ds.field("port", &self.port());
@@ -9613,7 +9593,6 @@ pub mod fb {
     #[non_exhaustive]
     #[derive(Debug, Clone, PartialEq)]
     pub struct ZcashSyncParamsT {
-        pub get_tx: bool,
         pub anchor_offset: u32,
         pub max_cost: u32,
         pub port: i64,
@@ -9621,7 +9600,6 @@ pub mod fb {
     impl Default for ZcashSyncParamsT {
         fn default() -> Self {
             Self {
-                get_tx: false,
                 anchor_offset: 0,
                 max_cost: 0,
                 port: 0,
@@ -9633,14 +9611,12 @@ pub mod fb {
             &self,
             _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
         ) -> flatbuffers::WIPOffset<ZcashSyncParams<'b>> {
-            let get_tx = self.get_tx;
             let anchor_offset = self.anchor_offset;
             let max_cost = self.max_cost;
             let port = self.port;
             ZcashSyncParams::create(
                 _fbb,
                 &ZcashSyncParamsArgs {
-                    get_tx,
                     anchor_offset,
                     max_cost,
                     port,

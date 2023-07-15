@@ -1,11 +1,13 @@
-use crate::coin::CoinApi;
+use anyhow::Result;
+use ambassador::Delegate;
+use crate::coin::{CoinApi, Database, EncryptedDatabase};
 use crate::db::data_generated::fb::{
     AccountVecT, BackupT, HeightT, PlainNoteVecT, PlainTxVecT, TxReportT,
 };
-use crate::RecipientsT;
+use crate::fb::RecipientsT;
 use async_trait::async_trait;
 use rusqlite::Connection;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 mod account;
@@ -14,28 +16,24 @@ mod sync;
 
 pub use db::init_db as init_tron_db;
 
+#[derive(Delegate)]
+#[delegate(Database, target = "db")]
 pub struct TronHandler {
-    connection: Mutex<Connection>,
-    db_path: PathBuf,
+    pub db: EncryptedDatabase,
     url: String,
 }
 
 impl TronHandler {
-    pub fn new(connection: Connection, db_path: PathBuf) -> Self {
-        TronHandler {
-            connection: Mutex::new(connection),
-            db_path,
+    pub fn new(db_path: PathBuf, passwd: &str) -> Result<Self> {
+        Ok(TronHandler {
+            db: EncryptedDatabase::new(db_path, passwd, |c| Ok(()))?,
             url: String::new(),
-        }
+        })
     }
 }
 
 #[async_trait(?Send)]
 impl CoinApi for TronHandler {
-    fn db_path(&self) -> &str {
-        self.db_path.to_str().unwrap()
-    }
-
     fn coingecko_id(&self) -> &'static str {
         "tron"
     }
@@ -84,15 +82,7 @@ impl CoinApi for TronHandler {
         crate::ton::db_height(&self.connection(), account)
     }
 
-    fn skip_to_last_height(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<u32> {
-        Ok(height)
-    }
-
-    fn truncate(&mut self, _height: u32) -> anyhow::Result<()> {
+    fn reset_sync(&mut self, _height: u32) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -129,9 +119,5 @@ impl CoinApi for TronHandler {
 
     fn broadcast(&self, _raw_tx: &[u8]) -> anyhow::Result<String> {
         todo!()
-    }
-
-    fn connection(&self) -> MutexGuard<Connection> {
-        self.connection.lock().unwrap()
     }
 }

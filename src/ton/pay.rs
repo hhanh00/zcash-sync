@@ -1,5 +1,5 @@
 use crate::db::data_generated::fb::{TONTransaction, TONTransactionT, TxOutputT, TxReportT};
-use crate::RecipientT;
+use crate::fb::RecipientT;
 use anyhow::Result;
 use flatbuffers::FlatBufferBuilder;
 use num_bigint::BigUint;

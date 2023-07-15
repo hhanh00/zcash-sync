@@ -72,12 +72,14 @@ pub mod lw_rpc;
 
 pub type Hash = [u8; 32];
 
+#[macro_use]
+pub mod coin;
+
+mod btc;
 pub mod account;
 pub mod api;
-mod btc;
 mod chain;
 /// accounts, sync, payments, etc.
-pub mod coin;
 mod coinconfig;
 mod contact;
 mod db;
@@ -122,21 +124,24 @@ pub use crate::orchard::decode_merkle_path as decode_orchard_merkle_path;
 pub use crate::unified::{decode_unified_address, get_unified_address};
 pub use note_selection::{
     build_tx, build_tx_plan, Destination, Source, TransactionBuilderConfig,
-    TransactionBuilderError, TransactionPlan, TxBuilderContext, MAX_ATTEMPTS,
+    TransactionBuilderError, TransactionPlan, TransactionReport, TxBuilderContext, MAX_ATTEMPTS,
 };
 
 pub use api::recipient::{make_recipient, make_recipients};
 pub use btc::{init_db as init_btc_db, BTCHandler};
 pub use coin::{CoinHandler, NoCoin};
-pub use db::data_generated::fb::{RecipientT, RecipientsT};
+pub use db::data_generated::fb;
 pub use eth::{init_db as init_eth_db, ETHHandler};
 // pub use scan::Progress;
 pub use unified::has_unified;
+pub use zcash::ZcashHandler;
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;
 
 mod gpu;
+
+pub type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 
 pub fn init_test() {
     let _ = env_logger::try_init();

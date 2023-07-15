@@ -1,12 +1,12 @@
 #if !defined(__APPLE__) || !defined(TARGET_OS_IPHONE)
-typedef char int8_t;
+typedef signed char int8_t;
 typedef unsigned char uint8_t;
-typedef short int uint16_t;
+typedef unsigned short int uint16_t;
 typedef long long int int64_t;
-typedef long long int uint64_t;
-typedef long long int uintptr_t;
-typedef long int int32_t;
-typedef long int uint32_t;
+typedef unsigned long long int uint64_t;
+typedef unsigned long int uintptr_t;
+typedef int int32_t;
+typedef unsigned int uint32_t;
 #ifndef __cplusplus
 typedef char bool;
 #endif
@@ -19,8 +19,6 @@ typedef void *DartPostCObjectFnType;
 #define QR_DATA_SIZE 256
 
 #define MAX_ATTEMPTS 10
-
-#define N 200000
 
 typedef struct CResult_u8 {
   uint8_t value;
@@ -216,13 +214,11 @@ typedef struct CResult_bool {
 
 #define TONTransaction_VT_STATE 10
 
-#define ZcashSyncParams_VT_GET_TX 4
+#define ZcashSyncParams_VT_ANCHOR_OFFSET 4
 
-#define ZcashSyncParams_VT_ANCHOR_OFFSET 6
+#define ZcashSyncParams_VT_MAX_COST 6
 
-#define ZcashSyncParams_VT_MAX_COST 8
-
-#define ZcashSyncParams_VT_PORT 10
+#define ZcashSyncParams_VT_PORT 8
 
 #define AccountDetails_VT_AINDEX 10
 
@@ -240,13 +236,7 @@ void deallocate_str(char *s);
 
 void deallocate_bytes(uint8_t *ptr, uint32_t len);
 
-struct CResult_u8 init_wallet(uint8_t coin, char *db_path);
-
-struct CResult_u8 migrate_db(uint8_t _coin, char *db_path);
-
-struct CResult_u8 migrate_data_db(uint8_t _coin);
-
-void set_active(uint8_t active);
+struct CResult_u8 init_wallet(uint8_t coin, char *db_path, char *passwd);
 
 void set_coin_lwd_url(uint8_t coin, char *lwd_url);
 
@@ -272,22 +262,19 @@ struct CResult_____c_char get_address(uint8_t coin, uint32_t account, uint8_t ua
 
 void cancel_warp(uint8_t coin);
 
-struct CResult_u32 warp(uint8_t coin,
-                        uint32_t account,
-                        bool get_tx,
-                        uint32_t anchor_offset,
-                        uint32_t max_cost,
-                        int64_t port);
+struct CResult_u32 warp(uint8_t coin, uint32_t anchor_offset, uint32_t max_cost, int64_t port);
 
-int8_t is_valid_key(uint8_t coin, char *key);
+struct CResult_u8 fetch_tx_details(uint8_t coin, uint32_t account);
+
+bool is_valid_key(uint8_t coin, char *key);
+
+bool is_valid_address(uint8_t coin, char *address);
 
 struct CResult_u8 trp_sync(uint8_t coin, uint32_t account);
 
 struct CResult______u8 get_trp_txs(uint8_t coin, uint32_t account);
 
-struct CResult______u8 get_t_notes(uint8_t coin, uint32_t account);
-
-bool valid_address(uint8_t coin, char *address);
+struct CResult______u8 get_trp_notes(uint8_t coin, uint32_t account);
 
 struct CResult_____c_char get_diversified_address(uint8_t coin,
                                                   uint32_t account,
@@ -296,18 +283,12 @@ struct CResult_____c_char get_diversified_address(uint8_t coin,
 
 struct CResult_u32 get_latest_height(uint8_t coin);
 
-struct CResult_u8 skip_to_last_height(uint8_t coin);
-
 struct CResult_u32 rewind_to(uint8_t coin, uint32_t height);
 
 struct CResult_u8 rescan_from(uint8_t coin, uint32_t height);
 
 struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t account);
 
-/**
- *
- * TODO RESUME HERE
- */
 struct CResult_____c_char transfer_pools(uint8_t coin,
                                          uint32_t account,
                                          uint8_t from_pool,
@@ -336,7 +317,7 @@ struct CResult_____c_char prepare_multi_payment(uint8_t coin,
 
 struct CResult______u8 transaction_report(uint8_t coin, char *plan);
 
-struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx_plan, int64_t _port);
+struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx_plan);
 
 struct CResult_____c_char broadcast_tx(uint8_t coin, char *tx_str);
 
@@ -367,7 +348,7 @@ struct CResult_____c_char commit_unsaved_contacts(uint8_t coin,
 
 struct CResult_u8 mark_message_read(uint8_t coin, uint32_t message, bool read);
 
-struct CResult_u8 mark_all_messages_read(uint8_t coin, bool read);
+struct CResult_u8 mark_all_messages_read(uint8_t coin, uint32_t account, bool read);
 
 struct CResult_u8 truncate_data(uint8_t coin);
 
@@ -430,7 +411,7 @@ struct CResult______u8 get_notes(uint8_t coin, uint32_t id);
 
 struct CResult______u8 get_txs(uint8_t coin, uint32_t id);
 
-struct CResult______u8 get_messages(uint8_t coin, uint32_t id);
+struct CResult______u8 get_messages(uint8_t coin, uint32_t account);
 
 struct CResult______u8 get_prev_next_message(uint8_t coin,
                                              uint32_t id,

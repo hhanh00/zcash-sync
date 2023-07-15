@@ -12,7 +12,7 @@ pub fn get_account(connection: &Connection, id: u32) -> Result<Option<AccountDet
     assert_ne!(id, 0);
     let r = connection
         .query_row(
-            "SELECT address, name, seed, aindex, sk, ivk FROM accounts WHERE address = ?1",
+            "SELECT address, name, seed, aindex, sk, ivk FROM accounts WHERE id_account = ?1",
             [id],
             |r| {
                 Ok(AccountDetailsT {
@@ -184,7 +184,7 @@ pub fn get_available_addrs(connection: &Connection, account: u32) -> Result<u8> 
         .is_some();
     let has_sapling = connection
         .query_row(
-            "SELECT 1 FROM accounts WHERE account = ?1",
+            "SELECT 1 FROM accounts WHERE id_account = ?1",
             [account],
             |_row| Ok(()),
         )

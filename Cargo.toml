@@ -43,7 +43,7 @@ thiserror = "1.0.25"
 log = "0.4.14"
 flexi_logger = {version="0.22.3", features = ["compress"]}
 parking_lot = "0.12"
-enum_delegate = "0.2.0"
+ambassador = "0.3.5"
 assert_matches = "1.5"
 async-trait = "0.1.68"
 serde = {version = "1.0.126", features = ["derive"]}
@@ -64,6 +64,7 @@ tiny-bip39 = "0.8"
 rand = "0.8.4"
 rusqlite = { version = "0.29.0", features = ["bundled", "modern_sqlite", "backup"] }
 r2d2_sqlite = "0.22"
+r2d2 = "0.8"
 zip = "0.6"
 # Workaround for https://github.com/gyscos/zstd-rs/issues/177
 zstd-sys = "=2.0.1+zstd.1.5.2"
@@ -143,38 +144,38 @@ sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
-rev = "a4a51b0ac6e748fa99cafd3639a8c2e5e55d6b82"
+rev = "e51b1a9eb2fb65f2f439a144b98d47518b64901f"
 #path = "../zcash-params"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f7c5d7814ef715a0e346ece3628af216bb3899e0"
+rev = "2796874b72dab521634e198427c9ad66e76ce73b"
 #path = "../../librustzcash/zcash_client_backend"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f7c5d7814ef715a0e346ece3628af216bb3899e0"
+rev = "2796874b72dab521634e198427c9ad66e76ce73b"
 #path = "../../librustzcash/zcash_primitives"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f7c5d7814ef715a0e346ece3628af216bb3899e0"
+rev = "2796874b72dab521634e198427c9ad66e76ce73b"
 #path = "../../librustzcash/zcash_proofs"
 
 [dependencies.zcash_address]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f7c5d7814ef715a0e346ece3628af216bb3899e0"
+rev = "2796874b72dab521634e198427c9ad66e76ce73b"
 #path = "../../librustzcash/components/zcash_address"
 
 [dependencies.zcash_encoding]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f7c5d7814ef715a0e346ece3628af216bb3899e0"
+rev = "2796874b72dab521634e198427c9ad66e76ce73b"
 #path = "../../librustzcash/components/zcash_encoding"
 
 [dependencies.zcash_note_encryption]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "f7c5d7814ef715a0e346ece3628af216bb3899e0"
+rev = "2796874b72dab521634e198427c9ad66e76ce73b"
 #path = "../../librustzcash/components/zcash_note_encryption"
 
 [build-dependencies]
@@ -186,4 +187,4 @@ criterion = "0.3.4"
 
 #These patch overrides must be included in your workspace root Cargo.toml
 #[patch.crates-io]
-#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "f7c5d7814ef715a0e346ece3628af216bb3899e0" }
+#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "2796874b72dab521634e198427c9ad66e76ce73b" }

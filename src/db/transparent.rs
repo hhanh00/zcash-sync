@@ -1,4 +1,4 @@
-use crate::db::data_generated::fb::TransparentDetailsT;
+use crate::db::data_generated::fb;
 use crate::taddr::derive_tkeys;
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -7,13 +7,13 @@ use zcash_primitives::consensus::{Network, Parameters};
 pub fn get_transparent(
     connection: &Connection,
     account: u32,
-) -> Result<Option<TransparentDetailsT>> {
+) -> Result<Option<fb::TransparentDetailsT>> {
     let details = connection
         .query_row(
             "SELECT sk, address FROM taddrs WHERE account = ?1",
             [account],
             |r| {
-                Ok(TransparentDetailsT {
+                Ok(fb::TransparentDetailsT {
                     id: account,
                     sk: r.get(0)?,
                     address: r.get(1)?,
@@ -56,4 +56,46 @@ pub fn store_tsk(connection: &Connection, id_account: u32, sk: &str, addr: &str)
         params![sk, addr, id_account],
     )?;
     Ok(())
+}
+
+pub fn list_txs(connection: &Connection, account: u32) -> Result<fb::PlainTxVecT> {
+    let mut s = connection.prepare(
+        "SELECT id_tx, t.hash, t.height, timestamp, value, address FROM t_txs t JOIN block_timestamps b \
+        ON t.height = b.height WHERE account = ?1 ORDER BY t.height DESC")?;
+    let rows = s.query_map([account], |r| {
+        let mut tx_hash = r.get::<_, Vec<u8>>(1)?;
+        tx_hash.reverse();
+        Ok(fb::PlainTxT {
+            id: r.get(0)?,
+            tx_id: Some(hex::encode(&tx_hash)),
+            height: r.get(2)?,
+            timestamp: r.get(3)?,
+            value: r.get(4)?,
+            address: Some(r.get(5)?),
+        })
+    })?;
+    let txs: Result<Vec<_>, _> = rows.collect();
+    Ok(fb::PlainTxVecT { txs: Some(txs?) })
+}
+
+pub fn list_utxos(connection: &Connection, account: u32) -> Result<fb::PlainNoteVecT> {
+    let mut s = connection.prepare(
+        "SELECT id_utxo, tx_hash, t.height, timestamp, vout, value FROM t_utxos t JOIN block_timestamps b \
+        ON t.height = b.height WHERE account = ?1 AND spent IS NULL ORDER BY t.height DESC")?;
+    let rows = s.query_map([account], |r| {
+        let mut tx_hash = r.get::<_, Vec<u8>>(1)?;
+        tx_hash.reverse();
+        Ok(fb::PlainNoteT {
+            id: r.get(0)?,
+            tx_id: Some(hex::encode(&tx_hash)),
+            height: r.get(2)?,
+            timestamp: r.get(3)?,
+            vout: r.get(4)?,
+            value: r.get(5)?,
+        })
+    })?;
+    let notes: Result<Vec<_>, _> = rows.collect();
+    Ok(fb::PlainNoteVecT {
+        notes: Some(notes?),
+    })
 }

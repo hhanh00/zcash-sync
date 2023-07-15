@@ -1,24 +1,70 @@
+use ambassador::Delegate;
+use crate::db::cipher::check_passwd;
 use crate::db::data_generated::fb::{
     AccountT, AccountVecT, BackupT, HeightT, PlainNoteVecT, PlainTxVecT, RecipientsT, TxReportT,
 };
-use std::sync::MutexGuard;
-
 use crate::ton::TonHandler;
 use crate::tron::TronHandler;
 use crate::zcash::ZcashHandler;
 use crate::{BTCHandler, ETHHandler};
+use ambassador::delegatable_trait;
 use anyhow::Result;
 use async_trait::async_trait;
 use rusqlite::Connection;
+use std::path::{Path, PathBuf};
 use zcash_primitives::consensus::Network;
 
+pub struct EncryptedDatabase {
+    db_path: PathBuf,
+    pub pool: r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>,
+    passwd: String,
+}
+
+impl EncryptedDatabase {
+    pub fn new<F: Fn(&Connection) -> Result<()>>(
+        db_path: PathBuf,
+        passwd: &str,
+        init: F,
+    ) -> Result<Self> {
+        let manager = r2d2_sqlite::SqliteConnectionManager::file(&db_path);
+        let pool = r2d2::Pool::new(manager).unwrap();
+        let connection = pool.get().unwrap();
+        if !check_passwd(&connection, passwd)? {
+            anyhow::bail!("Invalid password");
+        }
+        init(&connection)?;
+        Ok(EncryptedDatabase {
+            db_path,
+            pool,
+            passwd: passwd.to_owned(),
+        })
+    }
+}
+
+#[delegatable_trait]
+pub trait Database {
+    fn db_path(&self) -> &Path;
+    fn connection(&self) -> crate::Connection;
+}
+
+impl Database for EncryptedDatabase {
+    fn db_path(&self) -> &Path {
+        self.db_path.as_path()
+    }
+
+    fn connection(&self) -> crate::Connection {
+        let connection = self.pool.get().unwrap();
+        let _ = crate::db::cipher::set_db_passwd(&connection, &self.passwd);
+        connection
+    }
+}
+
 #[async_trait(?Send)]
-#[enum_delegate::register]
-pub trait CoinApi {
+#[delegatable_trait]
+pub trait CoinApi: Database {
     fn is_private(&self) -> bool {
         false
     }
-    fn db_path(&self) -> &str;
     fn coingecko_id(&self) -> &'static str;
     fn url(&self) -> String;
     fn set_url(&mut self, url: &str);
@@ -66,9 +112,7 @@ pub trait CoinApi {
     fn get_db_height(&self, _account: u32) -> Result<Option<HeightT>> {
         super::btc::get_db_height(&self.connection())
     }
-    fn skip_to_last_height(&mut self) -> Result<()>;
-    fn rewind_to_height(&mut self, height: u32) -> Result<u32>;
-    fn truncate(&mut self, height: u32) -> Result<()>;
+    fn reset_sync(&mut self, height: u32) -> Result<()>;
 
     fn get_balance(&self, account: u32) -> Result<u64>;
     fn get_txs(&self, account: u32) -> Result<PlainTxVecT>;
@@ -86,8 +130,6 @@ pub trait CoinApi {
     fn mark_inputs_spent(&self, _tx_plan: &str, _height: u32) -> Result<()> {
         Ok(())
     }
-
-    fn connection(&self) -> MutexGuard<Connection>;
 }
 
 #[async_trait(?Send)]
@@ -102,12 +144,18 @@ pub trait ZcashApi: Send {
 
 pub struct NoCoin;
 
-#[async_trait(?Send)]
-impl CoinApi for NoCoin {
-    fn db_path(&self) -> &str {
+impl Database for NoCoin {
+    fn db_path(&self) -> &Path {
         unimplemented!()
     }
 
+    fn connection(&self) -> crate::Connection {
+        unimplemented!()
+    }
+}
+
+#[async_trait(?Send)]
+impl CoinApi for NoCoin {
     fn coingecko_id(&self) -> &'static str {
         unimplemented!()
     }
@@ -152,15 +200,7 @@ impl CoinApi for NoCoin {
         unimplemented!()
     }
 
-    fn skip_to_last_height(&mut self) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn rewind_to_height(&mut self, _height: u32) -> Result<u32> {
-        unimplemented!()
-    }
-
-    fn truncate(&mut self, _height: u32) -> Result<()> {
+    fn reset_sync(&mut self, _height: u32) -> Result<()> {
         unimplemented!()
     }
 
@@ -196,13 +236,11 @@ impl CoinApi for NoCoin {
     fn broadcast(&self, _raw_tx: &[u8]) -> Result<String> {
         unimplemented!()
     }
-
-    fn connection(&self) -> MutexGuard<Connection> {
-        unimplemented!()
-    }
 }
 
-// #[enum_delegate::implement(CoinApi)]
+#[derive(Delegate)]
+#[delegate(Database)]
+#[delegate(CoinApi)]
 pub enum CoinHandler {
     NoCoin(NoCoin),
     Zcash(ZcashHandler),
@@ -224,105 +262,5 @@ impl ZcashApi for CoinHandler {
             CoinHandler::Zcash(zcash) => zcash.network(),
             _ => unimplemented!(),
         }
-    }
-}
-
-#[async_trait(?Send)]
-impl CoinApi for CoinHandler {
-    fn db_path(&self) -> &str {
-        todo!()
-    }
-
-    fn coingecko_id(&self) -> &'static str {
-        todo!()
-    }
-
-    fn url(&self) -> String {
-        todo!()
-    }
-
-    fn set_url(&mut self, _url: &str) {
-        todo!()
-    }
-
-    fn list_accounts(&self) -> Result<AccountVecT> {
-        todo!()
-    }
-
-    fn new_account(&self, _name: &str, _key: &str, _index: Option<u32>) -> Result<u32> {
-        todo!()
-    }
-
-    fn is_valid_key(&self, _key: &str) -> bool {
-        todo!()
-    }
-
-    fn is_valid_address(&self, _key: &str) -> bool {
-        todo!()
-    }
-
-    fn get_backup(&self, _account: u32) -> Result<BackupT> {
-        todo!()
-    }
-
-    async fn sync(&mut self, _account: u32, _params: Vec<u8>) -> Result<u32> {
-        todo!()
-    }
-
-    fn cancel_sync(&mut self) -> Result<()> {
-        todo!()
-    }
-
-    async fn get_latest_height(&self) -> Result<u32> {
-        todo!()
-    }
-
-    fn skip_to_last_height(&mut self) -> Result<()> {
-        todo!()
-    }
-
-    fn rewind_to_height(&mut self, _height: u32) -> Result<u32> {
-        todo!()
-    }
-
-    fn truncate(&mut self, _height: u32) -> Result<()> {
-        todo!()
-    }
-
-    fn get_balance(&self, _account: u32) -> Result<u64> {
-        todo!()
-    }
-
-    fn get_txs(&self, _account: u32) -> Result<PlainTxVecT> {
-        todo!()
-    }
-
-    fn get_notes(&self, _account: u32) -> Result<PlainNoteVecT> {
-        todo!()
-    }
-
-    fn prepare_multi_payment(
-        &self,
-        _account: u32,
-        _recipients: &RecipientsT,
-        _feeb: Option<u64>,
-    ) -> Result<String> {
-        todo!()
-    }
-
-    fn to_tx_report(&self, _tx_plan: &str) -> Result<TxReportT> {
-        todo!()
-    }
-
-    fn sign(&self, _account: u32, _tx_plan: &str) -> Result<Vec<u8>> {
-        todo!()
-    }
-
-    fn broadcast(&self, _raw_tx: &[u8]) -> Result<String> {
-        todo!()
-    }
-
-    fn connection(&self) -> MutexGuard<Connection> {
-        todo!()
     }
 }

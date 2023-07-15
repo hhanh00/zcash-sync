@@ -1,5 +1,5 @@
 use crate::db::data_generated::fb::{ETHTransaction, ETHTransactionT, TxOutputT, TxReportT};
-use crate::RecipientsT;
+use crate::fb::RecipientsT;
 use anyhow::{anyhow, Result};
 use ethers::prelude::*;
 use ethers::types::transaction::eip2718::TypedTransaction;

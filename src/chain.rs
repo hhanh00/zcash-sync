@@ -97,13 +97,13 @@ pub async fn get_block_date(
     Ok(block.time)
 }
 
-pub async fn fetch_tree_state(url: &str, height: u32) -> Result<(CTree, CTree)> {
+pub async fn fetch_tree_state(url: &str, height: u32) -> Result<(CompactBlock, CTree, CTree)> {
     let mut client = connect_lightwalletd(url).await?;
     let block_id = BlockId {
         height: height as u64,
         hash: vec![],
     };
-    let _block = client.get_block(block_id.clone()).await?.into_inner();
+    let block = client.get_block(block_id.clone()).await?.into_inner();
     let tree_state = client
         .get_tree_state(Request::new(block_id))
         .await?
@@ -114,7 +114,7 @@ pub async fn fetch_tree_state(url: &str, height: u32) -> Result<(CTree, CTree)> 
     } else {
         CTree::new()
     };
-    Ok((sapling_tree, orchard_tree))
+    Ok((block, sapling_tree, orchard_tree))
 }
 
 #[derive(Error, Debug)]

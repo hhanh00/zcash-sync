@@ -1,10 +1,12 @@
-use crate::coin::CoinApi;
+use anyhow::Result;
+use ambassador::Delegate;
+use crate::coin::{CoinApi, Database, EncryptedDatabase};
 use crate::db::data_generated::fb::{
     AccountVecT, BackupT, HeightT, PlainNoteVecT, PlainTxVecT, TxReportT,
 };
-use crate::RecipientsT;
+use crate::fb::RecipientsT;
 use rusqlite::Connection;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 mod account;
@@ -16,28 +18,24 @@ pub use account::db_height;
 use async_trait::async_trait;
 pub use db::init_db as init_ton_db;
 
+#[derive(Delegate)]
+#[delegate(Database, target = "db")]
 pub struct TonHandler {
-    connection: Mutex<Connection>,
-    db_path: PathBuf,
+    pub db: EncryptedDatabase,
     url: String,
 }
 
 impl TonHandler {
-    pub fn new(connection: Connection, db_path: PathBuf) -> Self {
-        TonHandler {
-            connection: Mutex::new(connection),
-            db_path,
+    pub fn new(db_path: PathBuf, passwd: &str) -> Result<Self> {
+        Ok(TonHandler {
+            db: EncryptedDatabase::new(db_path, passwd, |c| Ok(()))?,
             url: String::new(),
-        }
+        })
     }
 }
 
 #[async_trait(?Send)]
 impl CoinApi for TonHandler {
-    fn db_path(&self) -> &str {
-        self.db_path.to_str().unwrap()
-    }
-
     fn coingecko_id(&self) -> &'static str {
         "the-open-network"
     }
@@ -86,15 +84,7 @@ impl CoinApi for TonHandler {
         account::db_height(&self.connection(), account)
     }
 
-    fn skip_to_last_height(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn rewind_to_height(&mut self, height: u32) -> anyhow::Result<u32> {
-        Ok(height)
-    }
-
-    fn truncate(&mut self, _height: u32) -> anyhow::Result<()> {
+    fn reset_sync(&mut self, _height: u32) -> anyhow::Result<()> {
         todo!()
     }
 
@@ -136,9 +126,5 @@ impl CoinApi for TonHandler {
 
     fn broadcast(&self, raw_tx: &[u8]) -> anyhow::Result<String> {
         sync::broadcast(&self.url, raw_tx)
-    }
-
-    fn connection(&self) -> MutexGuard<Connection> {
-        self.connection.lock().unwrap()
     }
 }

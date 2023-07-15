@@ -1,6 +1,5 @@
-use crate::db::data_generated::fb::{Recipient, Recipients};
 use crate::db::ZMessage;
-use crate::{RecipientT, RecipientsT};
+use crate::fb::{Recipient, RecipientT, RecipientsT};
 use serde::Deserialize;
 use std::str::FromStr;
 use zcash_primitives::memo::Memo;
@@ -21,7 +20,7 @@ pub struct RecipientMemo {
 }
 
 impl RecipientMemo {
-    pub fn from_recipient(from: &str, r: &Recipient) -> anyhow::Result<Self> {
+    pub fn from_recipient(from: &str, r: &crate::fb::Recipient) -> anyhow::Result<Self> {
         let memo = if !r.reply_to() && r.subject().as_ref().unwrap().is_empty() {
             r.memo().unwrap().to_string()
         } else {
@@ -99,7 +98,7 @@ pub fn decode_memo(
 /// Parse a json document that contains a list of recipients
 pub fn parse_recipients(
     sender: &str,
-    recipients: &Recipients,
+    recipients: &crate::fb::Recipients,
 ) -> anyhow::Result<Vec<RecipientMemo>> {
     let recipients = recipients.values().unwrap();
     let recipient_memos: anyhow::Result<Vec<_>> = recipients

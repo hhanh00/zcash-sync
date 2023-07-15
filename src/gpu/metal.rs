@@ -24,7 +24,7 @@ lazy_static! {
     pub static ref METAL_CONTEXT: Mutex<MetalContext> = Mutex::new(MetalContext::new());
 }
 
-pub const N: usize = 200_000;
+const N: usize = 200_000;
 const WIDTH: u64 = 256;
 
 #[derive(Clone)]

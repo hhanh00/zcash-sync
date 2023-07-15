@@ -32,16 +32,17 @@ pub struct ContactRef {
     pub contact: Contact,
 }
 
-pub async fn get_transaction_details(
+pub async fn fetch_transaction_details(
     network: &Network,
     connection: &Connection,
     url: &str,
+    account: u32,
 ) -> anyhow::Result<()> {
     let mut client = connect_lightwalletd(url).await?;
     let mut keys = HashMap::new();
 
     let reqs = {
-        let reqs = crate::db::transaction::list_txid_without_memo(connection)?;
+        let reqs = crate::db::transaction::list_txid_without_memo(connection, account)?;
         for req in reqs.iter() {
             if !keys.contains_key(&req.account) {
                 let decryption_keys = get_decryption_keys(network, connection, req.account)?;

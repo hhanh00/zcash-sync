@@ -37,7 +37,7 @@ pub fn delete_incomplete_scan(connection: &mut Connection, network: &Network) ->
     Ok(())
 }
 
-pub fn delete_account(connection: &Connection, account: u32) -> anyhow::Result<()> {
+pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     connection.execute("DELETE FROM received_notes WHERE account = ?1", [account])?;
     connection.execute("DELETE FROM transactions WHERE account = ?1", [account])?;
     connection.execute("DELETE FROM diversifiers WHERE account = ?1", [account])?;

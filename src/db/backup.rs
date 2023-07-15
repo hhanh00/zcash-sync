@@ -5,6 +5,7 @@ use anyhow::{anyhow, Result};
 use orchard::keys::FullViewingKey;
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
@@ -40,12 +41,12 @@ impl FullEncryptedBackup {
         })
     }
 
-    pub fn add(&mut self, src: &Connection, db_name: &str) -> Result<()> {
+    pub fn add(&mut self, src: &Connection, db_name: &OsStr) -> Result<()> {
         let dst_path = self.tmp_dir.join(db_name);
         let mut dst = Connection::open(&dst_path)?;
         let backup = Backup::new(src, &mut dst)?;
         backup.run_to_completion(100, time::Duration::from_millis(250), None)?;
-        self.db_names.push(db_name.to_string());
+        self.db_names.push(db_name.to_string_lossy().to_string());
         Ok(())
     }
 
