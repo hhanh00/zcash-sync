@@ -11,7 +11,7 @@ lazy_static! {
 mod hash;
 mod note;
 
-pub use hash::{SaplingHasher, SAPLING_ROOTS};
+pub use hash::{SaplingHasher, SAPLING_ROOTS, hash_combine as sapling_hash};
 pub use note::{DecryptedSaplingNote, SaplingDecrypter, SaplingViewKey};
 
 fn read_generators_bin() -> Vec<ExtendedNielsPoint> {

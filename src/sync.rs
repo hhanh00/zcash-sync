@@ -15,6 +15,7 @@ use zcash_primitives::consensus::Parameters;
 
 pub mod tree;
 pub mod trial_decrypt;
+pub mod warp;
 
 use crate::sync::tree::TreeCheckpoint;
 pub use tree::{CTree, Hasher, Node, WarpProcessor, Witness};

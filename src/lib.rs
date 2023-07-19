@@ -135,6 +135,7 @@ pub use eth::{init_db as init_eth_db, ETHHandler};
 // pub use scan::Progress;
 pub use unified::has_unified;
 pub use zcash::ZcashHandler;
+pub use sapling::sapling_hash;
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;
