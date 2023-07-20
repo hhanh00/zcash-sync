@@ -1472,3 +1472,14 @@ pub unsafe extern "C" fn has_gpu() -> bool {
 pub unsafe extern "C" fn use_gpu(v: bool) {
     crate::gpu::use_gpu(v)
 }
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn test_warp(coin: u8) -> CResult<u8> {
+    let res = async {
+        let h = get_coin_handler(coin);
+        crate::sync::warp::tree::test_warp(h.network(), &h.connection(), &h.url()).await?;
+        Ok(())
+    };
+    to_cresult_unit(res.await)
+}

@@ -9,6 +9,7 @@ use crate::{Hash, Source};
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension, Row, Statement, Transaction};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
+use crate::sync::warp::{witness::Witness as WarpWitness, tree::MerkleTree as WarpTree};
 
 pub fn get_last_sync_height(
     network: &Network,
@@ -151,6 +152,35 @@ pub fn store_tree<const POOL: char>(height: u32, tree: &CTree, db_tx: &Transacti
     let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
     let mut bb: Vec<u8> = vec![];
     tree.write(&mut bb)?;
+    db_tx.execute(
+        &format!("INSERT INTO {shielded_pool}_tree(height, tree) VALUES (?1,?2)"),
+        params![height, &bb],
+    )?;
+    Ok(())
+}
+
+pub fn store_warp_witness<const POOL: char>(
+    witness: &WarpWitness<Hash>,
+    height: u32,
+    id_note: u32,
+    db_tx: &Transaction,
+) -> Result<()> {
+    let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
+    let mut bb: Vec<u8> = vec![];
+    witness.write(&mut bb);
+    db_tx.execute(
+        &format!(
+            "INSERT INTO {shielded_pool}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)"
+        ),
+        params![id_note, height, bb],
+    )?;
+    Ok(())
+}
+
+pub fn store_warp_tree<const POOL: char>(height: u32, tree: &WarpTree<Hash>, db_tx: &Transaction) -> Result<()> {
+    let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
+    let mut bb: Vec<u8> = vec![];
+    tree.write(&mut bb);
     db_tx.execute(
         &format!("INSERT INTO {shielded_pool}_tree(height, tree) VALUES (?1,?2)"),
         params![height, &bb],

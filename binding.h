@@ -20,7 +20,7 @@ typedef void *DartPostCObjectFnType;
 
 #define MAX_ATTEMPTS 10
 
-#define DEPTH 33
+#define DEPTH 32
 
 typedef struct CResult_u8 {
   uint8_t value;
@@ -465,3 +465,5 @@ bool has_metal(void);
 bool has_gpu(void);
 
 void use_gpu(bool v);
+
+struct CResult_u8 test_warp(uint8_t coin);
