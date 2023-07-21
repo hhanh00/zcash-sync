@@ -5,6 +5,7 @@ use ff::PrimeField;
 use group::Curve;
 use jubjub::{AffinePoint, ExtendedPoint, Fr};
 use lazy_static::lazy_static;
+use rayon::prelude::*;
 use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 
 lazy_static! {
@@ -111,6 +112,26 @@ pub fn hash_combine_inner(depth: u8, left: &[u8; 32], right: &[u8; 32]) -> Exten
     hash
 }
 
+pub fn parallel_hash(depth: u8, layer: &[[u8; 32]], pairs: usize) -> Vec<[u8; 32]> {
+    let hash_extended: Vec<_> = (0..pairs)
+        .into_par_iter()
+        .map(|i| {
+            hash_combine_inner(
+                depth,
+                &layer[2*i],
+                &layer[2*i+1],
+            )
+        })
+        .collect();
+    hash_normalize(&hash_extended)
+}
+
+fn hash_normalize(extended: &[ExtendedPoint]) -> Vec<[u8; 32]> {
+    let mut hash_affine = vec![AffinePoint::identity(); extended.len()];
+    ExtendedPoint::batch_normalize(extended, &mut hash_affine);
+    hash_affine.iter().map(|p| p.get_u().to_repr()).collect()
+}
+
 #[derive(Clone, Default)]
 pub struct SaplingHasher {}
 
@@ -130,9 +151,7 @@ impl Hasher for SaplingHasher {
     }
 
     fn normalize(&self, extended: &[Self::Extended]) -> Vec<Node> {
-        let mut hash_affine = vec![AffinePoint::identity(); extended.len()];
-        ExtendedPoint::batch_normalize(extended, &mut hash_affine);
-        hash_affine.iter().map(|p| p.get_u().to_repr()).collect()
+        hash_normalize(extended)
     }
 }
 

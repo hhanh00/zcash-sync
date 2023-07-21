@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::fmt::Debug;
 use std::io::{Read, Write};
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -49,25 +50,26 @@ impl <D: Clone + PartialEq + Debug + ReadWrite> Witness<D> {
         (h.clone(), path.try_into().unwrap())
     }
 
-    pub fn write<W: Write>(&self, mut w: W) {
-        self.path.write(&mut w);
+    pub fn write<W: Write>(&self, mut w: W) -> Result<()> {
+        self.path.write(&mut w)?;
         w.write_u8(self.fills.len() as u8).unwrap();
         for f in self.fills.iter() {
-            f.write(&mut w);
+            f.write(&mut w)?;
         }
+        Ok(())
     }
 
-    pub fn read<R: Read>(mut r: R) -> Self {
-        let path = Path::read(&mut r);
-        let len = r.read_u8().unwrap() as usize;
+    pub fn read<R: Read>(mut r: R) -> Result<Self> {
+        let path = Path::read(&mut r)?;
+        let len = r.read_u8()? as usize;
         let mut fills = vec![];
         for _ in 0..len {
-            let fill = D::read(&mut r);
+            let fill = D::read(&mut r)?;
             fills.push(fill);
         }
-        Self {
+        Ok(Self {
             path,
             fills,
-        }
+        })
     }
 }

@@ -167,7 +167,7 @@ pub fn store_warp_witness<const POOL: char>(
 ) -> Result<()> {
     let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
     let mut bb: Vec<u8> = vec![];
-    witness.write(&mut bb);
+    witness.write(&mut bb)?;
     db_tx.execute(
         &format!(
             "INSERT INTO {shielded_pool}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)"
@@ -180,7 +180,7 @@ pub fn store_warp_witness<const POOL: char>(
 pub fn store_warp_tree<const POOL: char>(height: u32, tree: &WarpTree<Hash>, db_tx: &Transaction) -> Result<()> {
     let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
     let mut bb: Vec<u8> = vec![];
-    tree.write(&mut bb);
+    tree.write(&mut bb)?;
     db_tx.execute(
         &format!("INSERT INTO {shielded_pool}_tree(height, tree) VALUES (?1,?2)"),
         params![height, &bb],

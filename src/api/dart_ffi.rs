@@ -21,7 +21,7 @@ use parking_lot::{Mutex, MutexGuard};
 use rusqlite::Connection;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use zcash_primitives::consensus::Network::{MainNetwork, YCashMainNetwork};
 use zcash_primitives::transaction::builder::Progress;
@@ -1479,6 +1479,48 @@ pub async unsafe extern "C" fn test_warp(coin: u8) -> CResult<u8> {
     let res = async {
         let h = get_coin_handler(coin);
         crate::sync::warp::tree::test_warp(h.network(), &h.connection(), &h.url()).await?;
+        Ok(())
+    };
+    to_cresult_unit(res.await)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn setup_warp(coin: u8, filename: *mut c_char) -> CResult<u8> {
+    from_c_str!(filename);
+    let h = get_coin_handler(coin);
+    let res = crate::sync::warp::import_tunnels(&h.network(), &h.connection(), &filename);
+    to_cresult_unit(res)
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn calc_merkle_proof(coin: u8, account: u32) -> CResult<u8> {
+    let res = async {
+        let h = get_coin_handler(coin);
+        crate::sync::warp::calc_merkle_proof(&h.network(), &h.connection(), &h.url(), account).await?;
+        Ok(())
+    };
+    to_cresult_unit(res.await)
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn build_bridges(coin: u8, path: *mut c_char) -> CResult<u8> {
+    from_c_str!(path);
+    let res = async {
+        let h = get_coin_handler(coin);
+        crate::sync::warp::build_bridges(&h.connection(), &h.url(), Path::new(&*path)).await?;
+        Ok(())
+    };
+    to_cresult_unit(res.await)
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn test_bridges(coin: u8) -> CResult<u8> {
+    let h = get_coin_handler(coin);
+    let res = async {
+        crate::sync::warp::test_bridges(&h.connection(), &h.url()).await?;
         Ok(())
     };
     to_cresult_unit(res.await)

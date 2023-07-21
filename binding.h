@@ -230,6 +230,8 @@ typedef struct CResult_bool {
 
 #define ZcashTransaction_VT_TXID 8
 
+#define Note_VT_POS 8
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -467,3 +469,11 @@ bool has_gpu(void);
 void use_gpu(bool v);
 
 struct CResult_u8 test_warp(uint8_t coin);
+
+struct CResult_u8 setup_warp(uint8_t coin, char *filename);
+
+struct CResult_u8 calc_merkle_proof(uint8_t coin, uint32_t account);
+
+struct CResult_u8 build_bridges(uint8_t coin, char *path);
+
+struct CResult_u8 test_bridges(uint8_t coin);

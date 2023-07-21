@@ -7,7 +7,6 @@ use tonic::Request;
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::Node;
-use crate::chain::get_latest_height;
 use crate::{BlockId, BlockRange, connect_lightwalletd, Hash};
 use super::{DEPTH, ReadWrite, Hasher, Path, SaplingHasher};
 use super::bridge::{Bridge, CompactLayer};
@@ -21,7 +20,7 @@ pub struct MerkleTree<D: Clone + PartialEq + Debug + ReadWrite> {
 }
 
 impl <D: Clone + PartialEq + Debug + ReadWrite> MerkleTree<D> {
-    fn empty<H: Hasher<D>>() -> Self {
+    pub fn empty<H: Hasher<D>>() -> Self {
         MerkleTree {
             pos: 0,
             prev: std::array::from_fn(|_| H::empty()),
@@ -29,9 +28,10 @@ impl <D: Clone + PartialEq + Debug + ReadWrite> MerkleTree<D> {
         }
     }
 
-    pub fn add_nodes<H: Hasher<D>>(&mut self, block_len: usize, nodes: &[(D, bool)]) -> Bridge<D> {
+    pub fn add_nodes<H: Hasher<D>>(&mut self, height: u32, block_len: u32, nodes: &[(D, bool)]) -> Bridge<D> {
         // let ns: Vec<_> = nodes.iter().map(|n| n.0).collect();
         // println!("{ns:?}");
+        println!("self.pos {}", self.pos);
         assert!(!nodes.is_empty());
         let mut compact_layers = vec![];
         let mut new_witnesses = vec![];
@@ -59,9 +59,10 @@ impl <D: Clone + PartialEq + Debug + ReadWrite> MerkleTree<D> {
         layer.extend(nodes.iter().map(|n| n.0.clone()));
 
         for depth in 0..DEPTH {
+            // println!("Merging {depth}");
             let mut new_fill = H::empty();
             let len = layer.len();
-            let start = (self.pos >> depth) & 0xFFFE;
+            let start = (self.pos >> depth) & 0xFFFF_FFFE;
             for &wi in new_witnesses.iter() {
                 let w = &mut self.witnesses[wi];
                 let i = (w.path.pos >> depth) - start;
@@ -86,7 +87,9 @@ impl <D: Clone + PartialEq + Debug + ReadWrite> MerkleTree<D> {
                 new_layer.push(self.prev[depth + 1].clone());
             }
             self.prev[depth] = H::empty();
-            for i in 0..pairs {
+            new_layer.extend_from_slice(&H::parallel_combine(depth as u8, &layer, pairs-1));
+            {
+                let i = pairs - 1;
                 let l = &layer[2 * i];
                 if 2 * i + 1 < len {
                     if !H::is_empty(&layer[2 * i + 1]) {
@@ -120,8 +123,9 @@ impl <D: Clone + PartialEq + Debug + ReadWrite> MerkleTree<D> {
         let pos = self.pos;
         self.pos += nodes.len();
         Bridge {
-            pos,
+            height,
             block_len,
+            pos,
             len: nodes.len(),
             layers: compact_layers.try_into().unwrap(),
         }
@@ -163,32 +167,33 @@ impl <D: Clone + PartialEq + Debug + ReadWrite> MerkleTree<D> {
         self.witnesses.push(w);
     }
 
-    pub fn write<W: Write>(&self, mut w: W) {
-        w.write_u64::<LE>(self.pos as u64).unwrap();
+    pub fn write<W: Write>(&self, mut w: W) -> Result<()> {
+        w.write_u64::<LE>(self.pos as u64)?;
         for p in self.prev.iter() {
-            p.write(&mut w);
+            p.write(&mut w)?;
         }
+        Ok(())
     }
 
-    pub fn read<R: Read>(mut r: R) -> Self {
-        let pos = r.read_u64::<LE>().unwrap() as usize;
+    pub fn read<R: Read>(mut r: R) -> Result<Self> {
+        let pos = r.read_u64::<LE>()? as usize;
         let mut prev = vec![];
         for _ in 0..DEPTH+1 {
-            let p = D::read(&mut r);
+            let p = D::read(&mut r)?;
             prev.push(p);
         }
-        Self {
+        Ok(Self {
             pos,
             prev: prev.try_into().unwrap(),
             witnesses: vec![],
-        }
+        })
     }
 }
 
 pub async fn test_warp(network: Network, connection: &Connection, url: &str) -> Result<()> {
     let mut client = connect_lightwalletd(url).await?;
     let start = u64::from(network.activation_height(NetworkUpgrade::Sapling).unwrap());
-    let end = start + 100_000;
+    let end = start + 1_000;
     println!("{end}");
     // Retrieve the "official" CMU tree state from the server
     let rep = client.get_tree_state(Request::new(BlockId { height: end, hash: vec![] })).await?.into_inner();
@@ -196,7 +201,7 @@ pub async fn test_warp(network: Network, connection: &Connection, url: &str) -> 
     let tree = CommitmentTree::<Node>::read(&*tree)?;
     // calculate the root hash
     let root = tree.root();
-    println!("root  {}", hex::encode(&root.repr));
+    println!("server root {}", hex::encode(&root.repr));
 
     // Do the same calculation locally using our Merkle Tree Warp
     // Get the same range from the server
@@ -209,27 +214,32 @@ pub async fn test_warp(network: Network, connection: &Connection, url: &str) -> 
 
     let mut ref_tree = CommitmentTree::<Node>::empty();
     let mut ref_w = IncrementalWitness::<Node>::from_tree(&ref_tree);
-    let mut first = true;
+    let mut i = 0;
+    let i_track = 30;
+    let mut height = start as u32;
     while let Some(block) = blocks.message().await? {
         // Extract the CMU and add them to the tree
         let mut nodes: Vec<(Hash, bool)> = vec![];
         for tx in block.vtx.iter() {
             for o in tx.outputs.iter() {
                 ref_tree.append(Node::new(o.cmu.clone().try_into().unwrap())).unwrap();
-                if first {
+                if i == i_track {
+                    println!("CMU {}", hex::encode(&o.cmu));
                     ref_w = IncrementalWitness::from_tree(&ref_tree);
                 }
-                else {
+                else if i > i_track {
                     ref_w.append(Node::new(o.cmu.clone().try_into().unwrap())).unwrap();
                 }
-                nodes.push((o.cmu.clone().try_into().unwrap(), first));
-                first = false;
+                nodes.push((o.cmu.clone().try_into().unwrap(), i == i_track));
+                i += 1;
             }
         }
         if !nodes.is_empty() {
-            tree.add_nodes::<SaplingHasher>(1, &nodes);
+            tree.add_nodes::<SaplingHasher>(height, 1, &nodes);
         }
+        height += 1;
     }
+    println!("# notes = {i}");
 
     // Calculate the root of the tree by getting the merkle path of the tree right edge
     let er = super::empty_roots::<_, SaplingHasher>();
@@ -243,20 +253,24 @@ pub async fn test_warp(network: Network, connection: &Connection, url: &str) -> 
     println!("rootw {}", hex::encode(&ref_w.root().repr));
 
     let w = &tree.witnesses[0];
-    for p in w.path.siblings.iter() {
-        println!("L {}", hex::encode(p));
-    }
-    for p in w.fills.iter() {
-        println!("R {}", hex::encode(p));
-    }
-    for p in edge.iter() {
-        println!("E {}", hex::encode(p));
-    }
+    // for p in w.path.siblings.iter() {
+    //     println!("L {}", hex::encode(p));
+    // }
+    // for p in w.fills.iter() {
+    //     println!("R {}", hex::encode(p));
+    // }
+    // for p in edge.iter() {
+    //     println!("E {}", hex::encode(p));
+    // }
+    println!("==============");
+    println!("W/CMU {}", hex::encode(&w.path.value));
+    println!("pos {}", w.path.pos);
+
     let (root, proof) = w.root::<SaplingHasher>(&er, &edge);
     for p in proof.iter() {
-        println!("P {}", hex::encode(p));
+        println!("Path {}", hex::encode(p));
     }
-    println!("rootw2 {}", hex::encode(&root));
+    println!("Root {}", hex::encode(&root));
 
     Ok(())
 }

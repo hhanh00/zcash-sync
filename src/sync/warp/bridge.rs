@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::fmt::Debug;
 use std::io::{Read, Write};
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
@@ -10,24 +11,26 @@ pub struct CompactLayer<D: ReadWrite> {
 }
 
 impl <D: ReadWrite> CompactLayer<D> {
-    fn write<W: Write>(&self, mut w: W) {
-        self.fill.write(&mut w);
-        self.prev.write(&mut w);
+    pub fn write<W: Write>(&self, mut w: W) -> Result<()> {
+        self.fill.write(&mut w)?;
+        self.prev.write(&mut w)?;
+        Ok(())
     }
 
-    fn read<R: Read>(mut r: R) -> Self {
-        let fill = D::read(&mut r);
-        let prev = D::read(&mut r);
-        CompactLayer {
+    pub fn read<R: Read>(mut r: R) -> Result<Self> {
+        let fill = D::read(&mut r)?;
+        let prev = D::read(&mut r)?;
+        Ok(CompactLayer {
             fill, prev
-        }
+        })
     }
 }
 
 #[derive(Debug)]
 pub struct Bridge<D: ReadWrite> {
+    pub height: u32,
+    pub block_len: u32,
     pub pos: usize,
-    pub block_len: usize,
     pub len: usize,
     pub layers: [CompactLayer<D>; DEPTH],
 }
@@ -43,36 +46,40 @@ impl <D: Clone + PartialEq + Debug + ReadWrite> Bridge<D> {
         self.len += other.len;
     }
 
-    pub fn write<W: Write>(&self, mut w: W) {
-        w.write_u64::<LE>(self.pos as u64).unwrap();
-        w.write_u64::<LE>(self.len as u64).unwrap();
-        w.write_u32::<LE>(self.block_len as u32).unwrap();
+    pub fn write<W: Write>(&self, mut w: W) -> Result<()> {
+        w.write_u32::<LE>(self.height as u32)?;
+        w.write_u32::<LE>(self.block_len as u32)?;
+        w.write_u64::<LE>(self.pos as u64)?;
+        w.write_u64::<LE>(self.len as u64)?;
         for layer in self.layers.iter() {
-            layer.write(&mut w);
+            layer.write(&mut w)?;
         }
+        Ok(())
     }
 
-    pub fn read<R: Read>(mut r: R) -> Self {
-        let pos = r.read_u64::<LE>().unwrap() as usize;
-        let len = r.read_u64::<LE>().unwrap() as usize;
-        let block_len = r.read_u32::<LE>().unwrap() as usize;
+    pub fn read<R: Read>(mut r: R) -> Result<Self> {
+        let height = r.read_u32::<LE>()?;
+        let block_len = r.read_u32::<LE>()?;
+        let pos = r.read_u64::<LE>()? as usize;
+        let len = r.read_u64::<LE>()? as usize;
         let mut layers = vec![];
         for _ in 0..DEPTH {
-            let layer = CompactLayer::read(&mut r);
+            let layer = CompactLayer::read(&mut r)?;
             layers.push(layer);
         }
-        Bridge {
-            pos, len, block_len,
+        Ok(Bridge {
+            pos, len, height, block_len,
             layers: layers.try_into().unwrap()
-        }
+        })
     }
 }
 
 impl <D: Clone + PartialEq + Debug + ReadWrite> Bridge<D> {
     fn empty<H: Hasher<D>>() -> Self {
         Bridge {
-            pos: 0,
+            height: 0,
             block_len: 0,
+            pos: 0,
             len: 0,
             layers: std::array::from_fn(|_| CompactLayer { fill: H::empty(), prev: H::empty() })
         }
