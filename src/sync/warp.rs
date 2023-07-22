@@ -3,7 +3,6 @@ use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
-use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use tonic::Request;
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
@@ -21,10 +20,10 @@ pub trait ReadWrite {
 
 pub trait Hasher {
     type D: Clone + PartialEq + Debug + ReadWrite;
-    fn empty() -> Self::D;
-    fn is_empty(d: &Self::D) -> bool;
-    fn combine(depth: u8, l: &Self::D, r: &Self::D, check: bool) -> Self::D;
-    fn parallel_combine(depth: u8, layer: &[Self::D], pairs: usize) -> Vec<Self::D>;
+    fn empty(&self) -> Self::D;
+    fn is_empty(&self, d: &Self::D) -> bool;
+    fn combine(&self, depth: u8, l: &Self::D, r: &Self::D, check: bool) -> Self::D;
+    fn parallel_combine(&self, depth: u8, layer: &[Self::D], pairs: usize) -> Vec<Self::D>;
 }
 
 impl ReadWrite for Hash {
@@ -40,33 +39,12 @@ impl ReadWrite for Hash {
     }
 }
 
-pub struct SaplingHasher;
-
-const SAPLING_EMPTY: Hash = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
-impl Hasher for SaplingHasher {
-    type D = Hash;
-    fn empty() -> Hash {
-        SAPLING_EMPTY
-    }
-
-    fn is_empty(d: &Hash) -> bool {
-        *d == SAPLING_EMPTY
-    }
-
-    fn combine(depth: u8, l: &Hash, r: &Hash, _check: bool) -> Hash {
-        // println!("> {} {} {}", depth, hex::encode(l), hex::encode(r));
-        crate::sapling::sapling_hash(depth, l, r)
-    }
-
-    fn parallel_combine(depth: u8, layer: &[[u8; 32]], pairs: usize) -> Vec<Hash> {
-        crate::sapling::sapling_parallel_hash(depth, layer, pairs)
-    }
-}
-
+pub mod hasher;
 pub mod witness;
 pub mod tree;
 pub mod bridge;
+
+use hasher::{SaplingHasher, OrchardHasher};
 
 pub struct Path<H: Hasher> {
     pub value: H::D,
@@ -83,9 +61,9 @@ impl <H: Hasher> Debug for Path<H> {
 }
 
 impl <H: Hasher> Path<H> {
-    pub fn empty() -> Self {
+    pub fn empty(h: &H) -> Self {
         Path {
-            value: H::empty(),
+            value: h.empty(),
             pos: 0,
             siblings: vec![],
         }
@@ -118,11 +96,11 @@ impl <H: Hasher> Path<H> {
     }
 }
 
-pub fn empty_roots<H: Hasher>() -> [H::D; DEPTH] {
+pub fn empty_roots<H: Hasher>(h: &H) -> [H::D; DEPTH] {
     let mut roots = vec![];
-    roots.push(H::empty());
+    roots.push(h.empty());
     for i in 0..DEPTH-1 {
-        roots.push(H::combine(i as u8, &roots[i], &roots[i], false));
+        roots.push(h.combine(i as u8, &roots[i], &roots[i], false));
     }
     roots.try_into().unwrap()
 }
@@ -158,7 +136,6 @@ pub fn import_tunnels(network: &Network, connection: &Connection, filename: &str
 
 pub async fn calc_merkle_proof(network: &Network, connection: &Connection, url: &str, account: u32) -> Result<()> {
     let mut height = u64::from(network.activation_height(NetworkUpgrade::Sapling).unwrap());
-    let checkpoint_height = crate::db::checkpoint::get_last_sync_height(network, connection, None)?;
     let mut s = connection.prepare("SELECT id_note, position, value FROM received_notes WHERE account = ?1 AND orchard = 0")?;
     let notes = s.query_map([account], |r| {
         Ok(fb::NoteT {
@@ -181,7 +158,7 @@ pub async fn calc_merkle_proof(network: &Network, connection: &Connection, url: 
     let bridges = bridges.collect::<Result<Vec<_>, _>>()?;
 
     let mut client = connect_lightwalletd(url).await?;
-    let mut tree = MerkleTree::<SaplingHasher>::empty();
+    let mut tree = MerkleTree::empty(SaplingHasher::new());
     for b in bridges {
         println!("{} {}", b.pos, b.len);
         assert_eq!(b.pos, tree.pos);
@@ -218,12 +195,13 @@ pub async fn calc_merkle_proof(network: &Network, connection: &Connection, url: 
 }
 
 pub async fn build_bridges(connection: &Connection, url: &str, path: &std::path::Path) -> Result<()> {
-    let er = empty_roots::<SaplingHasher>();
+    let hasher = SaplingHasher::new();
+    let er = empty_roots(&hasher);
     let mut blocks = File::open(path.join("block.dat"))?;
     let mut bridges = File::create(path.join("bridge.dat"))?;
     let checkpoints = crate::db::checkpoint::list_checkpoints(connection)?.checkpoints.unwrap();
     let mut heights = checkpoints.iter();
-    let mut tree = MerkleTree::<SaplingHasher>::empty();
+    let mut tree = MerkleTree::empty(SaplingHasher::new());
     let mut nodes = vec![];
     let mut big_total = 0;
     let mut total = 0;
@@ -295,14 +273,15 @@ async fn check_tree(url: &str, height: u32, tree: &MerkleTree<SaplingHasher>, er
 }
 
 pub async fn test_bridges(connection: &Connection, url: &str) -> Result<()> {
+    let hasher = SaplingHasher::new();
     let mut s = connection.prepare("SELECT data FROM warp_tunnels ORDER BY height")?;
     let bridges = s.query_map([], |r| {
         let bridge = Bridge::<SaplingHasher>::read(&*r.get::<_, Vec<u8>>(0)?).unwrap();
         Ok(bridge)
     })?;
     let bridges = bridges.collect::<Result<Vec<_>, _>>()?;
-    let mut tree = MerkleTree::<SaplingHasher>::empty();
-    let er = empty_roots::<SaplingHasher>();
+    let mut tree = MerkleTree::empty(SaplingHasher::new());
+    let er = empty_roots(&hasher);
     let mut client = connect_lightwalletd(url).await?;
 
     for b in bridges.iter().take(10) {
@@ -329,6 +308,7 @@ struct Note {
 }
 
 pub async fn recover_tree(url: &str, height: u32) -> Result<()> {
+    let hasher = SaplingHasher::new();
     let mut client = connect_lightwalletd(url).await?;
     for i in 0..10 {
         let h = height + i;
@@ -337,8 +317,8 @@ pub async fn recover_tree(url: &str, height: u32) -> Result<()> {
         let tree = zcash_primitives::merkle_tree::CommitmentTree::<Node>::read(&*tree)?;
         let root1 = tree.root();
         println!("server root {}", hex::encode(&root1.repr));
-        let tree = from_tree_state::<SaplingHasher>(&tree);
-        let er = empty_roots::<SaplingHasher>();
+        let tree = from_tree_state(&tree, hasher.clone());
+        let er = empty_roots(&hasher);
         let edge = tree.edge(&er);
         let root2 = edge[31].clone();
         println!("{}", hex::encode(&root2));
@@ -349,6 +329,8 @@ pub async fn recover_tree(url: &str, height: u32) -> Result<()> {
 }
 
 pub async fn get_merkle_proof(connection: &Connection, url: &str, id_note: u32, target_height: u32) -> Result<()> {
+    let hasher = SaplingHasher::new();
+    let er = empty_roots(&hasher);
     let note = connection.query_row("SELECT height, position FROM received_notes WHERE id_note = ?1",
     [id_note], |r| {
             Ok(Note {
@@ -362,7 +344,7 @@ pub async fn get_merkle_proof(connection: &Connection, url: &str, id_note: u32, 
     let tree = hex::decode(&rep.sapling_tree).unwrap();
     let tree = zcash_primitives::merkle_tree::CommitmentTree::<Node>::read(&*tree)?;
     let start_pos = tree.size();
-    let mut tree = from_tree_state::<SaplingHasher>(&tree);
+    let mut tree = from_tree_state(&tree, hasher);
 
     let mut s = connection.prepare("SELECT data FROM warp_tunnels WHERE height > ?1 AND height + block_len <= ?2 ORDER BY height")?;
     let bridges = s.query_map([note.height, target_height], |r| {
@@ -390,10 +372,9 @@ pub async fn get_merkle_proof(connection: &Connection, url: &str, id_note: u32, 
     nodes[rel_pos].1 = true;
     tree.add_nodes(note.height, bridges[0].height - note.height, &nodes);
     let mut bridge_end = 0;
-    let er = empty_roots::<SaplingHasher>();
     let w = &tree.witnesses[0];
     let edge = tree.edge(&er);
-    let (root, _proof) = w.root(&er, &edge);
+    let (root, _proof) = w.root(&er, &edge, &tree.h);
     println!("Tree Root {}", hex::encode(&edge[31]));
     println!("Witness Root {}", hex::encode(root));
     for b in bridges {
@@ -405,7 +386,7 @@ pub async fn get_merkle_proof(connection: &Connection, url: &str, id_note: u32, 
         tree.add_bridge(&b);
         let w = &tree.witnesses[0];
         let edge = tree.edge(&er);
-        let (root, _proof) = w.root(&er, &edge);
+        let (root, _proof) = w.root(&er, &edge, &tree.h);
         println!("Tree Root {}", hex::encode(&edge[31]));
         println!("Witness Root {}", hex::encode(root));
     }
@@ -427,7 +408,7 @@ pub async fn get_merkle_proof(connection: &Connection, url: &str, id_note: u32, 
 
     let w = &tree.witnesses[0];
     let edge = tree.edge(&er);
-    let (root, proof) = w.root(&er, &edge);
+    let (root, proof) = w.root(&er, &edge, &tree.h);
     for p in proof.iter() {
         println!("Path {}", hex::encode(p));
     }

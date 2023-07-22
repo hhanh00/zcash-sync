@@ -36,9 +36,9 @@ pub struct Bridge<H: Hasher> {
 }
 
 impl <H: Hasher> Bridge<H> {
-    pub fn merge(&mut self, other: &Bridge<H>) {
+    pub fn merge(&mut self, other: &Bridge<H>, h: &H) {
         for i in 0..DEPTH {
-            if H::is_empty(&self.layers[i].fill) && !H::is_empty(&other.layers[i].fill) {
+            if h.is_empty(&self.layers[i].fill) && !h.is_empty(&other.layers[i].fill) {
                 self.layers[i].fill = other.layers[i].fill.clone();
             }
             self.layers[i].prev = other.layers[i].prev.clone();
@@ -73,13 +73,13 @@ impl <H: Hasher> Bridge<H> {
         })
     }
 
-    pub fn empty() -> Self {
+    pub fn empty(h: &H) -> Self {
         Bridge {
             height: 0,
             block_len: 0,
             pos: 0,
             len: 0,
-            layers: std::array::from_fn(|_| CompactLayer { fill: H::empty(), prev: H::empty() })
+            layers: std::array::from_fn(|_| CompactLayer { fill: h.empty(), prev: h.empty() })
         }
     }
 }

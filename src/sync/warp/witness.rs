@@ -17,16 +17,16 @@ impl <H: Hasher> Debug for Witness<H> {
 }
 
 impl <H: Hasher> Witness<H> {
-    pub fn root(&self, empty_roots: &[H::D; DEPTH], edge: &[H::D; DEPTH]) -> (H::D, [H::D; DEPTH]) {
+    pub fn root(&self, empty_roots: &[H::D; DEPTH], edge: &[H::D; DEPTH], h: &H) -> (H::D, [H::D; DEPTH]) {
         let mut p = self.path.pos;
-        let mut h = self.path.value.clone();
+        let mut hash = self.path.value.clone();
         let mut j = 0;
         let mut k = 0;
         let mut edge_used = false;
         let mut path = vec![];
 
         for i in 0..DEPTH {
-            h =
+            hash =
                 if p & 1 == 0 {
                     let r = if k < self.fills.len() {
                         let r = &self.fills[k];
@@ -41,19 +41,19 @@ impl <H: Hasher> Witness<H> {
                         &empty_roots[i]
                     };
                     path.push(r.clone());
-                    H::combine(i as u8, &h, r, false)
+                    h.combine(i as u8, &hash, r, false)
                 }
                 else {
                     let l = &self.path.siblings[j];
                     path.push(l.clone());
-                    let v = H::combine(i as u8, l, &h, true);
+                    let v = h.combine(i as u8, l, &hash, true);
                     j += 1;
                     v
                 };
             p = p / 2;
         }
 
-        (h.clone(), path.try_into().unwrap())
+        (hash.clone(), path.try_into().unwrap())
     }
 
     pub fn write<W: Write>(&self, mut w: W) -> Result<()> {
