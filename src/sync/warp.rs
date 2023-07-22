@@ -107,7 +107,16 @@ pub fn empty_roots<H: Hasher>(h: &H) -> [H::D; DEPTH] {
 
 pub fn migrate_db(connection: &Connection) -> Result<()> {
     connection.execute(
-        "CREATE TABLE IF NOT EXISTS warp_tunnels(
+        "CREATE TABLE IF NOT EXISTS sapling_warp_bridges(
+            height INTEGER PRIMARY KEY NOT NULL,
+            block_len INTEGER NOT NULL,
+            pos INTEGER NOT NULL,
+            len INTEGER NOT NULL,
+            data BLOB NOT NULL)",
+        [],
+    )?;
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS orchard_warp_bridges(
             height INTEGER PRIMARY KEY NOT NULL,
             block_len INTEGER NOT NULL,
             pos INTEGER NOT NULL,
@@ -120,15 +129,31 @@ pub fn migrate_db(connection: &Connection) -> Result<()> {
 
 pub fn import_tunnels(network: &Network, connection: &Connection, filename: &str) -> Result<()> {
     let mut height = u64::from(network.activation_height(NetworkUpgrade::Sapling).unwrap());
-    let mut s = connection.prepare("INSERT INTO warp_tunnels(height, block_len, pos, len, data) \
+    let mut s = connection.prepare("INSERT INTO sapling_warp_bridges(height, block_len, pos, len, data) \
+        VALUES (?1, ?2, ?3, ?4, ?5)")?;
+    let mut o = connection.prepare("INSERT INTO orchard_warp_bridges(height, block_len, pos, len, data) \
         VALUES (?1, ?2, ?3, ?4, ?5)")?;
     let mut file = File::open(filename)?;
-    while let Ok(bridge) = Bridge::<SaplingHasher>::read(&mut file) {
-        println!("{}", bridge.height);
-        let mut data = vec![];
-        bridge.write(&mut data)?;
-        s.execute(params![height, bridge.block_len, bridge.pos, bridge.len, data])?;
-        height += bridge.block_len as u64;
+    while let Ok(tpe) = file.read_u8() {
+        match tpe {
+            0 => {
+                let bridge = Bridge::<SaplingHasher>::read(&mut file)?;
+                println!("{}", bridge.height);
+                let mut data = vec![];
+                bridge.write(&mut data)?;
+                s.execute(params![height, bridge.block_len, bridge.pos, bridge.len, data])?;
+                height += bridge.block_len as u64;
+            },
+            1 => {
+                let bridge = Bridge::<OrchardHasher>::read(&mut file)?;
+                println!("{}", bridge.height);
+                let mut data = vec![];
+                bridge.write(&mut data)?;
+                o.execute(params![height, bridge.block_len, bridge.pos, bridge.len, data])?;
+                height += bridge.block_len as u64;
+            },
+            _ => unreachable!(),
+        }
     }
 
     Ok(())
@@ -195,66 +220,78 @@ pub async fn calc_merkle_proof(network: &Network, connection: &Connection, url: 
 }
 
 pub async fn build_bridges(connection: &Connection, url: &str, path: &std::path::Path) -> Result<()> {
-    let hasher = SaplingHasher::new();
-    let er = empty_roots(&hasher);
+    let z_hasher = SaplingHasher::new();
+    let o_hasher = OrchardHasher::new();
+
     let mut blocks = File::open(path.join("block.dat"))?;
     let mut bridges = File::create(path.join("bridge.dat"))?;
-    let checkpoints = crate::db::checkpoint::list_checkpoints(connection)?.checkpoints.unwrap();
-    let mut heights = checkpoints.iter();
-    let mut tree = MerkleTree::empty(SaplingHasher::new());
-    let mut nodes = vec![];
+    let mut z_tree = MerkleTree::empty(z_hasher);
+    let mut z_nodes = vec![];
+    let mut o_tree = MerkleTree::empty(o_hasher);
+    let mut o_nodes = vec![];
     let mut big_total = 0;
     let mut total = 0;
     let mut start = 0;
     let mut height = 0;
-    let mut next_height = heights.next().unwrap().height;
     while let Ok(h) = blocks.read_u32::<LE>() {
         height = h;
+        println!("Block {height}");
         if start == 0 {
             start = height;
         }
-        let count = blocks.read_u32::<LE>().unwrap();
-        for _ in 0..count {
+        let z_count = blocks.read_u32::<LE>().unwrap();
+        for _ in 0..z_count {
             let mut hash = [0u8; 32];
             blocks.read_exact(&mut hash).unwrap();
-            nodes.push((hash, false));
-            // ref_tree.append(zcash_primitives::sapling::Node::new(hash)).unwrap();
+            z_nodes.push((hash, false));
         }
+        let o_count = blocks.read_u32::<LE>().unwrap();
+        for _ in 0..o_count {
+            let mut hash = [0u8; 32];
+            blocks.read_exact(&mut hash).unwrap();
+            o_nodes.push((hash, false));
+        }
+
+        let count = z_count + o_count;
         total += count;
         big_total += count;
-        if height == next_height {
-            match heights.next() {
-                Some(cp) => {
-                    next_height = cp.height;
-                    let block_len  = height - start + 1;
-                    println!("{start} {height} {count} {block_len}");
-                    let bridge = tree.add_nodes(start, block_len, &nodes);
-                    check_tree(url, height, &tree, &er).await?;
-                    bridge.write(&mut bridges)?;
-                    start = 0;
-                    total = 0;
-                    nodes.clear();
-                }
-                None => break,
-            }
-        }
+
         if total > 100_000 {
-            println!("{start} {height} {count}");
             let block_len  = height - start + 1;
-            let bridge = tree.add_nodes(start, block_len, &nodes);
-            check_tree(url, height, &tree, &er).await?;
-            bridge.write(&mut bridges)?;
+            println!("{start} {height} {zlen} {olen} {block_len}", zlen = z_nodes.len(), olen = o_nodes.len());
+
+            if !z_nodes.is_empty() {
+                let bridge = z_tree.add_nodes(start, block_len, &z_nodes);
+                bridges.write_u8(0)?;
+                bridge.write(&mut bridges)?;
+            }
+            if !o_nodes.is_empty() {
+                let bridge = o_tree.add_nodes(start, block_len, &o_nodes);
+                bridges.write_u8(1)?;
+                bridge.write(&mut bridges)?;
+            }
+
+            //check_tree(url, height, &z_tree, &z_er).await?;
             start = 0;
             total = 0;
-            nodes.clear();
+            z_nodes.clear();
+            o_nodes.clear();
         }
         // if big_total > 1000_000 { break }
     }
-    if !nodes.is_empty() {
-        let block_len  = height - start + 1;
-        let bridge = tree.add_nodes(start, block_len, &nodes);
+    let block_len  = height - start + 1;
+    println!("{start} {height} {zlen} {olen} {block_len}", zlen = z_nodes.len(), olen = o_nodes.len());
+    if !z_nodes.is_empty() {
+        let bridge = z_tree.add_nodes(start, block_len, &z_nodes);
+        bridges.write_u8(0)?;
         bridge.write(&mut bridges)?;
     }
+    if !o_nodes.is_empty() {
+        let bridge = o_tree.add_nodes(start, block_len, &o_nodes);
+        bridges.write_u8(1)?;
+        bridge.write(&mut bridges)?;
+    }
+
     Ok(())
 }
 
