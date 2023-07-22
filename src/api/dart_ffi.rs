@@ -1525,3 +1525,25 @@ pub async unsafe extern "C" fn test_bridges(coin: u8) -> CResult<u8> {
     };
     to_cresult_unit(res.await)
 }
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn recover_tree(coin: u8, height: u32) -> CResult<u8> {
+    let h = get_coin_handler(coin);
+    let res = async {
+        crate::sync::warp::recover_tree(&h.url(), height).await?;
+        Ok(())
+    };
+    to_cresult_unit(res.await)
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn get_merkle_proof(coin: u8, id_note: u32, target_height: u32) -> CResult<u8> {
+    let h = get_coin_handler(coin);
+    let res = async {
+        crate::sync::warp::get_merkle_proof(&h.connection(), &h.url(), id_note, target_height).await?;
+        Ok(())
+    };
+    to_cresult_unit(res.await)
+}

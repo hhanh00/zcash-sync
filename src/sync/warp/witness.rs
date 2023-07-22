@@ -1,17 +1,23 @@
 use anyhow::Result;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::io::{Read, Write};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use super::{DEPTH, ReadWrite, Path, Hasher};
 
-#[derive(Debug)]
-pub struct Witness<D: ReadWrite> {
-    pub path: Path<D>,
-    pub fills: Vec<D>,
+pub struct Witness<H: Hasher> {
+    pub path: Path<H>,
+    pub fills: Vec<H::D>,
 }
 
-impl <D: Clone + PartialEq + Debug + ReadWrite> Witness<D> {
-    pub fn root<H: Hasher<D>>(&self, empty_roots: &[D; DEPTH], edge: &[D; DEPTH]) -> (D, [D; DEPTH]) {
+impl <H: Hasher> Debug for Witness<H> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "path: {:?}", self.path)?;
+        writeln!(f, ", fills: {:?}", self.fills)
+    }
+}
+
+impl <H: Hasher> Witness<H> {
+    pub fn root(&self, empty_roots: &[H::D; DEPTH], edge: &[H::D; DEPTH]) -> (H::D, [H::D; DEPTH]) {
         let mut p = self.path.pos;
         let mut h = self.path.value.clone();
         let mut j = 0;
@@ -64,7 +70,7 @@ impl <D: Clone + PartialEq + Debug + ReadWrite> Witness<D> {
         let len = r.read_u8()? as usize;
         let mut fills = vec![];
         for _ in 0..len {
-            let fill = D::read(&mut r)?;
+            let fill = H::D::read(&mut r)?;
             fills.push(fill);
         }
         Ok(Self {

@@ -27,16 +27,16 @@ impl <D: ReadWrite> CompactLayer<D> {
 }
 
 #[derive(Debug)]
-pub struct Bridge<D: ReadWrite> {
+pub struct Bridge<H: Hasher> {
     pub height: u32,
     pub block_len: u32,
     pub pos: usize,
     pub len: usize,
-    pub layers: [CompactLayer<D>; DEPTH],
+    pub layers: [CompactLayer<H::D>; DEPTH],
 }
 
-impl <D: Clone + PartialEq + Debug + ReadWrite> Bridge<D> {
-    pub fn merge<H: Hasher<D>>(&mut self, other: &Bridge<D>) {
+impl <H: Hasher> Bridge<H> {
+    pub fn merge(&mut self, other: &Bridge<H>) {
         for i in 0..DEPTH {
             if H::is_empty(&self.layers[i].fill) && !H::is_empty(&other.layers[i].fill) {
                 self.layers[i].fill = other.layers[i].fill.clone();
@@ -72,10 +72,8 @@ impl <D: Clone + PartialEq + Debug + ReadWrite> Bridge<D> {
             layers: layers.try_into().unwrap()
         })
     }
-}
 
-impl <D: Clone + PartialEq + Debug + ReadWrite> Bridge<D> {
-    fn empty<H: Hasher<D>>() -> Self {
+    pub fn empty() -> Self {
         Bridge {
             height: 0,
             block_len: 0,

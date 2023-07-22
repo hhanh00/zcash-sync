@@ -477,3 +477,7 @@ struct CResult_u8 calc_merkle_proof(uint8_t coin, uint32_t account);
 struct CResult_u8 build_bridges(uint8_t coin, char *path);
 
 struct CResult_u8 test_bridges(uint8_t coin);
+
+struct CResult_u8 recover_tree(uint8_t coin, uint32_t height);
+
+struct CResult_u8 get_merkle_proof(uint8_t coin, uint32_t id_note, uint32_t target_height);

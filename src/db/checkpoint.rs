@@ -159,8 +159,8 @@ pub fn store_tree<const POOL: char>(height: u32, tree: &CTree, db_tx: &Transacti
     Ok(())
 }
 
-pub fn store_warp_witness<const POOL: char>(
-    witness: &WarpWitness<Hash>,
+pub fn store_warp_witness<H: crate::sync::warp::Hasher, const POOL: char>(
+    witness: &WarpWitness<H>,
     height: u32,
     id_note: u32,
     db_tx: &Transaction,
@@ -177,7 +177,7 @@ pub fn store_warp_witness<const POOL: char>(
     Ok(())
 }
 
-pub fn store_warp_tree<const POOL: char>(height: u32, tree: &WarpTree<Hash>, db_tx: &Transaction) -> Result<()> {
+pub fn store_warp_tree<H: crate::sync::warp::Hasher, const POOL: char>(height: u32, tree: &WarpTree<H>, db_tx: &Transaction) -> Result<()> {
     let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
     let mut bb: Vec<u8> = vec![];
     tree.write(&mut bb)?;
