@@ -52,6 +52,10 @@ pub struct CompactTx {
     pub outputs: ::prost::alloc::vec::Vec<CompactSaplingOutput>,
     #[prost(message, repeated, tag="6")]
     pub actions: ::prost::alloc::vec::Vec<CompactOrchardAction>,
+    #[prost(bytes="vec", tag="7")]
+    pub sapling_bridge: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes="vec", tag="8")]
+    pub orchard_bridge: ::prost::alloc::vec::Vec<u8>,
 }
 /// CompactSaplingSpend is a Sapling Spend Description as described in 7.3 of the Zcash
 /// protocol specification.

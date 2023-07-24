@@ -164,6 +164,7 @@ pub async fn download_chain(
     client: &mut CompactTxStreamerClient<Channel>,
     start_height: u32,
     end_height: u32,
+    heights: &[u32],
     mut prev_hash: Option<[u8; 32]>,
     max_cost: u32,
     mut cancel: mpsc::Receiver<()>,
@@ -174,6 +175,8 @@ pub async fn download_chain(
     log::info!("Outputs per chunk = {}", outputs_per_chunk);
     log::info!("max_cost = {}", max_cost);
 
+    let mut heights = heights.iter();
+    let mut next_height = heights.next();
     let mut output_count = 0;
     let mut cbs: Vec<CompactBlock> = Vec::new();
     let range = BlockRange {
@@ -187,6 +190,7 @@ pub async fn download_chain(
         }),
         spam_filter_threshold: max_cost as u64,
     };
+    println!("{start_height}..{end_height}");
     let mut total_block_size = 0;
     let mut block_stream = client
         .get_block_range(Request::new(range))
@@ -238,8 +242,21 @@ pub async fn download_chain(
                             .iter()
                             .map(|tx| tx.outputs.len() + tx.actions.len())
                             .sum();
-                        if output_count + block_output_count > outputs_per_chunk {
-                            // output
+
+                        let mut emit = false;
+                        match next_height {
+                            Some(h) =>
+                                if *h == block.height as u32 {
+                                    emit = true;
+                                    next_height = heights.next();
+                                }
+                            None =>
+                                if output_count + block_output_count > outputs_per_chunk {
+                                    emit = true;
+                                }
+                        }
+
+                        if emit {    // output
                             let out = cbs;
                             cbs = Vec::new();
                             let blocks = Blocks(out, total_block_size);

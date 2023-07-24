@@ -144,11 +144,4 @@ mod gpu;
 
 pub type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 
-pub fn init_test() {
-    let _ = env_logger::try_init();
-    // TODO
-    // init_coin(0, "./zec.db").unwrap();
-    // set_coin_lwd_url(0, "http://127.0.0.1:9067");
-}
-
 pub use taddr::derive_from_secretkey;

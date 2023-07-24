@@ -9,7 +9,7 @@ use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::Node;
 use crate::{BlockId, BlockRange, connect_lightwalletd, fb, Hash};
 use crate::sync::warp::tree::from_tree_state;
-use self::{tree::MerkleTree, bridge::Bridge};
+pub use self::{tree::MerkleTree, bridge::Bridge, witness::Witness};
 
 pub const DEPTH: usize = 32usize;
 
@@ -18,8 +18,8 @@ pub trait ReadWrite {
     fn read<R: Read>(r: R) -> Result<Self> where Self: Sized;
 }
 
-pub trait Hasher {
-    type D: Clone + PartialEq + Debug + ReadWrite;
+pub trait Hasher: Debug + Default {
+    type D: Copy + Clone + PartialEq + Default + Debug + ReadWrite;
     fn empty(&self) -> Self::D;
     fn is_empty(&self, d: &Self::D) -> bool;
     fn combine(&self, depth: u8, l: &Self::D, r: &Self::D, check: bool) -> Self::D;
@@ -43,6 +43,7 @@ pub mod hasher;
 pub mod witness;
 pub mod tree;
 pub mod bridge;
+pub mod check;
 
 use hasher::{SaplingHasher, OrchardHasher};
 
@@ -106,24 +107,32 @@ pub fn empty_roots<H: Hasher>(h: &H) -> [H::D; DEPTH] {
 }
 
 pub fn migrate_db(connection: &Connection) -> Result<()> {
-    connection.execute(
-        "CREATE TABLE IF NOT EXISTS sapling_warp_bridges(
+    for &pool in &["sapling", "orchard"] {
+        connection.execute(
+            &format!("CREATE TABLE IF NOT EXISTS {pool}_cmtree(
+            height INTEGER PRIMARY KEY NOT NULL,
+            data BLOB NOT NULL)"),
+            [],
+        )?;
+        connection.execute(
+            &format!("CREATE TABLE IF NOT EXISTS {pool}_cmwitnesses(
+            id_witness INTEGER PRIMARY KEY,
+            note INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            data BLOB NOT NULL,
+            CONSTRAINT note_height UNIQUE (note, height))"),
+            [],
+        )?;
+        connection.execute(
+            &format!("CREATE TABLE IF NOT EXISTS {pool}_warp_bridges(
             height INTEGER PRIMARY KEY NOT NULL,
             block_len INTEGER NOT NULL,
             pos INTEGER NOT NULL,
             len INTEGER NOT NULL,
-            data BLOB NOT NULL)",
-        [],
-    )?;
-    connection.execute(
-        "CREATE TABLE IF NOT EXISTS orchard_warp_bridges(
-            height INTEGER PRIMARY KEY NOT NULL,
-            block_len INTEGER NOT NULL,
-            pos INTEGER NOT NULL,
-            len INTEGER NOT NULL,
-            data BLOB NOT NULL)",
-        [],
-    )?;
+            data BLOB NOT NULL)"),
+            [],
+        )?;
+    }
     Ok(())
 }
 
@@ -134,21 +143,23 @@ pub fn import_tunnels(network: &Network, connection: &Connection, filename: &str
     let mut o = connection.prepare("INSERT INTO orchard_warp_bridges(height, block_len, pos, len, data) \
         VALUES (?1, ?2, ?3, ?4, ?5)")?;
     let mut file = File::open(filename)?;
+    let sh = SaplingHasher::default();
+    let oh = OrchardHasher::default();
     while let Ok(tpe) = file.read_u8() {
         match tpe {
             0 => {
-                let bridge = Bridge::<SaplingHasher>::read(&mut file)?;
+                let bridge = Bridge::read(&mut file, &sh)?;
                 println!("{}", bridge.height);
                 let mut data = vec![];
-                bridge.write(&mut data)?;
+                bridge.write(&mut data, &sh)?;
                 s.execute(params![height, bridge.block_len, bridge.pos, bridge.len, data])?;
                 height += bridge.block_len as u64;
             },
             1 => {
-                let bridge = Bridge::<OrchardHasher>::read(&mut file)?;
+                let bridge = Bridge::read(&mut file, &oh)?;
                 println!("{}", bridge.height);
                 let mut data = vec![];
-                bridge.write(&mut data)?;
+                bridge.write(&mut data, &oh)?;
                 o.execute(params![height, bridge.block_len, bridge.pos, bridge.len, data])?;
                 height += bridge.block_len as u64;
             },
@@ -175,9 +186,10 @@ pub async fn calc_merkle_proof(network: &Network, connection: &Connection, url: 
         println!("{:?}", n);
     }
 
+    let sh = SaplingHasher::default();
     let mut s = connection.prepare("SELECT data FROM warp_tunnels ORDER BY height")?;
     let bridges = s.query_map([], |r| {
-        let bridge = Bridge::<SaplingHasher>::read(&*r.get::<_, Vec<u8>>(0)?).unwrap();
+        let bridge = Bridge::read(&*r.get::<_, Vec<u8>>(0)?, &sh).unwrap();
         Ok(bridge)
     })?;
     let bridges = bridges.collect::<Result<Vec<_>, _>>()?;
@@ -225,9 +237,9 @@ pub async fn build_bridges(connection: &Connection, url: &str, path: &std::path:
 
     let mut blocks = File::open(path.join("block.dat"))?;
     let mut bridges = File::create(path.join("bridge.dat"))?;
-    let mut z_tree = MerkleTree::empty(z_hasher);
+    let mut z_tree = MerkleTree::empty(z_hasher.clone());
     let mut z_nodes = vec![];
-    let mut o_tree = MerkleTree::empty(o_hasher);
+    let mut o_tree = MerkleTree::empty(o_hasher.clone());
     let mut o_nodes = vec![];
     let mut big_total = 0;
     let mut total = 0;
@@ -263,12 +275,12 @@ pub async fn build_bridges(connection: &Connection, url: &str, path: &std::path:
             if !z_nodes.is_empty() {
                 let bridge = z_tree.add_nodes(start, block_len, &z_nodes);
                 bridges.write_u8(0)?;
-                bridge.write(&mut bridges)?;
+                bridge.write(&mut bridges, &z_hasher)?;
             }
             if !o_nodes.is_empty() {
                 let bridge = o_tree.add_nodes(start, block_len, &o_nodes);
                 bridges.write_u8(1)?;
-                bridge.write(&mut bridges)?;
+                bridge.write(&mut bridges, &o_hasher)?;
             }
 
             //check_tree(url, height, &z_tree, &z_er).await?;
@@ -284,12 +296,12 @@ pub async fn build_bridges(connection: &Connection, url: &str, path: &std::path:
     if !z_nodes.is_empty() {
         let bridge = z_tree.add_nodes(start, block_len, &z_nodes);
         bridges.write_u8(0)?;
-        bridge.write(&mut bridges)?;
+        bridge.write(&mut bridges, &z_hasher)?;
     }
     if !o_nodes.is_empty() {
         let bridge = o_tree.add_nodes(start, block_len, &o_nodes);
         bridges.write_u8(1)?;
-        bridge.write(&mut bridges)?;
+        bridge.write(&mut bridges, &o_hasher)?;
     }
 
     Ok(())
@@ -313,7 +325,7 @@ pub async fn test_bridges(connection: &Connection, url: &str) -> Result<()> {
     let hasher = SaplingHasher::new();
     let mut s = connection.prepare("SELECT data FROM warp_tunnels ORDER BY height")?;
     let bridges = s.query_map([], |r| {
-        let bridge = Bridge::<SaplingHasher>::read(&*r.get::<_, Vec<u8>>(0)?).unwrap();
+        let bridge = Bridge::<SaplingHasher>::read(&*r.get::<_, Vec<u8>>(0)?, &hasher).unwrap();
         Ok(bridge)
     })?;
     let bridges = bridges.collect::<Result<Vec<_>, _>>()?;
@@ -381,11 +393,11 @@ pub async fn get_merkle_proof(connection: &Connection, url: &str, id_note: u32, 
     let tree = hex::decode(&rep.sapling_tree).unwrap();
     let tree = zcash_primitives::merkle_tree::CommitmentTree::<Node>::read(&*tree)?;
     let start_pos = tree.size();
-    let mut tree = from_tree_state(&tree, hasher);
+    let mut tree = from_tree_state(&tree, hasher.clone());
 
     let mut s = connection.prepare("SELECT data FROM warp_tunnels WHERE height > ?1 AND height + block_len <= ?2 ORDER BY height")?;
     let bridges = s.query_map([note.height, target_height], |r| {
-        let bridge = Bridge::<SaplingHasher>::read(&*r.get::<_, Vec<u8>>(0)?).unwrap();
+        let bridge = Bridge::<SaplingHasher>::read(&*r.get::<_, Vec<u8>>(0)?, &hasher).unwrap();
         Ok(bridge)
     })?;
     let bridges = bridges.collect::<Result<Vec<_>, _>>()?;

@@ -481,3 +481,9 @@ struct CResult_u8 test_bridges(uint8_t coin);
 struct CResult_u8 recover_tree(uint8_t coin, uint32_t height);
 
 struct CResult_u8 get_merkle_proof(uint8_t coin, uint32_t id_note, uint32_t target_height);
+
+struct CResult_u8 check_warp(uint8_t coin, uint32_t height);
+
+struct CResult_u8 process_block_file(uint8_t coin, char *filename);
+
+struct CResult_u8 full_scan(uint8_t coin, char *phrase);

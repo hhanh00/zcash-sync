@@ -3,7 +3,7 @@ use crate::orchard::{DecryptedOrchardNote, OrchardDecrypter, OrchardHasher, Orch
 use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
 // use crate::scan::{AMProgressCallback, Blocks, Progress};
 use crate::sync::tree::TreeCheckpoint;
-use crate::sync::{Synchronizer, WarpProcessor};
+use crate::sync::{Synchronizer, warp, WarpProcessor};
 
 use crate::db::checkpoint::get_block;
 use crate::db::data_generated::fb::ProgressT;
@@ -14,6 +14,7 @@ use rusqlite::Connection;
 use tokio::sync::mpsc;
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
+use zcash_primitives::sapling::pedersen_hash::Personalization::MerkleTree;
 
 type ProgressCallback = dyn Fn(ProgressT);
 
@@ -24,6 +25,7 @@ type SaplingSynchronizer = Synchronizer<
     DecryptedSaplingNote,
     SaplingDecrypter<Network>,
     SaplingHasher,
+    warp::hasher::SaplingHasher,
     'S',
 >;
 
@@ -34,6 +36,7 @@ type OrchardSynchronizer = Synchronizer<
     DecryptedOrchardNote,
     OrchardDecrypter<Network>,
     OrchardHasher,
+    warp::hasher::OrchardHasher,
     'O',
 >;
 
@@ -57,19 +60,21 @@ pub async fn warp_sync_inner<'a>(
     };
     let end_height = get_latest_height(&mut client).await?;
     let end_height = (end_height - target_height_offset).max(start_height);
-    log::info!("{start_height} - {end_height}");
+    println!("{start_height} - {end_height}");
     if start_height >= end_height {
         return Ok(start_height);
     }
 
-    log::info!("Scan started");
+    println!("Scan started");
     let mut height = start_height;
+    let heights = db::checkpoint::list_sync_ranges(connection, start_height, end_height)?;
     let (blocks_tx, mut blocks_rx) = mpsc::channel::<Blocks>(1);
     let downloader = tokio::spawn(async move {
         download_chain(
             &mut client,
             start_height,
             end_height,
+            &heights,
             prev_hash,
             max_cost,
             cancel,
@@ -105,8 +110,8 @@ pub async fn warp_sync_inner<'a>(
 
     while let Some(blocks) = blocks_rx.recv().await {
         let first_block = blocks.0.first().unwrap(); // cannot be empty because blocks are not
-        println!("Height: {}", first_block.height);
         let last_block = blocks.0.last().unwrap();
+        println!("Height: {} {}", first_block.height, last_block.height);
         let last_hash: [u8; 32] = last_block.hash.clone().try_into().unwrap();
         let last_height = last_block.height as u32;
         let last_timestamp = last_block.time;
@@ -122,6 +127,8 @@ pub async fn warp_sync_inner<'a>(
                     db::checkpoint::get_tree::<'S'>(connection, height)?;
                 let decrypter = SaplingDecrypter::new(network);
                 let warper = WarpProcessor::new(SaplingHasher::default());
+                let cmtree = warp::MerkleTree::from_db::<'S'>(
+                    connection, height, warp::hasher::SaplingHasher::default())?;
                 SaplingSynchronizer::new_from_parts(
                     decrypter,
                     warper,
@@ -129,6 +136,7 @@ pub async fn warp_sync_inner<'a>(
                     tree,
                     unspent_notes.clone(),
                     witnesses,
+                    cmtree,
                     "sapling",
                 )
             };
@@ -139,6 +147,8 @@ pub async fn warp_sync_inner<'a>(
                         db::checkpoint::get_tree::<'O'>(connection, height)?;
                     let decrypter = OrchardDecrypter::new(network);
                     let warper = WarpProcessor::new(OrchardHasher::new());
+                    let cmtree = warp::MerkleTree::from_db::<'O'>(
+                        connection, height, warp::hasher::OrchardHasher::default())?;
                     let synchronizer = OrchardSynchronizer::new_from_parts(
                         decrypter,
                         warper,
@@ -146,6 +156,7 @@ pub async fn warp_sync_inner<'a>(
                         tree,
                         unspent_notes,
                         witnesses,
+                        cmtree,
                         "orchard",
                     );
                     Some(synchronizer)
@@ -202,10 +213,9 @@ pub async fn rescan_from(
     crate::db::purge::truncate_data(connection)?;
     let height = std::cmp::max(
         height,
-        network
+        u32::from(network
             .activation_height(NetworkUpgrade::Sapling)
-            .unwrap()
-            .into(),
+            .unwrap()),
     );
     let (block, z, o) = crate::chain::fetch_tree_state(url, height).await?;
     let db_tx = connection.transaction()?;

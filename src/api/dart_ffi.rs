@@ -144,7 +144,10 @@ fn try_init_logger() {
             // })
             .with_min_level(Level::Info),
     );
-    let _ = env_logger::try_init();
+    // let _ = env_logger::try_init();
+    let _ = stderrlog::new()
+        .timestamp(stderrlog::Timestamp::Second)
+        .init();
 }
 
 lazy_static! {
@@ -378,6 +381,8 @@ pub async unsafe extern "C" fn warp(
     max_cost: u32,
     port: i64,
 ) -> CResult<u32> {
+    try_init_logger();
+    log::info!("Start warp");
     let sync_params = fb::ZcashSyncParamsT {
         anchor_offset,
         max_cost,
@@ -1546,4 +1551,28 @@ pub async unsafe extern "C" fn get_merkle_proof(coin: u8, id_note: u32, target_h
         Ok(())
     };
     to_cresult_unit(res.await)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn check_warp(coin: u8, height: u32) -> CResult<u8> {
+    let h = get_coin_handler(coin);
+    let res = crate::sync::warp::check::check_warp2(&h.connection(), height);
+    to_cresult_unit(res)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn process_block_file(coin: u8, filename: *mut c_char) -> CResult<u8> {
+    from_c_str!(filename);
+    let h = get_coin_handler(coin);
+    let res = crate::sync::warp::check::process_block_file(&filename);
+    to_cresult_unit(res)
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn full_scan(coin: u8, phrase: *mut c_char) -> CResult<u8> {
+    from_c_str!(phrase);
+    let h = get_coin_handler(coin);
+    let res = crate::sync::warp::check::full_scan(&h.network(), &h.url(), &phrase).await;
+    to_cresult_unit(res)
 }

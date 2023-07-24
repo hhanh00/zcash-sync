@@ -22,6 +22,7 @@ pub use tree::{CTree, Hasher, Node, WarpProcessor, Witness};
 pub use trial_decrypt::{
     CompactOutputBytes, DecryptedNote, OutputPosition, TrialDecrypter, ViewKey,
 };
+use crate::sync::warp::tree::MerkleTree;
 
 pub struct Synchronizer<
     N: Parameters,
@@ -30,6 +31,7 @@ pub struct Synchronizer<
     DN: DecryptedNote<D, VK>,
     TD: TrialDecrypter<N, D, VK, DN>,
     H: Hasher,
+    H2: warp::Hasher,
     const POOL: char,
 > {
     pub decrypter: TD,
@@ -41,6 +43,7 @@ pub struct Synchronizer<
     pub nullifiers: HashMap<Nf, ReceivedNoteShort>,
     pub tree: CTree,
     pub witnesses: Vec<Witness>,
+    pub cmtree: MerkleTree<H2>,
     pub _phantom: PhantomData<(N, D, DN)>,
 }
 
@@ -51,8 +54,9 @@ impl<
         DN: DecryptedNote<D, VK> + Sync,
         TD: TrialDecrypter<N, D, VK, DN> + Sync,
         H: Hasher,
+        H2: warp::Hasher<D = [u8; 32]>,
         const POOL: char,
-    > Synchronizer<N, D, VK, DN, TD, H, POOL>
+    > Synchronizer<N, D, VK, DN, TD, H, H2, POOL>
 {
     pub fn new(
         decrypter: TD,
@@ -65,11 +69,11 @@ impl<
             warper,
             vks,
             shielded_pool,
-
             note_position: 0,
             nullifiers: HashMap::default(),
             tree: CTree::new(),
             witnesses: vec![],
+            cmtree: MerkleTree::empty(H2::default()),
             _phantom: Default::default(),
         }
     }
@@ -81,6 +85,7 @@ impl<
         tree: CTree,
         received_notes: Vec<ReceivedNoteShort>,
         witnesses: Vec<Witness>,
+        cmtree: MerkleTree<H2>,
         shielded_pool: &'static str,
     ) -> Self {
         Synchronizer {
@@ -95,6 +100,7 @@ impl<
                 .collect(),
             tree,
             witnesses,
+            cmtree,
             _phantom: Default::default(),
         }
     }
@@ -116,6 +122,7 @@ impl<
         if blocks.is_empty() {
             return Ok(0);
         }
+        println!("Trial Decryption");
         let decrypter = self.decrypter.clone();
         let decrypted_blocks: Vec<_> = blocks
             .par_iter()
@@ -172,6 +179,7 @@ impl<
         }
 
         // Detect spends and collect note commitments
+        println!("Nullifier Detection");
         let mut new_cmx = vec![];
         let mut height = 0;
         let mut hash = [0u8; 32];
@@ -198,7 +206,38 @@ impl<
             hash.copy_from_slice(&b.hash);
         }
 
+        println!("Warp 2");
+        let start_pos = self.cmtree.pos;
+        let mut nodes: Vec<_> = new_cmx.iter().map(|h| (h.clone(), false)).collect();
+        for w in new_witnesses.iter() {
+            let p = w.position - start_pos;
+            nodes[p].1 = true;
+        }
+        let start_height = blocks[0].height as u32;
+        if !nodes.is_empty() {
+            if new_witnesses.is_empty() {
+                println!("Check Bridge {} {}", blocks[0].height, blocks.len());
+                match db::checkpoint::get_bridge::<H2, POOL>(blocks[0].height as u32, blocks.len(), &self.cmtree.h, &db_tx)? {
+                    Some(bridge) => {
+                        println!("Have Bridge {} {}", start_height, blocks.len());
+                        self.cmtree.add_bridge(&bridge)
+                    }
+                    None => {
+                        println!("No matching Bridge");
+                        self.cmtree.add_nodes(start_height, blocks.len() as u32, &nodes);
+                    }
+                }
+            } else {
+                self.cmtree.add_nodes(start_height, blocks.len() as u32, &nodes);
+            }
+        }
+        crate::db::checkpoint::store_cmtree::<_, POOL>(height, &self.cmtree, db_tx)?;
+        for w in self.cmtree.witnesses.iter() {
+            crate::db::checkpoint::store_cmwitness::<_, POOL>(height, w, db_tx)?;
+        }
+
         // Run blocks through warp sync
+        println!("Warp 1");
         self.warper.add_nodes(&mut new_cmx, &new_witnesses);
         let (updated_tree, updated_witnesses) = self.warper.finalize();
 

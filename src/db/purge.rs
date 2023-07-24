@@ -20,12 +20,16 @@ pub fn truncate_sync_data(connection: &Connection) -> Result<()> {
     connection.execute("DELETE FROM blocks", [])?;
     connection.execute("DELETE FROM sapling_tree", [])?;
     connection.execute("DELETE FROM orchard_tree", [])?;
+    connection.execute("DELETE FROM sapling_cmtree", [])?;
+    connection.execute("DELETE FROM orchard_cmtree", [])?;
     connection.execute("DELETE FROM contacts", [])?;
     connection.execute("DELETE FROM diversifiers", [])?;
     connection.execute("DELETE FROM historical_prices", [])?;
     connection.execute("DELETE FROM received_notes", [])?;
     connection.execute("DELETE FROM sapling_witnesses", [])?;
     connection.execute("DELETE FROM orchard_witnesses", [])?;
+    connection.execute("DELETE FROM sapling_cmwitnesses", [])?;
+    connection.execute("DELETE FROM orchard_cmwitnesses", [])?;
     connection.execute("DELETE FROM transactions", [])?;
     connection.execute("DELETE FROM messages", [])?;
     Ok(())

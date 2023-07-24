@@ -7,7 +7,7 @@ use tonic::Request;
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use zcash_primitives::sapling::Node;
-use crate::{BlockId, BlockRange, connect_lightwalletd, Hash};
+use crate::{BlockId, BlockRange, connect_lightwalletd, db, Hash};
 use super::{DEPTH, ReadWrite, Hasher, Path, SaplingHasher};
 use super::bridge::{Bridge, CompactLayer};
 use super::witness::Witness;
@@ -30,10 +30,14 @@ impl <H: Hasher> MerkleTree<H> {
         }
     }
 
+    pub fn from_db<const POOL: char>(connection: &Connection, height: u32, h: H) -> Result<Self> {
+        db::checkpoint::get_cmtree::<_, POOL>(connection, height, h)
+    }
+
     pub fn add_nodes(&mut self, height: u32, block_len: u32, nodes: &[(H::D, bool)]) -> Bridge<H> {
         // let ns: Vec<_> = nodes.iter().map(|n| n.0).collect();
         // println!("{ns:?}");
-        println!("self.pos {}", self.pos);
+        // println!("self.pos {}", self.pos);
         assert!(!nodes.is_empty());
         let mut compact_layers = vec![];
         let mut new_witnesses = vec![];
@@ -167,6 +171,9 @@ impl <H: Hasher> MerkleTree<H> {
 
     pub fn add_witness(&mut self, w: Witness<H>) {
         self.witnesses.push(w);
+    }
+    pub fn remove_witness(&mut self, pos: usize) {
+        self.witnesses.retain(|w| w.path.pos != pos);
     }
 
     pub fn write<W: Write>(&self, mut w: W) -> Result<()> {

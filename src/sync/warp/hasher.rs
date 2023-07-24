@@ -8,7 +8,7 @@ use pasta_curves::{EpAffine, pallas};
 use pasta_curves::pallas::{Affine, Point};
 use rayon::prelude::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SaplingHasher {
     empty: Hash,
 }
@@ -21,6 +21,12 @@ impl SaplingHasher {
         Self {
             empty
         }
+    }
+}
+
+impl Default for SaplingHasher {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -44,7 +50,7 @@ impl Hasher for SaplingHasher {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OrchardHasher {
     Q: Point,
     empty: Hash,
@@ -102,6 +108,11 @@ impl OrchardHasher {
     }
 }
 
+impl Default for OrchardHasher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Hasher for OrchardHasher {
     type D = Hash;

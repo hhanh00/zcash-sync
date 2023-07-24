@@ -4,6 +4,7 @@ use crate::db::{wrap_query_no_rows, ReceivedNote, ReceivedNoteShort};
 use crate::note_selection::UTXO;
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::{CTree, Witness};
+use crate::sync::warp;
 
 use crate::{Hash, Source};
 use anyhow::Result;
@@ -23,10 +24,9 @@ pub fn get_last_sync_height(
         |row| row.get::<_, Option<u32>>(0),
     )?;
     Ok(height.unwrap_or_else(|| {
-        network
+        u32::from(network
             .activation_height(NetworkUpgrade::Sapling)
-            .unwrap()
-            .into()
+            .unwrap())
     }))
 }
 
@@ -428,4 +428,51 @@ fn prune_interval(low: u32, high: u32, db_tx: &Transaction) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+pub fn list_sync_ranges(connection: &Connection, start: u32, end: u32) -> Result<Vec<u32>> {
+    let mut s = connection.prepare("SELECT height FROM sapling_warp_bridges WHERE height > ?1 AND height <= ?2")?;
+    let r = s.query_map([start, end], |r| r.get::<_, u32>(0))?;
+    let heights = r.collect::<Result<Vec<_>, _>>()?;
+    Ok(heights)
+}
+
+pub fn get_cmtree<H: warp::Hasher, const POOL: char>(connection: &Connection, height: u32, h: H) -> Result<warp::MerkleTree<H>> {
+    let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
+    let tree = connection.query_row(&format!("SELECT data FROM {shielded_pool}_cmtree WHERE height = ?1"),
+    [height], |r|
+            r.get::<_, Vec<u8>>(0)
+        ).optional()?;
+    let tree = match tree {
+        Some(tree) => warp::MerkleTree::read(& *tree, h)?,
+        None => warp::MerkleTree::empty(h),
+    };
+    Ok(tree)
+}
+
+pub fn store_cmtree<H: warp::Hasher, const POOL: char>(height: u32, tree: &warp::MerkleTree<H>, db_tx: &Transaction) -> Result<()> {
+    let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
+    let mut data = vec![];
+    tree.write(&mut data)?;
+    db_tx.execute(&format!("INSERT INTO {shielded_pool}_cmtree(height, data) \
+    VALUES (?1, ?2)"), params![height, data])?;
+    Ok(())
+}
+
+pub fn store_cmwitness<H: warp::Hasher, const POOL: char>(height: u32, witness: &warp::Witness<H>, db_tx: &Transaction) -> Result<()> {
+    let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
+    let mut data = vec![];
+    witness.write(&mut data)?;
+    db_tx.execute(&format!("INSERT INTO {shielded_pool}_cmwitnesses(note, height, data) \
+    SELECT id_note, ?1, ?2 FROM received_notes WHERE position = ?3"), params![height, data, witness.path.pos as u64])?;
+    Ok(())
+}
+
+pub fn get_bridge<H: warp::Hasher, const POOL: char>(height: u32, len: usize, h: &H, db_tx: &Transaction) -> Result<Option<warp::Bridge<H>>> {
+    let shielded_pool = if POOL == 'S' { "sapling" } else { "orchard" };
+    let bridge = db_tx.query_row(
+        &format!("SELECT data FROM {shielded_pool}_warp_bridges WHERE height = ?1 AND block_len = ?2"),
+        [height, len as u32], |r| r.get::<_, Vec<u8>>(0)).optional()?;
+    let bridge = bridge.map(|b| warp::Bridge::<H>::read(&*b, h).unwrap());
+    Ok(bridge)
 }
