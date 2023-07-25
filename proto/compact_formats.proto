@@ -21,6 +21,8 @@ message CompactBlock {
     uint32 time = 5;            // Unix epoch time when the block was mined
     bytes header = 6;           // (hash, prevHash, and time) OR (full header)
     repeated CompactTx vtx = 7; // zero or more compact transactions from this block
+    Bridge SaplingBridge = 8;
+    Bridge OrchardBridge = 9;
 }
 
 // CompactTx contains the minimum information for a wallet to know if this transaction
@@ -40,8 +42,8 @@ message CompactTx {
     repeated CompactSaplingSpend spends = 4;   // inputs
     repeated CompactSaplingOutput outputs = 5; // outputs
     repeated CompactOrchardAction actions = 6;
-    bytes SaplingBridge = 7;
-    bytes OrchardBridge = 8;
+    Bridge SaplingBridge = 7;
+    Bridge OrchardBridge = 8;
 }
 
 // CompactSaplingSpend is a Sapling Spend Description as described in 7.3 of the Zcash
@@ -65,4 +67,9 @@ message CompactOrchardAction {
     bytes cmx = 2;              // [32] The x-coordinate of the note commitment for the output note
     bytes ephemeralKey = 3;     // [32] An encoding of an ephemeral Pallas public key
     bytes ciphertext = 4;       // [52] The note plaintext component of the encCiphertext field
+}
+
+message Bridge {
+    uint32 len = 1;
+    bytes data = 2;
 }

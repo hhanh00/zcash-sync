@@ -25,6 +25,10 @@ pub struct CompactBlock {
     /// zero or more compact transactions from this block
     #[prost(message, repeated, tag="7")]
     pub vtx: ::prost::alloc::vec::Vec<CompactTx>,
+    #[prost(message, optional, tag="8")]
+    pub sapling_bridge: ::core::option::Option<Bridge>,
+    #[prost(message, optional, tag="9")]
+    pub orchard_bridge: ::core::option::Option<Bridge>,
 }
 /// CompactTx contains the minimum information for a wallet to know if this transaction
 /// is relevant to it (either pays to it or spends from it) via shielded elements
@@ -52,10 +56,10 @@ pub struct CompactTx {
     pub outputs: ::prost::alloc::vec::Vec<CompactSaplingOutput>,
     #[prost(message, repeated, tag="6")]
     pub actions: ::prost::alloc::vec::Vec<CompactOrchardAction>,
-    #[prost(bytes="vec", tag="7")]
-    pub sapling_bridge: ::prost::alloc::vec::Vec<u8>,
-    #[prost(bytes="vec", tag="8")]
-    pub orchard_bridge: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, optional, tag="7")]
+    pub sapling_bridge: ::core::option::Option<Bridge>,
+    #[prost(message, optional, tag="8")]
+    pub orchard_bridge: ::core::option::Option<Bridge>,
 }
 /// CompactSaplingSpend is a Sapling Spend Description as described in 7.3 of the Zcash
 /// protocol specification.
@@ -95,6 +99,13 @@ pub struct CompactOrchardAction {
     /// \[52\] The note plaintext component of the encCiphertext field
     #[prost(bytes="vec", tag="4")]
     pub ciphertext: ::prost::alloc::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Bridge {
+    #[prost(uint32, tag="1")]
+    pub len: u32,
+    #[prost(bytes="vec", tag="2")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
 }
 /// A BlockID message contains identifiers to select a block: a height or a
 /// hash. Specification by hash is not implemented, but may be in the future.

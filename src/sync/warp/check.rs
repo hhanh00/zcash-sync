@@ -9,7 +9,7 @@ use rusqlite::Connection;
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use crate::sync::Witness;
 use zcash_primitives::sapling::{Node, SaplingIvk};
-use crate::{CompactBlock, CompactSaplingOutput, Hash};
+use crate::{CompactBlock, CompactSaplingOutput, Hash, lw_rpc};
 use crate::sync::warp;
 use crate::sync::warp::hasher::{SaplingHasher, OrchardHasher};
 use tonic::{Request, Response};
@@ -86,36 +86,59 @@ pub fn process_block_file(filename: &str) -> Result<()> {
     let mut buf = vec![0; 4_000_000];
     let mut z_tree = MerkleTree::empty(SaplingHasher::default());
     let mut o_tree = MerkleTree::empty(OrchardHasher::default());
+    let mut z_tree_block = MerkleTree::empty(SaplingHasher::default());
+    let mut o_tree_block = MerkleTree::empty(OrchardHasher::default());
     while let Ok(len) = f.read_u32::<LE>() {
         let len = len as usize;
         f.read_exact(&mut buf[0..len])?;
         let mut block = CompactBlock::decode(&buf[0..len])?;
         println!("{}", block.height);
 
+        let mut z_nodes: Vec<(Hash, bool)> = vec![];
+        let mut o_nodes: Vec<(Hash, bool)> = vec![];
         for tx in block.vtx.iter_mut() {
             let nodes: Vec<(Hash, bool)> = tx.outputs.iter().map(|o| (o.cmu.clone().try_into().unwrap(), false)).collect();
+            z_nodes.extend(nodes.iter());
             if !nodes.is_empty() {
                 let b = z_tree.add_nodes(0, 0, &nodes);
-                if tx.outputs.iter().any(|o| o.epk.is_empty()) {
+                if tx.outputs.iter().any(|o| o.epk.is_empty()) { // spam filtered
                     let mut bb = vec![];
                     b.write(&mut bb, &z_tree.h)?;
                     tx.outputs.clear();
                     tx.spends.clear();
-                    tx.sapling_bridge = bb;
+                    let bridge = lw_rpc::Bridge { len: nodes.len() as u32, data: bb };
+                    tx.sapling_bridge = Some(bridge);
                 }
             }
 
             let nodes: Vec<(Hash, bool)> = tx.actions.iter().map(|o| (o.cmx.clone().try_into().unwrap(), false)).collect();
+            o_nodes.extend(nodes.iter());
             if !nodes.is_empty() {
                 let b = o_tree.add_nodes(0, 0, &nodes);
-                if tx.actions.iter().any(|o| o.ephemeral_key.is_empty()) {
+                if tx.actions.iter().any(|o| o.ephemeral_key.is_empty()) { // spam filtered
                     let mut bb = vec![];
                     b.write(&mut bb, &o_tree.h)?;
                     tx.actions.clear();
-                    tx.orchard_bridge = bb;
+                    let bridge = lw_rpc::Bridge { len: nodes.len() as u32, data: bb };
+                    tx.orchard_bridge = Some(bridge);
                 }
             }
         }
+        if !z_nodes.is_empty() {
+            let b = z_tree_block.add_nodes(block.height as u32, 1, &z_nodes);
+            let mut bb = vec![];
+            b.write(&mut bb, &z_tree_block.h)?;
+            let bridge = lw_rpc::Bridge { len: z_nodes.len() as u32, data: bb };
+            block.sapling_bridge = Some(bridge);
+        }
+        if !o_nodes.is_empty() {
+            let b = o_tree_block.add_nodes(block.height as u32, 1, &o_nodes);
+            let mut bb = vec![];
+            b.write(&mut bb, &o_tree_block.h)?;
+            let bridge = lw_rpc::Bridge { len: o_nodes.len() as u32, data: bb };
+            block.orchard_bridge = Some(bridge);
+        }
+
         of.write_u32::<LE>(block.encoded_len() as u32)?;
         let mut bb = vec![];
         block.encode(&mut bb)?;
@@ -163,6 +186,7 @@ pub async fn full_scan(network: &Network, url: &str, phrase: &str) -> Result<()>
                 .collect();
 
             let mut notes = vec![];
+            let mut bridges: Option<Bridge<SaplingHasher>> = None;
             let mut pos_start = pos;
             for db in dec_block_chunk.iter() {
                 for n in db.notes.iter() {
@@ -178,36 +202,74 @@ pub async fn full_scan(network: &Network, url: &str, phrase: &str) -> Result<()>
             }
 
             let mut cmus: Vec<(Hash, bool)> = vec![];
-            for b in block_chunk.iter() {
-                for tx in b.vtx.iter() {
-                    if !tx.sapling_bridge.is_empty() {
-                        let bridge = Bridge::read(&*tx.sapling_bridge, &SaplingHasher::default())?;
-                        if !cmus.is_empty() {
-                            cmtree.add_nodes(0, 0, &cmus);
-                            pos_start += cmus.len() as u32;
-                            cmus.clear();
-                        }
+            for (b, db) in block_chunk.iter().zip(dec_block_chunk.iter()) {
+                if db.notes.is_empty() { // block has no new notes, use the block bridge
+                    // flush bridges or cmus (only one should exist)
+                    if let Some(bridge) = bridges.take() { // flush bridges
                         cmtree.add_bridge(&bridge);
                         pos_start += bridge.len as u32;
                     }
-                    else {
-                        for o in tx.outputs.iter() {
-                            cmus.push((o.cmu.clone().try_into().unwrap(), false));
-                        }
+                    if !cmus.is_empty() { // flush nodes
+                        cmtree.add_nodes(0, 0, &cmus);
+                        cmus.clear();
+                    }
 
-                        while !notes.is_empty() {
-                            let n = &notes[0];
-                            if (n.0 - pos_start) as usize >= cmus.len() { break }
-                            cmus[(n.0 - pos_start) as usize].1 = true;
-                            notes.remove(0);
+                    if let Some(bridge) = b.sapling_bridge.as_ref() {
+                        let bridge = Bridge::read(&*bridge.data, &SaplingHasher::default())?;
+                        cmtree.add_bridge(&bridge);
+                        pos_start += bridge.len as u32;
+                    }
+                }
+                else {
+                    for tx in b.vtx.iter() {
+                        if let Some(sapling_bridge) = tx.sapling_bridge.as_ref() { // tx was pruned
+                            if !cmus.is_empty() { // flush nodes
+                                cmtree.add_nodes(0, 0, &cmus);
+                                pos_start += cmus.len() as u32;
+                                cmus.clear();
+                            }
+
+                            // accumulate bridge
+                            let bridge = Bridge::read(&*sapling_bridge.data, &SaplingHasher::default())?;
+                            bridges = match bridges.take() {
+                                Some(mut b) => {
+                                    b.merge(&bridge, &cmtree.h);
+                                    Some(b)
+                                }
+                                None => Some(bridge)
+                            }
+                        } else {
+                            if let Some(bridge) = bridges.take() { // flush bridges
+                                cmtree.add_bridge(&bridge);
+                                pos_start += bridge.len as u32;
+                            }
+
+                            // accumulate cmus
+                            for o in tx.outputs.iter() {
+                                cmus.push((o.cmu.clone().try_into().unwrap(), false));
+                            }
+                            while !notes.is_empty() {
+                                let n = &notes[0];
+                                if (n.0 - pos_start) as usize >= cmus.len() { break }
+                                cmus[(n.0 - pos_start) as usize].1 = true;
+                                notes.remove(0);
+                            }
                         }
                     }
                 }
             }
-            if !cmus.is_empty() {
+
+            // flush bridges or cmus (only one should exist)
+            if let Some(bridge) = bridges.take() { // flush bridges
+                cmtree.add_bridge(&bridge);
+                pos_start += bridge.len as u32;
+            }
+            if !cmus.is_empty() { // flush nodes
                 cmtree.add_nodes(0, 0, &cmus);
+                cmus.clear();
             }
 
+            // detect spends
             for b in block_chunk.iter() {
                 for tx in b.vtx.iter() {
                     for s in tx.spends.iter() {
@@ -235,7 +297,7 @@ pub async fn full_scan(network: &Network, url: &str, phrase: &str) -> Result<()>
     let edge = cmtree.edge(&er);
     for w in cmtree.witnesses.iter() {
         let (root, _proof) = w.root(&er, &edge, &cmtree.h);
-        println!("{}", hex::encode(&root));
+        println!("{} {}", w.path.pos, hex::encode(&root));
     }
 
     let mut client = connect_lightwalletd(url).await?;
@@ -245,10 +307,11 @@ pub async fn full_scan(network: &Network, url: &str, phrase: &str) -> Result<()>
     let root = tree.root();
     println!("server root {}", hex::encode(&root.repr));
 
-    for (i, (_, v)) in nfs.values().enumerate() {
-        println!("Note #{i} = {v}");
+    for (i, (p, v)) in nfs.values().enumerate() {
+        println!("Note #{i} / {p} = {v}");
     }
     println!("Balance = {balance}");
+
     Ok(())
 }
 
@@ -300,16 +363,15 @@ fn decrypt_block(network: &Network, block: &CompactBlock, ivk: &PreparedIncoming
             outputs.push((d.clone(), EncryptedOutput::new(pos, o.clone())));
             pos += 1;
         }
-        if !tx.sapling_bridge.is_empty() {
-            let bridge = Bridge::read(&*tx.sapling_bridge, &SaplingHasher::default())?;
-            pos += bridge.len as u32;
+        if let Some(sapling_bridge) = tx.sapling_bridge.as_ref() {
+            pos += sapling_bridge.len;
         }
     }
     let decrypted = try_compact_note_decryption::<BD, EncryptedOutput>(slice::from_ref(ivk), &outputs);
     let mut notes = vec![];
     for (pos, dec) in decrypted.iter().enumerate() {
         if let Some(((note, _), _)) = dec {
-            println!("Incoming value {}", note.value.inner());
+            println!("Received {}", note.value.inner());
             notes.push((pos as u32, note.clone()));
         }
     }
