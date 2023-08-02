@@ -203,21 +203,24 @@ pub async fn full_scan(network: &Network, url: &str, phrase: &str) -> Result<()>
 
             let mut cmus: Vec<(Hash, bool)> = vec![];
             for (b, db) in block_chunk.iter().zip(dec_block_chunk.iter()) {
-                if db.notes.is_empty() { // block has no new notes, use the block bridge
-                    // flush bridges or cmus (only one should exist)
-                    if let Some(bridge) = bridges.take() { // flush bridges
-                        cmtree.add_bridge(&bridge);
-                        pos_start += bridge.len as u32;
-                    }
-                    if !cmus.is_empty() { // flush nodes
-                        cmtree.add_nodes(0, 0, &cmus);
-                        cmus.clear();
-                    }
+                // flush bridges or cmus (only one should exist)
+                if let Some(bridge) = bridges.take() { // flush bridges
+                    cmtree.add_bridge(&bridge);
+                }
+                if !cmus.is_empty() { // flush nodes
+                    cmtree.add_nodes(0, 0, &cmus);
+                    cmus.clear();
+                }
+                assert_eq!(pos_start as usize, cmtree.pos);
+                assert!(bridges.is_none());
+                assert!(cmus.is_empty());
 
+                if db.notes.is_empty() { // block has no new notes, use the block bridge
                     if let Some(bridge) = b.sapling_bridge.as_ref() {
                         let bridge = Bridge::read(&*bridge.data, &SaplingHasher::default())?;
                         cmtree.add_bridge(&bridge);
                         pos_start += bridge.len as u32;
+                        assert_eq!(pos_start as usize, cmtree.pos);
                     }
                 }
                 else {
@@ -225,33 +228,34 @@ pub async fn full_scan(network: &Network, url: &str, phrase: &str) -> Result<()>
                         if let Some(sapling_bridge) = tx.sapling_bridge.as_ref() { // tx was pruned
                             if !cmus.is_empty() { // flush nodes
                                 cmtree.add_nodes(0, 0, &cmus);
-                                pos_start += cmus.len() as u32;
                                 cmus.clear();
                             }
 
                             // accumulate bridge
                             let bridge = Bridge::read(&*sapling_bridge.data, &SaplingHasher::default())?;
+                            pos_start += bridge.len as u32;
                             bridges = match bridges.take() {
                                 Some(mut b) => {
                                     b.merge(&bridge, &cmtree.h);
                                     Some(b)
                                 }
                                 None => Some(bridge)
-                            }
+                            };
                         } else {
                             if let Some(bridge) = bridges.take() { // flush bridges
                                 cmtree.add_bridge(&bridge);
-                                pos_start += bridge.len as u32;
                             }
 
                             // accumulate cmus
                             for o in tx.outputs.iter() {
                                 cmus.push((o.cmu.clone().try_into().unwrap(), false));
                             }
+                            pos_start += tx.outputs.len() as u32;
+                            let cmus_pos_start = pos_start - cmus.len() as u32;
                             while !notes.is_empty() {
                                 let n = &notes[0];
-                                if (n.0 - pos_start) as usize >= cmus.len() { break }
-                                cmus[(n.0 - pos_start) as usize].1 = true;
+                                if (n.0 - cmus_pos_start) as usize >= cmus.len() { break }
+                                cmus[(n.0 - cmus_pos_start) as usize].1 = true;
                                 notes.remove(0);
                             }
                         }
@@ -262,12 +266,12 @@ pub async fn full_scan(network: &Network, url: &str, phrase: &str) -> Result<()>
             // flush bridges or cmus (only one should exist)
             if let Some(bridge) = bridges.take() { // flush bridges
                 cmtree.add_bridge(&bridge);
-                pos_start += bridge.len as u32;
             }
             if !cmus.is_empty() { // flush nodes
                 cmtree.add_nodes(0, 0, &cmus);
                 cmus.clear();
             }
+            assert_eq!(pos_start as usize, cmtree.pos);
 
             // detect spends
             for b in block_chunk.iter() {
@@ -300,17 +304,17 @@ pub async fn full_scan(network: &Network, url: &str, phrase: &str) -> Result<()>
         println!("{} {}", w.path.pos, hex::encode(&root));
     }
 
+    for (i, (p, v)) in nfs.values().enumerate() {
+        println!("Note #{i} / {p} = {v}");
+    }
+    println!("Balance = {balance}");
+
     let mut client = connect_lightwalletd(url).await?;
     let rep = client.get_tree_state(Request::new(BlockId { height: height as u64, hash: vec![] })).await?.into_inner();
     let tree = hex::decode(&rep.sapling_tree).unwrap();
     let tree = zcash_primitives::merkle_tree::CommitmentTree::<Node>::read(&*tree)?;
     let root = tree.root();
     println!("server root {}", hex::encode(&root.repr));
-
-    for (i, (p, v)) in nfs.values().enumerate() {
-        println!("Note #{i} / {p} = {v}");
-    }
-    println!("Balance = {balance}");
 
     Ok(())
 }

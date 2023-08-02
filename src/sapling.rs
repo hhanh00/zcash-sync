@@ -2,7 +2,6 @@ use group::GroupEncoding;
 use jubjub::{ExtendedNielsPoint, ExtendedPoint, SubgroupPoint};
 use lazy_static::lazy_static;
 use std::io::Read;
-use zcash_params::GENERATORS;
 
 lazy_static! {
     pub static ref GENERATORS_EXP: Vec<ExtendedNielsPoint> = read_generators_bin();
