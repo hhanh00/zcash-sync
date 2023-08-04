@@ -1,5 +1,5 @@
 use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
-use crate::db::data_generated::fb::{ProgressT, Recipients, SendTemplate, Servers};
+use crate::db::data_generated::fb::{Fee, FeeT, ProgressT, Recipients, SendTemplate, Servers};
 use crate::db::FullEncryptedBackup;
 #[cfg(feature = "ledger2")]
 use crate::ledger2;
@@ -521,6 +521,8 @@ pub async unsafe extern "C" fn transfer_pools(
     memo: *mut c_char,
     split_amount: u64,
     confirmations: u32,
+    fee_bytes: *mut u8,
+    fee_len: u64,
 ) -> CResult<*mut c_char> {
     from_c_str!(memo);
     let res = async move {
@@ -534,6 +536,7 @@ pub async unsafe extern "C" fn transfer_pools(
             &memo,
             split_amount,
             confirmations,
+            &unpack_fee(fee_bytes, fee_len),
         )
         .await?;
         let tx_plan = serde_json::to_string(&tx_plan)?;
@@ -549,10 +552,14 @@ pub async unsafe extern "C" fn shield_taddr(
     account: u32,
     amount: u64,
     confirmations: u32,
+    fee_bytes: *mut u8,
+    fee_len: u64,
 ) -> CResult<*mut c_char> {
     let res = async move {
+        let fee = unpack_fee(fee_bytes, fee_len);
         let tx_plan =
-            crate::api::payment_v2::shield_taddr(coin, account, amount, confirmations).await?;
+            crate::api::payment_v2::shield_taddr(coin, account, amount, confirmations, &fee)
+                .await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };
@@ -586,6 +593,8 @@ pub async unsafe extern "C" fn prepare_multi_payment(
     recipients_bytes: *mut u8,
     recipients_len: u64,
     anchor_offset: u32,
+    fee_bytes: *mut u8,
+    fee_len: u64,
 ) -> CResult<*mut c_char> {
     let res = async {
         let last_height = crate::api::sync::get_latest_height().await?;
@@ -603,6 +612,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             &recipients,
             0,
             anchor_offset,
+            &unpack_fee(fee_bytes, fee_len),
         )
         .await?;
         let tx_str = serde_json::to_string(&tx)?;
@@ -686,9 +696,12 @@ pub async unsafe extern "C" fn sweep_tkey(
     sk: *mut c_char,
     pool: u8,
     confirmations: u32,
+    fee_bytes: *mut u8,
+    fee_len: u64,
 ) -> CResult<*mut c_char> {
     from_c_str!(sk);
-    let txid = crate::taddr::sweep_tkey(last_height, &sk, pool, confirmations).await;
+    let fee = unpack_fee(fee_bytes, fee_len);
+    let txid = crate::taddr::sweep_tkey(last_height, &sk, pool, confirmations, &fee).await;
     to_cresult_str(txid)
 }
 
@@ -733,9 +746,14 @@ pub unsafe extern "C" fn store_contact(
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn commit_unsaved_contacts(anchor_offset: u32) -> CResult<*mut c_char> {
+pub async unsafe extern "C" fn commit_unsaved_contacts(
+    anchor_offset: u32,
+    fee_bytes: *mut u8,
+    fee_len: u64,
+) -> CResult<*mut c_char> {
     let res = async move {
-        let tx_plan = crate::api::contact::commit_unsaved_contacts(anchor_offset).await?;
+        let fee = unpack_fee(fee_bytes, fee_len);
+        let tx_plan = crate::api::contact::commit_unsaved_contacts(anchor_offset, &fee).await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };
@@ -1277,4 +1295,11 @@ pub unsafe extern "C" fn has_gpu() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn use_gpu(v: bool) {
     crate::gpu::use_gpu(v)
+}
+
+fn unpack_fee(fee_bytes: *mut u8, fee_len: u64) -> FeeT {
+    let fee_bytes: Vec<u8> =
+        unsafe { Vec::from_raw_parts(fee_bytes, fee_len as usize, fee_len as usize) };
+    let fee_rule = flatbuffers::root::<Fee>(&fee_bytes).unwrap();
+    fee_rule.unpack()
 }

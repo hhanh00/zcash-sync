@@ -16,7 +16,7 @@ use crate::{Destination, Source, TransactionPlan};
 use anyhow::{anyhow, Result};
 use rand::rngs::OsRng;
 use rand::{RngCore, SeedableRng};
-use rand_chacha::{ChaChaRng};
+use rand_chacha::ChaChaRng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::PublicKey;
 use sha2::Sha256;
@@ -30,11 +30,11 @@ use zcash_primitives::legacy::TransparentAddress;
 
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
+use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_primitives::{
     consensus::{BlockHeight, BranchId, MainNetwork},
     transaction::{Authorized, TransactionData, TxVersion},
 };
-use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_proofs::prover::LocalTxProver;
 
 mod orchard_bundle;
@@ -239,14 +239,20 @@ pub fn build_ledger_tx(
 
     let txid_parts = authed_tx.digest(TxIdDigester);
     match txid_parts.sapling_digest {
-        Some(h) =>
-            if h.as_bytes() != &hashes[0..32] { anyhow::bail!("Sapling Hash Mismatch") }
-        None => ()
+        Some(h) => {
+            if h.as_bytes() != &hashes[0..32] {
+                anyhow::bail!("Sapling Hash Mismatch")
+            }
+        }
+        None => (),
     }
     match txid_parts.orchard_digest {
-        Some(h) =>
-            if h.as_bytes() != &hashes[32..64] { anyhow::bail!("Orchard Hash Mismatch") }
-        None => ()
+        Some(h) => {
+            if h.as_bytes() != &hashes[32..64] {
+                anyhow::bail!("Orchard Hash Mismatch")
+            }
+        }
+        None => (),
     }
 
     let tx = authed_tx.freeze().unwrap();

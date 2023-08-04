@@ -3,6 +3,7 @@ use crate::api::recipient::RecipientMemo;
 use crate::api::sync::get_latest_height;
 pub use crate::broadcast_tx;
 use crate::chain::{get_checkpoint_height, EXPIRY_HEIGHT_OFFSET};
+use crate::db::data_generated::fb::FeeT;
 use crate::note_selection::{FeeFlat, Order, UTXO};
 use crate::{
     build_tx, fetch_utxos, get_secret_keys, note_selection, AccountData, CoinConfig,
@@ -28,6 +29,7 @@ pub async fn build_tx_plan_with_utxos(
     expiry_height: u32,
     recipients: &[RecipientMemo],
     utxos: &[UTXO],
+    fee: &FeeT,
 ) -> note_selection::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
@@ -79,6 +81,7 @@ pub async fn build_tx_plan_with_utxos(
     }
 
     let config = TransactionBuilderConfig::new(&change_address);
+    let fee = FeeFlat::from_rule(fee);
     let tx_plan = note_selection::build_tx_plan::<FeeFlat>(
         network,
         &fvk,
@@ -90,6 +93,7 @@ pub async fn build_tx_plan_with_utxos(
         &utxos,
         &orders,
         &config,
+        &fee,
     )?;
     Ok(tx_plan)
 }
@@ -101,6 +105,7 @@ pub async fn build_tx_plan(
     recipients: &[RecipientMemo],
     excluded_flags: u8,
     confirmations: u32,
+    fee_rule: &FeeT,
 ) -> note_selection::Result<TransactionPlan> {
     let checkpoint_height = {
         let c = CoinConfig::get(coin);
@@ -117,6 +122,7 @@ pub async fn build_tx_plan(
         expiry_height,
         recipients,
         &utxos,
+        fee_rule,
     )
     .await?;
     Ok(tx_plan)
@@ -166,44 +172,6 @@ pub async fn sign_and_broadcast(
     Ok(txid)
 }
 
-pub async fn build_max_tx(
-    coin: u8,
-    account: u32,
-    last_height: u32,
-    recipient: &RecipientMemo, // amount & max_amount per note are ignored
-    excluded_flags: u8,
-    confirmations: u32,
-) -> note_selection::Result<TransactionPlan> {
-    let mut recipient = recipient.clone();
-    let checkpoint_height = {
-        let c = CoinConfig::get(coin);
-        let db = c.db()?;
-        get_checkpoint_height(&db, last_height, confirmations)?
-    };
-    let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;
-    let available_funds: u64 = utxos.iter().map(|n| n.amount).sum();
-    recipient.amount = available_funds;
-    for _ in 0..MAX_ATTEMPTS {
-        // this will fail at least once because of the fees
-        let result = build_tx_plan(
-            coin,
-            account,
-            last_height,
-            slice::from_ref(&recipient),
-            excluded_flags,
-            confirmations,
-        )
-        .await;
-        match result {
-            Err(TransactionBuilderError::NotEnoughFunds(missing)) => {
-                recipient.amount -= missing; // reduce the amount and retry
-            }
-            _ => return result,
-        }
-    }
-    Err(TransactionBuilderError::TxTooComplex)
-}
-
 pub async fn transfer_pools(
     coin: u8,
     account: u32,
@@ -214,6 +182,7 @@ pub async fn transfer_pools(
     memo: &str,
     split_amount: u64,
     confirmations: u32,
+    fee: &FeeT,
 ) -> anyhow::Result<TransactionPlan> {
     let address = get_unified_address(coin, account, to_pool)?; // get our own unified address
     let recipient = RecipientMemo {
@@ -231,6 +200,7 @@ pub async fn transfer_pools(
         slice::from_ref(&recipient),
         !from_pool,
         confirmations,
+        fee,
     )
     .await?;
     Ok(tx_plan)
@@ -242,6 +212,7 @@ pub async fn shield_taddr(
     account: u32,
     amount: u64,
     confirmations: u32,
+    fee: &FeeT,
 ) -> anyhow::Result<TransactionPlan> {
     let tx_plan = transfer_pools(
         coin,
@@ -253,6 +224,7 @@ pub async fn shield_taddr(
         "Shield Transparent Balance",
         0,
         confirmations,
+        fee,
     )
     .await?;
     Ok(tx_plan)

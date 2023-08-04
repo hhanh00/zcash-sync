@@ -5,6 +5,7 @@ use crate::api::recipient::RecipientMemo;
 use crate::api::sync::get_latest_height;
 use crate::coinconfig::CoinConfig;
 use crate::contact::{serialize_contacts, Contact};
+use crate::db::data_generated::fb::FeeT;
 use crate::db::AccountData;
 use crate::TransactionPlan;
 use zcash_primitives::memo::Memo;
@@ -29,15 +30,22 @@ pub fn store_contact(id: u32, name: &str, address: &str, dirty: bool) -> anyhow:
 /// Save the new/modified contacts to the blockchain
 /// # Arguments
 /// * `anchor_offset`: minimum confirmations required for note selection
-pub async fn commit_unsaved_contacts(anchor_offset: u32) -> anyhow::Result<TransactionPlan> {
+pub async fn commit_unsaved_contacts(
+    anchor_offset: u32,
+    fee: &FeeT,
+) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get_active();
     let contacts = c.db()?.get_unsaved_contacts()?;
     let memos = serialize_contacts(&contacts)?;
-    let tx_plan = save_contacts_tx(&memos, anchor_offset).await?;
+    let tx_plan = save_contacts_tx(&memos, anchor_offset, fee).await?;
     Ok(tx_plan)
 }
 
-async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<TransactionPlan> {
+async fn save_contacts_tx(
+    memos: &[Memo],
+    anchor_offset: u32,
+    fee: &FeeT,
+) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get_active();
     let last_height = get_latest_height().await?;
     let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
@@ -59,6 +67,7 @@ async fn save_contacts_tx(memos: &[Memo], anchor_offset: u32) -> anyhow::Result<
         &recipients,
         1,
         anchor_offset,
+        fee,
     )
     .await?;
     Ok(tx_plan)

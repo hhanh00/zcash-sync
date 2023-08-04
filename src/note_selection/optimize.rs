@@ -297,6 +297,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
     utxos: &[UTXO],
     orders: &[Order],
     config: &TransactionBuilderConfig,
+    fee_rule: &F,
 ) -> Result<TransactionPlan> {
     let mut fee = 0;
 
@@ -319,7 +320,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
         let change_outputs = outputs_for_change(&change_destinations, &change)?;
         fills.extend(change_outputs);
 
-        let updated_fee = F::calculate_fee(&notes, &fills);
+        let updated_fee = fee_rule.calculate_fee(&notes, &fills);
         if updated_fee == fee {
             let tx_plan = TransactionPlan {
                 fvk: fvk.to_string(),

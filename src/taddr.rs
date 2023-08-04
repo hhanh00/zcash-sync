@@ -2,6 +2,7 @@ use crate::api::payment_v2::build_tx_plan_with_utxos;
 use crate::api::recipient::RecipientMemo;
 use crate::chain::{get_checkpoint_height, get_latest_height, EXPIRY_HEIGHT_OFFSET};
 use crate::coinconfig::CoinConfig;
+use crate::db::data_generated::fb::FeeT;
 use crate::db::AccountData;
 use crate::key2::split_key;
 use crate::note_selection::{SecretKeys, Source, UTXO};
@@ -286,6 +287,7 @@ pub async fn sweep_tkey(
     sk: &str,
     pool: u8,
     confirmations: u32,
+    fee_rule: &FeeT,
 ) -> anyhow::Result<String> {
     let c = CoinConfig::get_active();
     let network = c.chain.network();
@@ -345,6 +347,7 @@ pub async fn sweep_tkey(
         last_height + EXPIRY_HEIGHT_OFFSET,
         slice::from_ref(&recipient),
         &utxos,
+        fee_rule,
     )
     .await?;
     let skeys = SecretKeys {

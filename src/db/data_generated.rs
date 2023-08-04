@@ -7319,4 +7319,205 @@ pub mod fb {
             )
         }
     }
+    pub enum FeeOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct Fee<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for Fee<'a> {
+        type Inner = Fee<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> Fee<'a> {
+        pub const VT_FEE: flatbuffers::VOffsetT = 4;
+        pub const VT_MIN_FEE: flatbuffers::VOffsetT = 6;
+        pub const VT_MAX_FEE: flatbuffers::VOffsetT = 8;
+        pub const VT_SCHEME: flatbuffers::VOffsetT = 10;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            Fee { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args FeeArgs,
+        ) -> flatbuffers::WIPOffset<Fee<'bldr>> {
+            let mut builder = FeeBuilder::new(_fbb);
+            builder.add_max_fee(args.max_fee);
+            builder.add_min_fee(args.min_fee);
+            builder.add_fee(args.fee);
+            builder.add_scheme(args.scheme);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> FeeT {
+            let fee = self.fee();
+            let min_fee = self.min_fee();
+            let max_fee = self.max_fee();
+            let scheme = self.scheme();
+            FeeT {
+                fee,
+                min_fee,
+                max_fee,
+                scheme,
+            }
+        }
+
+        #[inline]
+        pub fn fee(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u64>(Fee::VT_FEE, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn min_fee(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u64>(Fee::VT_MIN_FEE, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn max_fee(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u64>(Fee::VT_MAX_FEE, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn scheme(&self) -> u8 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u8>(Fee::VT_SCHEME, Some(0)).unwrap() }
+        }
+    }
+
+    impl flatbuffers::Verifiable for Fee<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<u64>("fee", Self::VT_FEE, false)?
+                .visit_field::<u64>("min_fee", Self::VT_MIN_FEE, false)?
+                .visit_field::<u64>("max_fee", Self::VT_MAX_FEE, false)?
+                .visit_field::<u8>("scheme", Self::VT_SCHEME, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct FeeArgs {
+        pub fee: u64,
+        pub min_fee: u64,
+        pub max_fee: u64,
+        pub scheme: u8,
+    }
+    impl<'a> Default for FeeArgs {
+        #[inline]
+        fn default() -> Self {
+            FeeArgs {
+                fee: 0,
+                min_fee: 0,
+                max_fee: 0,
+                scheme: 0,
+            }
+        }
+    }
+
+    pub struct FeeBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> FeeBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_fee(&mut self, fee: u64) {
+            self.fbb_.push_slot::<u64>(Fee::VT_FEE, fee, 0);
+        }
+        #[inline]
+        pub fn add_min_fee(&mut self, min_fee: u64) {
+            self.fbb_.push_slot::<u64>(Fee::VT_MIN_FEE, min_fee, 0);
+        }
+        #[inline]
+        pub fn add_max_fee(&mut self, max_fee: u64) {
+            self.fbb_.push_slot::<u64>(Fee::VT_MAX_FEE, max_fee, 0);
+        }
+        #[inline]
+        pub fn add_scheme(&mut self, scheme: u8) {
+            self.fbb_.push_slot::<u8>(Fee::VT_SCHEME, scheme, 0);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> FeeBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            FeeBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<Fee<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for Fee<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("Fee");
+            ds.field("fee", &self.fee());
+            ds.field("min_fee", &self.min_fee());
+            ds.field("max_fee", &self.max_fee());
+            ds.field("scheme", &self.scheme());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct FeeT {
+        pub fee: u64,
+        pub min_fee: u64,
+        pub max_fee: u64,
+        pub scheme: u8,
+    }
+    impl Default for FeeT {
+        fn default() -> Self {
+            Self {
+                fee: 0,
+                min_fee: 0,
+                max_fee: 0,
+                scheme: 0,
+            }
+        }
+    }
+    impl FeeT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<Fee<'b>> {
+            let fee = self.fee;
+            let min_fee = self.min_fee;
+            let max_fee = self.max_fee;
+            let scheme = self.scheme;
+            Fee::create(
+                _fbb,
+                &FeeArgs {
+                    fee,
+                    min_fee,
+                    max_fee,
+                    scheme,
+                },
+            )
+        }
+    }
 } // pub mod fb

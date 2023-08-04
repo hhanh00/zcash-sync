@@ -1,5 +1,5 @@
-use std::io::Write;
 use blake2b_simd::State;
+use std::io::Write;
 
 use ff::PrimeField;
 use group::GroupEncoding;
@@ -14,6 +14,7 @@ use crate::ledger::transport::*;
 use anyhow::{anyhow, Result};
 use rand::RngCore;
 
+use zcash_primitives::constants::SPENDING_KEY_GENERATOR;
 use zcash_primitives::{
     consensus::MainNetwork,
     merkle_tree::IncrementalWitness,
@@ -29,7 +30,6 @@ use zcash_primitives::{
         Amount, OutputDescription, SpendDescription, GROTH_PROOF_SIZE,
     },
 };
-use zcash_primitives::constants::SPENDING_KEY_GENERATOR;
 use zcash_proofs::{prover::LocalTxProver, sapling::SaplingProvingContext};
 
 use super::create_hasher;
@@ -262,7 +262,8 @@ impl<'a> SaplingBuilder<'a> {
             let mut message: Vec<u8> = vec![];
             message.write_all(&rk.0.to_bytes())?;
             message.write_all(sig_hash.as_ref())?;
-            let verified = rk.verify_with_zip216(&message, &signature, SPENDING_KEY_GENERATOR, true);
+            let verified =
+                rk.verify_with_zip216(&message, &signature, SPENDING_KEY_GENERATOR, true);
             if !verified {
                 anyhow::bail!("Invalid Sapling signature");
             }

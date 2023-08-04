@@ -1,12 +1,8 @@
 use orchard::{
-    builder::{
-        SigningMetadata, SigningParts, SpendInfo,
-    },
+    builder::{SigningMetadata, SigningParts, SpendInfo},
     bundle::{Authorization, Authorized, Flags},
     circuit::{Circuit, Instance, ProvingKey},
-    keys::{
-        Diversifier, FullViewingKey, Scope, SpendAuthorizingKey, SpendValidatingKey,
-    },
+    keys::{Diversifier, FullViewingKey, Scope, SpendAuthorizingKey, SpendValidatingKey},
     note::{ExtractedNoteCommitment, Nullifier, RandomSeed, TransmittedNoteCiphertext},
     note_encryption::OrchardNoteEncryption,
     primitives::redpallas::{Signature, SpendAuth},
@@ -17,24 +13,13 @@ use orchard::{
 
 use rand::{rngs::OsRng, RngCore};
 
-
-use crate::{
-    decode_orchard_merkle_path, ledger::*,
-};
+use crate::{decode_orchard_merkle_path, ledger::*};
 use anyhow::Result;
-
 
 use group::ff::Field;
 
 use nonempty::NonEmpty;
-use zcash_primitives::{
-    memo::MemoBytes,
-    transaction::{
-        components::Amount,
-    },
-};
-
-
+use zcash_primitives::{memo::MemoBytes, transaction::components::Amount};
 
 use super::create_hasher;
 

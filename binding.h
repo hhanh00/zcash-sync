@@ -192,6 +192,12 @@ typedef struct CResult_bool {
 
 #define TxReport_VT_PRIVACY_LEVEL 18
 
+#define Fee_VT_MIN_FEE 6
+
+#define Fee_VT_MAX_FEE 8
+
+#define Fee_VT_SCHEME 10
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -274,12 +280,16 @@ struct CResult_____c_char transfer_pools(uint8_t coin,
                                          bool fee_included,
                                          char *memo,
                                          uint64_t split_amount,
-                                         uint32_t confirmations);
+                                         uint32_t confirmations,
+                                         uint8_t *fee_bytes,
+                                         uint64_t fee_len);
 
 struct CResult_____c_char shield_taddr(uint8_t coin,
                                        uint32_t account,
                                        uint64_t amount,
-                                       uint32_t confirmations);
+                                       uint32_t confirmations,
+                                       uint8_t *fee_bytes,
+                                       uint64_t fee_len);
 
 struct CResult______u8 scan_transparent_accounts(uint8_t coin,
                                                  uint32_t account,
@@ -289,7 +299,9 @@ struct CResult_____c_char prepare_multi_payment(uint8_t coin,
                                                 uint32_t account,
                                                 uint8_t *recipients_bytes,
                                                 uint64_t recipients_len,
-                                                uint32_t anchor_offset);
+                                                uint32_t anchor_offset,
+                                                uint8_t *fee_bytes,
+                                                uint64_t fee_len);
 
 struct CResult______u8 transaction_report(uint8_t coin, char *plan);
 
@@ -304,7 +316,9 @@ bool is_valid_tkey(char *sk);
 struct CResult_____c_char sweep_tkey(uint32_t last_height,
                                      char *sk,
                                      uint8_t pool,
-                                     uint32_t confirmations);
+                                     uint32_t confirmations,
+                                     uint8_t *fee_bytes,
+                                     uint64_t fee_len);
 
 struct CResult_u32 get_activation_date(void);
 
@@ -314,7 +328,9 @@ struct CResult_u32 sync_historical_prices(int64_t now, uint32_t days, char *curr
 
 void store_contact(uint32_t id, char *name, char *address, bool dirty);
 
-struct CResult_____c_char commit_unsaved_contacts(uint32_t anchor_offset);
+struct CResult_____c_char commit_unsaved_contacts(uint32_t anchor_offset,
+                                                  uint8_t *fee_bytes,
+                                                  uint64_t fee_len);
 
 void mark_message_read(uint32_t message, bool read);
 
