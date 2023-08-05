@@ -38,7 +38,10 @@ anyhow = "1.0.40"
 thiserror = "1.0.25"
 log = "0.4.14"
 flexi_logger = {version="0.22.3", features = ["compress"]}
+parking_lot = "0.12"
+ambassador = "0.3.5"
 assert_matches = "1.5"
+async-trait = "0.1.68"
 serde = {version = "1.0.126", features = ["derive"]}
 serde_json = "1.0.64"
 serde_with = { version = "2", features = ["hex"] }
@@ -55,7 +58,9 @@ prost = "0.10.3"
 rayon = "1.5.1"
 tiny-bip39 = "0.8"
 rand = "0.8.4"
-rusqlite = { version = "0.27.0", features = ["bundled", "modern_sqlite", "backup"] }
+rusqlite = { version = "0.29.0", features = ["bundled", "modern_sqlite", "backup"] }
+r2d2_sqlite = "0.22"
+r2d2 = "0.8"
 zip = "0.6"
 # Workaround for https://github.com/gyscos/zstd-rs/issues/177
 zstd-sys = "=2.0.1+zstd.1.5.2"
@@ -71,14 +76,14 @@ ripemd = "0.1.1"
 sha2 = "0.10.2"
 lazy_static = "1.4.0"
 rustyline = "9.1.2"
-clap = "3.1.18"
+clap = { version = "4.3.0", features = [ "derive" ] }
 chrono = "0.4.19"
 lazycell = "1.3.0"
 reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-features = false }
 ureq = { version = "2.6", optional = true }
 hex-literal = "0.4"
 pasta_curves = "0.5"
-f4jumble = { path = "../../librustzcash/components/f4jumble" }
+f4jumble = "0.1.0"
 
 # Halo
 orchard = "0.3.0"
