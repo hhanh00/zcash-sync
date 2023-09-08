@@ -81,8 +81,8 @@ pub async fn build_tx_plan_with_utxos(
     }
 
     let config = TransactionBuilderConfig::new(&change_address);
-    let fee = FeeFlat::from_rule(fee);
-    let tx_plan = note_selection::build_tx_plan::<FeeFlat>(
+    let fee = note_selection::FeeRule::from_rule(fee);
+    let tx_plan = note_selection::build_tx_plan(
         network,
         &fvk,
         &taddr,
