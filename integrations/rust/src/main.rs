@@ -16,7 +16,7 @@ async fn main() {
 
     // Initialize the library for Zcash (coin = 0)
     init_coin(0, "./zec.db").unwrap();
-    set_coin_lwd_url(0, "https://lwdv3.zecwallet.co:443"); // ZecWallet Lightwalletd URL
+    set_coin_lwd_url(0, "https://mainnet.lightwalletd.com:9067");
 
     // Create a new account with the ZEC pages viewing key
     let id_account = new_account(0, "test_account", Some(FVK.to_string()),
