@@ -248,10 +248,12 @@ pub fn select_inputs(
         };
         if needed[idx] > 0 {
             let available = utxo.amount;
-            let a = available.min(needed[idx]);
-            inputs.push(utxo.clone());
-            needed[idx] -= a;
-            change[idx] += available - a;
+            if available > 0 {
+                let a = available.min(needed[idx]);
+                inputs.push(utxo.clone());
+                needed[idx] -= a;
+                change[idx] += available - a;
+            }
         }
     }
 
