@@ -18,12 +18,13 @@ impl FeeRule {
     pub fn from_rule(fee_config: &FeeT) -> Self {
         match fee_config.scheme {
             0 => FeeRule::FeeZIP327(FeeZIP327 {}),
-            1 => FeeRule::FeeFlat(FeeFlat { fee: fee_config.fee }),
+            1 => FeeRule::FeeFlat(FeeFlat {
+                fee: fee_config.fee,
+            }),
             _ => unreachable!(),
         }
     }
 }
-
 
 impl FeeCalculator for FeeRule {
     fn calculate_fee(&self, inputs: &[UTXO], outputs: &[Fill]) -> u64 {

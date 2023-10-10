@@ -179,13 +179,15 @@ pub async fn download_chain(
             log::info!("Canceling download");
             break;
         }
-        if prev_hash.is_some() && block.prev_hash.as_slice() != prev_hash.unwrap() {
-            log::warn!(
-                "Reorg: {} != {}",
-                hex::encode(block.prev_hash.as_slice()),
-                hex::encode(prev_hash.unwrap())
-            );
-            anyhow::bail!(ChainError::Reorg);
+        if let Some(prev_hash) = prev_hash.as_ref() {
+            if block.prev_hash.as_slice() != prev_hash {
+                log::warn!(
+                    "Reorg: {} != {}",
+                    hex::encode(block.prev_hash.as_slice()),
+                    hex::encode(prev_hash)
+                );
+                anyhow::bail!(ChainError::Reorg);
+            }
         }
         let mut ph = [0u8; 32];
         ph.copy_from_slice(&block.hash);
