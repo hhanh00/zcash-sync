@@ -1,6 +1,6 @@
 use crate::fountain::FountainCodes;
 use crate::mempool::{MemPool, MemPoolRunner};
-use crate::{connect_lightwalletd, CompactTxStreamerClient, DbAdapter};
+use crate::{connect_lightwalletd, CompactTxStreamerClient, Connection, DbAdapter};
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;
@@ -72,7 +72,12 @@ pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
 pub fn migrate_db(coin: u8, db_path: &str) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let chain = c.chain;
-    DbAdapter::migrate_db(chain.network(), db_path, &c.passwd, chain.has_unified())?;
+    DbAdapter::migrate_db(
+        chain.network(),
+        &c.connection(),
+        &c.passwd,
+        chain.has_unified(),
+    )?;
     Ok(())
 }
 
@@ -90,9 +95,9 @@ pub struct CoinConfig {
     pub id_account: u32,
     pub height: u32,
     pub lwd_url: Option<String>,
-    pub passwd: String,
     pub db_path: Option<String>,
-    pub db: Option<Arc<Mutex<DbAdapter>>>,
+    pub passwd: String,
+    pub pool: Option<r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>>,
     pub chain: &'static (dyn CoinChain + Send),
 }
 
@@ -105,14 +110,17 @@ impl CoinConfig {
             id_account: 0,
             height: 0,
             lwd_url: None,
-            passwd: String::new(),
             db_path: None,
-            db: None,
+            passwd: String::new(),
+            pool: None,
             chain,
         }
     }
 
     pub fn set_db_path(&mut self, db_path: &str) -> anyhow::Result<()> {
+        let manager = r2d2_sqlite::SqliteConnectionManager::file(db_path);
+        let pool = r2d2::Pool::new(manager)?;
+        self.pool = Some(pool);
         self.db_path = Some(db_path.to_string());
         Ok(())
     }
@@ -121,7 +129,7 @@ impl CoinConfig {
         let network = self.chain.network();
         DbAdapter::migrate_db(
             network,
-            self.db_path.as_ref().unwrap(),
+            &self.connection(),
             &self.passwd,
             self.chain.has_unified(),
         )?;
@@ -129,9 +137,8 @@ impl CoinConfig {
     }
 
     pub fn open_db(&mut self) -> anyhow::Result<()> {
-        let mut db = DbAdapter::new(self.coin_type, self.db_path.as_ref().unwrap(), &self.passwd)?;
+        let mut db = DbAdapter::new(self.coin_type, self.connection())?;
         db.init_db()?;
-        self.db = Some(Arc::new(Mutex::new(db)));
         Ok(())
     }
 
@@ -152,18 +159,25 @@ impl CoinConfig {
         c.height = height;
     }
 
-    pub fn db(&self) -> anyhow::Result<MutexGuard<DbAdapter>> {
-        let db = self.db.as_ref().unwrap();
-        let db = db.lock().unwrap();
-        Ok(db)
-    }
-
     pub async fn connect_lwd(&self) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
         if let Some(lwd_url) = &self.lwd_url {
             connect_lightwalletd(lwd_url).await
         } else {
             Err(anyhow!("LWD URL Not set"))
         }
+    }
+
+    pub fn db(&self) -> anyhow::Result<DbAdapter> {
+        DbAdapter::new(self.coin_type, self.connection())
+    }
+
+    pub fn connection(&self) -> Connection {
+        let Some(pool) = self.pool.as_ref() else {
+            panic!("No db path")
+        };
+        let connection = pool.get().unwrap();
+        let _ = crate::db::cipher::set_db_passwd(&connection, &self.passwd);
+        todo!()
     }
 }
 

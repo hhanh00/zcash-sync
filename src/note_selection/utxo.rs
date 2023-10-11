@@ -13,8 +13,7 @@ pub async fn fetch_utxos(
         utxos.extend(get_transparent_utxos(coin, account).await?);
     }
     let coin = CoinConfig::get(coin);
-    let db = coin.db.as_ref().unwrap();
-    let db = db.lock().unwrap();
+    let db = coin.db()?;
     if excluded_flags & 2 == 0 {
         utxos.extend(db.get_unspent_received_notes(account, checkpoint_height, false)?);
     }
@@ -27,8 +26,7 @@ pub async fn fetch_utxos(
 async fn get_transparent_utxos(coin: u8, account: u32) -> anyhow::Result<Vec<UTXO>> {
     let coin = CoinConfig::get(coin);
     let taddr = {
-        let db = coin.db.as_ref().unwrap();
-        let db = db.lock().unwrap();
+        let db = coin.db()?;
         db.get_taddr(account)?
     };
     if let Some(taddr) = taddr {

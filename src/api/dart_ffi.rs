@@ -4,13 +4,13 @@ use crate::db::FullEncryptedBackup;
 #[cfg(feature = "ledger2")]
 use crate::ledger2;
 use crate::note_selection::TransactionReport;
+use crate::Connection;
 use crate::{ChainError, TransactionPlan, Tx};
 use allo_isolate::{ffi, IntoDart};
 use android_logger::Config;
 use flatbuffers::FlatBufferBuilder;
 use lazy_static::lazy_static;
 use log::Level;
-use rusqlite::Connection;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
@@ -24,9 +24,8 @@ const MAX_COINS: u8 = 2;
 
 fn with_coin<T, F: Fn(&Connection) -> anyhow::Result<T>>(coin: u8, f: F) -> anyhow::Result<T> {
     let c = CoinConfig::get(coin);
-    let db = c.db()?;
-    let connection = &db.connection;
-    f(connection)
+    let connection = c.connection();
+    f(&connection)
 }
 
 #[no_mangle]
@@ -840,7 +839,7 @@ pub unsafe extern "C" fn zip_backup(key: *mut c_char, dst_dir: *mut c_char) -> C
         for coin in 0..MAX_COINS {
             let c = CoinConfig::get(coin);
             let db = c.db().unwrap();
-            let db_path = Path::new(&db.db_path);
+            let db_path = Path::new(c.db_path.as_ref().unwrap());
             let db_name = db_path.file_name().unwrap().to_string_lossy();
             backup.add(&db.connection, &db_name)?;
         }
@@ -1194,7 +1193,7 @@ pub unsafe extern "C" fn decrypt_db(db_path: *mut c_char, passwd: *mut c_char) -
     from_c_str!(passwd);
     from_c_str!(db_path);
     let res = || {
-        let connection = Connection::open(&*db_path)?;
+        let connection = rusqlite::Connection::open(&*db_path)?;
         let valid = crate::db::cipher::check_passwd(&connection, &passwd)?;
         Ok(valid)
     };

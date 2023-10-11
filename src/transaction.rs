@@ -36,8 +36,7 @@ pub async fn get_transaction_details(coin: u8) -> anyhow::Result<()> {
     let mut keys = HashMap::new();
 
     let reqs = {
-        let db = c.db.as_ref().unwrap();
-        let db = db.lock().unwrap();
+        let db = c.db()?;
         let reqs = db.get_txid_without_memo()?;
         for req in reqs.iter() {
             if !keys.contains_key(&req.account) {
@@ -56,8 +55,7 @@ pub async fn get_transaction_details(coin: u8) -> anyhow::Result<()> {
         details.push(tx_details);
     }
 
-    let db = c.db.as_ref().unwrap();
-    let db = db.lock().unwrap();
+    let db = c.db()?;
     for tx_details in details.iter() {
         db.update_transaction_with_memo(tx_details)?;
         for c in tx_details.contacts.iter() {

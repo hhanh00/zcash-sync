@@ -1,10 +1,9 @@
 use super::optimize::{allocate_funds, fill, group_orders};
 use super::types::*;
 use super::TransactionBuilderError::NotEnoughFunds;
-use crate::note_selection::{build_tx_plan, FeeFlat};
+use crate::note_selection::build_tx_plan;
 use crate::note_selection::fee::{FeeCalculator, FeeZIP327};
 use crate::note_selection::optimize::select_inputs;
-use crate::Hash;
 use assert_matches::assert_matches;
 use serde::Serialize;
 use serde_json::Value;
@@ -739,7 +738,7 @@ fn test_tx_plan() {
         &TransactionBuilderConfig {
             change_address: CHANGE_ADDRESS.to_string(),
         },
-        &FeeZIP327 {}
+        &FeeZIP327 {},
     )
     .unwrap();
     let simple_plan: SimpleTxPlan = tx_plan.into();

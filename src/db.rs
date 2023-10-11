@@ -8,11 +8,11 @@ use crate::sync::tree::{CTree, TreeCheckpoint};
 use crate::taddr::{derive_tkeys, TransparentTxInfo};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
-use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Hash};
+use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Connection, Hash};
 use anyhow::anyhow;
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
-use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
+use rusqlite::{params, OpenFlags, OptionalExtension, Transaction};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -39,17 +39,9 @@ pub use backup::FullEncryptedBackup;
 #[allow(dead_code)]
 pub const DEFAULT_DB_PATH: &str = "zec.db";
 
-#[derive(Clone)]
-pub struct DbAdapterBuilder {
-    pub coin_type: CoinType,
-    pub db_path: String,
-    pub passwd: String,
-}
-
 pub struct DbAdapter {
     pub coin_type: CoinType,
     pub connection: Connection,
-    pub db_path: String,
 }
 
 #[derive(Debug)]
@@ -94,37 +86,20 @@ pub fn wrap_query_no_rows(name: &'static str) -> impl Fn(rusqlite::Error) -> any
     }
 }
 
-impl DbAdapterBuilder {
-    pub fn build(&self) -> anyhow::Result<DbAdapter> {
-        DbAdapter::new(self.coin_type, &self.db_path, &self.passwd)
-    }
-}
-
 impl DbAdapter {
-    pub fn new(coin_type: CoinType, db_path: &str, passwd: &str) -> anyhow::Result<DbAdapter> {
-        let connection = Connection::open(db_path)?;
-        set_db_passwd(&connection, passwd)?;
+    pub fn new(coin_type: CoinType, connection: Connection) -> anyhow::Result<DbAdapter> {
         Ok(DbAdapter {
             coin_type,
             connection,
-            db_path: db_path.to_owned(),
         })
     }
 
     pub fn migrate_db(
         network: &Network,
-        db_path: &str,
+        connection: &Connection,
         passwd: &str,
         has_ua: bool,
     ) -> anyhow::Result<()> {
-        let dir = Path::new(db_path)
-            .parent()
-            .ok_or(anyhow!("Invalid db path"))?;
-        std::fs::create_dir_all(dir)?;
-        let connection = Connection::open_with_flags(
-            db_path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
-        )?;
         set_db_passwd(&connection, passwd)?;
         connection.query_row("PRAGMA journal_mode=wal", [], |_| Ok(()))?;
         migration::init_db(&connection, network, has_ua)?;
@@ -443,13 +418,13 @@ impl DbAdapter {
         witness: &sync::Witness,
         height: u32,
         id_note: u32,
-        connection: &Connection,
+        db_tx: &Transaction,
         shielded_pool: &str,
     ) -> anyhow::Result<()> {
         log::debug!("+store_witness");
         let mut bb: Vec<u8> = vec![];
         witness.write(&mut bb)?;
-        connection.execute(
+        db_tx.execute(
             &format!(
                 "INSERT INTO {}_witnesses(note, height, witness) VALUES (?1, ?2, ?3)",
                 shielded_pool
@@ -461,12 +436,12 @@ impl DbAdapter {
     }
 
     pub fn store_block_timestamp(
-        &self,
+        connection: &Transaction,
         height: u32,
         hash: &[u8],
         timestamp: u32,
     ) -> anyhow::Result<()> {
-        self.connection.execute(
+        connection.execute(
             "INSERT INTO blocks(height, hash, timestamp) VALUES (?1,?2,?3)",
             params![height, hash, timestamp],
         )?;
@@ -476,7 +451,7 @@ impl DbAdapter {
     pub fn store_tree(
         height: u32,
         tree: &CTree,
-        db_tx: &Connection,
+        db_tx: &Transaction,
         shielded_pool: &str,
     ) -> anyhow::Result<()> {
         let mut bb: Vec<u8> = vec![];
@@ -565,12 +540,11 @@ impl DbAdapter {
     }
 
     pub fn get_tree_by_name(
-        &self,
+        connection: &Transaction,
         height: u32,
         shielded_pool: &str,
     ) -> anyhow::Result<TreeCheckpoint> {
-        let tree = self
-            .connection
+        let tree = connection
             .query_row(
                 &format!("SELECT tree FROM {}_tree WHERE height = ?1", shielded_pool),
                 [height],
@@ -584,7 +558,7 @@ impl DbAdapter {
         match tree {
             Some(tree) => {
                 let tree = CTree::read(&*tree)?;
-                let mut statement = self.connection.prepare(
+                let mut statement = connection.prepare(
                     &format!("SELECT id_note, witness FROM {}_witnesses w, received_notes n WHERE w.height = ?1 AND w.note = n.id_note AND (n.spent IS NULL OR n.spent = 0)", shielded_pool))?;
                 let ws = statement.query_map(params![height], |row| {
                     let id_note: u32 = row.get(0)?;
@@ -628,9 +602,11 @@ impl DbAdapter {
         Ok(nfs)
     }
 
-    pub fn get_unspent_nullifiers(&self) -> anyhow::Result<Vec<ReceivedNoteShort>> {
+    pub fn get_unspent_nullifiers(
+        connection: &Transaction,
+    ) -> anyhow::Result<Vec<ReceivedNoteShort>> {
         let sql = "SELECT id_note, account, nf, value FROM received_notes WHERE spent IS NULL OR spent = 0";
-        let mut statement = self.connection.prepare(sql)?;
+        let mut statement = connection.prepare(sql)?;
         let nfs_res = statement.query_map(params![], |row| {
             let id: u32 = row.get(0)?;
             let account: u32 = row.get(1)?;
@@ -741,7 +717,7 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn purge_old_witnesses(&mut self, height: u32) -> anyhow::Result<()> {
+    pub fn purge_old_witnesses(connection: &Connection, height: u32) -> anyhow::Result<()> {
         log::debug!("+purge_old_witnesses");
         const BLOCKS_PER_HOUR: u32 = 60 * 60 / 75;
         const BLOCKS_PER_DAY: u32 = 24 * BLOCKS_PER_HOUR;
@@ -749,21 +725,24 @@ impl DbAdapter {
         // Keep the last hour
         for i in 2..=24 {
             // 1 checkpoint per hour
-            self.prune_interval(
+            Self::prune_interval(
+                connection,
                 height - i * BLOCKS_PER_HOUR,
                 height - (i - 1) * BLOCKS_PER_HOUR,
             )?;
         }
         for i in 2..=30 {
             // 1 checkpoint per day
-            self.prune_interval(
+            Self::prune_interval(
+                connection,
                 height - i * BLOCKS_PER_DAY,
                 height - (i - 1) * BLOCKS_PER_DAY,
             )?;
         }
         for i in 2..=12 {
             // 1 checkpoint per 30 days
-            self.prune_interval(
+            Self::prune_interval(
+                connection,
                 height - i * BLOCKS_PER_MONTH,
                 height - (i - 1) * BLOCKS_PER_MONTH,
             )?;
@@ -774,16 +753,17 @@ impl DbAdapter {
     }
 
     // Only keep the oldest checkpoint in [low, high)
-    fn prune_interval(&mut self, low: u32, high: u32) -> anyhow::Result<()> {
+    fn prune_interval(connection: &Connection, low: u32, high: u32) -> anyhow::Result<()> {
         log::debug!("prune_interval {} {}", low, high);
-        let keep_height: Option<u32> = self.connection.query_row(
+        let keep_height: Option<u32> = connection.query_row(
             "SELECT MIN(height) FROM blocks WHERE height >= ?1 AND height < ?2",
             params![low, high],
             |row| row.get(0),
         )?;
         if let Some(keep_height) = keep_height {
             log::info!("keep checkpoint {}", keep_height);
-            let transaction = self.connection.transaction()?;
+            let transaction =
+                Transaction::new_unchecked(connection, rusqlite::TransactionBehavior::Deferred)?;
             transaction.execute(
                 "DELETE FROM sapling_witnesses WHERE height >= ?1 AND height < ?2 AND height != ?3",
                 params![low, high, keep_height],
@@ -848,7 +828,6 @@ impl DbAdapter {
 
     pub fn get_account_info(&self, account: u32) -> anyhow::Result<AccountData> {
         assert_ne!(account, 0);
-        log::info!("get_account_info {} {}", self.db_path, account);
         let account_data = self
             .connection
             .query_row(
@@ -1295,17 +1274,4 @@ pub struct AccountData {
     pub fvk: String,
     pub address: String,
     pub aindex: u32,
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::db::{DbAdapter, DEFAULT_DB_PATH};
-    use zcash_params::coin::CoinType;
-
-    #[test]
-    fn test_balance() {
-        let db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, "").unwrap();
-        let balance = db.get_balance(1).unwrap();
-        println!("{}", balance);
-    }
 }

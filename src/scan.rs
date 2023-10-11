@@ -5,7 +5,7 @@ use crate::chain::{download_chain, DecryptNode};
 use crate::transaction::get_transaction_details;
 use crate::{
     connect_lightwalletd, ChainError, CoinConfig, CompactBlock, CompactSaplingOutput, CompactTx,
-    DbAdapterBuilder,
+    DbAdapter,
 };
 
 use anyhow::anyhow;
@@ -57,7 +57,8 @@ pub struct TxIdHeight {
     index: u32,
 }
 
-type SaplingSynchronizer = Synchronizer<
+type SaplingSynchronizer<'a> = Synchronizer<
+    'a,
     Network,
     SaplingDomain<Network>,
     SaplingViewKey,
@@ -66,7 +67,8 @@ type SaplingSynchronizer = Synchronizer<
     SaplingHasher,
 >;
 
-type OrchardSynchronizer = Synchronizer<
+type OrchardSynchronizer<'a> = Synchronizer<
+    'a,
     Network,
     OrchardDomain,
     OrchardViewKey,
@@ -113,14 +115,12 @@ async fn sync_async_inner<'a>(
 ) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let ld_url = c.lwd_url.as_ref().unwrap().clone();
-    let db_path = c.db_path.as_ref().unwrap().clone();
 
     let network = *c.chain.network();
 
     let mut client = connect_lightwalletd(&ld_url).await?;
     let (start_height, prev_hash, sapling_vks, orchard_vks) = {
-        let db = c.db.as_ref().unwrap();
-        let db = db.lock().unwrap();
+        let db = c.db()?;
         let height = db.get_db_height()?;
         let hash = db.get_db_hash(height)?;
         let sapling_vks = db.get_sapling_fvks()?;
@@ -149,11 +149,6 @@ async fn sync_async_inner<'a>(
         Ok::<_, anyhow::Error>(())
     });
 
-    let db_builder = DbAdapterBuilder {
-        coin_type: c.coin_type,
-        db_path: db_path.clone(),
-        passwd: c.passwd.clone(),
-    };
     let mut progress = Progress {
         height: 0,
         trial_decryptions: 0,
@@ -171,6 +166,8 @@ async fn sync_async_inner<'a>(
         progress.downloaded += blocks.1;
         progress.height = last_height;
 
+        let mut connection = c.connection();
+        let db_tx = connection.transaction()?;
         // Sapling
         log::info!("Sapling");
         {
@@ -180,7 +177,7 @@ async fn sync_async_inner<'a>(
                 decrypter,
                 warper,
                 sapling_vks.clone(),
-                db_builder.clone(),
+                &db_tx,
                 "sapling".to_string(),
             );
             synchronizer.initialize(height)?;
@@ -197,7 +194,7 @@ async fn sync_async_inner<'a>(
                     decrypter,
                     warper,
                     orchard_vks.clone(),
-                    db_builder.clone(),
+                    &db_tx,
                     "orchard".to_string(),
                 );
                 synchronizer.initialize(height)?;
@@ -207,8 +204,8 @@ async fn sync_async_inner<'a>(
             }
         }
 
-        let db = db_builder.build()?;
-        db.store_block_timestamp(last_height, &last_hash, last_timestamp)?;
+        DbAdapter::store_block_timestamp(&db_tx, last_height, &last_hash, last_timestamp)?;
+        db_tx.commit()?;
         height = last_height;
         let cb = progress_callback.lock().await;
         cb(progress.clone());
@@ -219,8 +216,8 @@ async fn sync_async_inner<'a>(
     if get_tx {
         get_transaction_details(coin).await?;
     }
-    let mut db = db_builder.build()?;
-    db.purge_old_witnesses(height)?;
+    let connection = c.connection();
+    DbAdapter::purge_old_witnesses(&connection, height)?;
 
     Ok(())
 }

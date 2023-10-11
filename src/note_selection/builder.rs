@@ -4,7 +4,7 @@ use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::Witness;
-use crate::{AccountData, CoinConfig};
+use crate::{AccountData, CoinConfig, DbAdapter};
 use anyhow::anyhow;
 use jubjub::Fr;
 use orchard::builder::Builder as OrchardBuilder;
@@ -46,14 +46,16 @@ pub struct TxBuilderContext {
 impl TxBuilderContext {
     pub fn from_height(coin: u8, height: u32) -> anyhow::Result<Self> {
         let c = CoinConfig::get(coin);
-        let db = c.db.as_ref().unwrap();
-        let db = db.lock().unwrap();
-        let TreeCheckpoint { tree, .. } = db.get_tree_by_name(height, "sapling")?;
+        let mut connection = c.connection();
+        let db_tx = connection.transaction()?;
+        let TreeCheckpoint { tree, .. } =
+            DbAdapter::get_tree_by_name(&db_tx, height, "sapling")?;
         let hasher = SaplingHasher {};
         let sapling_anchor = tree.root(32, &SAPLING_ROOTS, &hasher);
 
         let orchard_anchor = if c.chain.has_unified() {
-            let TreeCheckpoint { tree, .. } = db.get_tree_by_name(height, "orchard")?;
+            let TreeCheckpoint { tree, .. } =
+                DbAdapter::get_tree_by_name(&db_tx, height, "orchard")?;
             let hasher = OrchardHasher::new();
             Some(tree.root(32, &ORCHARD_ROOTS, &hasher))
         } else {

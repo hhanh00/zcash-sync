@@ -1,8 +1,9 @@
 use crate::chain::Nf;
-use crate::db::{DbAdapterBuilder, ReceivedNote, ReceivedNoteShort};
-use crate::{CompactBlock, DbAdapter};
+use crate::db::{ReceivedNote, ReceivedNoteShort};
+use crate::{CompactBlock, Connection, DbAdapter};
 use anyhow::Result;
 use rayon::prelude::*;
+use rusqlite::Transaction;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
@@ -19,6 +20,7 @@ pub use trial_decrypt::{
 };
 
 pub struct Synchronizer<
+    'a,
     N: Parameters,
     D: BatchDomain<ExtractedCommitmentBytes = [u8; 32]>,
     VK: ViewKey<D>,
@@ -29,7 +31,7 @@ pub struct Synchronizer<
     pub decrypter: TD,
     pub warper: WarpProcessor<H>,
     pub vks: Vec<VK>,
-    pub db: DbAdapterBuilder,
+    pub db_tx: &'a Transaction<'a>,
     pub shielded_pool: String,
 
     pub note_position: usize,
@@ -40,26 +42,27 @@ pub struct Synchronizer<
 }
 
 impl<
+        'a,
         N: Parameters + Sync,
         D: BatchDomain<ExtractedCommitmentBytes = [u8; 32]> + Sync + Send,
         VK: ViewKey<D> + Sync + Send,
         DN: DecryptedNote<D, VK> + Sync,
         TD: TrialDecrypter<N, D, VK, DN> + Sync,
         H: Hasher,
-    > Synchronizer<N, D, VK, DN, TD, H>
+    > Synchronizer<'a, N, D, VK, DN, TD, H>
 {
     pub fn new(
         decrypter: TD,
         warper: WarpProcessor<H>,
         vks: Vec<VK>,
-        db: DbAdapterBuilder,
+        db_tx: &'a Transaction<'a>,
         shielded_pool: String,
     ) -> Self {
         Synchronizer {
             decrypter,
             warper,
             vks,
-            db,
+            db_tx,
             shielded_pool,
 
             note_position: 0,
@@ -71,13 +74,12 @@ impl<
     }
 
     pub fn initialize(&mut self, height: u32) -> Result<()> {
-        let db = self.db.build()?;
         let TreeCheckpoint { tree, witnesses } =
-            db.get_tree_by_name(height, &self.shielded_pool)?;
+            DbAdapter::get_tree_by_name(self.db_tx, height, &self.shielded_pool)?;
         self.tree = tree;
         self.witnesses = witnesses;
         self.note_position = self.tree.get_position();
-        let nfs = db.get_unspent_nullifiers()?;
+        let nfs = DbAdapter::get_unspent_nullifiers(self.db_tx)?;
         for rn in nfs.into_iter() {
             self.nullifiers.insert(rn.nf.clone(), rn);
         }
@@ -98,9 +100,7 @@ impl<
             .map(|b| b.count_outputs)
             .sum::<u32>() as usize;
 
-        let mut db = self.db.build()?;
         self.warper.initialize(&self.tree, &self.witnesses);
-        let db_tx = db.begin_transaction()?;
 
         // Detect new received notes
         let mut new_witnesses = vec![];
@@ -112,13 +112,13 @@ impl<
                     dectx.height,
                     dectx.timestamp,
                     dectx.tx_index as u32,
-                    &db_tx,
+                    &self.db_tx,
                 )?;
                 let mut balance: i64 = 0;
                 for decn in dectx.notes.iter() {
                     let position = decn.position(self.note_position);
                     let rn: ReceivedNote = decn.to_received_note(position as u64);
-                    let id_note = DbAdapter::store_received_note(&rn, id_tx, position, &db_tx)?;
+                    let id_note = DbAdapter::store_received_note(&rn, id_tx, position, &self.db_tx)?;
                     let nf = Nf(rn.nf.try_into().unwrap());
                     self.nullifiers.insert(
                         nf,
@@ -139,7 +139,7 @@ impl<
                     new_witnesses.push(witness);
                     balance += rn.value as i64;
                 }
-                DbAdapter::add_value(id_tx, balance, &db_tx)?;
+                DbAdapter::add_value(id_tx, balance, &self.db_tx)?;
             }
             self.note_position += decb.count_outputs as usize;
         }
@@ -158,10 +158,10 @@ impl<
                             b.height as u32,
                             b.time,
                             tx_index as u32,
-                            &db_tx,
+                            &self.db_tx,
                         )?;
-                        DbAdapter::add_value(id_tx, -(rn.value as i64), &db_tx)?;
-                        DbAdapter::mark_spent(rn.id, b.height as u32, &db_tx)?;
+                        DbAdapter::add_value(id_tx, -(rn.value as i64), &self.db_tx)?;
+                        DbAdapter::mark_spent(rn.id, b.height as u32, &self.db_tx)?;
                         self.nullifiers.remove(sp);
                     }
                 }
@@ -177,63 +177,12 @@ impl<
 
         // Store witnesses
         for w in updated_witnesses.iter() {
-            DbAdapter::store_witness(w, height, w.id_note, &db_tx, &self.shielded_pool)?;
+            DbAdapter::store_witness(w, height, w.id_note, &self.db_tx, &self.shielded_pool)?;
         }
-        DbAdapter::store_tree(height, &updated_tree, &db_tx, &self.shielded_pool)?;
+        DbAdapter::store_tree(height, &updated_tree, &self.db_tx, &self.shielded_pool)?;
         self.tree = updated_tree;
         self.witnesses = updated_witnesses;
 
-        db_tx.commit()?;
         Ok(count_outputs * self.vks.len())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Synchronizer;
-    use crate::coinconfig::COIN_CONFIG;
-    use crate::db::DbAdapterBuilder;
-    use crate::init_coin;
-    use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
-    use crate::sync::tree::WarpProcessor;
-    use crate::sync::CTree;
-    use std::collections::HashMap;
-    use zcash_primitives::consensus::Network;
-    use zcash_primitives::sapling::note_encryption::SaplingDomain;
-
-    type SaplingSynchronizer = Synchronizer<
-        Network,
-        SaplingDomain<Network>,
-        SaplingViewKey,
-        DecryptedSaplingNote,
-        SaplingDecrypter<Network>,
-        SaplingHasher,
-    >;
-
-    #[test]
-    fn test() {
-        init_coin(0, "zec.db").unwrap();
-        let coin = COIN_CONFIG[0].lock().unwrap();
-        let network = coin.chain.network();
-        let mut synchronizer = SaplingSynchronizer {
-            decrypter: SaplingDecrypter::new(*network),
-            warper: WarpProcessor::new(SaplingHasher::default()),
-            vks: vec![],
-            db: DbAdapterBuilder {
-                coin_type: coin.coin_type,
-                db_path: coin.db_path.as_ref().unwrap().to_owned(),
-                passwd: String::new(),
-            },
-            shielded_pool: "sapling".to_string(),
-            tree: CTree::new(),
-            witnesses: vec![],
-
-            note_position: 0,
-            nullifiers: HashMap::new(),
-            _phantom: Default::default(),
-        };
-
-        synchronizer.initialize(1000).unwrap();
-        synchronizer.process(&vec![]).unwrap();
     }
 }
