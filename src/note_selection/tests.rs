@@ -1,7 +1,7 @@
 use super::optimize::{allocate_funds, fill, group_orders};
 use super::types::*;
 use super::TransactionBuilderError::NotEnoughFunds;
-use crate::note_selection::build_tx_plan;
+use crate::note_selection::{build_tx_plan, FeeFlat};
 use crate::note_selection::fee::{FeeCalculator, FeeZIP327};
 use crate::note_selection::optimize::select_inputs;
 use crate::Hash;
@@ -59,9 +59,10 @@ macro_rules! order {
     ($id:expr, $q:expr, $destinations:expr) => {
         Order {
             id: $id,
-            amount: $q * 1000,
+            raw_amount: $q * 1000,
             destinations: $destinations,
             memo: MemoBytes::empty(),
+            take_fee: false,
         }
     };
 }
@@ -71,7 +72,7 @@ macro_rules! t {
         order!(
             $id,
             $q,
-            [Some(Destination::Transparent([0u8; 20])), None, None]
+            [Some(Destination::Transparent([0u8; 21])), None, None]
         )
     };
 }
@@ -94,7 +95,7 @@ macro_rules! ts {
             $id,
             $q,
             [
-                Some(Destination::Transparent([0u8; 20])),
+                Some(Destination::Transparent([0u8; 21])),
                 Some(Destination::Sapling([0u8; 43])),
                 None
             ]
@@ -108,7 +109,7 @@ macro_rules! to {
             $id,
             $q,
             [
-                Some(Destination::Transparent([0u8; 20])),
+                Some(Destination::Transparent([0u8; 21])),
                 None,
                 Some(Destination::Orchard([0u8; 43]))
             ]
@@ -136,7 +137,7 @@ macro_rules! tso {
             $id,
             $q,
             [
-                Some(Destination::Transparent([0u8; 20])),
+                Some(Destination::Transparent([0u8; 21])),
                 Some(Destination::Sapling([0u8; 43])),
                 Some(Destination::Orchard([0u8; 43]))
             ]
@@ -650,7 +651,7 @@ fn test_fill() {
     let allocation =
         allocate_funds(&amounts, &PoolAllocation([200_000, 200_000, 200_000])).unwrap();
 
-    let fills = fill(&orders, &groups, &amounts, &allocation).unwrap();
+    let fills = fill(&orders, &groups, &amounts, &allocation, 0).unwrap();
     log::info!("{:?}", allocation);
     log::info!("{:?}", fills);
 
@@ -705,9 +706,10 @@ fn test_fees() {
     let (groups, amounts) = group_orders(&orders, 0).unwrap();
     let allocation =
         allocate_funds(&amounts, &PoolAllocation([200_000, 200_000, 200_000])).unwrap();
-    let fills = fill(&orders, &groups, &amounts, &allocation).unwrap();
+    let fills = fill(&orders, &groups, &amounts, &allocation, 0).unwrap();
 
-    let fees = FeeZIP327::calculate_fee(&utxos, &fills);
+    let f = FeeZIP327 {};
+    let fees = f.calculate_fee(&utxos, &fills);
     assert_eq!(fees, 150_000);
 }
 
@@ -727,6 +729,9 @@ fn test_tx_plan() {
     let tx_plan = build_tx_plan::<FeeZIP327>(
         &Network::MainNetwork,
         "",
+        "",
+        "",
+        0,
         0,
         &None,
         &utxos,
@@ -734,6 +739,7 @@ fn test_tx_plan() {
         &TransactionBuilderConfig {
             change_address: CHANGE_ADDRESS.to_string(),
         },
+        &FeeZIP327 {}
     )
     .unwrap();
     let simple_plan: SimpleTxPlan = tx_plan.into();

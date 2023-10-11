@@ -88,12 +88,12 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_quotes() {
         let currency = "EUR";
-        let mut db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH).unwrap();
+        let mut db = DbAdapter::new(CoinType::Zcash, DEFAULT_DB_PATH, "").unwrap();
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
-        let quotes = fetch_historical_prices(now, 365, currency, &db)
+        let quotes = fetch_historical_prices(0, now, 365, currency)
             .await
             .unwrap();
         for q in quotes.iter() {
