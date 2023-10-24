@@ -1,5 +1,5 @@
 use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
-use crate::db::data_generated::fb::{Fee, FeeT, ProgressT, Recipients, SendTemplate, Servers};
+use crate::db::data_generated::fb::{Fee, FeeT, ProgressT, PaymentURIT, Recipients, SendTemplate, Servers};
 use crate::db::FullEncryptedBackup;
 #[cfg(feature = "ledger2")]
 use crate::ledger2;
@@ -383,6 +383,24 @@ pub unsafe extern "C" fn valid_address(coin: u8, address: *mut c_char) -> bool {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn receivers_of_address(coin: u8, address: *mut c_char) -> u8 {
+    use zcash_client_backend::address::RecipientAddress;
+    from_c_str!(address);
+    match crate::key2::decode_address(coin, &address) {
+        None => 0,
+        Some(RecipientAddress::Transparent(_)) => 1,
+        Some(RecipientAddress::Shielded(_)) => 2,
+        Some(RecipientAddress::Unified(ua)) => {
+            let t = if ua.transparent().is_some() { 1 } else { 0 };
+            let s = if ua.sapling().is_some() { 2 } else { 0 };
+            let o = if ua.orchard().is_some() { 4 } else { 0 };
+            t + s + o
+        }
+    }
+}
+
+
+#[no_mangle]
 pub unsafe extern "C" fn get_diversified_address(ua_type: u8, time: u32) -> CResult<*mut c_char> {
     let res = || crate::api::account::get_diversified_address(ua_type, time);
     to_cresult_str(res())
@@ -713,8 +731,8 @@ pub async unsafe extern "C" fn get_activation_date() -> CResult<u32> {
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn get_block_by_time(time: u32) -> CResult<u32> {
-    let res = crate::api::sync::get_block_by_time(time).await;
+pub async unsafe extern "C" fn get_block_by_time(coin: u8, time: u32) -> CResult<u32> {
+    let res = crate::api::sync::get_block_by_time(coin, time).await;
     to_cresult(res)
 }
 
@@ -819,6 +837,24 @@ pub unsafe extern "C" fn parse_payment_uri(uri: *mut c_char) -> CResult<*mut c_c
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn decode_payment_uri(uri: *mut c_char) -> CResult<*const u8> {
+    from_c_str!(uri);
+    let payment_bytes = || {
+        let mut builder = FlatBufferBuilder::new();
+        let payment = crate::api::payment_uri::parse_payment_uri(&uri)?;
+        let payment = PaymentURIT {
+            address: Some(payment.address), 
+            amount: payment.amount,
+            memo: Some(payment.memo),
+        };
+        let data = payment.pack(&mut builder);
+        builder.finish(data, None);
+        Ok(builder.finished_data().to_vec())
+    };
+    to_cresult_bytes(payment_bytes())
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn generate_key() -> CResult<*const u8> {
     let res = || {
         let secret_key = FullEncryptedBackup::generate_key()?;
@@ -831,17 +867,19 @@ pub unsafe extern "C" fn generate_key() -> CResult<*const u8> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn zip_backup(key: *mut c_char, dst_dir: *mut c_char) -> CResult<u8> {
+pub unsafe extern "C" fn zip_backup(key: *mut c_char, 
+    path: *mut c_char, temp_dir: *mut c_char) -> CResult<u8> {
     from_c_str!(key);
-    from_c_str!(dst_dir);
+    from_c_str!(path);
+    from_c_str!(temp_dir);
     let res = || {
-        let mut backup = FullEncryptedBackup::new(&dst_dir);
+        let mut backup = FullEncryptedBackup::new(&path, &temp_dir);
         for coin in 0..MAX_COINS {
             let c = CoinConfig::get(coin);
-            let db = c.db().unwrap();
+            let connection = c.connection();
             let db_path = Path::new(c.db_path.as_ref().unwrap());
             let db_name = db_path.file_name().unwrap().to_string_lossy();
-            backup.add(&db.connection, &db_name)?;
+            backup.add(&connection, &db_name)?;
         }
         backup.close(&key)?;
         Ok(0)
@@ -852,15 +890,15 @@ pub unsafe extern "C" fn zip_backup(key: *mut c_char, dst_dir: *mut c_char) -> C
 #[no_mangle]
 pub unsafe extern "C" fn unzip_backup(
     key: *mut c_char,
-    data_path: *mut c_char,
-    dst_dir: *mut c_char,
+    path: *mut c_char,
+    temp_dir: *mut c_char,
 ) -> CResult<u8> {
     from_c_str!(key);
-    from_c_str!(data_path);
-    from_c_str!(dst_dir);
+    from_c_str!(path);
+    from_c_str!(temp_dir);
     let res = || {
-        let backup = FullEncryptedBackup::new(&dst_dir);
-        backup.restore(&key, &data_path)?;
+        let backup = FullEncryptedBackup::new(&path, &temp_dir);
+        backup.restore(&key, &path)?;
         Ok(0)
     };
     to_cresult(res())
@@ -957,7 +995,7 @@ pub unsafe extern "C" fn clear_tx_details(coin: u8, account: u32) -> CResult<u8>
 #[no_mangle]
 pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
     let res = |connection: &Connection| {
-        let accounts = crate::db::read::get_account_list(connection)?;
+        let accounts = crate::db::read::get_account_list(coin, connection)?;
         let mut builder = flatbuffers::FlatBufferBuilder::new();
         let root = accounts.pack(&mut builder);
         builder.finish(root, None);
@@ -965,6 +1003,15 @@ pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
         Ok(data)
     };
     to_cresult_bytes(with_coin(coin, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_first_account(coin: u8) -> CResult<u32> {
+    let res = |connection: &Connection| {
+        let id = crate::db::read::get_first_account(connection)?;
+        Ok(id)
+    };
+    to_cresult(with_coin(coin, res))
 }
 
 #[no_mangle]
@@ -1028,10 +1075,32 @@ pub unsafe extern "C" fn get_balances(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
-    let res = |connection: &Connection| {
-        let data = crate::db::read::get_db_height(connection)?;
+pub unsafe extern "C" fn get_pool_balances(
+    coin: u8,
+    id: u32,
+    confirmations: u32,
+) -> CResult<*const u8> {
+    let res = || {
+        let balances = crate::scan::get_pool_balances(coin, id, confirmations)?;
+        let mut builder = flatbuffers::FlatBufferBuilder::new();
+        let root = balances.pack(&mut builder);
+        builder.finish(root, None);
+        let data = builder.finished_data().to_vec();
         Ok(data)
+    };
+    to_cresult_bytes(res())
+}
+
+
+#[no_mangle]
+pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
+    let c = CoinConfig::get(coin);
+    let res = |connection: &Connection| {
+        let height = crate::db::read::get_db_height(&c.chain.network(), connection)?;
+        let mut builder = FlatBufferBuilder::new();
+        let height = height.pack(&mut builder);
+        builder.finish(height, None);
+        Ok(builder.finished_data().to_vec())
     };
     to_cresult_bytes(with_coin(coin, res))
 }
@@ -1124,6 +1193,19 @@ pub unsafe extern "C" fn delete_send_template(coin: u8, id: u32) -> CResult<u8> 
 pub unsafe extern "C" fn get_contacts(coin: u8) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let data = crate::db::read::get_contacts(connection)?;
+        Ok(data)
+    };
+    to_cresult_bytes(with_coin(coin, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_contact(coin: u8, id: u32) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let contact = crate::db::read::get_contact(connection, id)?;
+        let mut builder = flatbuffers::FlatBufferBuilder::new();
+        let root = contact.pack(&mut builder);
+        builder.finish(root, None);
+        let data = builder.finished_data().to_vec();
         Ok(data)
     };
     to_cresult_bytes(with_coin(coin, res))
@@ -1302,3 +1384,4 @@ fn unpack_fee(fee_bytes: *mut u8, fee_len: u64) -> FeeT {
     let fee_rule = flatbuffers::root::<Fee>(&fee_bytes).unwrap();
     fee_rule.unpack()
 }
+

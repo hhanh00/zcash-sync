@@ -2,15 +2,18 @@ use crate::chain::get_latest_height;
 use crate::db::AccountViewKey;
 
 use crate::chain::{download_chain, DecryptNode};
+use crate::db::data_generated::fb::*;
+use crate::taddr::get_taddr_balance;
 use crate::transaction::get_transaction_details;
 use crate::{
     connect_lightwalletd, ChainError, CoinConfig, CompactBlock, CompactSaplingOutput, CompactTx,
-    DbAdapter,
+    DbAdapter, Connection,
 };
 
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use orchard::note_encryption::OrchardDomain;
+use rusqlite::{params, OptionalExtension};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::{Builder, Runtime};
@@ -270,4 +273,51 @@ pub fn trial_decrypt_one(
     let decrypted_block = decrypted_block.first().unwrap();
     let note = decrypted_block.notes.first().map(|dn| dn.note.clone());
     Ok(note)
+}
+
+pub async fn coin_trp_sync(coin: u8) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    let mut client = c.connect_lwd().await?;
+    let connection = c.connection();
+    let mut query_addresses = connection.prepare("SELECT account, address FROM taddrs")?;
+    let res = query_addresses.query_map([], |r| {
+        let account = r.get::<_, u32>(0)?;
+        let address = r.get::<_, String>(1)?;
+        Ok((account, address))
+    })?;
+    let mut update_balance = connection.prepare("UPDATE taddrs SET balance = ?2 WHERE account = ?1")?;
+    for r in res {
+        let (account, address) = r?;
+        let balance = get_taddr_balance(&mut client, &address).await?;
+        update_balance.execute(params![account, balance])?;
+    }
+    Ok(())
+}
+
+fn get_balance(connection: &Connection, account: u32, height: u32, orchard: u8) -> anyhow::Result<u64> {
+    let balance = connection.query_row(
+        "SELECT SUM(value) FROM received_notes WHERE account = ?1 AND spent IS NULL AND orchard = ?3 AND height <= ?2 AND (excluded IS NULL OR NOT excluded)",
+        params![account, height, orchard], |row| {
+            let value = row.get::<_, Option<u64>>(0)?;
+            Ok(value.unwrap_or(0))
+        }).optional()?.unwrap_or(0);
+    Ok(balance)
+}
+
+pub fn get_pool_balances(coin: u8, account: u32, confirmations: u32) -> anyhow::Result<PoolBalanceT> {
+    let c = CoinConfig::get(coin);
+    let connection = c.connection();
+    let db = DbAdapter::new(c.coin_type, connection)?;
+    let h = db.get_db_height()? - confirmations;
+    let connection = db.inner();
+    let sapling = get_balance(&connection, account, h, 0)?;
+    let orchard = get_balance(&connection, account, h, 1)?;
+    let transparent = connection.query_row("SELECT balance FROM taddrs WHERE account = ?1", [account], 
+    |r| r.get::<_, Option<u64>>(0))?.unwrap_or_default();
+    
+    Ok(PoolBalanceT {
+        transparent,
+        sapling,
+        orchard,
+    })
 }

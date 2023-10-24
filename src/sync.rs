@@ -179,7 +179,7 @@ impl<
         for w in updated_witnesses.iter() {
             DbAdapter::store_witness(w, height, w.id_note, &self.db_tx, &self.shielded_pool)?;
         }
-        DbAdapter::store_tree(height, &updated_tree, &self.db_tx, &self.shielded_pool)?;
+        DbAdapter::store_tree(self.db_tx, height, &updated_tree, &self.shielded_pool)?;
         self.tree = updated_tree;
         self.witnesses = updated_witnesses;
 

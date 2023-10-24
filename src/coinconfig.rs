@@ -177,7 +177,7 @@ impl CoinConfig {
         };
         let connection = pool.get().unwrap();
         let _ = crate::db::cipher::set_db_passwd(&connection, &self.passwd);
-        todo!()
+        connection
     }
 }
 

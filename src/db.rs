@@ -9,14 +9,13 @@ use crate::taddr::{derive_tkeys, TransparentTxInfo};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Connection, Hash};
-use anyhow::anyhow;
+use ambassador::{delegatable_trait, delegate_remote};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
-use rusqlite::{params, OpenFlags, OptionalExtension, Transaction};
+use rusqlite::{params, OptionalExtension, Transaction, Params, Statement, Row};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::path::Path;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
@@ -42,6 +41,49 @@ pub const DEFAULT_DB_PATH: &str = "zec.db";
 pub struct DbAdapter {
     pub coin_type: CoinType,
     pub connection: Connection,
+}
+
+pub trait ConnectionOrTransaction {
+    fn sql_execute<P: Params>(&self, sql: &str, params: P) -> rusqlite::Result<usize>;
+    fn sql_prepare(&self, sql: &str) -> rusqlite::Result<Statement<'_>>;
+    fn sql_query_row<T, P, F>(&self, sql: &str, params: P, f: F) -> rusqlite::Result<T>
+        where
+            P: Params,
+            F: FnOnce(&Row<'_>) -> rusqlite::Result<T>;
+}
+
+impl <'conn> ConnectionOrTransaction for Transaction<'conn> {
+    fn sql_execute<P: Params>(&self, sql: &str, params: P) -> rusqlite::Result<usize> {
+        self.execute(sql, params)
+    }
+
+    fn sql_prepare(&self, sql: &str) -> rusqlite::Result<Statement<'_>> {
+        self.prepare(sql)
+    }
+
+    fn sql_query_row<T, P, F>(&self, sql: &str, params: P, f: F) -> rusqlite::Result<T>
+        where
+            P: Params,
+            F: FnOnce(&Row<'_>) -> rusqlite::Result<T> {
+        self.query_row(sql, params, f)
+    }
+}
+
+impl <'conn> ConnectionOrTransaction for Connection {
+    fn sql_execute<P: Params>(&self, sql: &str, params: P) -> rusqlite::Result<usize> {
+        self.execute(sql, params)
+    }
+
+    fn sql_prepare(&self, sql: &str) -> rusqlite::Result<Statement<'_>> {
+        self.prepare(sql)
+    }
+
+    fn sql_query_row<T, P, F>(&self, sql: &str, params: P, f: F) -> rusqlite::Result<T>
+        where
+            P: Params,
+            F: FnOnce(&Row<'_>) -> rusqlite::Result<T> {
+        self.query_row(sql, params, f)
+    }
 }
 
 #[derive(Debug)]
@@ -92,6 +134,10 @@ impl DbAdapter {
             coin_type,
             connection,
         })
+    }
+
+    pub fn inner(self) -> Connection {
+        self.connection
     }
 
     pub fn migrate_db(
@@ -435,28 +481,28 @@ impl DbAdapter {
         Ok(())
     }
 
-    pub fn store_block_timestamp(
-        connection: &Transaction,
+    pub fn store_block_timestamp<C: ConnectionOrTransaction>(
+        connection: &C,
         height: u32,
         hash: &[u8],
         timestamp: u32,
     ) -> anyhow::Result<()> {
-        connection.execute(
+        connection.sql_execute(
             "INSERT INTO blocks(height, hash, timestamp) VALUES (?1,?2,?3)",
             params![height, hash, timestamp],
         )?;
         Ok(())
     }
 
-    pub fn store_tree(
+    pub fn store_tree<C: ConnectionOrTransaction>(
+        connection: &C,
         height: u32,
         tree: &CTree,
-        db_tx: &Transaction,
         shielded_pool: &str,
     ) -> anyhow::Result<()> {
         let mut bb: Vec<u8> = vec![];
         tree.write(&mut bb)?;
-        db_tx.execute(
+        connection.sql_execute(
             &format!(
                 "INSERT INTO {}_tree(height, tree) VALUES (?1,?2)",
                 shielded_pool

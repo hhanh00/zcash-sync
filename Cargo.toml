@@ -29,7 +29,7 @@ required-features = ["dotenv"]
 
 [lib]
 name = "warp_api_ffi"
-crate-type = ["rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 nonempty = "0.7"

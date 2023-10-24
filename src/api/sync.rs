@@ -29,6 +29,7 @@ pub async fn coin_sync(
     let p_cb = Arc::new(Mutex::new(progress_callback));
     coin_sync_impl(coin, get_tx, anchor_offset, max_cost, p_cb.clone(), cancel).await?;
     coin_sync_impl(coin, get_tx, 0, u32::MAX, p_cb.clone(), cancel).await?;
+    crate::scan::coin_trp_sync(coin).await?;
     Ok(())
 }
 
@@ -141,8 +142,8 @@ pub async fn get_activation_date() -> anyhow::Result<u32> {
 /// Return the block height for a given timestamp
 /// # Arguments
 /// * `time`: seconds since epoch
-pub async fn get_block_by_time(time: u32) -> anyhow::Result<u32> {
-    let c = CoinConfig::get_active();
+pub async fn get_block_by_time(coin: u8, time: u32) -> anyhow::Result<u32> {
+    let c = CoinConfig::get(coin);
     let mut client = c.connect_lwd().await?;
     let date_time = crate::chain::get_block_by_time(c.chain.network(), &mut client, time).await?;
     Ok(date_time)

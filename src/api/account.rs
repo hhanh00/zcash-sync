@@ -7,7 +7,7 @@ use crate::db::data_generated::fb::{AddressBalanceT, AddressBalanceVecT, BackupT
 use crate::db::AccountData;
 use crate::key2::decode_key;
 use crate::orchard::OrchardKeyBytes;
-use crate::taddr::{derive_taddr, derive_tkeys};
+use crate::taddr::{derive_taddr, derive_tkeys, get_base58_tsk};
 use crate::unified::UnifiedAddressType;
 use crate::zip32::derive_zip32;
 use anyhow::anyhow;
@@ -125,6 +125,7 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
     let db = c.db()?;
+    println!("1");
     let AccountData {
         name,
         seed,
@@ -133,6 +134,7 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
         aindex,
         ..
     } = db.get_account_info(id_account)?;
+    println!("2");
     let orchard_keys = db.get_orchard(id_account)?;
     let uvk = orchard_keys.map(|OrchardKeyBytes { fvk: ofvk, .. }| {
         // orchard sk is not serializable and must derived from seed
@@ -144,6 +146,11 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
         let ufvk = UnifiedFullViewingKey::new(Some(sapling_dfvk), orchard_fvk).unwrap();
         ufvk.encode(network)
     });
+    println!("3");
+    let connection = db.inner();
+    let tsk = get_base58_tsk(&connection, id_account)?;
+    println!("4");
+
     let backup = BackupT {
         name: Some(name),
         seed,
@@ -151,6 +158,7 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
         sk,
         fvk: Some(fvk),
         uvk,
+        tsk,
     };
     Ok(backup)
 }

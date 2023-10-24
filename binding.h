@@ -58,13 +58,17 @@ typedef struct CResult_bool {
   uint32_t len;
 } CResult_bool;
 
-#define Account_VT_ID 4
+#define Account_VT_COIN 4
 
-#define Account_VT_NAME 6
+#define Account_VT_ID 6
 
-#define Account_VT_KEY_TYPE 8
+#define Account_VT_NAME 8
 
-#define Account_VT_BALANCE 10
+#define Account_VT_KEY_TYPE 10
+
+#define Account_VT_BALANCE 12
+
+#define Account_VT_ADDRESS 14
 
 #define AccountVec_VT_ACCOUNTS 4
 
@@ -80,6 +84,8 @@ typedef struct CResult_bool {
 
 #define Balance_VT_ORCHARD 16
 
+#define PoolBalance_VT_TRANSPARENT 4
+
 #define Height_VT_HEIGHT 4
 
 #define Height_VT_TIMESTAMP 6
@@ -93,8 +99,6 @@ typedef struct CResult_bool {
 #define ShieldedTx_VT_TX_ID 6
 
 #define ShieldedTx_VT_SHORT_TX_ID 10
-
-#define ShieldedTx_VT_ADDRESS 18
 
 #define ShieldedTx_VT_MEMO 20
 
@@ -154,6 +158,8 @@ typedef struct CResult_bool {
 
 #define Backup_VT_UVK 14
 
+#define Backup_VT_TSK 16
+
 #define RaptorQDrops_VT_DROPS 4
 
 #define AGEKeys_VT_PK 6
@@ -181,8 +187,6 @@ typedef struct CResult_bool {
 #define TxOutput_VT_POOL 10
 
 #define TxReport_VT_OUTPUTS 4
-
-#define TxReport_VT_TRANSPARENT 6
 
 #define TxReport_VT_NET_SAPLING 12
 
@@ -254,6 +258,8 @@ int8_t is_valid_key(uint8_t coin, char *key);
 
 bool valid_address(uint8_t coin, char *address);
 
+uint8_t receivers_of_address(uint8_t coin, char *address);
+
 struct CResult_____c_char get_diversified_address(uint8_t ua_type, uint32_t time);
 
 struct CResult_u32 get_latest_height(void);
@@ -322,7 +328,7 @@ struct CResult_____c_char sweep_tkey(uint32_t last_height,
 
 struct CResult_u32 get_activation_date(void);
 
-struct CResult_u32 get_block_by_time(uint32_t time);
+struct CResult_u32 get_block_by_time(uint8_t coin, uint32_t time);
 
 struct CResult_u32 sync_historical_prices(int64_t now, uint32_t days, char *currency);
 
@@ -351,11 +357,13 @@ struct CResult_____c_char make_payment_uri(uint8_t coin,
 
 struct CResult_____c_char parse_payment_uri(char *uri);
 
+struct CResult______u8 decode_payment_uri(char *uri);
+
 struct CResult______u8 generate_key(void);
 
-struct CResult_u8 zip_backup(char *key, char *dst_dir);
+struct CResult_u8 zip_backup(char *key, char *path, char *temp_dir);
 
-struct CResult_u8 unzip_backup(char *key, char *data_path, char *dst_dir);
+struct CResult_u8 unzip_backup(char *key, char *path, char *temp_dir);
 
 struct CResult______u8 split_data(uint32_t id, char *data);
 
@@ -378,6 +386,8 @@ struct CResult_u8 clear_tx_details(uint8_t coin, uint32_t account);
 
 struct CResult______u8 get_account_list(uint8_t coin);
 
+struct CResult_u32 get_first_account(uint8_t coin);
+
 struct CResult_u32 get_active_account(uint8_t coin);
 
 struct CResult_u8 set_active_account(uint8_t coin, uint32_t id);
@@ -389,6 +399,8 @@ struct CResult_____c_char get_sk(uint8_t coin, uint32_t id);
 struct CResult_u8 update_account_name(uint8_t coin, uint32_t id, char *name);
 
 struct CResult______u8 get_balances(uint8_t coin, uint32_t id, uint32_t confirmed_height);
+
+struct CResult______u8 get_pool_balances(uint8_t coin, uint32_t id, uint32_t confirmations);
 
 struct CResult______u8 get_db_height(uint8_t coin);
 
@@ -410,6 +422,8 @@ struct CResult_u32 save_send_template(uint8_t coin, uint8_t *template_, uint64_t
 struct CResult_u8 delete_send_template(uint8_t coin, uint32_t id);
 
 struct CResult______u8 get_contacts(uint8_t coin);
+
+struct CResult______u8 get_contact(uint8_t coin, uint32_t id);
 
 struct CResult______u8 get_pnl_txs(uint8_t coin, uint32_t id, uint32_t timestamp);
 

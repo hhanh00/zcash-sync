@@ -9,11 +9,12 @@ use crate::note_selection::{SecretKeys, Source, UTXO};
 use crate::unified::orchard_as_unified;
 use crate::{
     broadcast_tx, build_tx, AddressList, BlockId, BlockRange, CompactTxStreamerClient,
-    GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
+    GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter, Connection,
 };
 use anyhow::anyhow;
-use base58check::FromBase58Check;
+use base58check::{FromBase58Check, ToBase58Check};
 use bip39::{Language, Mnemonic, Seed};
+use rusqlite::OptionalExtension;
 use core::slice;
 use futures::StreamExt;
 use rand::rngs::OsRng;
@@ -360,6 +361,17 @@ pub async fn sweep_tkey(
     println!("broadcast_tx");
     let txid = broadcast_tx(&tx).await?;
     Ok(txid)
+}
+
+pub fn get_base58_tsk(connection: &Connection, account: u32) -> anyhow::Result<Option<String>> {
+    let tsk = connection.query_row("SELECT sk FROM taddrs WHERE account = ?1", 
+    [account], |r| r.get::<_, Option<String>>(0)).optional()?;
+    let base58_tsk = tsk.flatten().map(|tsk| {
+        let mut sk = hex::decode(tsk).unwrap();
+        sk.push(0x01);
+        sk.to_base58check(0x80)
+    });
+    Ok(base58_tsk)
 }
 
 pub struct TBalance {

@@ -6,18 +6,19 @@ use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::AddressCodec;
-use zcash_primitives::consensus::Network;
+use zcash_primitives::consensus::{Network, Parameters};
 
-pub fn get_account_list(connection: &Connection) -> Result<AccountVecT> {
-    let mut stmt = connection.prepare("WITH notes AS (SELECT a.id_account, a.name, a.seed, a.sk, CASE WHEN r.spent IS NULL THEN r.value ELSE 0 END AS nv FROM accounts a LEFT JOIN received_notes r ON a.id_account = r.account), \
-                       accounts2 AS (SELECT id_account, name, seed, sk, COALESCE(sum(nv), 0) AS balance FROM notes GROUP by id_account) \
-                       SELECT a.id_account, a.name, a.seed, a.sk, a.balance, hw.ledger FROM accounts2 a LEFT JOIN hw_wallets hw ON a.id_account = hw.account")?;
+pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT> {
+    let mut stmt = connection.prepare("WITH notes AS (SELECT a.id_account, a.name, a.seed, a.sk, a.address, CASE WHEN r.spent IS NULL THEN r.value ELSE 0 END AS nv FROM accounts a LEFT JOIN received_notes r ON a.id_account = r.account), \
+                       accounts2 AS (SELECT id_account, name, seed, sk, address, COALESCE(sum(nv), 0) AS balance FROM notes GROUP by id_account) \
+                       SELECT a.id_account, a.name, a.seed, a.sk, a.balance, a.address, hw.ledger FROM accounts2 a LEFT JOIN hw_wallets hw ON a.id_account = hw.account")?;
     let rows = stmt.query_map([], |row| {
         let id: u32 = row.get("id_account")?;
         let name: String = row.get("name")?;
         let balance: i64 = row.get("balance")?;
         let seed: Option<String> = row.get("seed")?;
         let sk: Option<String> = row.get("sk")?;
+        let address: String = row.get("address")?;
         let ledger: Option<bool> = row.get("ledger")?;
         let key_type = if seed.is_some() {
             0
@@ -29,10 +30,12 @@ pub fn get_account_list(connection: &Connection) -> Result<AccountVecT> {
             0x80
         };
         let account = AccountT {
+            coin,
             id,
             name: Some(name),
             key_type,
             balance: balance as u64,
+            address: Some(address),
         };
         Ok(account)
     })?;
@@ -44,6 +47,12 @@ pub fn get_account_list(connection: &Connection) -> Result<AccountVecT> {
         accounts: Some(accounts),
     };
     Ok(accounts)
+}
+
+pub fn get_first_account(connection: &Connection) -> Result<u32> {
+    let id = connection.query_row("SELECT MIN(id_account) FROM accounts", [], 
+    |r| r.get::<_, Option<u32>>(0))?;
+    Ok(id.unwrap_or(0))
 }
 
 pub fn get_active_account(connection: &Connection) -> Result<u32> {
@@ -189,8 +198,7 @@ pub fn get_balances(connection: &Connection, id: u32, confirmed_height: u32) -> 
     Ok(data)
 }
 
-pub fn get_db_height(connection: &Connection) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_db_height(network: &Network, connection: &Connection) -> Result<HeightT> {
     let height = connection
         .query_row(
             "SELECT height, timestamp FROM blocks WHERE height = (SELECT MAX(height) FROM blocks)",
@@ -198,18 +206,17 @@ pub fn get_db_height(connection: &Connection) -> Result<Vec<u8>> {
             |row| {
                 let height: u32 = row.get(0)?;
                 let timestamp: u32 = row.get(1)?;
-                let height = Height::create(&mut builder, &HeightArgs { height, timestamp });
-                Ok(height)
+                Ok(HeightT {
+                    height,
+                    timestamp,
+                })
             },
         )
-        .optional()?;
-    let data = height
-        .map(|h| {
-            builder.finish(h, None);
-            builder.finished_data().to_vec()
-        })
-        .unwrap_or(vec![]);
-    Ok(data)
+        .optional()?.unwrap_or_else(|| {
+            let h: u32 = network.activation_height(zcash_primitives::consensus::NetworkUpgrade::Sapling).unwrap().into();
+            HeightT { height: h - 1, timestamp: 0 }
+        });
+    Ok(height)
 }
 
 pub fn get_notes(connection: &Connection, id: u32) -> Result<Vec<u8>> {
@@ -460,6 +467,20 @@ pub fn get_contacts(connection: &Connection) -> Result<Vec<u8>> {
     builder.finish(contacts, None);
     let data = builder.finished_data().to_vec();
     Ok(data)
+}
+
+pub fn get_contact(connection: &Connection, id: u32) -> Result<ContactT> {
+    let contact = connection.query_row("SELECT name, address FROM contacts WHERE id = ?1", 
+    [id], |r| {
+        let name = r.get::<_, String>(0)?;
+        let address = r.get::<_, String>(1)?;
+        Ok(ContactT {
+            id,
+            name: Some(name),
+            address: Some(address),
+        })
+    })?;
+    Ok(contact)
 }
 
 pub fn get_pnl_txs(connection: &Connection, id: u32, timestamp: u32) -> Result<Vec<u8>> {
