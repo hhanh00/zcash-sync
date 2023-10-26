@@ -57,7 +57,23 @@ impl FullEncryptedBackup {
         Ok(())
     }
 
-    pub fn restore(&self, cipher_key: &str, data_path: &str) -> anyhow::Result<()> {
+    fn make_zip(&self) -> anyhow::Result<Vec<u8>> {
+        let mut buffer = Vec::new();
+        let zip_data = vec![];
+        let buff = Cursor::new(zip_data);
+        let mut zip_writer = zip::ZipWriter::new(buff);
+        for db_name in self.db_names.iter() {
+            zip_writer.start_file(db_name, FileOptions::default())?;
+            let mut f = File::open(self.temp_dir.join(db_name))?;
+            f.read_to_end(&mut buffer)?;
+            zip_writer.write_all(&*buffer)?;
+            buffer.clear();
+        }
+        let r = zip_writer.finish()?;
+        Ok(r.into_inner())
+    }
+
+    pub fn decrypt(cipher_key: &str, data_path: &str, temp_dir: &str) -> anyhow::Result<String> {
         let key =
             age::x25519::Identity::from_str(cipher_key).map_err(|e| anyhow!(e.to_string()))?;
         let mut cipher_text = Vec::new();
@@ -76,33 +92,29 @@ impl FullEncryptedBackup {
             .map_err(|_| anyhow!("Decryption Error"))?;
         reader.read_to_end(&mut plain_text)?;
 
-        self.unzip(&plain_text)?;
-        Ok(())
+        let temp_dir = PathBuf::from_str(temp_dir).unwrap();
+        let plain_filename = temp_dir.join("db.zip");
+        let mut file = File::create(&plain_filename)?;
+        file.write_all(&plain_text)?;
+
+        // self.unzip(&plain_text)?;
+        Ok(plain_filename.to_string_lossy().to_string())
     }
 
-    fn make_zip(&self) -> anyhow::Result<Vec<u8>> {
-        let mut buffer = Vec::new();
-        let zip_data = vec![];
-        let buff = Cursor::new(zip_data);
-        let mut zip_writer = zip::ZipWriter::new(buff);
-        for db_name in self.db_names.iter() {
-            zip_writer.start_file(db_name, FileOptions::default())?;
-            let mut f = File::open(self.temp_dir.join(db_name))?;
-            f.read_to_end(&mut buffer)?;
-            zip_writer.write_all(&*buffer)?;
-            buffer.clear();
-        }
-        let r = zip_writer.finish()?;
-        Ok(r.into_inner())
-    }
-
-    fn unzip(&self, data: &[u8]) -> anyhow::Result<()> {
+    pub fn unzip(zip_file: &str, db_dir: &str) -> anyhow::Result<()> {
+        let path = PathBuf::from_str(zip_file)?;
+        let db_dir = PathBuf::from_str(db_dir)?;
+        let mut file = File::open(&path)?;
+        let mut data = vec![];
+        file.read_to_end(&mut data)?;
         let buff = Cursor::new(data);
         let mut zip_reader = zip::ZipArchive::new(buff)?;
         let db_names: Vec<_> = zip_reader.file_names().map(|s| s.to_string()).collect();
         for db_name in db_names {
             let mut zip_file = zip_reader.by_name(&db_name)?;
-            let mut out_file = File::create(&self.temp_dir.join(db_name))?;
+            let out_path = db_dir.join(db_name);
+            println!("unpack to {}", out_path.display());
+            let mut out_file = File::create(&out_path)?;
             std::io::copy(&mut zip_file, &mut out_file)?;
         }
         Ok(())

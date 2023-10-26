@@ -363,7 +363,9 @@ struct CResult______u8 generate_key(void);
 
 struct CResult_u8 zip_backup(char *key, char *path, char *temp_dir);
 
-struct CResult_u8 unzip_backup(char *key, char *path, char *temp_dir);
+struct CResult_____c_char decrypt_backup(char *key, char *path, char *temp_dir);
+
+struct CResult_u8 unzip_backup(char *path, char *db_dir);
 
 struct CResult______u8 split_data(uint32_t id, char *data);
 

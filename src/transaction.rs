@@ -123,6 +123,7 @@ pub fn decode_transaction(
 
     let mut tx_memo: Memo = Memo::Empty;
     let mut contacts = vec![];
+    let mut incoming_message = false;
 
     if let Some(sapling_bundle) = tx.sapling_bundle() {
         let mut contact_decoder = ContactDecoder::new(sapling_bundle.shielded_outputs.len());
@@ -137,6 +138,7 @@ pub fn decode_transaction(
                 if let Ok(memo) = Memo::try_from(memo) {
                     if memo != Memo::Empty {
                         tx_memo = memo;
+                        incoming_message = true;
                     }
                 }
                 temp_address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
@@ -181,6 +183,7 @@ pub fn decode_transaction(
                         if let Ok(memo) = Memo::try_from(MemoBytes::from_bytes(&memo)?) {
                             if memo != Memo::Empty {
                                 tx_memo = memo;
+                                incoming_message = true;
                             }
                         }
                         temp_address = orchard_as_unified(network, &pa).encode();
@@ -249,7 +252,7 @@ pub fn decode_transaction(
         height,
         timestamp,
         memo,
-        incoming,
+        incoming: incoming_message,
         contacts,
     };
 

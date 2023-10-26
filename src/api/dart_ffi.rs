@@ -888,17 +888,30 @@ pub unsafe extern "C" fn zip_backup(key: *mut c_char,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn unzip_backup(
+pub unsafe extern "C" fn decrypt_backup(
     key: *mut c_char,
     path: *mut c_char,
     temp_dir: *mut c_char,
-) -> CResult<u8> {
+) -> CResult<*mut c_char> {
     from_c_str!(key);
     from_c_str!(path);
     from_c_str!(temp_dir);
     let res = || {
-        let backup = FullEncryptedBackup::new(&path, &temp_dir);
-        backup.restore(&key, &path)?;
+        let zip_file = FullEncryptedBackup::decrypt(&key, &path, &temp_dir)?;
+        Ok(zip_file)
+    };
+    to_cresult_str(res())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn unzip_backup(
+    path: *mut c_char,
+    db_dir: *mut c_char,
+) -> CResult<u8> {
+    from_c_str!(path);
+    from_c_str!(db_dir);
+    let res = || {
+        FullEncryptedBackup::unzip(&path, &db_dir)?;
         Ok(0)
     };
     to_cresult(res())

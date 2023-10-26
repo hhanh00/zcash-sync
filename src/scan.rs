@@ -7,7 +7,7 @@ use crate::taddr::get_taddr_balance;
 use crate::transaction::get_transaction_details;
 use crate::{
     connect_lightwalletd, ChainError, CoinConfig, CompactBlock, CompactSaplingOutput, CompactTx,
-    DbAdapter, Connection,
+    Connection, DbAdapter,
 };
 
 use anyhow::anyhow;
@@ -285,7 +285,8 @@ pub async fn coin_trp_sync(coin: u8) -> anyhow::Result<()> {
         let address = r.get::<_, String>(1)?;
         Ok((account, address))
     })?;
-    let mut update_balance = connection.prepare("UPDATE taddrs SET balance = ?2 WHERE account = ?1")?;
+    let mut update_balance =
+        connection.prepare("UPDATE taddrs SET balance = ?2 WHERE account = ?1")?;
     for r in res {
         let (account, address) = r?;
         let balance = get_taddr_balance(&mut client, &address).await?;
@@ -294,7 +295,12 @@ pub async fn coin_trp_sync(coin: u8) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_balance(connection: &Connection, account: u32, height: u32, orchard: u8) -> anyhow::Result<u64> {
+fn get_balance(
+    connection: &Connection,
+    account: u32,
+    height: u32,
+    orchard: u8,
+) -> anyhow::Result<u64> {
     let balance = connection.query_row(
         "SELECT SUM(value) FROM received_notes WHERE account = ?1 AND spent IS NULL AND orchard = ?3 AND height <= ?2 AND (excluded IS NULL OR NOT excluded)",
         params![account, height, orchard], |row| {
@@ -304,7 +310,11 @@ fn get_balance(connection: &Connection, account: u32, height: u32, orchard: u8) 
     Ok(balance)
 }
 
-pub fn get_pool_balances(coin: u8, account: u32, confirmations: u32) -> anyhow::Result<PoolBalanceT> {
+pub fn get_pool_balances(
+    coin: u8,
+    account: u32,
+    confirmations: u32,
+) -> anyhow::Result<PoolBalanceT> {
     let c = CoinConfig::get(coin);
     let connection = c.connection();
     let db = DbAdapter::new(c.coin_type, connection)?;
@@ -312,9 +322,16 @@ pub fn get_pool_balances(coin: u8, account: u32, confirmations: u32) -> anyhow::
     let connection = db.inner();
     let sapling = get_balance(&connection, account, h, 0)?;
     let orchard = get_balance(&connection, account, h, 1)?;
-    let transparent = connection.query_row("SELECT balance FROM taddrs WHERE account = ?1", [account], 
-    |r| r.get::<_, Option<u64>>(0))?.unwrap_or_default();
-    
+    let transparent = connection
+        .query_row(
+            "SELECT balance FROM taddrs WHERE account = ?1",
+            [account],
+            |r| r.get::<_, Option<u64>>(0),
+        )
+        .optional()?
+        .flatten()
+        .unwrap_or_default();
+
     Ok(PoolBalanceT {
         transparent,
         sapling,
