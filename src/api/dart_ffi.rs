@@ -609,6 +609,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
     account: u32,
     recipients_bytes: *mut u8,
     recipients_len: u64,
+    sender_ua: u8,
     anchor_offset: u32,
     fee_bytes: *mut u8,
     fee_len: u64,
@@ -621,7 +622,14 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             recipients_len as usize,
         );
         let recipients = flatbuffers::root::<Recipients>(&recipients_bytes)?;
-        let recipients = crate::api::recipient::parse_recipients(&recipients)?;
+
+        let sender_address = {
+            let c = CoinConfig::get(coin);
+            let connection = c.connection();
+            crate::get_ua_of(&c.chain.network(), &connection, account, sender_ua)?
+        };
+        let recipients = crate::api::recipient::parse_recipients(&sender_address, &recipients)?;
+
         let tx = crate::api::payment_v2::build_tx_plan(
             coin,
             account,

@@ -318,16 +318,16 @@ pub fn get_messages(network: &Network, connection: &Connection, id: u32) -> Resu
         let incoming: bool = row.get("incoming")?;
 
         let id_tx = id_tx.unwrap_or(0);
-        let from = sender.map(|s| addresses.get(&s).cloned().unwrap_or(String::new()));
-        let to = recipient.map(|s| addresses.get(&s).cloned().unwrap_or(String::new()));
+        let from = sender.as_ref().and_then(|s| addresses.get(s).cloned());
+        let to = recipient.as_ref().and_then(|r| addresses.get(r).cloned());
 
         let message = MessageT {
             id_msg,
             id_tx,
             height,
             timestamp,
-            from,
-            to,
+            from: from.or(sender),
+            to: to.or(recipient),
             subject: Some(subject),
             body: Some(body),
             read,

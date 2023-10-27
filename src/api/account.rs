@@ -4,6 +4,7 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::{AddressBalanceT, AddressBalanceVecT, BackupT, KeyPackT};
+use crate::Connection;
 use crate::db::AccountData;
 use crate::key2::decode_key;
 use crate::orchard::OrchardKeyBytes;
@@ -19,7 +20,7 @@ use zcash_address::unified::{Address as UA, Receiver};
 use zcash_address::{ToAddress, ZcashAddress};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
 use zcash_client_backend::keys::UnifiedFullViewingKey;
-use zcash_primitives::consensus::Parameters;
+use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::zip32::DiversifierIndex;
 
 pub fn check_account(coin: u8, account: u32) -> bool {
@@ -414,15 +415,22 @@ pub fn derive_keys(
 /// The address depends on the UA settings and may include transparent, sapling & orchard receivers
 pub fn get_unified_address(coin: u8, id_account: u32, address_type: u8) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);
-    let db = c.db()?;
-    let tpe = UnifiedAddressType {
-        transparent: address_type & 1 != 0,
-        sapling: address_type & 2 != 0,
-        orchard: address_type & 4 != 0,
-    };
-    let address = crate::get_unified_address(c.chain.network(), &db, id_account, Some(tpe))?; // use ua settings
+    let connection = c.connection();
+    let address = crate::unified::get_ua_of(c.chain.network(), &connection, id_account, address_type)?; // use ua settings
     Ok(address)
 }
+
+// pub fn get_unified_address2(network: &Network, connection: &Connection, id_account: u32, address_type: u8) -> anyhow::Result<String> {
+//     let c = CoinConfig::get(coin);
+//     let db = c.db()?;
+//     let tpe = UnifiedAddressType {
+//         transparent: address_type & 1 != 0,
+//         sapling: address_type & 2 != 0,
+//         orchard: address_type & 4 != 0,
+//     };
+//     let address = crate::get_unified_address(network, &db, id_account, Some(tpe))?; // use ua settings
+//     Ok(address)
+// }
 
 fn get_sapling_address(coin: u8, id_account: u32) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);

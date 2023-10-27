@@ -305,6 +305,7 @@ struct CResult_____c_char prepare_multi_payment(uint8_t coin,
                                                 uint32_t account,
                                                 uint8_t *recipients_bytes,
                                                 uint64_t recipients_len,
+                                                uint8_t sender_ua,
                                                 uint32_t anchor_offset,
                                                 uint8_t *fee_bytes,
                                                 uint64_t fee_len);

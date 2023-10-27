@@ -873,7 +873,10 @@ impl DbAdapter {
     }
 
     pub fn get_account_info(&self, account: u32) -> anyhow::Result<AccountData> {
-        assert_ne!(account, 0);
+        if (account == 0) {
+            panic!();
+            anyhow::bail!("Invalid account");
+        }
         let account_data = self
             .connection
             .query_row(
