@@ -46,6 +46,7 @@ impl std::fmt::Display for DecodedUA {
 pub fn get_ua_of(network: &Network, connection: &Connection, account: u32,
     ua: u8
 ) -> anyhow::Result<String> {
+    println!("75 {ua}");
     let t_addr = connection.query_row("SELECT address FROM taddrs WHERE account = ?1",
     [account], |r| r.get::<_, String>(0)).optional()?;
     let z_addr = connection.query_row("SELECT address FROM accounts WHERE id_account = ?1",
@@ -73,7 +74,6 @@ pub fn get_ua_of(network: &Network, connection: &Connection, account: u32,
     let t_recv = if ua & 1 != 0 { t_addr } else { None };
     let z_recv = if ua & 2 != 0 { z_addr } else { None };
     let o_recv = if ua & 4 != 0 { o_addr } else { None };
-
 
     let address = zcash_client_backend::address::UnifiedAddress::from_receivers(
         o_recv, z_recv, t_recv).ok_or(anyhow!("Invalid UA"))?;

@@ -53,8 +53,8 @@ async fn coin_sync_impl(
 }
 
 /// Return the latest block height
-pub async fn get_latest_height() -> anyhow::Result<u32> {
-    let c = CoinConfig::get_active();
+pub async fn get_latest_height(coin: u8) -> anyhow::Result<u32> {
+    let c = CoinConfig::get(coin);
     let mut client = c.connect_lwd().await?;
     let last_height = crate::chain::get_latest_height(&mut client).await?;
     Ok(last_height)

@@ -262,7 +262,7 @@ uint8_t receivers_of_address(uint8_t coin, char *address);
 
 struct CResult_____c_char get_diversified_address(uint8_t ua_type, uint32_t time);
 
-struct CResult_u32 get_latest_height(void);
+struct CResult_u32 get_latest_height(uint8_t coin);
 
 struct CResult_u8 ledger_build_keys(void);
 
@@ -316,7 +316,7 @@ struct CResult_____c_char sign(uint8_t coin, uint32_t account, char *tx_plan, in
 
 struct CResult_____c_char sign_and_broadcast(uint8_t coin, uint32_t account, char *tx_plan);
 
-struct CResult_____c_char broadcast_tx(char *tx_str);
+struct CResult_____c_char broadcast_tx(uint8_t coin, char *tx_str);
 
 bool is_valid_tkey(char *sk);
 
@@ -335,7 +335,8 @@ struct CResult_u32 sync_historical_prices(int64_t now, uint32_t days, char *curr
 
 void store_contact(uint32_t id, char *name, char *address, bool dirty);
 
-struct CResult_____c_char commit_unsaved_contacts(uint32_t anchor_offset,
+struct CResult_____c_char commit_unsaved_contacts(uint8_t coin,
+                                                  uint32_t anchor_offset,
                                                   uint8_t *fee_bytes,
                                                   uint64_t fee_len);
 

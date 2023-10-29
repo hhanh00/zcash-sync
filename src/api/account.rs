@@ -440,12 +440,7 @@ fn get_sapling_address(coin: u8, id_account: u32) -> anyhow::Result<String> {
 }
 
 pub fn get_address(coin: u8, id_account: u32, address_type: u8) -> anyhow::Result<String> {
-    let c = CoinConfig::get(coin);
-    let address = if c.chain.has_unified() {
-        get_unified_address(coin, id_account, address_type)?
-    } else {
-        get_sapling_address(coin, id_account)?
-    };
+    let address = get_unified_address(coin, id_account, address_type)?;
     Ok(address)
 }
 

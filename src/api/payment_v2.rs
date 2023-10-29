@@ -113,7 +113,7 @@ pub async fn build_tx_plan(
         let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
         checkpoint_height
     };
-    let expiry_height = get_latest_height().await? + EXPIRY_HEIGHT_OFFSET;
+    let expiry_height = get_latest_height(coin).await? + EXPIRY_HEIGHT_OFFSET;
     let utxos = fetch_utxos(coin, account, checkpoint_height, excluded_flags).await?;
     let tx_plan = build_tx_plan_with_utxos(
         coin,
@@ -162,7 +162,7 @@ pub async fn sign_and_broadcast(
     tx_plan: &TransactionPlan,
 ) -> anyhow::Result<String> {
     let tx = sign_plan(coin, account, tx_plan)?;
-    let txid = broadcast_tx(&tx).await?;
+    let txid = broadcast_tx(coin, &tx).await?;
     let id_notes: Vec<_> = tx_plan
         .spends
         .iter()
@@ -192,7 +192,7 @@ pub async fn transfer_pools(
         memo: Memo::from_str(memo)?,
         max_amount_per_note: split_amount,
     };
-    let last_height = get_latest_height().await?;
+    let last_height = get_latest_height(coin).await?;
     let tx_plan = build_tx_plan(
         coin,
         account,

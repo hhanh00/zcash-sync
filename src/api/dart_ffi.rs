@@ -408,8 +408,8 @@ pub unsafe extern "C" fn get_diversified_address(ua_type: u8, time: u32) -> CRes
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn get_latest_height() -> CResult<u32> {
-    let height = crate::api::sync::get_latest_height().await;
+pub async unsafe extern "C" fn get_latest_height(coin: u8) -> CResult<u32> {
+    let height = crate::api::sync::get_latest_height(coin).await;
     to_cresult(height)
 }
 
@@ -615,7 +615,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
     fee_len: u64,
 ) -> CResult<*mut c_char> {
     let res = async {
-        let last_height = crate::api::sync::get_latest_height().await?;
+        let last_height = crate::api::sync::get_latest_height(coin).await?;
         let recipients_bytes: Vec<u8> = Vec::from_raw_parts(
             recipients_bytes,
             recipients_len as usize,
@@ -699,11 +699,11 @@ pub async unsafe extern "C" fn sign_and_broadcast(
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn broadcast_tx(tx_str: *mut c_char) -> CResult<*mut c_char> {
+pub async unsafe extern "C" fn broadcast_tx(coin: u8, tx_str: *mut c_char) -> CResult<*mut c_char> {
     from_c_str!(tx_str);
     let res = async {
         let tx = base64::decode(&*tx_str)?;
-        crate::broadcast_tx(&tx).await
+        crate::broadcast_tx(coin, &tx).await
     };
     to_cresult_str(res.await)
 }
@@ -772,13 +772,14 @@ pub unsafe extern "C" fn store_contact(
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn commit_unsaved_contacts(
+    coin: u8,
     anchor_offset: u32,
     fee_bytes: *mut u8,
     fee_len: u64,
 ) -> CResult<*mut c_char> {
     let res = async move {
         let fee = unpack_fee(fee_bytes, fee_len);
-        let tx_plan = crate::api::contact::commit_unsaved_contacts(anchor_offset, &fee).await?;
+        let tx_plan = crate::api::contact::commit_unsaved_contacts(coin, anchor_offset, &fee).await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };
@@ -1358,7 +1359,7 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
             Ok::<_, anyhow::Error>(raw_tx)
         })
         .await??;
-        let response = crate::broadcast_tx(&raw_tx).await?;
+        let response = crate::broadcast_tx(coin, &raw_tx).await?;
         Ok::<_, anyhow::Error>(response)
     };
     to_cresult_str(res.await)

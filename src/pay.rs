@@ -414,8 +414,8 @@ impl Tx {
 }
 
 /// Broadcast a raw signed transaction to the network
-pub async fn broadcast_tx(tx: &[u8]) -> anyhow::Result<String> {
-    let c = CoinConfig::get_active();
+pub async fn broadcast_tx(coin: u8, tx: &[u8]) -> anyhow::Result<String> {
+    let c = CoinConfig::get(coin);
     let mut client = c.connect_lwd().await?;
     let latest_height = get_latest_height(&mut client).await?;
     let raw_tx = RawTransaction {

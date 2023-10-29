@@ -359,7 +359,7 @@ pub async fn sweep_tkey(
     println!("build_tx");
     let tx = build_tx(network, &skeys, &tx_plan, OsRng)?;
     println!("broadcast_tx");
-    let txid = broadcast_tx(&tx).await?;
+    let txid = broadcast_tx(c.coin, &tx).await?;
     Ok(txid)
 }
 

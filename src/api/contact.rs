@@ -31,23 +31,25 @@ pub fn store_contact(id: u32, name: &str, address: &str, dirty: bool) -> anyhow:
 /// # Arguments
 /// * `anchor_offset`: minimum confirmations required for note selection
 pub async fn commit_unsaved_contacts(
+    coin: u8,
     anchor_offset: u32,
     fee: &FeeT,
 ) -> anyhow::Result<TransactionPlan> {
-    let c = CoinConfig::get_active();
+    let c = CoinConfig::get(coin);
     let contacts = c.db()?.get_unsaved_contacts()?;
     let memos = serialize_contacts(&contacts)?;
-    let tx_plan = save_contacts_tx(&memos, anchor_offset, fee).await?;
+    let tx_plan = save_contacts_tx(coin, &memos, anchor_offset, fee).await?;
     Ok(tx_plan)
 }
 
 async fn save_contacts_tx(
+    coin: u8,
     memos: &[Memo],
     anchor_offset: u32,
     fee: &FeeT,
 ) -> anyhow::Result<TransactionPlan> {
-    let c = CoinConfig::get_active();
-    let last_height = get_latest_height().await?;
+    let c = CoinConfig::get(coin);
+    let last_height = get_latest_height(coin).await?;
     let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
     let recipients: Vec<_> = memos
         .iter()
