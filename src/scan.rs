@@ -300,9 +300,11 @@ fn get_balance(
     account: u32,
     height: u32,
     orchard: u8,
+    include_unconfirmed: bool
 ) -> anyhow::Result<u64> {
+    let spend_predicate = if include_unconfirmed { "(spent IS NULL OR spent = 0)" } else { "spent IS NULL" };
     let balance = connection.query_row(
-        "SELECT SUM(value) FROM received_notes WHERE account = ?1 AND spent IS NULL AND orchard = ?3 AND height <= ?2 AND (excluded IS NULL OR NOT excluded)",
+        &format!("SELECT SUM(value) FROM received_notes WHERE account = ?1 AND {spend_predicate} AND orchard = ?3 AND height <= ?2 AND (excluded IS NULL OR NOT excluded)"),
         params![account, height, orchard], |row| {
             let value = row.get::<_, Option<u64>>(0)?;
             Ok(value.unwrap_or(0))
@@ -314,14 +316,15 @@ pub fn get_pool_balances(
     coin: u8,
     account: u32,
     confirmations: u32,
+    include_unconfirmed: bool,
 ) -> anyhow::Result<PoolBalanceT> {
     let c = CoinConfig::get(coin);
     let connection = c.connection();
     let db = DbAdapter::new(c.coin_type, connection)?;
     let h = db.get_db_height()? - confirmations;
     let connection = db.inner();
-    let sapling = get_balance(&connection, account, h, 0)?;
-    let orchard = get_balance(&connection, account, h, 1)?;
+    let sapling = get_balance(&connection, account, h, 0, include_unconfirmed)?;
+    let orchard = get_balance(&connection, account, h, 1, include_unconfirmed)?;
     let transparent = connection
         .query_row(
             "SELECT balance FROM taddrs WHERE account = ?1",

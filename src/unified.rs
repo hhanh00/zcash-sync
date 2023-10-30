@@ -46,7 +46,6 @@ impl std::fmt::Display for DecodedUA {
 pub fn get_ua_of(network: &Network, connection: &Connection, account: u32,
     ua: u8
 ) -> anyhow::Result<String> {
-    println!("75 {ua}");
     let t_addr = connection.query_row("SELECT address FROM taddrs WHERE account = ?1",
     [account], |r| r.get::<_, String>(0)).optional()?;
     let z_addr = connection.query_row("SELECT address FROM accounts WHERE id_account = ?1",

@@ -503,8 +503,8 @@ pub async unsafe extern "C" fn skip_to_last_height(coin: u8) {
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn rewind_to(height: u32) -> CResult<u32> {
-    let res = crate::api::sync::rewind_to(height).await;
+pub async unsafe extern "C" fn rewind_to(coin: u8, height: u32) -> CResult<u32> {
+    let res = crate::api::sync::rewind_to(coin, height).await;
     to_cresult(res)
 }
 
@@ -747,12 +747,13 @@ pub async unsafe extern "C" fn get_block_by_time(coin: u8, time: u32) -> CResult
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn sync_historical_prices(
+    coin: u8,
     now: i64,
     days: u32,
     currency: *mut c_char,
 ) -> CResult<u32> {
     from_c_str!(currency);
-    let res = crate::api::historical_prices::sync_historical_prices(now, days, &currency).await;
+    let res = crate::api::historical_prices::sync_historical_prices(coin, now, days, &currency).await;
     to_cresult(res)
 }
 
@@ -1101,9 +1102,10 @@ pub unsafe extern "C" fn get_pool_balances(
     coin: u8,
     id: u32,
     confirmations: u32,
+    include_spent: bool,
 ) -> CResult<*const u8> {
     let res = || {
-        let balances = crate::scan::get_pool_balances(coin, id, confirmations)?;
+        let balances = crate::scan::get_pool_balances(coin, id, confirmations, include_spent)?;
         let mut builder = flatbuffers::FlatBufferBuilder::new();
         let root = balances.pack(&mut builder);
         builder.finish(root, None);

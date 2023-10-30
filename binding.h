@@ -272,7 +272,7 @@ struct CResult_____c_char ledger_get_address(void);
 
 void skip_to_last_height(uint8_t coin);
 
-struct CResult_u32 rewind_to(uint32_t height);
+struct CResult_u32 rewind_to(uint8_t coin, uint32_t height);
 
 void rescan_from(uint32_t height);
 
@@ -331,7 +331,7 @@ struct CResult_u32 get_activation_date(void);
 
 struct CResult_u32 get_block_by_time(uint8_t coin, uint32_t time);
 
-struct CResult_u32 sync_historical_prices(int64_t now, uint32_t days, char *currency);
+struct CResult_u32 sync_historical_prices(uint8_t coin, int64_t now, uint32_t days, char *currency);
 
 void store_contact(uint32_t id, char *name, char *address, bool dirty);
 
@@ -404,7 +404,10 @@ struct CResult_u8 update_account_name(uint8_t coin, uint32_t id, char *name);
 
 struct CResult______u8 get_balances(uint8_t coin, uint32_t id, uint32_t confirmed_height);
 
-struct CResult______u8 get_pool_balances(uint8_t coin, uint32_t id, uint32_t confirmations);
+struct CResult______u8 get_pool_balances(uint8_t coin,
+                                         uint32_t id,
+                                         uint32_t confirmations,
+                                         bool include_spent);
 
 struct CResult______u8 get_db_height(uint8_t coin);
 
