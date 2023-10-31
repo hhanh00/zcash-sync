@@ -240,10 +240,8 @@ pub fn decode_transaction(
     let address = address.unwrap_or(String::new());
 
     let memo = match tx_memo {
-        Memo::Empty => "".to_string(),
         Memo::Text(text) => text.to_string(),
-        Memo::Future(_) => "Unrecognized".to_string(),
-        Memo::Arbitrary(_) => "Unrecognized".to_string(),
+        _ => "".to_string(),
     };
     let tx_details = TransactionDetails {
         account,
