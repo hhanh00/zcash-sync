@@ -704,6 +704,7 @@ impl DbAdapter {
                     id: id_note,
                     source,
                     amount: amount as u64,
+                    key: None,
                 })
             })?;
             for r in rows {
@@ -733,6 +734,7 @@ impl DbAdapter {
                     id: id_note,
                     source,
                     amount: amount as u64,
+                    key: None,
                 })
             })?;
             for r in rows {
@@ -873,8 +875,7 @@ impl DbAdapter {
     }
 
     pub fn get_account_info(&self, account: u32) -> anyhow::Result<AccountData> {
-        if (account == 0) {
-            panic!();
+        if account == 0 {
             anyhow::bail!("Invalid account");
         }
         let account_data = self

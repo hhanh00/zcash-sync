@@ -19,6 +19,7 @@ macro_rules! utxo {
                 txid: [0u8; 32],
                 index: $id,
             },
+            key: None,
         }
     };
 }
@@ -34,6 +35,7 @@ macro_rules! sapling {
                 rseed: [0u8; 32],
                 witness: vec![],
             },
+            key: None,
         }
     };
 }
@@ -50,6 +52,7 @@ macro_rules! orchard {
                 rho: [0u8; 32],
                 witness: vec![],
             },
+            key: None,
         }
     };
 }

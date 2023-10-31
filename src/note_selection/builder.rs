@@ -4,6 +4,7 @@ use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::Witness;
+use crate::taddr::derive_taddr;
 use crate::{AccountData, CoinConfig, DbAdapter};
 use anyhow::anyhow;
 use jubjub::Fr;
@@ -100,6 +101,7 @@ pub fn build_tx(
         _ => (None, None),
     };
 
+    let account_tsk = skeys.transparent;
     let mut has_orchard = false;
     let mut builder = Builder::new_with_rng(
         *network,
@@ -113,16 +115,26 @@ pub fn build_tx(
     for spend in plan.spends.iter() {
         match &spend.source {
             Source::Transparent { txid, index } => {
+                let sk = spend.key.as_ref().map(|k| {
+                    SecretKey::from_slice(k).unwrap()
+                });
+                // Use secret key from UTXO or fail over with secret key from account
+                let tsk = sk.or(account_tsk).ok_or(anyhow!("No transparent secret key"))?;
+                let pub_key = PublicKey::from_secret_key(&secp, &tsk);
+                let pub_key = pub_key.serialize();
+                let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
+                let address = TransparentAddress::PublicKey(pub_key.into());
+                let script_pubkey = address.script();
+
                 let utxo = OutPoint::new(*txid, *index);
                 let coin = TxOut {
                     value: Amount::from_u64(spend.amount).unwrap(),
-                    script_pubkey: transparent_address
-                        .ok_or(anyhow!("No transparent key"))
-                        .map(|ta| ta.script())?,
+                    script_pubkey: script_pubkey,
                 };
                 builder
-                    .add_transparent_input(skeys.transparent.unwrap(), utxo, coin)
+                    .add_transparent_input(tsk, utxo, coin)
                     .map_err(|e| anyhow!(e.to_string()))?;
+                println!("2");
             }
             Source::Sapling {
                 diversifier,

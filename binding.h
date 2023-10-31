@@ -320,12 +320,23 @@ struct CResult_____c_char broadcast_tx(uint8_t coin, char *tx_str);
 
 bool is_valid_tkey(char *sk);
 
-struct CResult_____c_char sweep_tkey(uint32_t last_height,
+struct CResult_____c_char sweep_tkey(uint8_t coin,
+                                     uint32_t account,
+                                     uint32_t last_height,
                                      char *sk,
                                      uint8_t pool,
-                                     uint32_t confirmations,
                                      uint8_t *fee_bytes,
                                      uint64_t fee_len);
+
+struct CResult_____c_char sweep_tseed(uint8_t coin,
+                                      uint32_t account,
+                                      uint32_t last_height,
+                                      char *seed,
+                                      uint8_t pool,
+                                      uint32_t index,
+                                      uint32_t limit,
+                                      uint8_t *fee_bytes,
+                                      uint64_t fee_len);
 
 struct CResult_u32 get_activation_date(void);
 

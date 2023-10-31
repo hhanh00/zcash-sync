@@ -1,5 +1,7 @@
 use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
-use crate::db::data_generated::fb::{Fee, FeeT, ProgressT, PaymentURIT, Recipients, SendTemplate, Servers};
+use crate::db::data_generated::fb::{
+    Fee, FeeT, PaymentURIT, ProgressT, Recipients, SendTemplate, Servers,
+};
 use crate::db::FullEncryptedBackup;
 #[cfg(feature = "ledger2")]
 use crate::ledger2;
@@ -399,7 +401,6 @@ pub unsafe extern "C" fn receivers_of_address(coin: u8, address: *mut c_char) ->
     }
 }
 
-
 #[no_mangle]
 pub unsafe extern "C" fn get_diversified_address(ua_type: u8, time: u32) -> CResult<*mut c_char> {
     let res = || crate::api::account::get_diversified_address(ua_type, time);
@@ -647,7 +648,10 @@ pub async unsafe extern "C" fn prepare_multi_payment(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn transaction_report(coin: u8, plan: *mut c_char) -> CResult<*const u8> {
+pub unsafe extern "C" fn transaction_report(
+    coin: u8,
+    plan: *mut c_char,
+) -> CResult<*const u8> {
     from_c_str!(plan);
     let c = CoinConfig::get(coin);
     let res = || {
@@ -717,17 +721,46 @@ pub unsafe extern "C" fn is_valid_tkey(sk: *mut c_char) -> bool {
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn sweep_tkey(
+    coin: u8,
+    account: u32,
     last_height: u32,
     sk: *mut c_char,
     pool: u8,
-    confirmations: u32,
     fee_bytes: *mut u8,
     fee_len: u64,
 ) -> CResult<*mut c_char> {
-    from_c_str!(sk);
-    let fee = unpack_fee(fee_bytes, fee_len);
-    let txid = crate::taddr::sweep_tkey(last_height, &sk, pool, confirmations, &fee).await;
-    to_cresult_str(txid)
+    let res = async {
+        from_c_str!(sk);
+        let fee = unpack_fee(fee_bytes, fee_len);
+        let tx_plan = crate::taddr::sweep_tkey(coin, account, last_height, &sk, pool, &fee).await?;
+        let res = serde_json::to_string(&tx_plan)?;
+        Ok::<_, anyhow::Error>(res)
+    };
+    to_cresult_str(res.await)
+}
+
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn sweep_tseed(
+    coin: u8,
+    account: u32,
+    last_height: u32,
+    seed: *mut c_char,
+    pool: u8,
+    index: u32,
+    limit: u32,
+    fee_bytes: *mut u8,
+    fee_len: u64,
+) -> CResult<*mut c_char> {
+    let res = async {
+        from_c_str!(seed);
+        let fee = unpack_fee(fee_bytes, fee_len);
+        let tx_plan = crate::taddr::sweep_tseed(coin, account, last_height, &seed, pool, 
+            index, limit, &fee).await?;
+        let res = serde_json::to_string(&tx_plan)?;
+        Ok::<_, anyhow::Error>(res)
+    };
+    to_cresult_str(res.await)
 }
 
 #[tokio::main]
@@ -753,7 +786,8 @@ pub async unsafe extern "C" fn sync_historical_prices(
     currency: *mut c_char,
 ) -> CResult<u32> {
     from_c_str!(currency);
-    let res = crate::api::historical_prices::sync_historical_prices(coin, now, days, &currency).await;
+    let res =
+        crate::api::historical_prices::sync_historical_prices(coin, now, days, &currency).await;
     to_cresult(res)
 }
 
@@ -780,7 +814,8 @@ pub async unsafe extern "C" fn commit_unsaved_contacts(
 ) -> CResult<*mut c_char> {
     let res = async move {
         let fee = unpack_fee(fee_bytes, fee_len);
-        let tx_plan = crate::api::contact::commit_unsaved_contacts(coin, anchor_offset, &fee).await?;
+        let tx_plan =
+            crate::api::contact::commit_unsaved_contacts(coin, anchor_offset, &fee).await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };
@@ -853,7 +888,7 @@ pub unsafe extern "C" fn decode_payment_uri(uri: *mut c_char) -> CResult<*const 
         let mut builder = FlatBufferBuilder::new();
         let payment = crate::api::payment_uri::parse_payment_uri(&uri)?;
         let payment = PaymentURIT {
-            address: Some(payment.address), 
+            address: Some(payment.address),
             amount: payment.amount,
             memo: Some(payment.memo),
         };
@@ -877,8 +912,11 @@ pub unsafe extern "C" fn generate_key() -> CResult<*const u8> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn zip_backup(key: *mut c_char, 
-    path: *mut c_char, temp_dir: *mut c_char) -> CResult<u8> {
+pub unsafe extern "C" fn zip_backup(
+    key: *mut c_char,
+    path: *mut c_char,
+    temp_dir: *mut c_char,
+) -> CResult<u8> {
     from_c_str!(key);
     from_c_str!(path);
     from_c_str!(temp_dir);
@@ -914,10 +952,7 @@ pub unsafe extern "C" fn decrypt_backup(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn unzip_backup(
-    path: *mut c_char,
-    db_dir: *mut c_char,
-) -> CResult<u8> {
+pub unsafe extern "C" fn unzip_backup(path: *mut c_char, db_dir: *mut c_char) -> CResult<u8> {
     from_c_str!(path);
     from_c_str!(db_dir);
     let res = || {
@@ -1114,7 +1149,6 @@ pub unsafe extern "C" fn get_pool_balances(
     };
     to_cresult_bytes(res())
 }
-
 
 #[no_mangle]
 pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
@@ -1408,4 +1442,3 @@ fn unpack_fee(fee_bytes: *mut u8, fee_len: u64) -> FeeT {
     let fee_rule = flatbuffers::root::<Fee>(&fee_bytes).unwrap();
     fee_rule.unpack()
 }
-

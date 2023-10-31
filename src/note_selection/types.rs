@@ -127,6 +127,7 @@ pub struct UTXO {
     pub id: u32,
     pub source: Source,
     pub amount: u64,
+    pub key: Option<[u8; 32]>,
 }
 
 #[derive(Serialize, Debug)]

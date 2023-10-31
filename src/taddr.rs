@@ -1,24 +1,24 @@
 use crate::api::payment_v2::build_tx_plan_with_utxos;
 use crate::api::recipient::RecipientMemo;
-use crate::chain::{get_checkpoint_height, get_latest_height, EXPIRY_HEIGHT_OFFSET};
+use crate::chain::{get_latest_height, EXPIRY_HEIGHT_OFFSET};
 use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::FeeT;
 use crate::db::AccountData;
 use crate::key2::split_key;
-use crate::note_selection::{SecretKeys, Source, UTXO};
+use crate::note_selection::{Source, UTXO};
 use crate::unified::orchard_as_unified;
+use crate::zip32::derive_zip32;
 use crate::{
-    broadcast_tx, build_tx, AddressList, BlockId, BlockRange, CompactTxStreamerClient,
-    GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter, Connection,
+    AddressList, BlockId, BlockRange, CompactTxStreamerClient, Connection,
+    GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
 };
 use anyhow::anyhow;
 use base58check::{FromBase58Check, ToBase58Check};
 use bip39::{Language, Mnemonic, Seed};
-use rusqlite::OptionalExtension;
 use core::slice;
 use futures::StreamExt;
-use rand::rngs::OsRng;
 use ripemd::{Digest, Ripemd160};
+use rusqlite::OptionalExtension;
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use std::collections::HashMap;
@@ -27,7 +27,7 @@ use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::encode_transparent_address;
 use zcash_params::coin::get_branch;
-use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
+use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::memo::Memo;
 use zcash_primitives::transaction::components::OutPoint;
@@ -180,24 +180,12 @@ pub async fn scan_transparent_accounts(
     mut aindex: u32,
     gap_limit: usize,
 ) -> anyhow::Result<Vec<TBalance>> {
-    let start: u32 = network
-        .activation_height(NetworkUpgrade::Sapling)
-        .unwrap()
-        .into();
-    let end = get_latest_height(client).await?;
-
+    let last_height = get_latest_height(client).await?;
     let range = BlockRange {
-        start: Some(BlockId {
-            height: start as u64,
-            hash: vec![],
-        }),
-        end: Some(BlockId {
-            height: end as u64,
-            hash: vec![],
-        }),
-        spam_filter_threshold: 0,
+        start: Some(BlockId { height: 1, hash: vec![] }),
+        end: Some(BlockId { height: last_height as u64, hash: vec![] }),
+        ..BlockRange::default()
     };
-
     let mut addresses = vec![];
     let mut gap = 0;
     while gap < gap_limit {
@@ -284,43 +272,20 @@ pub fn derive_from_pubkey(network: &Network, pub_key: &[u8]) -> anyhow::Result<S
 }
 
 pub async fn sweep_tkey(
+    coin: u8,
+    account: u32,
     last_height: u32,
     sk: &str,
     pool: u8,
-    confirmations: u32,
     fee_rule: &FeeT,
-) -> anyhow::Result<String> {
-    let c = CoinConfig::get_active();
+) -> anyhow::Result<crate::TransactionPlan> {
+    let c = CoinConfig::get(coin);
     let network = c.chain.network();
     let (seckey, from_address) = derive_taddr(network, sk)?;
 
-    let (checkpoint_height, to_address) = {
-        let db = c.db().unwrap();
-        let checkpoint_height = get_checkpoint_height(&db, last_height, confirmations)?;
-
-        let to_address = match pool {
-            0 => db.get_taddr(c.id_account)?,
-            1 => {
-                let AccountData { address, .. } = db.get_account_info(c.id_account)?;
-                Some(address)
-            }
-            2 => {
-                let okeys = db.get_orchard(c.id_account)?;
-                okeys.map(|okeys| {
-                    let address = okeys.get_address(0);
-                    orchard_as_unified(network, &address).encode()
-                })
-            }
-            _ => unreachable!(),
-        };
-        let to_address = to_address.ok_or(anyhow!("Account has no address of this type"))?;
-        (checkpoint_height, to_address)
-    };
-
     let mut client = c.connect_lwd().await?;
     let utxos = get_utxos(&mut client, &from_address).await?;
-    let balance = utxos.iter().map(|utxo| utxo.value_zat).sum::<i64>();
-    println!("balance {}", balance);
+
     let utxos: Vec<_> = utxos
         .iter()
         .enumerate()
@@ -331,41 +296,144 @@ pub async fn sweep_tkey(
                 index: utxo.index as u32,
             },
             amount: utxo.value_zat as u64,
+            key: Some(seckey.serialize_secret()),
         })
         .collect();
+
+    let tx_plan = sweep_utxos(coin, account, pool, last_height,
+        &utxos, fee_rule).await?;
+    Ok(tx_plan)
+}
+
+pub async fn sweep_tseed(
+    coin: u8,
+    account: u32,
+    last_height: u32,
+    phrase: &str,
+    pool: u8,
+    index: u32,
+    limit: u32,
+    fee_rule: &FeeT,
+) -> anyhow::Result<crate::TransactionPlan> {
+    let secp = Secp256k1::<All>::new();
+
+    let range = BlockRange {
+        start: Some(BlockId { height: 1, hash: vec![] }),
+        end: Some(BlockId { height: last_height as u64, hash: vec![] }),
+        ..BlockRange::default()
+    };
+
+    let c = CoinConfig::get(coin);
+    let mut client = c.connect_lwd().await?;
+    let network = c.chain.network();
+
+    let mut a = 0;
+    let mut gap = 0;
+    let mut external = 0;
+    let mut inputs = vec![];
+    loop {
+        let kp = derive_zip32(network, phrase, index, external, Some(a))?;
+        let tkey = kp.t_key.unwrap();
+        let sk = parse_seckey(&tkey)?;
+        let (_, taddr) = derive_from_secretkey(network, &sk)?;
+        log::info!("sweep_tseed {}", taddr);
+        let utxos = get_utxos(&mut client, &taddr).await?;
+        for utxo in utxos.iter() {
+            inputs.push(UTXO {
+                source: Source::Transparent {
+                    txid: utxo.txid.clone().try_into().unwrap(),
+                    index: utxo.index as u32,
+                },
+                amount: utxo.value_zat as u64,
+                key: Some(sk.serialize_secret()),
+                id: 0,
+            });
+        }
+        if utxos.is_empty() {
+            let tx_count = get_taddr_tx_count(&mut client, &taddr, &range).await?;
+            if tx_count == 0 {
+                gap += 1;
+            }
+            else {
+                gap = 0;
+            }
+        }
+        else {
+            gap = 0;
+        }
+
+        external += 1;
+        if external == 2 {
+            external = 0;
+            a += 1;
+        }
+
+        if gap > limit {
+            break;
+        }
+    }
+
+    let tx_plan = sweep_utxos(coin, account, pool, last_height,
+        &inputs, fee_rule).await?;
+    Ok(tx_plan)
+}
+
+async fn sweep_utxos(coin: u8, account: u32, pool: u8,
+    last_height: u32,
+    utxos: &[UTXO],
+    fee_rule: &FeeT) -> anyhow::Result<crate::TransactionPlan> {
+    let c = CoinConfig::get(coin);
+    let network = c.chain.network();
+    let to_address = {
+        let db = c.db().unwrap();
+
+        let to_address = match pool {
+            0 => db.get_taddr(account)?,
+            1 => {
+                let AccountData { address, .. } = db.get_account_info(account)?;
+                Some(address)
+            }
+            2 => {
+                let okeys = db.get_orchard(account)?;
+                okeys.map(|okeys| {
+                    let address = okeys.get_address(0);
+                    orchard_as_unified(network, &address).encode()
+                })
+            }
+            _ => unreachable!(),
+        };
+        let to_address = to_address.ok_or(anyhow!("Account has no address of this type"))?;
+        to_address
+    };
+
+    let balance = utxos.iter().map(|utxo| utxo.amount).sum::<u64>();
     let recipient = RecipientMemo {
         address: to_address,
-        amount: balance as u64,
+        amount: balance,
         fee_included: true,
         memo: Memo::default(),
         max_amount_per_note: 0,
     };
-    println!("build_tx_plan_with_utxos");
     let tx_plan = build_tx_plan_with_utxos(
-        c.coin,
-        c.id_account,
-        checkpoint_height,
+        coin,
+        account,
+        last_height,
         last_height + EXPIRY_HEIGHT_OFFSET,
         slice::from_ref(&recipient),
         &utxos,
         fee_rule,
     )
     .await?;
-    let skeys = SecretKeys {
-        transparent: Some(seckey),
-        sapling: None,
-        orchard: None,
-    };
-    println!("build_tx");
-    let tx = build_tx(network, &skeys, &tx_plan, OsRng)?;
-    println!("broadcast_tx");
-    let txid = broadcast_tx(c.coin, &tx).await?;
-    Ok(txid)
+    Ok(tx_plan)
 }
 
+
 pub fn get_base58_tsk(connection: &Connection, account: u32) -> anyhow::Result<Option<String>> {
-    let tsk = connection.query_row("SELECT sk FROM taddrs WHERE account = ?1", 
-    [account], |r| r.get::<_, Option<String>>(0)).optional()?;
+    let tsk = connection
+        .query_row("SELECT sk FROM taddrs WHERE account = ?1", [account], |r| {
+            r.get::<_, Option<String>>(0)
+        })
+        .optional()?;
     let base58_tsk = tsk.flatten().map(|tsk| {
         let mut sk = hex::decode(tsk).unwrap();
         sk.push(0x01);

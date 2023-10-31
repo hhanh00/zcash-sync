@@ -43,6 +43,7 @@ async fn get_transparent_utxos(coin: u8, account: u32) -> anyhow::Result<Vec<UTX
                     id: 0,
                     source,
                     amount: utxo.value_zat as u64,
+                    key: None,
                 }
             })
             .collect();
