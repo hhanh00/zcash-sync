@@ -1,14 +1,17 @@
 use crate::db::data_generated::fb::AGEKeysT;
+use crate::CoinConfig;
 use age::secrecy::ExposeSecret;
 use anyhow::anyhow;
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
-use std::fs::File;
+use std::fs::{File, DirEntry, remove_file};
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{iter, time};
 use zip::write::FileOptions;
+
+use super::cipher::clone_db_with_passwd;
 
 pub struct FullEncryptedBackup {
     temp_dir: PathBuf,
@@ -119,4 +122,36 @@ impl FullEncryptedBackup {
         }
         Ok(())
     }
+}
+
+pub fn zip_dbs(passwd: &str, temp_dir: &str) -> anyhow::Result<String> {
+    let temp_dir = PathBuf::from_str(temp_dir)?;
+    let zip_path = temp_dir.join("encrypted_db.zip");
+    let zip_file = File::create(&zip_path)?;
+    let mut zip_writer = zip::ZipWriter::new(zip_file);
+    for i in 0..2 {
+        println!("{i}");
+        let c = CoinConfig::get(i);
+        let connection = c.connection();
+        let Some(db_path) = c.db_path.as_ref() else {
+            anyhow::bail!("No db")
+        };
+        let db_path = PathBuf::from_str(db_path)?;
+        let db_name = db_path.file_name().unwrap().to_string_lossy().to_string();
+        let encrypted_db_path = temp_dir.join(&db_name);
+        println!("{} -> {}", c.db_path.as_ref().unwrap(), encrypted_db_path.display());
+        let _ = remove_file(&encrypted_db_path);
+        clone_db_with_passwd(
+            &connection,
+            encrypted_db_path.as_path().to_str().unwrap(),
+            passwd,
+        )?;
+        zip_writer.start_file(&db_name, FileOptions::default())?;
+        let mut buffer = vec![];
+        let mut f = File::open(&encrypted_db_path)?;
+        f.read_to_end(&mut buffer)?;
+        zip_writer.write_all(&*buffer)?;
+    }
+    let r = zip_writer.finish()?;
+    Ok(zip_path.as_path().to_string_lossy().to_string())
 }

@@ -963,6 +963,16 @@ pub unsafe extern "C" fn unzip_backup(path: *mut c_char, db_dir: *mut c_char) ->
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn zip_dbs(passwd: *mut c_char, temp_dir: *mut c_char) -> CResult<*mut c_char> {
+    from_c_str!(passwd);
+    from_c_str!(temp_dir);
+    let res = || {
+        crate::zip_dbs(&passwd, &temp_dir)
+    };
+    to_cresult_str(res())
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn split_data(id: u32, data: *mut c_char) -> CResult<*const u8> {
     from_c_str!(data);
     let res = || {

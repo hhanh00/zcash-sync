@@ -123,6 +123,7 @@ pub use note_selection::{
     TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
     MAX_ATTEMPTS,
 };
+pub use db::backup::zip_dbs;
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;

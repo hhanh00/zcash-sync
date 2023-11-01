@@ -25,7 +25,7 @@ use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
 use zcash_primitives::zip32::ExtendedFullViewingKey;
 
-mod backup;
+pub mod backup;
 pub mod cipher;
 pub mod data_generated;
 mod migration;

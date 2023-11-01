@@ -380,6 +380,8 @@ struct CResult_____c_char decrypt_backup(char *key, char *path, char *temp_dir);
 
 struct CResult_u8 unzip_backup(char *path, char *db_dir);
 
+struct CResult_____c_char zip_dbs(char *passwd, char *temp_dir);
+
 struct CResult______u8 split_data(uint32_t id, char *data);
 
 struct CResult_____c_char merge_data(char *drop);
