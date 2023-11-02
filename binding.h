@@ -260,7 +260,10 @@ bool valid_address(uint8_t coin, char *address);
 
 uint8_t receivers_of_address(uint8_t coin, char *address);
 
-struct CResult_____c_char get_diversified_address(uint8_t ua_type, uint32_t time);
+struct CResult_____c_char get_diversified_address(uint8_t coin,
+                                                  uint32_t account,
+                                                  uint8_t ua_type,
+                                                  uint32_t time);
 
 struct CResult_u32 get_latest_height(uint8_t coin);
 

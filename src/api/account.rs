@@ -193,14 +193,14 @@ pub fn import_transparent_secret_key(coin: u8, id_account: u32, sk: &str) -> any
 }
 
 /// Generate a new diversified address
-pub fn get_diversified_address(ua_type: u8, time: u32) -> anyhow::Result<String> {
+pub fn get_diversified_address(coin: u8, account: u32, ua_type: u8, time: u32) -> anyhow::Result<String> {
     let ua_type = ua_type & 6; // don't include transparent component
     if ua_type == 0 {
         anyhow::bail!("Must include a shielded receiver");
     }
-    let c = CoinConfig::get_active();
+    let c = CoinConfig::get(coin);
     let db = c.db()?;
-    let AccountData { fvk, .. } = db.get_account_info(c.id_account)?;
+    let AccountData { fvk, .. } = db.get_account_info(account)?;
     let fvk = decode_extended_full_viewing_key(
         c.chain.network().hrp_sapling_extended_full_viewing_key(),
         &fvk,
@@ -213,7 +213,7 @@ pub fn get_diversified_address(ua_type: u8, time: u32) -> anyhow::Result<String>
         .find_address(diversifier_index)
         .ok_or_else(|| anyhow::anyhow!("Cannot generate new address"))?;
 
-    let orchard_keys = db.get_orchard(c.id_account)?;
+    let orchard_keys = db.get_orchard(account)?;
     if ua_type == 2 || orchard_keys.is_none() {
         // sapling only
         return Ok(encode_payment_address(

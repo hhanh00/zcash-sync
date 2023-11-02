@@ -402,8 +402,8 @@ pub unsafe extern "C" fn receivers_of_address(coin: u8, address: *mut c_char) ->
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_diversified_address(ua_type: u8, time: u32) -> CResult<*mut c_char> {
-    let res = || crate::api::account::get_diversified_address(ua_type, time);
+pub unsafe extern "C" fn get_diversified_address(coin: u8, account: u32, ua_type: u8, time: u32) -> CResult<*mut c_char> {
+    let res = || crate::api::account::get_diversified_address(coin, account, ua_type, time);
     to_cresult_str(res())
 }
 
