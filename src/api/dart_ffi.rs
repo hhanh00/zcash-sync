@@ -610,6 +610,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
     account: u32,
     recipients_bytes: *mut u8,
     recipients_len: u64,
+    pools: u8,
     sender_ua: u8,
     anchor_offset: u32,
     fee_bytes: *mut u8,
@@ -636,7 +637,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             account,
             last_height,
             &recipients,
-            0,
+            !pools & 0x07,
             anchor_offset,
             &unpack_fee(fee_bytes, fee_len),
         )
