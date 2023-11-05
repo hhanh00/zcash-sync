@@ -277,6 +277,7 @@ pub async fn sweep_tkey(
     last_height: u32,
     sk: &str,
     pool: u8,
+    address: &str,
     fee_rule: &FeeT,
 ) -> anyhow::Result<crate::TransactionPlan> {
     let c = CoinConfig::get(coin);
@@ -300,7 +301,7 @@ pub async fn sweep_tkey(
         })
         .collect();
 
-    let tx_plan = sweep_utxos(coin, account, pool, last_height,
+    let tx_plan = sweep_utxos(coin, account, pool, address, last_height,
         &utxos, fee_rule).await?;
     Ok(tx_plan)
 }
@@ -311,6 +312,7 @@ pub async fn sweep_tseed(
     last_height: u32,
     phrase: &str,
     pool: u8,
+    address: &str,
     index: u32,
     limit: u32,
     fee_rule: &FeeT,
@@ -373,18 +375,19 @@ pub async fn sweep_tseed(
         }
     }
 
-    let tx_plan = sweep_utxos(coin, account, pool, last_height,
+    let tx_plan = sweep_utxos(coin, account, pool, address, last_height,
         &inputs, fee_rule).await?;
     Ok(tx_plan)
 }
 
 async fn sweep_utxos(coin: u8, account: u32, pool: u8,
+    address: &str,
     last_height: u32,
     utxos: &[UTXO],
     fee_rule: &FeeT) -> anyhow::Result<crate::TransactionPlan> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
-    let to_address = {
+    let to_address = if address.is_empty() {
         let db = c.db().unwrap();
 
         let to_address = match pool {
@@ -404,6 +407,9 @@ async fn sweep_utxos(coin: u8, account: u32, pool: u8,
         };
         let to_address = to_address.ok_or(anyhow!("Account has no address of this type"))?;
         to_address
+    }
+    else {
+        address.to_string()
     };
 
     let balance = utxos.iter().map(|utxo| utxo.amount).sum::<u64>();

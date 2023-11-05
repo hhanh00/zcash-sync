@@ -727,13 +727,15 @@ pub async unsafe extern "C" fn sweep_tkey(
     last_height: u32,
     sk: *mut c_char,
     pool: u8,
+    address: *mut c_char,
     fee_bytes: *mut u8,
     fee_len: u64,
 ) -> CResult<*mut c_char> {
     let res = async {
         from_c_str!(sk);
+        from_c_str!(address);
         let fee = unpack_fee(fee_bytes, fee_len);
-        let tx_plan = crate::taddr::sweep_tkey(coin, account, last_height, &sk, pool, &fee).await?;
+        let tx_plan = crate::taddr::sweep_tkey(coin, account, last_height, &sk, pool, &address, &fee).await?;
         let res = serde_json::to_string(&tx_plan)?;
         Ok::<_, anyhow::Error>(res)
     };
@@ -748,6 +750,7 @@ pub async unsafe extern "C" fn sweep_tseed(
     last_height: u32,
     seed: *mut c_char,
     pool: u8,
+    address: *mut c_char,
     index: u32,
     limit: u32,
     fee_bytes: *mut u8,
@@ -755,9 +758,10 @@ pub async unsafe extern "C" fn sweep_tseed(
 ) -> CResult<*mut c_char> {
     let res = async {
         from_c_str!(seed);
+        from_c_str!(address);
         let fee = unpack_fee(fee_bytes, fee_len);
         let tx_plan = crate::taddr::sweep_tseed(coin, account, last_height, &seed, pool, 
-            index, limit, &fee).await?;
+            &address, index, limit, &fee).await?;
         let res = serde_json::to_string(&tx_plan)?;
         Ok::<_, anyhow::Error>(res)
     };
