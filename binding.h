@@ -357,9 +357,9 @@ struct CResult_____c_char commit_unsaved_contacts(uint8_t coin,
                                                   uint8_t *fee_bytes,
                                                   uint64_t fee_len);
 
-void mark_message_read(uint32_t message, bool read);
+void mark_message_read(uint8_t coin, uint32_t message, bool read);
 
-void mark_all_messages_read(bool read);
+void mark_all_messages_read(uint8_t coin, uint32_t account, bool read);
 
 void truncate_data(void);
 

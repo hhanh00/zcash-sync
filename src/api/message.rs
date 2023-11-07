@@ -6,8 +6,8 @@ use crate::coinconfig::CoinConfig;
 /// # Arguments
 /// * `message`: message id
 /// * `read`: read or unread
-pub fn mark_message_read(message: u32, read: bool) -> anyhow::Result<()> {
-    let c = CoinConfig::get_active();
+pub fn mark_message_read(coin: u8, message: u32, read: bool) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
     c.db()?.mark_message_read(message, read)?;
     Ok(())
 }
@@ -15,8 +15,8 @@ pub fn mark_message_read(message: u32, read: bool) -> anyhow::Result<()> {
 /// Mark all messages as read or unread
 /// # Arguments
 /// * `read`: read or unread
-pub fn mark_all_messages_read(read: bool) -> anyhow::Result<()> {
-    let c = CoinConfig::get_active();
-    c.db()?.mark_all_messages_read(c.id_account, read)?;
+pub fn mark_all_messages_read(coin: u8, account: u32, read: bool) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    c.db()?.mark_all_messages_read(account, read)?;
     Ok(())
 }

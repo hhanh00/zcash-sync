@@ -828,14 +828,14 @@ pub async unsafe extern "C" fn commit_unsaved_contacts(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn mark_message_read(message: u32, read: bool) {
-    let res = crate::api::message::mark_message_read(message, read);
+pub unsafe extern "C" fn mark_message_read(coin: u8, message: u32, read: bool) {
+    let res = crate::api::message::mark_message_read(coin, message, read);
     log_error(res)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn mark_all_messages_read(read: bool) {
-    let res = crate::api::message::mark_all_messages_read(read);
+pub unsafe extern "C" fn mark_all_messages_read(coin: u8, account: u32, read: bool) {
+    let res = crate::api::message::mark_all_messages_read(coin, account, read);
     log_error(res)
 }
 
