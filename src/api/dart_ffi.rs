@@ -876,22 +876,11 @@ pub unsafe extern "C" fn make_payment_uri(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn parse_payment_uri(uri: *mut c_char) -> CResult<*mut c_char> {
-    from_c_str!(uri);
-    let payment_json = || {
-        let payment = crate::api::payment_uri::parse_payment_uri(&uri)?;
-        let payment_json = serde_json::to_string(&payment)?;
-        Ok(payment_json)
-    };
-    to_cresult_str(payment_json())
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn decode_payment_uri(uri: *mut c_char) -> CResult<*const u8> {
+pub unsafe extern "C" fn decode_payment_uri(coin: u8, uri: *mut c_char) -> CResult<*const u8> {
     from_c_str!(uri);
     let payment_bytes = || {
         let mut builder = FlatBufferBuilder::new();
-        let payment = crate::api::payment_uri::parse_payment_uri(&uri)?;
+        let payment = crate::api::payment_uri::parse_payment_uri(coin, &uri)?;
         let payment = PaymentURIT {
             address: Some(payment.address),
             amount: payment.amount,

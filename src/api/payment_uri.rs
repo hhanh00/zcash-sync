@@ -43,8 +43,8 @@ pub fn make_payment_uri(
 /// Decode a payment uri
 /// # Arguments
 /// * `uri`: payment uri
-pub fn parse_payment_uri(uri: &str) -> anyhow::Result<PaymentURI> {
-    let c = CoinConfig::get_active();
+pub fn parse_payment_uri(coin: u8, uri: &str) -> anyhow::Result<PaymentURI> {
+    let c = CoinConfig::get(coin);
     let scheme = c.chain.ticker();
     let scheme_len = scheme.len();
     if uri[..scheme_len].ne(scheme) {
