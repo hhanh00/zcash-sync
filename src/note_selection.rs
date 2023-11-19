@@ -21,7 +21,7 @@ pub enum TransactionBuilderError {
     NotEnoughFunds(u64),
     #[error("Only one recipient can pay for the fees")]
     DuplicateRecipientFee,
-    #[error("Recipient amount too low for the fees")]
+    #[error("Not enough funds to pay for the fees")]
     RecipientCannotPayFee,
     #[error("Tx too complex")]
     TxTooComplex,

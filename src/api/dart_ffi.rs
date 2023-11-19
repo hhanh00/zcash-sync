@@ -373,6 +373,12 @@ pub async unsafe extern "C" fn warp(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn is_valid_seed(coin: u8, seed: *mut c_char) -> bool {
+    from_c_str!(seed);
+    crate::key2::is_valid_seed(coin, &seed)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn is_valid_key(coin: u8, key: *mut c_char) -> i8 {
     from_c_str!(key);
     crate::key2::is_valid_key(coin, &key)

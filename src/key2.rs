@@ -71,6 +71,16 @@ pub fn decode_key(
 }
 
 #[allow(dead_code)] // Used by C FFI
+pub fn is_valid_seed(coin: u8, key: &str) -> bool {
+    let c = CoinConfig::get(coin);
+    let (phrase, _password) = split_key(key);
+    if Mnemonic::from_phrase(&phrase, Language::English).is_ok() {
+        return true;
+    }
+    false
+}
+
+#[allow(dead_code)] // Used by C FFI
 pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();

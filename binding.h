@@ -254,6 +254,8 @@ struct CResult_u8 warp(uint8_t coin,
                        uint32_t max_cost,
                        int64_t port);
 
+bool is_valid_seed(uint8_t coin, char *seed);
+
 int8_t is_valid_key(uint8_t coin, char *key);
 
 bool valid_address(uint8_t coin, char *address);
