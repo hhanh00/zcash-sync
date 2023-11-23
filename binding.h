@@ -216,15 +216,11 @@ struct CResult_u8 migrate_db(uint8_t coin, char *db_path);
 
 struct CResult_u8 migrate_data_db(uint8_t coin);
 
-void set_active(uint8_t active);
-
 void set_coin_lwd_url(uint8_t coin, char *lwd_url);
 
 char *get_lwd_url(uint8_t coin);
 
 void set_coin_passwd(uint8_t coin, char *passwd);
-
-void reset_app(void);
 
 void mempool_run(int64_t port);
 
@@ -301,10 +297,6 @@ struct CResult_____c_char shield_taddr(uint8_t coin,
                                        uint32_t confirmations,
                                        uint8_t *fee_bytes,
                                        uint64_t fee_len);
-
-struct CResult______u8 scan_transparent_accounts(uint8_t coin,
-                                                 uint32_t account,
-                                                 uint32_t gap_limit);
 
 struct CResult_____c_char prepare_multi_payment(uint8_t coin,
                                                 uint32_t account,
@@ -394,8 +386,6 @@ struct CResult_____c_char merge_data(char *drop);
 
 struct CResult_____c_char get_tx_summary(char *tx);
 
-struct CResult_____c_char get_best_server(uint8_t *servers, uint64_t len);
-
 void import_from_zwl(uint8_t coin, char *name, char *data);
 
 struct CResult______u8 derive_zip32(uint8_t coin,
@@ -410,8 +400,6 @@ struct CResult_u8 clear_tx_details(uint8_t coin, uint32_t account);
 struct CResult______u8 get_account_list(uint8_t coin);
 
 struct CResult_u32 get_first_account(uint8_t coin);
-
-struct CResult_u32 get_active_account(uint8_t coin);
 
 struct CResult_u8 set_active_account(uint8_t coin, uint32_t id);
 
@@ -442,8 +430,6 @@ struct CResult______u8 get_prev_next_message(uint8_t coin,
                                              uint32_t height);
 
 struct CResult______u8 get_templates(uint8_t coin);
-
-struct CResult_u32 save_send_template(uint8_t coin, uint8_t *template_, uint64_t len);
 
 struct CResult_u8 delete_send_template(uint8_t coin, uint32_t id);
 

@@ -72,6 +72,17 @@ fn to_cresult_str(res: Result<String, anyhow::Error>) -> CResult<*mut c_char> {
     to_cresult(res)
 }
 
+macro_rules! fb_to_bytes {
+    ($v: ident) => {
+        {
+        let mut builder = FlatBufferBuilder::new();
+        let backup_bytes = $v.pack(&mut builder);
+        builder.finish(backup_bytes, None);
+        Ok::<_, anyhow::Error>(builder.finished_data().to_vec())
+        }
+    };
+}
+
 fn log_error(res: Result<(), anyhow::Error>) {
     if let Err(e) = res {
         log::error!("{}", e.to_string());
@@ -161,11 +172,6 @@ pub async unsafe extern "C" fn migrate_data_db(coin: u8) -> CResult<u8> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn set_active(active: u8) {
-    crate::coinconfig::set_active(active);
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn set_coin_lwd_url(coin: u8, lwd_url: *mut c_char) {
     from_c_str!(lwd_url);
     crate::coinconfig::set_coin_lwd_url(coin, &lwd_url);
@@ -181,17 +187,6 @@ pub unsafe extern "C" fn get_lwd_url(coin: u8) -> *mut c_char {
 pub unsafe extern "C" fn set_coin_passwd(coin: u8, passwd: *mut c_char) {
     from_c_str!(passwd);
     crate::coinconfig::set_coin_passwd(coin, &passwd);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn reset_app() {
-    let res = || {
-        for i in 0..MAX_COINS {
-            crate::api::account::reset_db(i)?;
-        }
-        Ok(())
-    };
-    log_error(res())
 }
 
 #[no_mangle]
@@ -255,11 +250,9 @@ pub unsafe extern "C" fn convert_to_watchonly(coin: u8, id_account: u32) -> CRes
 #[no_mangle]
 pub unsafe extern "C" fn get_backup(coin: u8, id_account: u32) -> CResult<*const u8> {
     let res = || {
-        let mut builder = FlatBufferBuilder::new();
         let backup = crate::api::account::get_backup_package(coin, id_account)?;
-        let backup_bytes = backup.pack(&mut builder);
-        builder.finish(backup_bytes, None);
-        Ok::<_, anyhow::Error>(builder.finished_data().to_vec())
+        let r = fb_to_bytes!(backup);
+        r
     };
 
     to_cresult_bytes(res())
@@ -336,10 +329,7 @@ pub async unsafe extern "C" fn warp(
                     trial_decryptions: progress.trial_decryptions,
                     downloaded: progress.downloaded as u64,
                 };
-                let mut builder = FlatBufferBuilder::new();
-                let root = progress.pack(&mut builder);
-                builder.finish(root, None);
-                let v = builder.finished_data().to_vec();
+                let v = fb_to_bytes!(progress);
                 let mut progress = v.into_dart();
                 if port != 0 {
                     if let Some(p) = POST_COBJ {
@@ -590,24 +580,24 @@ pub async unsafe extern "C" fn shield_taddr(
     to_cresult_str(res.await)
 }
 
-#[tokio::main]
-#[no_mangle]
-pub async unsafe extern "C" fn scan_transparent_accounts(
-    coin: u8,
-    account: u32,
-    gap_limit: u32,
-) -> CResult<*const u8> {
-    let res = async {
-        let addresses =
-            crate::api::account::scan_transparent_accounts(coin, account, gap_limit as usize)
-                .await?;
-        let mut builder = FlatBufferBuilder::new();
-        let root = addresses.pack(&mut builder);
-        builder.finish(root, None);
-        Ok(builder.finished_data().to_vec())
-    };
-    to_cresult_bytes(res.await)
-}
+// #[tokio::main]
+// #[no_mangle]
+// pub async unsafe extern "C" fn scan_transparent_accounts(
+//     coin: u8,
+//     account: u32,
+//     gap_limit: u32,
+// ) -> CResult<*const u8> {
+//     let res = async {
+//         let addresses =
+//             crate::api::account::scan_transparent_accounts(coin, account, gap_limit as usize)
+//                 .await?;
+//         let mut builder = FlatBufferBuilder::new();
+//         let root = addresses.pack(&mut builder);
+//         builder.finish(root, None);
+//         Ok(builder.finished_data().to_vec())
+//     };
+//     to_cresult_bytes(res.await)
+// }
 
 #[tokio::main]
 #[no_mangle]
@@ -664,10 +654,7 @@ pub unsafe extern "C" fn transaction_report(
     let res = || {
         let plan: TransactionPlan = serde_json::from_str(&plan)?;
         let report = TransactionReport::from_plan(c.chain.network(), plan);
-        let mut builder = FlatBufferBuilder::new();
-        let root = report.pack(&mut builder);
-        builder.finish(root, None);
-        Ok(builder.finished_data().to_vec())
+        fb_to_bytes!(report)
     };
     to_cresult_bytes(res())
 }
@@ -885,16 +872,13 @@ pub unsafe extern "C" fn make_payment_uri(
 pub unsafe extern "C" fn decode_payment_uri(coin: u8, uri: *mut c_char) -> CResult<*const u8> {
     from_c_str!(uri);
     let payment_bytes = || {
-        let mut builder = FlatBufferBuilder::new();
-        let payment = crate::api::payment_uri::parse_payment_uri(coin, &uri)?;
-        let payment = PaymentURIT {
+            let payment = crate::api::payment_uri::parse_payment_uri(coin, &uri)?;
+            let payment = PaymentURIT {
             address: Some(payment.address),
             amount: payment.amount,
             memo: Some(payment.memo),
         };
-        let data = payment.pack(&mut builder);
-        builder.finish(data, None);
-        Ok(builder.finished_data().to_vec())
+        fb_to_bytes!(payment)
     };
     to_cresult_bytes(payment_bytes())
 }
@@ -903,10 +887,7 @@ pub unsafe extern "C" fn decode_payment_uri(coin: u8, uri: *mut c_char) -> CResu
 pub unsafe extern "C" fn generate_key() -> CResult<*const u8> {
     let res = || {
         let secret_key = FullEncryptedBackup::generate_key()?;
-        let mut builder = FlatBufferBuilder::new();
-        let root = secret_key.pack(&mut builder);
-        builder.finish(root, None);
-        Ok(builder.finished_data().to_vec())
+        fb_to_bytes!(secret_key)
     };
     to_cresult_bytes(res())
 }
@@ -977,10 +958,7 @@ pub unsafe extern "C" fn split_data(id: u32, data: *mut c_char) -> CResult<*cons
     from_c_str!(data);
     let res = || {
         let res = crate::fountain::FountainCodes::encode_into_drops(id, &base64::decode(&*data)?)?;
-        let mut builder = FlatBufferBuilder::new();
-        let res = res.pack(&mut builder);
-        builder.finish(res, None);
-        Ok(builder.finished_data().to_vec())
+        fb_to_bytes!(res)
     };
     to_cresult_bytes(res())
 }
@@ -1010,17 +988,17 @@ pub unsafe extern "C" fn get_tx_summary(tx: *mut c_char) -> CResult<*mut c_char>
     to_cresult_str(res())
 }
 
-#[tokio::main]
-#[no_mangle]
-pub async unsafe extern "C" fn get_best_server(servers: *mut u8, len: u64) -> CResult<*mut c_char> {
-    let servers: Vec<u8> = Vec::from_raw_parts(servers, len as usize, len as usize);
-    let res = async {
-        let servers = flatbuffers::root::<Servers>(&servers)?;
-        let best_server = crate::get_best_server(servers).await?;
-        Ok(best_server)
-    };
-    to_cresult_str(res.await)
-}
+// #[tokio::main]
+// #[no_mangle]
+// pub async unsafe extern "C" fn get_best_server(servers: *mut u8, len: u64) -> CResult<*mut c_char> {
+//     let servers: Vec<u8> = Vec::from_raw_parts(servers, len as usize, len as usize);
+//     let res = async {
+//         let servers = flatbuffers::root::<Servers>(&servers)?;
+//         let best_server = crate::get_best_server(servers).await?;
+//         Ok(best_server)
+//     };
+//     to_cresult_str(res.await)
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn import_from_zwl(coin: u8, name: *mut c_char, data: *mut c_char) {
@@ -1042,11 +1020,7 @@ pub unsafe extern "C" fn derive_zip32(
     let res = || {
         let address = if has_address { Some(address) } else { None };
         let kp = crate::api::account::derive_keys(coin, id_account, account, external, address)?;
-        let mut builder = FlatBufferBuilder::new();
-        let data = kp.pack(&mut builder);
-        builder.finish(data, None);
-        let res = builder.finished_data().to_vec();
-        Ok(res)
+        fb_to_bytes!(kp)
     };
     to_cresult_bytes(res())
 }
@@ -1064,11 +1038,7 @@ pub unsafe extern "C" fn clear_tx_details(coin: u8, account: u32) -> CResult<u8>
 pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let accounts = crate::db::read::get_account_list(coin, connection)?;
-        let mut builder = flatbuffers::FlatBufferBuilder::new();
-        let root = accounts.pack(&mut builder);
-        builder.finish(root, None);
-        let data = builder.finished_data().to_vec();
-        Ok(data)
+        fb_to_bytes!(accounts)
     };
     to_cresult_bytes(with_coin(coin, res))
 }
@@ -1082,14 +1052,14 @@ pub unsafe extern "C" fn get_first_account(coin: u8) -> CResult<u32> {
     to_cresult(with_coin(coin, res))
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn get_active_account(coin: u8) -> CResult<u32> {
-    let res = |connection: &Connection| {
-        let new_id = crate::db::read::get_active_account(connection)?;
-        Ok(new_id)
-    };
-    to_cresult(with_coin(coin, res))
-}
+// #[no_mangle]
+// pub unsafe extern "C" fn get_active_account(coin: u8) -> CResult<u32> {
+//     let res = |connection: &Connection| {
+//         let new_id = crate::db::read::get_active_account(connection)?;
+//         Ok(new_id)
+//     };
+//     to_cresult(with_coin(coin, res))
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn set_active_account(coin: u8, id: u32) -> CResult<u8> {
@@ -1151,11 +1121,7 @@ pub unsafe extern "C" fn get_pool_balances(
 ) -> CResult<*const u8> {
     let res = || {
         let balances = crate::scan::get_pool_balances(coin, id, confirmations, include_spent)?;
-        let mut builder = flatbuffers::FlatBufferBuilder::new();
-        let root = balances.pack(&mut builder);
-        builder.finish(root, None);
-        let data = builder.finished_data().to_vec();
-        Ok(data)
+        fb_to_bytes!(balances)
     };
     to_cresult_bytes(res())
 }
@@ -1165,10 +1131,7 @@ pub unsafe extern "C" fn get_db_height(coin: u8) -> CResult<*const u8> {
     let c = CoinConfig::get(coin);
     let res = |connection: &Connection| {
         let height = crate::db::read::get_db_height(&c.chain.network(), connection)?;
-        let mut builder = FlatBufferBuilder::new();
-        let height = height.pack(&mut builder);
-        builder.finish(height, None);
-        Ok(builder.finished_data().to_vec())
+        fb_to_bytes!(height)
     };
     to_cresult_bytes(with_coin(coin, res))
 }
@@ -1187,10 +1150,7 @@ pub unsafe extern "C" fn get_txs(coin: u8, id: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let c = CoinConfig::get(coin);
         let shielded_txs = crate::db::read::get_txs(c.chain.network(), connection, id)?;
-        let mut builder = FlatBufferBuilder::new();
-        let shielded_txs = shielded_txs.pack(&mut builder);
-        builder.finish(shielded_txs, None);
-        Ok(builder.finished_data().to_vec())
+        fb_to_bytes!(shielded_txs)
     };
     to_cresult_bytes(with_coin(coin, res))
 }
@@ -1200,11 +1160,7 @@ pub unsafe extern "C" fn get_messages(coin: u8, id: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let c = CoinConfig::get(coin);
         let messages = crate::db::read::get_messages(c.chain.network(), connection, id)?;
-        let mut builder = flatbuffers::FlatBufferBuilder::new();
-        let root = messages.pack(&mut builder);
-        builder.finish(root, None);
-        let data = builder.finished_data().to_vec();
-        Ok(data)
+        fb_to_bytes!(messages)
     };
     to_cresult_bytes(with_coin(coin, res))
 }
@@ -1233,18 +1189,18 @@ pub unsafe extern "C" fn get_templates(coin: u8) -> CResult<*const u8> {
     to_cresult_bytes(with_coin(coin, res))
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn save_send_template(coin: u8, template: *mut u8, len: u64) -> CResult<u32> {
-    let template: Vec<u8> = Vec::from_raw_parts(template, len as usize, len as usize);
-    let res = || {
-        let c = CoinConfig::get(coin);
-        let db = c.db()?;
-        let template = flatbuffers::root::<SendTemplate>(&template)?;
-        let id = db.store_template(&template)?;
-        Ok(id)
-    };
-    to_cresult(res())
-}
+// #[no_mangle]
+// pub unsafe extern "C" fn save_send_template(coin: u8, template: *mut u8, len: u64) -> CResult<u32> {
+//     let template: Vec<u8> = Vec::from_raw_parts(template, len as usize, len as usize);
+//     let res = || {
+//         let c = CoinConfig::get(coin);
+//         let db = c.db()?;
+//         let template = flatbuffers::root::<SendTemplate>(&template)?;
+//         let id = db.store_template(&template)?;
+//         Ok(id)
+//     };
+//     to_cresult(res())
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn delete_send_template(coin: u8, id: u32) -> CResult<u8> {
@@ -1270,11 +1226,7 @@ pub unsafe extern "C" fn get_contacts(coin: u8) -> CResult<*const u8> {
 pub unsafe extern "C" fn get_contact(coin: u8, id: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let contact = crate::db::read::get_contact(connection, id)?;
-        let mut builder = flatbuffers::FlatBufferBuilder::new();
-        let root = contact.pack(&mut builder);
-        builder.finish(root, None);
-        let data = builder.finished_data().to_vec();
-        Ok(data)
+        fb_to_bytes!(contact)
     };
     to_cresult_bytes(with_coin(coin, res))
 }
