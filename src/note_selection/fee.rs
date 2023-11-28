@@ -1,6 +1,6 @@
 use super::types::*;
 use crate::db::data_generated::fb::FeeT;
-use std::cmp::max;
+use std::cmp::{max, min};
 
 const MARGINAL_FEE: u64 = 5000;
 const GRACE_ACTIONS: u64 = 2;
@@ -51,6 +51,12 @@ impl FeeCalculator for FeeZIP327 {
             n_out[pool] += 1;
         }
 
+        for i in 1..3 {
+            if n_out[i] != 0 { // if used, shielded pools have a min of 2 outputs
+                n_out[i] = max(2, n_out[i]);
+            }
+        }
+
         let n_logical_actions =
             max(n_in[0], n_out[0]) + max(n_in[1], n_out[1]) + max(n_in[2], n_out[2]);
 
@@ -74,6 +80,7 @@ pub struct FeeFlat {
 }
 
 impl FeeFlat {
+    #[allow(dead_code)]
     pub fn from_rule(fee_rule: &FeeT) -> Self {
         FeeFlat { fee: fee_rule.fee }
     }

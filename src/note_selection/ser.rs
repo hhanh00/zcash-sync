@@ -20,6 +20,7 @@ impl From<MemoBytesProxy> for MemoBytes {
 }
 
 impl TransactionReport {
+    #[allow(dead_code)]
     pub fn from_plan(network: &Network, p: TransactionPlan) -> TxReportT {
         let mut spends = [0; 3];
         let mut outs = [0; 3];

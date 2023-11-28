@@ -4,7 +4,6 @@ use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::Witness;
-use crate::taddr::derive_taddr;
 use crate::{AccountData, CoinConfig, DbAdapter};
 use anyhow::anyhow;
 use jubjub::Fr;
