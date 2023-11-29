@@ -40,6 +40,7 @@ impl<'a> Account<'a> {
   pub const VT_KEY_TYPE: flatbuffers::VOffsetT = 10;
   pub const VT_BALANCE: flatbuffers::VOffsetT = 12;
   pub const VT_ADDRESS: flatbuffers::VOffsetT = 14;
+  pub const VT_SAVED: flatbuffers::VOffsetT = 16;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -55,6 +56,7 @@ impl<'a> Account<'a> {
     if let Some(x) = args.address { builder.add_address(x); }
     if let Some(x) = args.name { builder.add_name(x); }
     builder.add_id(args.id);
+    builder.add_saved(args.saved);
     builder.add_key_type(args.key_type);
     builder.add_coin(args.coin);
     builder.finish()
@@ -71,6 +73,7 @@ impl<'a> Account<'a> {
     let address = self.address().map(|x| {
       x.to_string()
     });
+    let saved = self.saved();
     AccountT {
       coin,
       id,
@@ -78,6 +81,7 @@ impl<'a> Account<'a> {
       key_type,
       balance,
       address,
+      saved,
     }
   }
 
@@ -123,6 +127,13 @@ impl<'a> Account<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Account::VT_ADDRESS, None)}
   }
+  #[inline]
+  pub fn saved(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(Account::VT_SAVED, Some(false)).unwrap()}
+  }
 }
 
 impl flatbuffers::Verifiable for Account<'_> {
@@ -138,6 +149,7 @@ impl flatbuffers::Verifiable for Account<'_> {
      .visit_field::<u8>("key_type", Self::VT_KEY_TYPE, false)?
      .visit_field::<u64>("balance", Self::VT_BALANCE, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .visit_field::<bool>("saved", Self::VT_SAVED, false)?
      .finish();
     Ok(())
   }
@@ -149,6 +161,7 @@ pub struct AccountArgs<'a> {
     pub key_type: u8,
     pub balance: u64,
     pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub saved: bool,
 }
 impl<'a> Default for AccountArgs<'a> {
   #[inline]
@@ -160,6 +173,7 @@ impl<'a> Default for AccountArgs<'a> {
       key_type: 0,
       balance: 0,
       address: None,
+      saved: false,
     }
   }
 }
@@ -194,6 +208,10 @@ impl<'a: 'b, 'b> AccountBuilder<'a, 'b> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Account::VT_ADDRESS, address);
   }
   #[inline]
+  pub fn add_saved(&mut self, saved: bool) {
+    self.fbb_.push_slot::<bool>(Account::VT_SAVED, saved, false);
+  }
+  #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> AccountBuilder<'a, 'b> {
     let start = _fbb.start_table();
     AccountBuilder {
@@ -217,6 +235,7 @@ impl core::fmt::Debug for Account<'_> {
       ds.field("key_type", &self.key_type());
       ds.field("balance", &self.balance());
       ds.field("address", &self.address());
+      ds.field("saved", &self.saved());
       ds.finish()
   }
 }
@@ -229,6 +248,7 @@ pub struct AccountT {
   pub key_type: u8,
   pub balance: u64,
   pub address: Option<String>,
+  pub saved: bool,
 }
 impl Default for AccountT {
   fn default() -> Self {
@@ -239,6 +259,7 @@ impl Default for AccountT {
       key_type: 0,
       balance: 0,
       address: None,
+      saved: false,
     }
   }
 }
@@ -257,6 +278,7 @@ impl AccountT {
     let address = self.address.as_ref().map(|x|{
       _fbb.create_string(x)
     });
+    let saved = self.saved;
     Account::create(_fbb, &AccountArgs{
       coin,
       id,
@@ -264,6 +286,7 @@ impl AccountT {
       key_type,
       balance,
       address,
+      saved,
     })
   }
 }
@@ -4706,6 +4729,7 @@ impl<'a> Backup<'a> {
   pub const VT_FVK: flatbuffers::VOffsetT = 12;
   pub const VT_UVK: flatbuffers::VOffsetT = 14;
   pub const VT_TSK: flatbuffers::VOffsetT = 16;
+  pub const VT_SAVED: flatbuffers::VOffsetT = 18;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -4724,6 +4748,7 @@ impl<'a> Backup<'a> {
     builder.add_index(args.index);
     if let Some(x) = args.seed { builder.add_seed(x); }
     if let Some(x) = args.name { builder.add_name(x); }
+    builder.add_saved(args.saved);
     builder.finish()
   }
 
@@ -4747,6 +4772,7 @@ impl<'a> Backup<'a> {
     let tsk = self.tsk().map(|x| {
       x.to_string()
     });
+    let saved = self.saved();
     BackupT {
       name,
       seed,
@@ -4755,6 +4781,7 @@ impl<'a> Backup<'a> {
       fvk,
       uvk,
       tsk,
+      saved,
     }
   }
 
@@ -4807,6 +4834,13 @@ impl<'a> Backup<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Backup::VT_TSK, None)}
   }
+  #[inline]
+  pub fn saved(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(Backup::VT_SAVED, Some(false)).unwrap()}
+  }
 }
 
 impl flatbuffers::Verifiable for Backup<'_> {
@@ -4823,6 +4857,7 @@ impl flatbuffers::Verifiable for Backup<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("fvk", Self::VT_FVK, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("uvk", Self::VT_UVK, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("tsk", Self::VT_TSK, false)?
+     .visit_field::<bool>("saved", Self::VT_SAVED, false)?
      .finish();
     Ok(())
   }
@@ -4835,6 +4870,7 @@ pub struct BackupArgs<'a> {
     pub fvk: Option<flatbuffers::WIPOffset<&'a str>>,
     pub uvk: Option<flatbuffers::WIPOffset<&'a str>>,
     pub tsk: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub saved: bool,
 }
 impl<'a> Default for BackupArgs<'a> {
   #[inline]
@@ -4847,6 +4883,7 @@ impl<'a> Default for BackupArgs<'a> {
       fvk: None,
       uvk: None,
       tsk: None,
+      saved: false,
     }
   }
 }
@@ -4885,6 +4922,10 @@ impl<'a: 'b, 'b> BackupBuilder<'a, 'b> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_TSK, tsk);
   }
   #[inline]
+  pub fn add_saved(&mut self, saved: bool) {
+    self.fbb_.push_slot::<bool>(Backup::VT_SAVED, saved, false);
+  }
+  #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> BackupBuilder<'a, 'b> {
     let start = _fbb.start_table();
     BackupBuilder {
@@ -4909,6 +4950,7 @@ impl core::fmt::Debug for Backup<'_> {
       ds.field("fvk", &self.fvk());
       ds.field("uvk", &self.uvk());
       ds.field("tsk", &self.tsk());
+      ds.field("saved", &self.saved());
       ds.finish()
   }
 }
@@ -4922,6 +4964,7 @@ pub struct BackupT {
   pub fvk: Option<String>,
   pub uvk: Option<String>,
   pub tsk: Option<String>,
+  pub saved: bool,
 }
 impl Default for BackupT {
   fn default() -> Self {
@@ -4933,6 +4976,7 @@ impl Default for BackupT {
       fvk: None,
       uvk: None,
       tsk: None,
+      saved: false,
     }
   }
 }
@@ -4960,6 +5004,7 @@ impl BackupT {
     let tsk = self.tsk.as_ref().map(|x|{
       _fbb.create_string(x)
     });
+    let saved = self.saved;
     Backup::create(_fbb, &BackupArgs{
       name,
       seed,
@@ -4968,6 +5013,7 @@ impl BackupT {
       fvk,
       uvk,
       tsk,
+      saved,
     })
   }
 }

@@ -259,6 +259,16 @@ pub unsafe extern "C" fn get_backup(coin: u8, id_account: u32) -> CResult<*const
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn set_backup_reminder(coin: u8, id_account: u32, v: bool) -> CResult<u8> {
+    let res = || {
+        crate::api::account::set_backup_reminder(coin, id_account, v)?;
+        Ok(0)
+    };
+
+    to_cresult(res())
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn get_available_addrs(coin: u8, account: u32) -> CResult<u8> {
     let res = |connection: &Connection| {
         let res = crate::db::read::get_available_addrs(connection, account)?;

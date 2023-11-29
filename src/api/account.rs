@@ -16,6 +16,7 @@ use bip39::{Language, Mnemonic};
 use orchard::keys::{FullViewingKey, Scope};
 use rand::rngs::OsRng;
 use rand::RngCore;
+use rusqlite::params;
 use zcash_address::unified::{Address as UA, Receiver};
 use zcash_address::{ToAddress, ZcashAddress};
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
@@ -132,6 +133,7 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
         sk,
         fvk,
         aindex,
+        saved,
         ..
     } = db.get_account_info(id_account)?;
     let orchard_keys = db.get_orchard(id_account)?;
@@ -156,8 +158,18 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
         fvk: Some(fvk),
         uvk,
         tsk,
+        saved,
     };
     Ok(backup)
+}
+
+pub fn set_backup_reminder(coin: u8, id_account: u32, v: bool) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
+    let connection = c.connection();
+    connection.execute("INSERT INTO accounts2(account, saved) \
+        VALUES (?1, ?2) ON CONFLICT DO UPDATE \
+        SET saved = excluded.saved", params![id_account, v])?;
+    Ok(())
 }
 
 /// Update the transparent secret key for the given account from a derivation path

@@ -10,8 +10,9 @@ use zcash_primitives::consensus::{Network, Parameters};
 
 pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT> {
     let mut stmt = connection.prepare("WITH notes AS (SELECT a.id_account, a.name, a.seed, a.sk, a.address, CASE WHEN r.spent IS NULL THEN r.value ELSE 0 END AS nv FROM accounts a LEFT JOIN received_notes r ON a.id_account = r.account), \
-                       accounts2 AS (SELECT id_account, name, seed, sk, address, COALESCE(sum(nv), 0) AS balance FROM notes GROUP by id_account) \
-                       SELECT a.id_account, a.name, a.seed, a.sk, a.balance, a.address, hw.ledger FROM accounts2 a LEFT JOIN hw_wallets hw ON a.id_account = hw.account")?;
+                       accountsA AS (SELECT id_account, name, seed, sk, address, COALESCE(sum(nv), 0) AS balance FROM notes GROUP by id_account) \
+                       SELECT a.id_account, a.name, a.seed, a.sk, a.balance, a.address, hw.ledger, a2.saved FROM accountsA a LEFT JOIN hw_wallets hw ON a.id_account = hw.account \
+                       LEFT JOIN accounts2 a2 ON a.id_account = a2.account")?;
     let rows = stmt.query_map([], |row| {
         let id: u32 = row.get("id_account")?;
         let name: String = row.get("name")?;
@@ -20,6 +21,7 @@ pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT
         let sk: Option<String> = row.get("sk")?;
         let address: String = row.get("address")?;
         let ledger: Option<bool> = row.get("ledger")?;
+        let saved: Option<bool> = row.get("saved")?;
         let key_type = if seed.is_some() {
             0
         } else if sk.is_some() {
@@ -36,6 +38,7 @@ pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT
             key_type,
             balance: balance as u64,
             address: Some(address),
+            saved: saved.unwrap_or(true),
         };
         Ok(account)
     })?;

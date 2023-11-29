@@ -70,6 +70,8 @@ typedef struct CResult_bool {
 
 #define Account_VT_ADDRESS 14
 
+#define Account_VT_SAVED 16
+
 #define AccountVec_VT_ACCOUNTS 4
 
 #define Balance_VT_SHIELDED 4
@@ -233,6 +235,8 @@ void new_sub_account(char *name, int32_t index, uint32_t count);
 struct CResult_u8 convert_to_watchonly(uint8_t coin, uint32_t id_account);
 
 struct CResult______u8 get_backup(uint8_t coin, uint32_t id_account);
+
+struct CResult_u8 set_backup_reminder(uint8_t coin, uint32_t id_account, bool v);
 
 struct CResult_u8 get_available_addrs(uint8_t coin, uint32_t account);
 

@@ -9,7 +9,6 @@ use crate::taddr::{derive_tkeys, TransparentTxInfo};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Connection, Hash};
-use ambassador::{delegatable_trait, delegate_remote};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, OptionalExtension, Transaction, Params, Statement, Row};
@@ -242,6 +241,8 @@ impl DbAdapter {
                 |row| row.get(0),
             )
             .map_err(wrap_query_no_rows("store_account/id_account"))?;
+        self.connection.execute("INSERT INTO accounts2(account, saved) \
+            VALUES (?1, FALSE)", [id_account])?;
         Ok(id_account)
     }
 
@@ -881,7 +882,7 @@ impl DbAdapter {
         let account_data = self
             .connection
             .query_row(
-                "SELECT name, seed, sk, ivk, address, aindex FROM accounts WHERE id_account = ?1",
+                "SELECT name, seed, sk, ivk, address, aindex, saved FROM accounts a LEFT JOIN accounts2 a2 ON a.id_account = a2.account WHERE id_account = ?1",
                 params![account],
                 |row| {
                     let name: String = row.get(0)?;
@@ -890,6 +891,7 @@ impl DbAdapter {
                     let fvk: String = row.get(3)?;
                     let address: String = row.get(4)?;
                     let aindex: u32 = row.get(5)?;
+                    let saved: Option<bool> = row.get(6)?;
                     Ok(AccountData {
                         name,
                         seed,
@@ -897,6 +899,7 @@ impl DbAdapter {
                         fvk,
                         address,
                         aindex,
+                        saved: saved.unwrap_or(true), // for compat with prev schemas
                     })
                 },
             )
@@ -1324,4 +1327,5 @@ pub struct AccountData {
     pub fvk: String,
     pub address: String,
     pub aindex: u32,
+    pub saved: bool,
 }

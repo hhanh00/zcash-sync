@@ -34,7 +34,7 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-const LATEST_VERSION: u32 = 9;
+const LATEST_VERSION: u32 = 10;
 
 pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyhow::Result<()> {
     connection.execute(
@@ -321,6 +321,15 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
     if version < 9 {
         connection.execute(
             "ALTER TABLE taddrs ADD balance INTEGER",
+            [],
+        )?;
+    }
+
+    if version < 10 {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS accounts2 (
+                account INTEGER PRIMARY KEY NOT NULL,
+                saved BOOL NOT NULL)",
             [],
         )?;
     }
