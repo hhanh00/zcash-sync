@@ -5,6 +5,7 @@ use orchard::Address;
 use rusqlite::OptionalExtension;
 use zcash_address::unified::{Container, Encoding, Receiver};
 use zcash_address::{unified, ToAddress, ZcashAddress};
+use zcash_client_backend::address::UnifiedAddress;
 use zcash_client_backend::encoding::{
     decode_payment_address, encode_payment_address, AddressCodec,
 };
@@ -177,7 +178,7 @@ pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<Dec
     Ok(decoded_ua)
 }
 
-pub fn orchard_as_unified(network: &Network, address: &Address) -> ZcashAddress {
-    let unified_address = unified::Address(vec![Receiver::Orchard(address.to_raw_address_bytes())]);
-    ZcashAddress::from_unified(network.address_network().unwrap(), unified_address)
+pub fn orchard_as_unified(network: &Network, address: &Address) -> String {
+    let ua = UnifiedAddress::from_receivers(Some(address.clone()), None, None).unwrap();
+    ua.encode(network)
 }

@@ -105,8 +105,7 @@ impl Destination {
             }
             Destination::Orchard(data) => {
                 let address = Address::from_raw_address_bytes(data).unwrap();
-                let zo = orchard_as_unified(network, &address);
-                zo.encode()
+                orchard_as_unified(network, &address)
             }
         }
     }

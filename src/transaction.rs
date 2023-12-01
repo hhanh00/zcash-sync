@@ -186,7 +186,7 @@ pub fn decode_transaction(
                                 incoming_message = true;
                             }
                         }
-                        temp_address = orchard_as_unified(network, &pa).encode();
+                        temp_address = orchard_as_unified(network, &pa);
                         incoming = true;
                     }
                     if let Some((_note, pa, memo, ..)) = try_output_recovery_with_ovk(
@@ -203,7 +203,7 @@ pub fn decode_transaction(
                                 tx_memo = memo;
                             }
                         }
-                        temp_address = orchard_as_unified(network, &pa).encode();
+                        temp_address = orchard_as_unified(network, &pa);
                         outgoing = true;
                     }
                     if incoming || outgoing {

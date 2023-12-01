@@ -400,7 +400,7 @@ async fn sweep_utxos(coin: u8, account: u32, pool: u8,
                 let okeys = db.get_orchard(account)?;
                 okeys.map(|okeys| {
                     let address = okeys.get_address(0);
-                    orchard_as_unified(network, &address).encode()
+                    orchard_as_unified(network, &address)
                 })
             }
             _ => unreachable!(),

@@ -1879,12 +1879,13 @@ impl<'a> Message<'a> {
   pub const VT_ID_TX: flatbuffers::VOffsetT = 6;
   pub const VT_HEIGHT: flatbuffers::VOffsetT = 8;
   pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 10;
-  pub const VT_FROM: flatbuffers::VOffsetT = 12;
-  pub const VT_TO: flatbuffers::VOffsetT = 14;
-  pub const VT_SUBJECT: flatbuffers::VOffsetT = 16;
-  pub const VT_BODY: flatbuffers::VOffsetT = 18;
-  pub const VT_READ: flatbuffers::VOffsetT = 20;
-  pub const VT_INCOMING: flatbuffers::VOffsetT = 22;
+  pub const VT_SENDER: flatbuffers::VOffsetT = 12;
+  pub const VT_FROM: flatbuffers::VOffsetT = 14;
+  pub const VT_TO: flatbuffers::VOffsetT = 16;
+  pub const VT_SUBJECT: flatbuffers::VOffsetT = 18;
+  pub const VT_BODY: flatbuffers::VOffsetT = 20;
+  pub const VT_READ: flatbuffers::VOffsetT = 22;
+  pub const VT_INCOMING: flatbuffers::VOffsetT = 24;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -1900,6 +1901,7 @@ impl<'a> Message<'a> {
     if let Some(x) = args.subject { builder.add_subject(x); }
     if let Some(x) = args.to { builder.add_to(x); }
     if let Some(x) = args.from { builder.add_from(x); }
+    if let Some(x) = args.sender { builder.add_sender(x); }
     builder.add_timestamp(args.timestamp);
     builder.add_height(args.height);
     builder.add_id_tx(args.id_tx);
@@ -1914,6 +1916,9 @@ impl<'a> Message<'a> {
     let id_tx = self.id_tx();
     let height = self.height();
     let timestamp = self.timestamp();
+    let sender = self.sender().map(|x| {
+      x.to_string()
+    });
     let from = self.from().map(|x| {
       x.to_string()
     });
@@ -1933,6 +1938,7 @@ impl<'a> Message<'a> {
       id_tx,
       height,
       timestamp,
+      sender,
       from,
       to,
       subject,
@@ -1969,6 +1975,13 @@ impl<'a> Message<'a> {
     // Created from valid Table for this object
     // which contains a valid value in this slot
     unsafe { self._tab.get::<u32>(Message::VT_TIMESTAMP, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn sender(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Message::VT_SENDER, None)}
   }
   #[inline]
   pub fn from(&self) -> Option<&'a str> {
@@ -2025,6 +2038,7 @@ impl flatbuffers::Verifiable for Message<'_> {
      .visit_field::<u32>("id_tx", Self::VT_ID_TX, false)?
      .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
      .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("sender", Self::VT_SENDER, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("from", Self::VT_FROM, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("to", Self::VT_TO, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("subject", Self::VT_SUBJECT, false)?
@@ -2040,6 +2054,7 @@ pub struct MessageArgs<'a> {
     pub id_tx: u32,
     pub height: u32,
     pub timestamp: u32,
+    pub sender: Option<flatbuffers::WIPOffset<&'a str>>,
     pub from: Option<flatbuffers::WIPOffset<&'a str>>,
     pub to: Option<flatbuffers::WIPOffset<&'a str>>,
     pub subject: Option<flatbuffers::WIPOffset<&'a str>>,
@@ -2055,6 +2070,7 @@ impl<'a> Default for MessageArgs<'a> {
       id_tx: 0,
       height: 0,
       timestamp: 0,
+      sender: None,
       from: None,
       to: None,
       subject: None,
@@ -2085,6 +2101,10 @@ impl<'a: 'b, 'b> MessageBuilder<'a, 'b> {
   #[inline]
   pub fn add_timestamp(&mut self, timestamp: u32) {
     self.fbb_.push_slot::<u32>(Message::VT_TIMESTAMP, timestamp, 0);
+  }
+  #[inline]
+  pub fn add_sender(&mut self, sender: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Message::VT_SENDER, sender);
   }
   #[inline]
   pub fn add_from(&mut self, from: flatbuffers::WIPOffset<&'b  str>) {
@@ -2132,6 +2152,7 @@ impl core::fmt::Debug for Message<'_> {
       ds.field("id_tx", &self.id_tx());
       ds.field("height", &self.height());
       ds.field("timestamp", &self.timestamp());
+      ds.field("sender", &self.sender());
       ds.field("from", &self.from());
       ds.field("to", &self.to());
       ds.field("subject", &self.subject());
@@ -2148,6 +2169,7 @@ pub struct MessageT {
   pub id_tx: u32,
   pub height: u32,
   pub timestamp: u32,
+  pub sender: Option<String>,
   pub from: Option<String>,
   pub to: Option<String>,
   pub subject: Option<String>,
@@ -2162,6 +2184,7 @@ impl Default for MessageT {
       id_tx: 0,
       height: 0,
       timestamp: 0,
+      sender: None,
       from: None,
       to: None,
       subject: None,
@@ -2180,6 +2203,9 @@ impl MessageT {
     let id_tx = self.id_tx;
     let height = self.height;
     let timestamp = self.timestamp;
+    let sender = self.sender.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
     let from = self.from.as_ref().map(|x|{
       _fbb.create_string(x)
     });
@@ -2199,6 +2225,7 @@ impl MessageT {
       id_tx,
       height,
       timestamp,
+      sender,
       from,
       to,
       subject,
@@ -7368,6 +7395,267 @@ impl PaymentURIT {
       address,
       amount,
       memo,
+    })
+  }
+}
+pub enum AccountAddressOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct AccountAddress<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for AccountAddress<'a> {
+  type Inner = AccountAddress<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> AccountAddress<'a> {
+  pub const VT_ID: flatbuffers::VOffsetT = 4;
+  pub const VT_NAME: flatbuffers::VOffsetT = 6;
+  pub const VT_TRANSPARENT: flatbuffers::VOffsetT = 8;
+  pub const VT_SAPLING: flatbuffers::VOffsetT = 10;
+  pub const VT_ORCHARD: flatbuffers::VOffsetT = 12;
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 14;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    AccountAddress { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args AccountAddressArgs<'args>
+  ) -> flatbuffers::WIPOffset<AccountAddress<'bldr>> {
+    let mut builder = AccountAddressBuilder::new(_fbb);
+    if let Some(x) = args.address { builder.add_address(x); }
+    if let Some(x) = args.orchard { builder.add_orchard(x); }
+    if let Some(x) = args.sapling { builder.add_sapling(x); }
+    if let Some(x) = args.transparent { builder.add_transparent(x); }
+    if let Some(x) = args.name { builder.add_name(x); }
+    builder.add_id(args.id);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> AccountAddressT {
+    let id = self.id();
+    let name = self.name().map(|x| {
+      x.to_string()
+    });
+    let transparent = self.transparent().map(|x| {
+      x.to_string()
+    });
+    let sapling = self.sapling().map(|x| {
+      x.to_string()
+    });
+    let orchard = self.orchard().map(|x| {
+      x.to_string()
+    });
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    AccountAddressT {
+      id,
+      name,
+      transparent,
+      sapling,
+      orchard,
+      address,
+    }
+  }
+
+  #[inline]
+  pub fn id(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(AccountAddress::VT_ID, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn name(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AccountAddress::VT_NAME, None)}
+  }
+  #[inline]
+  pub fn transparent(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AccountAddress::VT_TRANSPARENT, None)}
+  }
+  #[inline]
+  pub fn sapling(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AccountAddress::VT_SAPLING, None)}
+  }
+  #[inline]
+  pub fn orchard(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AccountAddress::VT_ORCHARD, None)}
+  }
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AccountAddress::VT_ADDRESS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for AccountAddress<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("id", Self::VT_ID, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("transparent", Self::VT_TRANSPARENT, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("sapling", Self::VT_SAPLING, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("orchard", Self::VT_ORCHARD, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct AccountAddressArgs<'a> {
+    pub id: u32,
+    pub name: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub transparent: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub sapling: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub orchard: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for AccountAddressArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    AccountAddressArgs {
+      id: 0,
+      name: None,
+      transparent: None,
+      sapling: None,
+      orchard: None,
+      address: None,
+    }
+  }
+}
+
+pub struct AccountAddressBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> AccountAddressBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_id(&mut self, id: u32) {
+    self.fbb_.push_slot::<u32>(AccountAddress::VT_ID, id, 0);
+  }
+  #[inline]
+  pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AccountAddress::VT_NAME, name);
+  }
+  #[inline]
+  pub fn add_transparent(&mut self, transparent: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AccountAddress::VT_TRANSPARENT, transparent);
+  }
+  #[inline]
+  pub fn add_sapling(&mut self, sapling: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AccountAddress::VT_SAPLING, sapling);
+  }
+  #[inline]
+  pub fn add_orchard(&mut self, orchard: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AccountAddress::VT_ORCHARD, orchard);
+  }
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AccountAddress::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> AccountAddressBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    AccountAddressBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<AccountAddress<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for AccountAddress<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("AccountAddress");
+      ds.field("id", &self.id());
+      ds.field("name", &self.name());
+      ds.field("transparent", &self.transparent());
+      ds.field("sapling", &self.sapling());
+      ds.field("orchard", &self.orchard());
+      ds.field("address", &self.address());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct AccountAddressT {
+  pub id: u32,
+  pub name: Option<String>,
+  pub transparent: Option<String>,
+  pub sapling: Option<String>,
+  pub orchard: Option<String>,
+  pub address: Option<String>,
+}
+impl Default for AccountAddressT {
+  fn default() -> Self {
+    Self {
+      id: 0,
+      name: None,
+      transparent: None,
+      sapling: None,
+      orchard: None,
+      address: None,
+    }
+  }
+}
+impl AccountAddressT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<AccountAddress<'b>> {
+    let id = self.id;
+    let name = self.name.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let transparent = self.transparent.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let sapling = self.sapling.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let orchard = self.orchard.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    AccountAddress::create(_fbb, &AccountAddressArgs{
+      id,
+      name,
+      transparent,
+      sapling,
+      orchard,
+      address,
     })
   }
 }

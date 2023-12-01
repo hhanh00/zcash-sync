@@ -1,23 +1,25 @@
+use crate::unified::orchard_as_unified;
 use crate::CoinConfig;
 use crate::{db::data_generated::fb::*, orchard::OrchardKeyBytes};
-use crate::unified::orchard_as_unified;
 use anyhow::Result;
-use orchard::keys::{FullViewingKey, Scope};
 use rusqlite::{params, Connection, OptionalExtension};
-use zcash_address::ZcashAddress;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use zcash_client_backend::address::{RecipientAddress, UnifiedAddress};
-use zcash_client_backend::encoding::{AddressCodec, decode_payment_address};
+use zcash_client_backend::encoding::{
+    decode_payment_address, encode_payment_address, AddressCodec,
+};
 use zcash_primitives::consensus::{Network, Parameters};
+use zcash_primitives::legacy::TransparentAddress;
 
 pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
     let mut stmt = connection.prepare("WITH notes AS (SELECT a.id_account, a.name, a.seed, a.sk, a.address, a.aindex, CASE WHEN r.spent IS NULL THEN r.value ELSE 0 END AS nv FROM accounts a LEFT JOIN received_notes r ON a.id_account = r.account), \
                        accountsA AS (SELECT id_account, name, seed, sk, address, aindex, COALESCE(sum(nv), 0) AS balance FROM notes GROUP by id_account) \
-                       SELECT a.id_account, a.name, a.seed, a.sk, a.balance, a.address, a.aindex, o.fvk, hw.ledger, a2.saved FROM accountsA a \
+                       SELECT a.id_account, a.name, a.seed, a.sk, a.balance, a.address, a.aindex, t.address AS taddr, o.fvk, hw.ledger, a2.saved FROM accountsA a \
                        LEFT JOIN hw_wallets hw ON a.id_account = hw.account \
                        LEFT JOIN accounts2 a2 ON a.id_account = a2.account \
+                       LEFT JOIN taddrs t ON a.id_account = t.account \
                        LEFT JOIN orchard_addrs o ON a.id_account = o.account")?;
     let rows = stmt.query_map([], |row| {
         let id: u32 = row.get("id_account")?;
@@ -27,6 +29,7 @@ pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT
         let sk: Option<String> = row.get("sk")?;
         let aindex: u32 = row.get("aindex")?;
         let address: String = row.get("address")?;
+        let taddr: Option<String> = row.get("taddr")?;
         let ledger: Option<bool> = row.get("ledger")?;
         let saved: Option<bool> = row.get("saved")?;
         let o_fvk: Option<Vec<u8>> = row.get("fvk")?;
@@ -45,8 +48,10 @@ pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT
                 fvk: o_fvk.try_into().unwrap(),
             };
             let o_address = o_key.get_address(aindex as usize);
-            let z_address = decode_payment_address(network.hrp_sapling_payment_address(), &address).unwrap();
-            let ua = UnifiedAddress::from_receivers(Some(o_address), Some(z_address), None).unwrap();
+            let z_address =
+                decode_payment_address(network.hrp_sapling_payment_address(), &address).unwrap();
+            let ua =
+                UnifiedAddress::from_receivers(Some(o_address), Some(z_address), None).unwrap();
             ua.encode(network)
         });
         let account = AccountT {
@@ -71,8 +76,9 @@ pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT
 }
 
 pub fn get_first_account(connection: &Connection) -> Result<u32> {
-    let id = connection.query_row("SELECT MIN(id_account) FROM accounts", [], 
-    |r| r.get::<_, Option<u32>>(0))?;
+    let id = connection.query_row("SELECT MIN(id_account) FROM accounts", [], |r| {
+        r.get::<_, Option<u32>>(0)
+    })?;
     Ok(id.unwrap_or(0))
 }
 
@@ -227,15 +233,19 @@ pub fn get_db_height(network: &Network, connection: &Connection) -> Result<Heigh
             |row| {
                 let height: u32 = row.get(0)?;
                 let timestamp: u32 = row.get(1)?;
-                Ok(HeightT {
-                    height,
-                    timestamp,
-                })
+                Ok(HeightT { height, timestamp })
             },
         )
-        .optional()?.unwrap_or_else(|| {
-            let h: u32 = network.activation_height(zcash_primitives::consensus::NetworkUpgrade::Sapling).unwrap().into();
-            HeightT { height: h - 1, timestamp: 0 }
+        .optional()?
+        .unwrap_or_else(|| {
+            let h: u32 = network
+                .activation_height(zcash_primitives::consensus::NetworkUpgrade::Sapling)
+                .unwrap()
+                .into();
+            HeightT {
+                height: h - 1,
+                timestamp: 0,
+            }
         });
     Ok(height)
 }
@@ -280,7 +290,7 @@ pub fn get_notes(connection: &Connection, id: u32) -> Result<Vec<u8>> {
 }
 
 pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<ShieldedTxVecT> {
-    let addresses = resolve_addresses(network, connection)?;
+    let known_addresses = list_known_addresses(network, connection)?;
     let mut stmt = connection.prepare(
         "SELECT id_tx, txid, height, timestamp, t.address, value, memo FROM transactions t \
         WHERE account = ?1 ORDER BY height DESC",
@@ -296,30 +306,119 @@ pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<Sh
         let address: Option<String> = row.get("address")?;
         let value: i64 = row.get("value")?;
         let memo: Option<String> = row.get("memo")?;
-        let name = address.as_ref().and_then(|a| addresses.get(a)).cloned();
         let tx = ShieldedTxT {
             id: id_tx,
             height,
             tx_id: Some(tx_id),
             short_tx_id: Some(short_tx_id),
             timestamp,
-            name,
+            name: None,
             value: value as u64,
             address,
             memo,
         };
         Ok(tx)
     })?;
-    let mut txs = vec![];
-    for r in rows {
-        txs.push(r?);
+    let mut txs = rows.collect::<Result<Vec<_>, _>>()?;
+    // Tx Addresses have one receiver because that is what the protocol uses
+    let tx_addresses = txs
+        .iter()
+        .filter_map(|tx| tx.address.clone())
+        .collect::<HashSet<String>>();
+    let names = tx_addresses
+        .iter()
+        .flat_map(|address| {
+            known_addresses
+                .get(address)
+                .cloned()
+                .unwrap_or_else(Vec::new)
+                .into_iter()
+                .map(|a| (address.clone(), a))
+        })
+        .collect::<HashMap<String, String>>();
+
+    for tx in txs.iter_mut() {
+        tx.name = names.get(tx.address.as_ref().unwrap()).cloned();
     }
     let txs = ShieldedTxVecT { txs: Some(txs) };
     Ok(txs)
 }
 
+// extract receivers from address and insert them in the receiver_map
+// receiver_map: receiver => address
+fn extract_receivers<T: Clone>(
+    network: &Network,
+    address: &str,
+    value: T,
+    receiver_map: &mut HashMap<String, Vec<T>>,
+) -> anyhow::Result<()> {
+    let a = RecipientAddress::decode(network, address).unwrap();
+    match a {
+        RecipientAddress::Transparent(_) | RecipientAddress::Shielded(_) => {
+            receiver_map
+                .entry(address.to_string())
+                .or_insert_with(Vec::new)
+                .push(value.clone());
+        }
+        RecipientAddress::Unified(ua) => {
+            if let Some(pa) = ua.transparent() {
+                let a = pa.encode(network);
+                receiver_map
+                    .entry(a.clone())
+                    .or_insert_with(Vec::new)
+                    .push(value.clone());
+            }
+            if let Some(pa) = ua.sapling() {
+                let a = encode_payment_address(network.hrp_sapling_payment_address(), pa);
+                receiver_map
+                    .entry(a.clone())
+                    .or_insert_with(Vec::new)
+                    .push(value.clone());
+            }
+            if let Some(pa) = ua.orchard() {
+                let a = UnifiedAddress::from_receivers(Some(pa.clone()), None, None).unwrap();
+                let a = a.encode(network);
+                receiver_map
+                    .entry(a.clone())
+                    .or_insert_with(Vec::new)
+                    .push(value.clone());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn list_known_addresses(
+    network: &Network,
+    connection: &Connection,
+) -> Result<HashMap<String, Vec<String>>> {
+    let mut known_receivers = HashMap::<String, Vec<String>>::new();
+    let mut stmt = connection.prepare("SELECT name, address FROM contacts WHERE address <> ''")?;
+    let rows = stmt.query_map([], |row| {
+        let name: String = row.get(0)?;
+        let address: String = row.get(1)?;
+        Ok((name, address))
+    })?;
+    for r in rows {
+        let (name, address) = r?;
+        extract_receivers(network, &address, name, &mut known_receivers)?;
+    }
+
+    let accounts = list_address_accounts(network, &connection)?;
+    for account in accounts.into_iter() {
+        let AccountAddressT { name, address, .. } = account;
+        extract_receivers(
+            network,
+            &address.unwrap(),
+            name.unwrap(),
+            &mut known_receivers,
+        )?;
+    }
+    Ok(known_receivers)
+}
+
 pub fn get_messages(network: &Network, connection: &Connection, id: u32) -> Result<MessageVecT> {
-    let addresses = resolve_addresses(network, connection)?;
+    let known_addresses = list_known_addresses(network, connection)?;
 
     let mut stmt = connection.prepare(
         "SELECT m.id, m.id_tx, m.timestamp, m.sender, m.recipient, m.incoming, \
@@ -339,27 +438,48 @@ pub fn get_messages(network: &Network, connection: &Connection, id: u32) -> Resu
         let incoming: bool = row.get("incoming")?;
 
         let id_tx = id_tx.unwrap_or(0);
-        let from = sender.as_ref().and_then(|s| addresses.get(s).cloned());
-        let to = recipient.as_ref().and_then(|r| addresses.get(r).cloned());
 
         let message = MessageT {
             id_msg,
             id_tx,
             height,
             timestamp,
-            from: from.or(sender),
-            to: to.or(recipient),
+            from: sender.clone(),
+            to: recipient,
             subject: Some(subject),
             body: Some(body),
             read,
             incoming,
+            sender,
         };
         Ok(message)
     })?;
-    let mut messages = vec![];
-    for r in rows {
-        messages.push(r?);
+    let mut messages = rows.collect::<Result<Vec<_>, _>>()?;
+    let mut message_receivers = HashMap::<String, Vec<(usize, bool)>>::new();
+    for (i, m) in messages.iter().enumerate() {
+        if let Some(ref from) = m.from {
+            extract_receivers(network, from, (i, true), &mut message_receivers)?;
+        }
+        if let Some(ref to) = m.to {
+            extract_receivers(network, to, (i, false), &mut message_receivers)?;
+        }
     }
+
+    // Join Many-Many from message to known_addresses
+    for (address, ms) in message_receivers.into_iter() {
+        if let Some(names) = known_addresses.get(&address) {
+            if let Some(name) = names.first() {
+                for (i, is_from) in ms.into_iter() {
+                    if is_from {
+                        messages[i].from = Some(name.clone());
+                    } else {
+                        messages[i].to = Some(name.clone());
+                    }
+                }
+            }
+        }
+    }
+
     let messages = MessageVecT {
         messages: Some(messages),
     };
@@ -491,16 +611,19 @@ pub fn get_contacts(connection: &Connection) -> Result<Vec<u8>> {
 }
 
 pub fn get_contact(connection: &Connection, id: u32) -> Result<ContactT> {
-    let contact = connection.query_row("SELECT name, address FROM contacts WHERE id = ?1", 
-    [id], |r| {
-        let name = r.get::<_, String>(0)?;
-        let address = r.get::<_, String>(1)?;
-        Ok(ContactT {
-            id,
-            name: Some(name),
-            address: Some(address),
-        })
-    })?;
+    let contact = connection.query_row(
+        "SELECT name, address FROM contacts WHERE id = ?1",
+        [id],
+        |r| {
+            let name = r.get::<_, String>(0)?;
+            let address = r.get::<_, String>(1)?;
+            Ok(ContactT {
+                id,
+                name: Some(name),
+                address: Some(address),
+            })
+        },
+    )?;
     Ok(contact)
 }
 
@@ -643,69 +766,6 @@ pub fn get_checkpoints(connection: &Connection) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-pub fn resolve_addresses(
-    network: &Network,
-    connection: &Connection,
-) -> Result<HashMap<String, String>> {
-    let mut addresses: HashMap<String, String> = HashMap::new();
-    let mut stmt = connection.prepare("SELECT name, address FROM contacts WHERE address <> ''")?;
-    let rows = stmt.query_map([], |row| {
-        let name: String = row.get(0)?;
-        let address: String = row.get(1)?;
-        let ra = RecipientAddress::decode(network, &address);
-        if let Some(ra) = ra {
-            match ra {
-                RecipientAddress::Unified(ua) => {
-                    if let Some(ta) = ua.transparent() {
-                        addresses.insert(ta.encode(network), name.clone());
-                    }
-                    if let Some(pa) = ua.sapling() {
-                        addresses.insert(pa.encode(network), name.clone());
-                    }
-                    if let Some(oa) = ua.orchard() {
-                        let oa = orchard_as_unified(network, oa);
-                        addresses.insert(oa.encode(), name.clone());
-                    }
-                }
-                _ => {
-                    addresses.insert(address, name);
-                }
-            }
-        }
-        Ok(())
-    })?;
-    for r in rows {
-        r?;
-    }
-
-    let mut stmt = connection.prepare(
-        "SELECT a.name, a.address, t.address, o.fvk FROM accounts a LEFT JOIN taddrs t ON a.id_account = t.account \
-        LEFT JOIN orchard_addrs o ON a.id_account = o.account",
-    )?;
-    let rows = stmt.query_map([], |row| {
-        let name: String = row.get(0)?;
-        let z_addr: String = row.get(1)?;
-        let t_addr: Option<String> = row.get(2)?;
-        let o_fvk: Option<Vec<u8>> = row.get(3)?;
-        addresses.insert(z_addr, name.clone());
-        if let Some(t_addr) = t_addr {
-            addresses.insert(t_addr, name.clone());
-        }
-        if let Some(o_fvk) = o_fvk {
-            let o_fvk = FullViewingKey::from_bytes(&o_fvk.try_into().unwrap()).unwrap();
-            let o_addr = o_fvk.address_at(0usize, Scope::External);
-            let o_addr = orchard_as_unified(network, &o_addr);
-            addresses.insert(o_addr.encode(), name.clone());
-        }
-        Ok(())
-    })?;
-    for r in rows {
-        r?;
-    }
-
-    Ok(addresses)
-}
-
 pub fn get_property(connection: &Connection, name: &str) -> anyhow::Result<String> {
     let url = connection
         .query_row(
@@ -762,4 +822,56 @@ pub fn get_account_by_address(connection: &Connection, address: &str) -> Result<
         )
         .optional()?;
     Ok(id)
+}
+
+pub fn list_address_accounts(
+    network: &Network,
+    connection: &Connection,
+) -> anyhow::Result<Vec<AccountAddressT>> {
+    let mut s = connection.prepare(
+        "SELECT id_account, name, aindex, a.address, t.address AS taddr, fvk FROM accounts a \
+        LEFT JOIN taddrs t ON t.account = a.id_account \
+        LEFT JOIN orchard_addrs o ON o.account = a.id_account",
+    )?;
+    let rows = s.query_map([], |r| {
+        let id = r.get::<_, u32>(0)?;
+        let name = r.get::<_, String>(1)?;
+        let aindex = r.get::<_, u32>(2)?;
+        let address = r.get::<_, String>(3)?;
+        let taddr = r.get::<_, Option<String>>(4)?;
+        let fvk = r.get::<_, Option<Vec<u8>>>(5)?;
+        Ok((id, name, aindex, address, taddr, fvk))
+    })?;
+    let mut account_addresses = vec![];
+    for r in rows {
+        let (id, name, aindex, zaddr, taddr, fvk) = r?;
+        let transparent = taddr
+            .as_ref()
+            .map(|address| TransparentAddress::decode(network, &address).unwrap());
+        let sapling =
+            decode_payment_address(network.hrp_sapling_payment_address(), &zaddr).unwrap();
+        let orchard = fvk.map(|fvk| {
+            let ob = OrchardKeyBytes {
+                sk: None,
+                fvk: fvk.try_into().unwrap(),
+            };
+            ob.get_address(aindex as usize)
+        });
+        let address = if transparent.is_some() || orchard.is_some() {
+            let ua = UnifiedAddress::from_receivers(orchard, Some(sapling), transparent).unwrap();
+            ua.encode(network)
+        } else {
+            zaddr.clone()
+        };
+        let aa = AccountAddressT {
+            id,
+            name: Some(name),
+            address: Some(address),
+            transparent: taddr,
+            sapling: Some(zaddr),
+            orchard: orchard.map(|o| orchard_as_unified(network, &o)),
+        };
+        account_addresses.push(aa);
+    }
+    Ok(account_addresses)
 }
