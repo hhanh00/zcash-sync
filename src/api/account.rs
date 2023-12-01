@@ -4,12 +4,10 @@
 
 use crate::coinconfig::CoinConfig;
 use crate::db::data_generated::fb::{AddressBalanceT, AddressBalanceVecT, BackupT, KeyPackT};
-use crate::Connection;
 use crate::db::AccountData;
 use crate::key2::decode_key;
 use crate::orchard::OrchardKeyBytes;
 use crate::taddr::{derive_taddr, derive_tkeys, get_base58_tsk};
-use crate::unified::UnifiedAddressType;
 use crate::zip32::derive_zip32;
 use anyhow::anyhow;
 use bip39::{Language, Mnemonic};

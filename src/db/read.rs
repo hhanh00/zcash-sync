@@ -1,27 +1,35 @@
-use crate::db::data_generated::fb::*;
+use crate::CoinConfig;
+use crate::{db::data_generated::fb::*, orchard::OrchardKeyBytes};
 use crate::unified::orchard_as_unified;
 use anyhow::Result;
 use orchard::keys::{FullViewingKey, Scope};
 use rusqlite::{params, Connection, OptionalExtension};
+use zcash_address::ZcashAddress;
 use std::collections::HashMap;
-use zcash_client_backend::address::RecipientAddress;
-use zcash_client_backend::encoding::AddressCodec;
+use zcash_client_backend::address::{RecipientAddress, UnifiedAddress};
+use zcash_client_backend::encoding::{AddressCodec, decode_payment_address};
 use zcash_primitives::consensus::{Network, Parameters};
 
 pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT> {
-    let mut stmt = connection.prepare("WITH notes AS (SELECT a.id_account, a.name, a.seed, a.sk, a.address, CASE WHEN r.spent IS NULL THEN r.value ELSE 0 END AS nv FROM accounts a LEFT JOIN received_notes r ON a.id_account = r.account), \
-                       accountsA AS (SELECT id_account, name, seed, sk, address, COALESCE(sum(nv), 0) AS balance FROM notes GROUP by id_account) \
-                       SELECT a.id_account, a.name, a.seed, a.sk, a.balance, a.address, hw.ledger, a2.saved FROM accountsA a LEFT JOIN hw_wallets hw ON a.id_account = hw.account \
-                       LEFT JOIN accounts2 a2 ON a.id_account = a2.account")?;
+    let c = CoinConfig::get(coin);
+    let network = c.chain.network();
+    let mut stmt = connection.prepare("WITH notes AS (SELECT a.id_account, a.name, a.seed, a.sk, a.address, a.aindex, CASE WHEN r.spent IS NULL THEN r.value ELSE 0 END AS nv FROM accounts a LEFT JOIN received_notes r ON a.id_account = r.account), \
+                       accountsA AS (SELECT id_account, name, seed, sk, address, aindex, COALESCE(sum(nv), 0) AS balance FROM notes GROUP by id_account) \
+                       SELECT a.id_account, a.name, a.seed, a.sk, a.balance, a.address, a.aindex, o.fvk, hw.ledger, a2.saved FROM accountsA a \
+                       LEFT JOIN hw_wallets hw ON a.id_account = hw.account \
+                       LEFT JOIN accounts2 a2 ON a.id_account = a2.account \
+                       LEFT JOIN orchard_addrs o ON a.id_account = o.account")?;
     let rows = stmt.query_map([], |row| {
         let id: u32 = row.get("id_account")?;
         let name: String = row.get("name")?;
         let balance: i64 = row.get("balance")?;
         let seed: Option<String> = row.get("seed")?;
         let sk: Option<String> = row.get("sk")?;
+        let aindex: u32 = row.get("aindex")?;
         let address: String = row.get("address")?;
         let ledger: Option<bool> = row.get("ledger")?;
         let saved: Option<bool> = row.get("saved")?;
+        let o_fvk: Option<Vec<u8>> = row.get("fvk")?;
         let key_type = if seed.is_some() {
             0
         } else if sk.is_some() {
@@ -31,13 +39,23 @@ pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT
         } else {
             0x80
         };
+        let ua = o_fvk.map(|o_fvk| {
+            let o_key = OrchardKeyBytes {
+                sk: None,
+                fvk: o_fvk.try_into().unwrap(),
+            };
+            let o_address = o_key.get_address(aindex as usize);
+            let z_address = decode_payment_address(network.hrp_sapling_payment_address(), &address).unwrap();
+            let ua = UnifiedAddress::from_receivers(Some(o_address), Some(z_address), None).unwrap();
+            ua.encode(network)
+        });
         let account = AccountT {
             coin,
             id,
             name: Some(name),
             key_type,
             balance: balance as u64,
-            address: Some(address),
+            address: ua.or(Some(address)),
             saved: saved.unwrap_or(true),
         };
         Ok(account)
