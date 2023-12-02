@@ -46,7 +46,7 @@ pub fn make_payment_uri(
 pub fn parse_payment_uri(coin: u8, uri: &str) -> anyhow::Result<PaymentURI> {
     let c = CoinConfig::get(coin);
     let scheme = c.chain.ticker();
-    let scheme_len = scheme.len();
+    let scheme_len = scheme.len().min(uri.len());
     if uri[..scheme_len].ne(scheme) {
         anyhow::bail!("Invalid Payment URI: Invalid scheme");
     }
