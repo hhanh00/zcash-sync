@@ -233,13 +233,13 @@ pub unsafe extern "C" fn new_account(
     to_cresult(res)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32, count: u32) {
-    from_c_str!(name);
-    let index = if index >= 0 { Some(index as u32) } else { None };
-    let res = crate::api::account::new_sub_account(&name, index, count);
-    log_error(res)
-}
+// #[no_mangle]
+// pub unsafe extern "C" fn new_sub_account(name: *mut c_char, index: i32, count: u32) {
+//     from_c_str!(name);
+//     let index = if index >= 0 { Some(index as u32) } else { None };
+//     let res = crate::api::account::new_sub_account(&name, index, count);
+//     log_error(res)
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn convert_to_watchonly(coin: u8, id_account: u32) -> CResult<u8> {
@@ -525,12 +525,7 @@ pub async unsafe extern "C" fn rescan_from(height: u32) {
 #[tokio::main]
 #[no_mangle]
 pub async unsafe extern "C" fn get_taddr_balance(coin: u8, id_account: u32) -> CResult<u64> {
-    let res = if coin == 0xFF {
-        crate::api::account::get_taddr_balance_default().await
-    } else {
-        crate::api::account::get_taddr_balance(coin, id_account).await
-    };
-    to_cresult(res)
+    to_cresult(crate::api::account::get_taddr_balance(coin, id_account).await)
 }
 
 #[tokio::main]
@@ -816,6 +811,7 @@ pub unsafe extern "C" fn store_contact(
 #[no_mangle]
 pub async unsafe extern "C" fn commit_unsaved_contacts(
     coin: u8,
+    account: u32,
     anchor_offset: u32,
     fee_bytes: *mut u8,
     fee_len: u64,
@@ -823,7 +819,7 @@ pub async unsafe extern "C" fn commit_unsaved_contacts(
     let res = async move {
         let fee = unpack_fee(fee_bytes, fee_len);
         let tx_plan =
-            crate::api::contact::commit_unsaved_contacts(coin, anchor_offset, &fee).await?;
+            crate::api::contact::commit_unsaved_contacts(coin, account, anchor_offset, &fee).await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };
@@ -1071,15 +1067,15 @@ pub unsafe extern "C" fn get_first_account(coin: u8) -> CResult<u32> {
 //     to_cresult(with_coin(coin, res))
 // }
 
-#[no_mangle]
-pub unsafe extern "C" fn set_active_account(coin: u8, id: u32) -> CResult<u8> {
-    let res = |connection: &Connection| {
-        crate::coinconfig::set_active_account(coin, id);
-        crate::db::read::set_active_account(connection, id)?;
-        Ok(0)
-    };
-    to_cresult(with_coin(coin, res))
-}
+// #[no_mangle]
+// pub unsafe extern "C" fn set_active_account(coin: u8, id: u32) -> CResult<u8> {
+//     let res = |connection: &Connection| {
+//         crate::coinconfig::set_active_account(coin, id);
+//         crate::db::read::set_active_account(connection, id)?;
+//         Ok(0)
+//     };
+//     to_cresult(with_coin(coin, res))
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn get_t_addr(coin: u8, id: u32) -> CResult<*mut c_char> {

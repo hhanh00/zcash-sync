@@ -110,17 +110,19 @@ typedef struct CResult_bool {
 
 #define Message_VT_ID_TX 6
 
-#define Message_VT_FROM 12
+#define Message_VT_SENDER 12
 
-#define Message_VT_TO 14
+#define Message_VT_FROM 14
 
-#define Message_VT_SUBJECT 16
+#define Message_VT_TO 16
 
-#define Message_VT_BODY 18
+#define Message_VT_SUBJECT 18
 
-#define Message_VT_READ 20
+#define Message_VT_BODY 20
 
-#define Message_VT_INCOMING 22
+#define Message_VT_READ 22
+
+#define Message_VT_INCOMING 24
 
 #define MessageVec_VT_MESSAGES 4
 
@@ -229,8 +231,6 @@ void mempool_run(int64_t port);
 void mempool_set_active(uint8_t coin, uint32_t id_account);
 
 struct CResult_u32 new_account(uint8_t coin, char *name, char *data, int32_t index);
-
-void new_sub_account(char *name, int32_t index, uint32_t count);
 
 struct CResult_u8 convert_to_watchonly(uint8_t coin, uint32_t id_account);
 
@@ -351,6 +351,7 @@ struct CResult_u32 sync_historical_prices(uint8_t coin, int64_t now, uint32_t da
 void store_contact(uint32_t id, char *name, char *address, bool dirty);
 
 struct CResult_____c_char commit_unsaved_contacts(uint8_t coin,
+                                                  uint32_t account,
                                                   uint32_t anchor_offset,
                                                   uint8_t *fee_bytes,
                                                   uint64_t fee_len);
@@ -404,8 +405,6 @@ struct CResult_u8 clear_tx_details(uint8_t coin, uint32_t account);
 struct CResult______u8 get_account_list(uint8_t coin);
 
 struct CResult_u32 get_first_account(uint8_t coin);
-
-struct CResult_u8 set_active_account(uint8_t coin, uint32_t id);
 
 struct CResult_____c_char get_t_addr(uint8_t coin, uint32_t id);
 

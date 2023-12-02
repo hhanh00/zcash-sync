@@ -7,8 +7,10 @@ use crate::coinconfig::CoinConfig;
 use crate::contact::{serialize_contacts, Contact};
 use crate::db::data_generated::fb::FeeT;
 use crate::db::AccountData;
-use crate::TransactionPlan;
+use crate::{TransactionPlan, get_ua_of};
+use crate::db::read::list_address_accounts;
 use zcash_primitives::memo::Memo;
+use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
 
 /// Store contact in the database
 /// # Arguments
@@ -32,30 +34,32 @@ pub fn store_contact(id: u32, name: &str, address: &str, dirty: bool) -> anyhow:
 /// * `anchor_offset`: minimum confirmations required for note selection
 pub async fn commit_unsaved_contacts(
     coin: u8,
+    account: u32,
     anchor_offset: u32,
     fee: &FeeT,
 ) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let contacts = c.db()?.get_unsaved_contacts()?;
     let memos = serialize_contacts(&contacts)?;
-    let tx_plan = save_contacts_tx(coin, &memos, anchor_offset, fee).await?;
+    let tx_plan = save_contacts_tx(coin, account, &memos, anchor_offset, fee).await?;
     Ok(tx_plan)
 }
 
 async fn save_contacts_tx(
     coin: u8,
+    account: u32,
     memos: &[Memo],
     anchor_offset: u32,
     fee: &FeeT,
 ) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let last_height = get_latest_height(coin).await?;
-    let AccountData { address, .. } = c.db()?.get_account_info(c.id_account)?;
+    let address = get_ua_of(c.chain.network(), &c.connection(), account, 7)?;
     let recipients: Vec<_> = memos
         .iter()
         .map(|m| RecipientMemo {
             address: address.clone(),
-            amount: 0,
+            amount: u64::from(DEFAULT_FEE),
             fee_included: false,
             memo: m.clone(),
             max_amount_per_note: 0,
@@ -63,8 +67,8 @@ async fn save_contacts_tx(
         .collect();
 
     let tx_plan = build_tx_plan(
-        c.coin,
-        c.id_account,
+        coin,
+        account,
         last_height,
         &recipients,
         1,

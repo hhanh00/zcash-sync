@@ -106,7 +106,7 @@ pub mod ledger;
 
 pub use crate::chain::{connect_lightwalletd, get_best_server, ChainError};
 pub use crate::coinconfig::{
-    init_coin, set_active, set_active_account, set_coin_lwd_url, CoinConfig, COIN_CONFIG,
+    init_coin, set_active, set_coin_lwd_url, CoinConfig, COIN_CONFIG,
 };
 pub use crate::db::{AccountData, AccountRec, DbAdapter, TxRec};
 pub use crate::fountain::{FountainCodes, RaptorQDrops};

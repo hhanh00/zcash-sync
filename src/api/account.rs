@@ -71,18 +71,18 @@ pub fn new_account(
 /// * `name`: name of the sub accounts. Every sub account will have the same name
 /// * `index`: Starting index. If `None`, use the index following the highest used index
 /// * `count`: Number of subaccounts to create
-pub fn new_sub_account(name: &str, index: Option<u32>, count: u32) -> anyhow::Result<()> {
-    let c = CoinConfig::get_active();
-    let db = c.db()?;
-    let AccountData { seed, .. } = db.get_account_info(c.id_account)?;
-    let seed = seed.ok_or_else(|| anyhow!("Account has no seed"))?;
-    let index = index.unwrap_or_else(|| db.next_account_id(&seed).unwrap());
-    drop(db);
-    for i in 0..count {
-        new_account_with_key(c.coin, name, &seed, index + i)?;
-    }
-    Ok(())
-}
+// pub fn new_sub_account(name: &str, index: Option<u32>, count: u32) -> anyhow::Result<()> {
+//     let c = CoinConfig::get_active();
+//     let db = c.db()?;
+//     let AccountData { seed, .. } = db.get_account_info(c.id_account)?;
+//     let seed = seed.ok_or_else(|| anyhow!("Account has no seed"))?;
+//     let index = index.unwrap_or_else(|| db.next_account_id(&seed).unwrap());
+//     drop(db);
+//     for i in 0..count {
+//         new_account_with_key(c.coin, name, &seed, index + i)?;
+//     }
+//     Ok(())
+// }
 
 fn new_account_with_key(coin: u8, name: &str, key: &str, index: u32) -> anyhow::Result<u32> {
     let c = CoinConfig::get(coin);
@@ -181,7 +181,7 @@ pub fn set_backup_reminder(coin: u8, id_account: u32, v: bool) -> anyhow::Result
 pub fn import_transparent_key(coin: u8, id_account: u32, path: &str) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let db = c.db()?;
-    let AccountData { seed, .. } = db.get_account_info(c.id_account)?;
+    let AccountData { seed, .. } = db.get_account_info(id_account)?;
     let seed = seed.ok_or_else(|| anyhow!("Account has no seed"))?;
     let (sk, addr) = derive_tkeys(c.chain.network(), &seed, path)?;
     db.store_transparent_key(id_account, &sk, &addr)?;
@@ -254,10 +254,10 @@ pub fn get_diversified_address(coin: u8, account: u32, ua_type: u8, time: u32) -
 }
 
 /// Retrieve the transparent balance for the current account from the LWD server
-pub async fn get_taddr_balance_default() -> anyhow::Result<u64> {
-    let c = CoinConfig::get_active();
-    get_taddr_balance(c.coin, c.id_account).await
-}
+// pub async fn get_taddr_balance_default() -> anyhow::Result<u64> {
+//     let c = CoinConfig::get_active();
+//     get_taddr_balance(c.coin, c.id_account).await
+// }
 
 /// Retrieve the transparent balance from the LWD server
 /// # Arguments

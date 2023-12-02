@@ -44,42 +44,58 @@ impl std::fmt::Display for DecodedUA {
     }
 }
 
-pub fn get_ua_of(network: &Network, connection: &Connection, account: u32,
-    ua: u8
+pub fn get_ua_of(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    ua: u8,
 ) -> anyhow::Result<String> {
-    let t_addr = connection.query_row("SELECT address FROM taddrs WHERE account = ?1",
-    [account], |r| r.get::<_, String>(0)).optional()?;
-    let z_addr = connection.query_row("SELECT address FROM accounts WHERE id_account = ?1",
-                                      [account], |r| r.get::<_, String>(0)).optional()?;
-    let o_fvk = connection.query_row("SELECT fvk FROM orchard_addrs WHERE account = ?1",
-                                      [account], |r| r.get::<_, Vec<u8>>(0)).optional()?;
+    let t_addr = connection
+        .query_row(
+            "SELECT address FROM taddrs WHERE account = ?1",
+            [account],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?;
+    let (z_addr, aindex) = connection
+        .query_row(
+            "SELECT address, aindex FROM accounts WHERE id_account = ?1",
+            [account],
+            |r| {
+                let address = r.get::<_, String>(0)?;
+                let aindex = r.get::<_, u32>(1)?;
+                Ok((address, aindex))
+            },
+        )?;
+    let o_fvk = connection
+        .query_row(
+            "SELECT fvk FROM orchard_addrs WHERE account = ?1",
+            [account],
+            |r| r.get::<_, Vec<u8>>(0),
+        )
+        .optional()?;
 
     if ua == 1 {
         return t_addr.ok_or(anyhow!("No receiver"));
-    }
-    else if ua == 2 {
-        return z_addr.ok_or(anyhow!("No receiver"));
+    } else if ua == 2 {
+        return Ok(z_addr);
     }
 
-    let t_addr = t_addr.map(|a| {
-        TransparentAddress::decode(network, &a).unwrap()
-    });
-    let z_addr = z_addr.map(|a| {
-        decode_payment_address(network.hrp_sapling_payment_address(), &a).unwrap()
-    });
+    let t_addr = t_addr.map(|a| TransparentAddress::decode(network, &a).unwrap());
+    let z_addr = decode_payment_address(network.hrp_sapling_payment_address(), &z_addr).unwrap();
     let o_addr = o_fvk.map(|fvk| {
         let fvk = FullViewingKey::from_bytes(&fvk.try_into().unwrap()).unwrap();
-        fvk.address_at(0usize, Scope::External)
+        fvk.address_at(aindex as usize, Scope::External)
     });
     let t_recv = if ua & 1 != 0 { t_addr } else { None };
-    let z_recv = if ua & 2 != 0 { z_addr } else { None };
+    let z_recv = if ua & 2 != 0 { Some(z_addr) } else { None };
     let o_recv = if ua & 4 != 0 { o_addr } else { None };
 
-    let address = zcash_client_backend::address::UnifiedAddress::from_receivers(
-        o_recv, z_recv, t_recv).ok_or(anyhow!("Invalid UA"))?;
+    let address =
+        zcash_client_backend::address::UnifiedAddress::from_receivers(o_recv, z_recv, t_recv)
+            .ok_or(anyhow!("Invalid UA"))?;
     Ok(address.encode(network))
 }
-
 
 /*
  * It can also return a t-addr if there is no other selection

@@ -31,13 +31,13 @@ pub fn set_active(active: u8) {
 }
 
 /// Set the active account for a given coin
-pub fn set_active_account(coin: u8, id: u32) {
-    let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
-    c.id_account = id;
-    if let Some(mempool) = MEMPOOL.borrow() {
-        mempool.set_active(coin, id);
-    }
-}
+// pub fn set_active_account(coin: u8, id: u32) {
+//     let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
+//     c.id_account = id;
+//     if let Some(mempool) = MEMPOOL.borrow() {
+//         mempool.set_active(coin, id);
+//     }
+// }
 
 /// Set the lightwalletd url for a given coin
 pub fn set_coin_lwd_url(coin: u8, lwd_url: &str) {
@@ -92,7 +92,6 @@ pub async fn migrate_data(coin: u8) -> anyhow::Result<()> {
 pub struct CoinConfig {
     pub coin: u8,
     pub coin_type: CoinType,
-    pub id_account: u32,
     pub height: u32,
     pub lwd_url: Option<String>,
     pub db_path: Option<String>,
@@ -107,7 +106,6 @@ impl CoinConfig {
         CoinConfig {
             coin,
             coin_type,
-            id_account: 0,
             height: 0,
             lwd_url: None,
             db_path: None,
