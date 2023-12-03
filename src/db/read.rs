@@ -875,3 +875,10 @@ pub fn list_address_accounts(
     }
     Ok(account_addresses)
 }
+
+pub fn count_accounts(connection: &Connection) -> anyhow::Result<u32> {
+    let c = connection.query_row("SELECT COUNT(*) FROM accounts", [], |r| {
+        r.get::<_, u32>(0)
+    })?;
+    Ok(c)
+}

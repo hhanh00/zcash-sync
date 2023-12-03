@@ -404,6 +404,8 @@ struct CResult_u8 clear_tx_details(uint8_t coin, uint32_t account);
 
 struct CResult______u8 get_account_list(uint8_t coin);
 
+struct CResult_u32 count_accounts(uint8_t coin);
+
 struct CResult_u32 get_first_account(uint8_t coin);
 
 struct CResult_____c_char get_t_addr(uint8_t coin, uint32_t id);

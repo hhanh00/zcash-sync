@@ -1050,6 +1050,15 @@ pub unsafe extern "C" fn get_account_list(coin: u8) -> CResult<*const u8> {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn count_accounts(coin: u8) -> CResult<u32> {
+    let res = |connection: &Connection| {
+        let c = crate::db::read::count_accounts(connection)?;
+        Ok(c)
+    };
+    to_cresult(with_coin(coin, res))
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn get_first_account(coin: u8) -> CResult<u32> {
     let res = |connection: &Connection| {
         let id = crate::db::read::get_first_account(connection)?;
