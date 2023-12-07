@@ -627,100 +627,40 @@ pub fn get_contact(connection: &Connection, id: u32) -> Result<ContactT> {
     Ok(contact)
 }
 
-pub fn get_pnl_txs(connection: &Connection, id: u32, timestamp: u32) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_pnl_txs(connection: &Connection, id: u32, timestamp: u32) -> Result<Vec<TxTimeValueT>> {
     let mut stmt = connection.prepare(
         "SELECT timestamp, value FROM transactions WHERE timestamp >= ?2 AND account = ?1 ORDER BY timestamp DESC")?;
     let rows = stmt.query_map([id, timestamp], |row| {
         let timestamp: u32 = row.get(0)?;
         let value: i64 = row.get(1)?;
-        let tx = TxTimeValue::create(
-            &mut builder,
-            &TxTimeValueArgs {
-                timestamp,
-                value: value as u64,
-            },
-        );
+        let tx = TxTimeValueT {
+            timestamp,
+            value,
+        };
         Ok(tx)
     })?;
-    let mut txs = vec![];
-    for r in rows {
-        txs.push(r?);
-    }
-    let txs = builder.create_vector(&txs);
-    let txs = TxTimeValueVec::create(&mut builder, &TxTimeValueVecArgs { values: Some(txs) });
-    builder.finish(txs, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
+    let txs = rows.collect::<Result<Vec<_>, _>>()?;
+    Ok(txs)
 }
 
-pub fn get_historical_prices(
-    connection: &Connection,
-    timestamp: u32,
-    currency: &str,
-) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let mut stmt = connection.prepare(
-        "SELECT timestamp, price FROM historical_prices WHERE timestamp >= ?2 AND currency = ?1",
-    )?;
-    let rows = stmt.query_map(params![currency, timestamp], |row| {
-        let timestamp: u32 = row.get(0)?;
-        let price: f64 = row.get(1)?;
-        let quote = Quote::create(&mut builder, &QuoteArgs { timestamp, price });
-        Ok(quote)
-    })?;
-    let mut quotes = vec![];
-    for r in rows {
-        quotes.push(r?);
-    }
-    let quotes = builder.create_vector(&quotes);
-    let quotes = QuoteVec::create(
-        &mut builder,
-        &QuoteVecArgs {
-            values: Some(quotes),
-        },
-    );
-    builder.finish(quotes, None);
-    let data = builder.finished_data().to_vec();
-    Ok(data)
-}
-
-pub fn get_spendings(connection: &Connection, id: u32, timestamp: u32) -> Result<Vec<u8>> {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+pub fn get_spendings(connection: &Connection, id: u32, timestamp: u32) -> Result<Vec<SpendingT>> {
     let mut stmt = connection.prepare(
         "SELECT SUM(value) as v, t.address, c.name FROM transactions t LEFT JOIN contacts c ON t.address = c.address \
         WHERE account = ?1 AND timestamp >= ?2 AND value < 0 GROUP BY t.address ORDER BY v ASC LIMIT 5")?;
     let rows = stmt.query_map([id, timestamp], |row| {
-        let value: i64 = row.get(0)?;
+        let amount: i64 = row.get(0)?;
         let address: Option<String> = row.get(1)?;
         let name: Option<String> = row.get(2)?;
 
         let recipient = name.or(address);
-        let recipient = recipient.unwrap_or(String::new());
-        let recipient = builder.create_string(&recipient);
 
-        let spending = Spending::create(
-            &mut builder,
-            &SpendingArgs {
-                recipient: Some(recipient),
-                amount: (-value) as u64,
-            },
-        );
+        let spending = SpendingT {
+            recipient,
+            amount,
+        };
         Ok(spending)
     })?;
-    let mut spendings = vec![];
-    for r in rows {
-        spendings.push(r?);
-    }
-    let spendings = builder.create_vector(&spendings);
-    let spendings = SpendingVec::create(
-        &mut builder,
-        &SpendingVecArgs {
-            values: Some(spendings),
-        },
-    );
-    builder.finish(spendings, None);
-    let data = builder.finished_data().to_vec();
+    let data = rows.collect::<Result<Vec<_>, _>>()?;
     Ok(data)
 }
 
@@ -877,8 +817,6 @@ pub fn list_address_accounts(
 }
 
 pub fn count_accounts(connection: &Connection) -> anyhow::Result<u32> {
-    let c = connection.query_row("SELECT COUNT(*) FROM accounts", [], |r| {
-        r.get::<_, u32>(0)
-    })?;
+    let c = connection.query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get::<_, u32>(0))?;
     Ok(c)
 }

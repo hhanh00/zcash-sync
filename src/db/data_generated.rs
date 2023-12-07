@@ -3358,11 +3358,11 @@ impl<'a> TxTimeValue<'a> {
     unsafe { self._tab.get::<u32>(TxTimeValue::VT_TIMESTAMP, Some(0)).unwrap()}
   }
   #[inline]
-  pub fn value(&self) -> u64 {
+  pub fn value(&self) -> i64 {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<u64>(TxTimeValue::VT_VALUE, Some(0)).unwrap()}
+    unsafe { self._tab.get::<i64>(TxTimeValue::VT_VALUE, Some(0)).unwrap()}
   }
 }
 
@@ -3374,14 +3374,14 @@ impl flatbuffers::Verifiable for TxTimeValue<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
-     .visit_field::<u64>("value", Self::VT_VALUE, false)?
+     .visit_field::<i64>("value", Self::VT_VALUE, false)?
      .finish();
     Ok(())
   }
 }
 pub struct TxTimeValueArgs {
     pub timestamp: u32,
-    pub value: u64,
+    pub value: i64,
 }
 impl<'a> Default for TxTimeValueArgs {
   #[inline]
@@ -3403,8 +3403,8 @@ impl<'a: 'b, 'b> TxTimeValueBuilder<'a, 'b> {
     self.fbb_.push_slot::<u32>(TxTimeValue::VT_TIMESTAMP, timestamp, 0);
   }
   #[inline]
-  pub fn add_value(&mut self, value: u64) {
-    self.fbb_.push_slot::<u64>(TxTimeValue::VT_VALUE, value, 0);
+  pub fn add_value(&mut self, value: i64) {
+    self.fbb_.push_slot::<i64>(TxTimeValue::VT_VALUE, value, 0);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> TxTimeValueBuilder<'a, 'b> {
@@ -3433,7 +3433,7 @@ impl core::fmt::Debug for TxTimeValue<'_> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TxTimeValueT {
   pub timestamp: u32,
-  pub value: u64,
+  pub value: i64,
 }
 impl Default for TxTimeValueT {
   fn default() -> Self {
@@ -3918,11 +3918,11 @@ impl<'a> Spending<'a> {
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Spending::VT_RECIPIENT, None)}
   }
   #[inline]
-  pub fn amount(&self) -> u64 {
+  pub fn amount(&self) -> i64 {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<u64>(Spending::VT_AMOUNT, Some(0)).unwrap()}
+    unsafe { self._tab.get::<i64>(Spending::VT_AMOUNT, Some(0)).unwrap()}
   }
 }
 
@@ -3934,14 +3934,14 @@ impl flatbuffers::Verifiable for Spending<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("recipient", Self::VT_RECIPIENT, false)?
-     .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
+     .visit_field::<i64>("amount", Self::VT_AMOUNT, false)?
      .finish();
     Ok(())
   }
 }
 pub struct SpendingArgs<'a> {
     pub recipient: Option<flatbuffers::WIPOffset<&'a str>>,
-    pub amount: u64,
+    pub amount: i64,
 }
 impl<'a> Default for SpendingArgs<'a> {
   #[inline]
@@ -3963,8 +3963,8 @@ impl<'a: 'b, 'b> SpendingBuilder<'a, 'b> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Spending::VT_RECIPIENT, recipient);
   }
   #[inline]
-  pub fn add_amount(&mut self, amount: u64) {
-    self.fbb_.push_slot::<u64>(Spending::VT_AMOUNT, amount, 0);
+  pub fn add_amount(&mut self, amount: i64) {
+    self.fbb_.push_slot::<i64>(Spending::VT_AMOUNT, amount, 0);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> SpendingBuilder<'a, 'b> {
@@ -3993,7 +3993,7 @@ impl core::fmt::Debug for Spending<'_> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpendingT {
   pub recipient: Option<String>,
-  pub amount: u64,
+  pub amount: i64,
 }
 impl Default for SpendingT {
   fn default() -> Self {

@@ -1,7 +1,5 @@
 use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
-use crate::db::data_generated::fb::{
-    Fee, FeeT, PaymentURIT, ProgressT, Recipients, SendTemplate, Servers,
-};
+use crate::db::data_generated::fb::*;
 use crate::db::FullEncryptedBackup;
 #[cfg(feature = "ledger2")]
 use crate::ledger2;
@@ -780,20 +778,6 @@ pub async unsafe extern "C" fn get_block_by_time(coin: u8, time: u32) -> CResult
     to_cresult(res)
 }
 
-#[tokio::main]
-#[no_mangle]
-pub async unsafe extern "C" fn sync_historical_prices(
-    coin: u8,
-    now: i64,
-    days: u32,
-    currency: *mut c_char,
-) -> CResult<u32> {
-    from_c_str!(currency);
-    let res =
-        crate::api::historical_prices::sync_historical_prices(coin, now, days, &currency).await;
-    to_cresult(res)
-}
-
 #[no_mangle]
 pub unsafe extern "C" fn store_contact(
     id: u32,
@@ -1249,22 +1233,11 @@ pub unsafe extern "C" fn get_contact(coin: u8, id: u32) -> CResult<*const u8> {
 #[no_mangle]
 pub unsafe extern "C" fn get_pnl_txs(coin: u8, id: u32, timestamp: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
-        let data = crate::db::read::get_pnl_txs(connection, id, timestamp)?;
-        Ok(data)
-    };
-    to_cresult_bytes(with_coin(coin, res))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn get_historical_prices(
-    coin: u8,
-    timestamp: u32,
-    currency: *mut c_char,
-) -> CResult<*const u8> {
-    from_c_str!(currency);
-    let res = |connection: &Connection| {
-        let data = crate::db::read::get_historical_prices(connection, timestamp, &currency)?;
-        Ok(data)
+        let txs = crate::db::read::get_pnl_txs(connection, id, timestamp)?;
+        let data = TxTimeValueVecT {
+            values: Some(txs),
+        };
+        fb_to_bytes!(data)
     };
     to_cresult_bytes(with_coin(coin, res))
 }
@@ -1273,7 +1246,10 @@ pub unsafe extern "C" fn get_historical_prices(
 pub unsafe extern "C" fn get_spendings(coin: u8, id: u32, timestamp: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let data = crate::db::read::get_spendings(connection, id, timestamp)?;
-        Ok(data)
+        let data = SpendingVecT {
+            values: Some(data),
+        };
+        fb_to_bytes!(data)
     };
     to_cresult_bytes(with_coin(coin, res))
 }

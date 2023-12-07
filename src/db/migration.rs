@@ -332,6 +332,8 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
                 saved BOOL NOT NULL)",
             [],
         )?;
+
+        connection.execute("DROP TABLE historical_prices", [])?;
     }
 
     if version != LATEST_VERSION {

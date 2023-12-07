@@ -346,8 +346,6 @@ struct CResult_u32 get_activation_date(void);
 
 struct CResult_u32 get_block_by_time(uint8_t coin, uint32_t time);
 
-struct CResult_u32 sync_historical_prices(uint8_t coin, int64_t now, uint32_t days, char *currency);
-
 void store_contact(uint32_t id, char *name, char *address, bool dirty);
 
 struct CResult_____c_char commit_unsaved_contacts(uint8_t coin,
@@ -443,8 +441,6 @@ struct CResult______u8 get_contacts(uint8_t coin);
 struct CResult______u8 get_contact(uint8_t coin, uint32_t id);
 
 struct CResult______u8 get_pnl_txs(uint8_t coin, uint32_t id, uint32_t timestamp);
-
-struct CResult______u8 get_historical_prices(uint8_t coin, uint32_t timestamp, char *currency);
 
 struct CResult______u8 get_spendings(uint8_t coin, uint32_t id, uint32_t timestamp);
 

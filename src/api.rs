@@ -1,6 +1,5 @@
 pub mod account;
 pub mod contact;
-pub mod historical_prices;
 pub mod message;
 pub mod recipient;
 // pub mod payment;
