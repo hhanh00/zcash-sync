@@ -5174,6 +5174,182 @@ impl RaptorQDropsT {
     })
   }
 }
+pub enum RaptorQResultOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct RaptorQResult<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for RaptorQResult<'a> {
+  type Inner = RaptorQResult<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> RaptorQResult<'a> {
+  pub const VT_PROGRESS: flatbuffers::VOffsetT = 4;
+  pub const VT_TOTAL: flatbuffers::VOffsetT = 6;
+  pub const VT_DATA: flatbuffers::VOffsetT = 8;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    RaptorQResult { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args RaptorQResultArgs<'args>
+  ) -> flatbuffers::WIPOffset<RaptorQResult<'bldr>> {
+    let mut builder = RaptorQResultBuilder::new(_fbb);
+    if let Some(x) = args.data { builder.add_data(x); }
+    builder.add_total(args.total);
+    builder.add_progress(args.progress);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> RaptorQResultT {
+    let progress = self.progress();
+    let total = self.total();
+    let data = self.data().map(|x| {
+      x.to_string()
+    });
+    RaptorQResultT {
+      progress,
+      total,
+      data,
+    }
+  }
+
+  #[inline]
+  pub fn progress(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(RaptorQResult::VT_PROGRESS, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn total(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(RaptorQResult::VT_TOTAL, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn data(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(RaptorQResult::VT_DATA, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for RaptorQResult<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u8>("progress", Self::VT_PROGRESS, false)?
+     .visit_field::<u8>("total", Self::VT_TOTAL, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("data", Self::VT_DATA, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct RaptorQResultArgs<'a> {
+    pub progress: u8,
+    pub total: u8,
+    pub data: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for RaptorQResultArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    RaptorQResultArgs {
+      progress: 0,
+      total: 0,
+      data: None,
+    }
+  }
+}
+
+pub struct RaptorQResultBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> RaptorQResultBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_progress(&mut self, progress: u8) {
+    self.fbb_.push_slot::<u8>(RaptorQResult::VT_PROGRESS, progress, 0);
+  }
+  #[inline]
+  pub fn add_total(&mut self, total: u8) {
+    self.fbb_.push_slot::<u8>(RaptorQResult::VT_TOTAL, total, 0);
+  }
+  #[inline]
+  pub fn add_data(&mut self, data: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(RaptorQResult::VT_DATA, data);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> RaptorQResultBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    RaptorQResultBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<RaptorQResult<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for RaptorQResult<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("RaptorQResult");
+      ds.field("progress", &self.progress());
+      ds.field("total", &self.total());
+      ds.field("data", &self.data());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RaptorQResultT {
+  pub progress: u8,
+  pub total: u8,
+  pub data: Option<String>,
+}
+impl Default for RaptorQResultT {
+  fn default() -> Self {
+    Self {
+      progress: 0,
+      total: 0,
+      data: None,
+    }
+  }
+}
+impl RaptorQResultT {
+  pub fn pack<'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b>
+  ) -> flatbuffers::WIPOffset<RaptorQResult<'b>> {
+    let progress = self.progress;
+    let total = self.total;
+    let data = self.data.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    RaptorQResult::create(_fbb, &RaptorQResultArgs{
+      progress,
+      total,
+      data,
+    })
+  }
+}
 pub enum AGEKeysOffset {}
 #[derive(Copy, Clone, PartialEq)]
 

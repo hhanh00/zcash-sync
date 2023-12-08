@@ -166,6 +166,12 @@ typedef struct CResult_bool {
 
 #define RaptorQDrops_VT_DROPS 4
 
+#define RaptorQResult_VT_PROGRESS 4
+
+#define RaptorQResult_VT_TOTAL 6
+
+#define RaptorQResult_VT_DATA 8
+
 #define AGEKeys_VT_PK 6
 
 #define Servers_VT_URLS 4
@@ -385,7 +391,7 @@ struct CResult_____c_char zip_dbs(char *passwd, char *temp_dir);
 
 struct CResult______u8 split_data(uint32_t id, char *data);
 
-struct CResult_____c_char merge_data(char *drop);
+struct CResult______u8 merge_data(char *drop);
 
 struct CResult_____c_char get_tx_summary(char *tx);
 

@@ -954,16 +954,14 @@ pub unsafe extern "C" fn split_data(id: u32, data: *mut c_char) -> CResult<*cons
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn merge_data(drop: *mut c_char) -> CResult<*mut c_char> {
+pub unsafe extern "C" fn merge_data(drop: *mut c_char) -> CResult<*const u8> {
     from_c_str!(drop);
     let res = || {
-        let res = crate::fountain::RaptorQDrops::put_drop(&*drop)?
-            .map(|d| base64::encode(&d))
-            .unwrap_or(String::new());
-        Ok::<_, anyhow::Error>(res)
+        let res = crate::fountain::RaptorQDrops::put_drop(&*drop)?;
+        log::info!("> {} {}", res.progress, res.total);
+        fb_to_bytes!(res)
     };
-    let res = res().or(Ok(String::new()));
-    to_cresult_str(res)
+    to_cresult_bytes(res())
 }
 
 #[no_mangle]
