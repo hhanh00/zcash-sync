@@ -34,8 +34,6 @@ pub fn reset_db(connection: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-const LATEST_VERSION: u32 = 10;
-
 pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyhow::Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS schema_version (
@@ -46,7 +44,7 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
 
     let version = get_schema_version(connection)?;
 
-    if version < 1 {
+    fn up1(connection: &Connection) -> rusqlite::Result<()> {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS accounts (
             id_account INTEGER PRIMARY KEY,
@@ -143,20 +141,34 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
                 dirty BOOL NOT NULL)",
             [],
         )?;
+        Ok(())
     }
 
-    if version < 2 {
+    fn up2(connection: &Connection) -> rusqlite::Result<()> {
         connection.execute(
-            "CREATE INDEX i_received_notes ON received_notes(account)",
+            "CREATE INDEX IF NOT EXISTS i_received_notes ON received_notes(account)",
             [],
         )?;
-        connection.execute("CREATE INDEX i_account ON accounts(address)", [])?;
-        connection.execute("CREATE INDEX i_contact ON contacts(address)", [])?;
-        connection.execute("CREATE INDEX i_transaction ON transactions(account)", [])?;
-        connection.execute("CREATE INDEX i_witness ON sapling_witnesses(height)", [])?;
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS i_account ON accounts(address)",
+            [],
+        )?;
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS i_contact ON contacts(address)",
+            [],
+        )?;
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS i_transaction ON transactions(account)",
+            [],
+        )?;
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS i_witness ON sapling_witnesses(height)",
+            [],
+        )?;
+        Ok(())
     }
 
-    if version < 3 {
+    fn up3(connection: &Connection) -> rusqlite::Result<()> {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY,
@@ -175,79 +187,87 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
         //     "CREATE INDEX i_messages ON messages(account)",
         //     [],
         // )?;
+        Ok(())
     }
 
-    if version < 4 {
-        connection.execute("ALTER TABLE messages ADD id_tx INTEGER", [])?;
+    fn up4(connection: &Connection) -> rusqlite::Result<()> {
+        if !has_column(connection, "messages", "id_tx")? {
+            connection.execute("ALTER TABLE messages ADD id_tx INTEGER", [])?;
+        }
+        Ok(())
     }
 
-    if version < 5 {
+    fn up5(connection: &Connection) -> rusqlite::Result<()> {
         connection.execute(
-            "CREATE TABLE orchard_addrs(
+            "CREATE TABLE IF NOT EXISTS orchard_addrs(
             account INTEGER PRIMARY KEY,
             sk BLOB,
             fvk BLOB NOT NULL)",
             [],
         )?;
         connection.execute(
-            "CREATE TABLE ua_settings(
+            "CREATE TABLE IF NOT EXISTS ua_settings(
             account INTEGER PRIMARY KEY,
             transparent BOOL NOT NULL,
             sapling BOOL NOT NULL,
             orchard BOOL NOT NULL)",
             [],
         )?;
-        if has_ua {
-            upgrade_accounts(&connection, network)?;
+        // if has_ua {
+        //     upgrade_accounts(&connection, network)?;
+        // }
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS sapling_tree(
+            height INTEGER PRIMARY KEY,
+            tree BLOB NOT NULL)",
+            [],
+        )?;
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS orchard_tree(
+            height INTEGER PRIMARY KEY,
+            tree BLOB NOT NULL)",
+            [],
+        )?;
+        if has_column(connection, "blocks", "sapling_tree")? {
+            connection.execute(
+                "INSERT INTO sapling_tree SELECT height, sapling_tree FROM blocks",
+                [],
+            )?;
+            connection.execute("ALTER TABLE blocks DROP sapling_tree", [])?;
         }
-        connection.execute(
-            "CREATE TABLE sapling_tree(
-            height INTEGER PRIMARY KEY,
-            tree BLOB NOT NULL)",
-            [],
-        )?;
-        connection.execute(
-            "CREATE TABLE orchard_tree(
-            height INTEGER PRIMARY KEY,
-            tree BLOB NOT NULL)",
-            [],
-        )?;
-        connection.execute(
-            "INSERT INTO sapling_tree SELECT height, sapling_tree FROM blocks",
-            [],
-        )?;
-        connection.execute("ALTER TABLE blocks DROP sapling_tree", [])?;
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS new_received_notes (
-            id_note INTEGER PRIMARY KEY,
-            account INTEGER NOT NULL,
-            position INTEGER NOT NULL,
-            tx INTEGER NOT NULL,
-            height INTEGER NOT NULL,
-            output_index INTEGER NOT NULL,
-            diversifier BLOB NOT NULL,
-            value INTEGER NOT NULL,
-            rcm BLOB NOT NULL,
-            nf BLOB NOT NULL UNIQUE,
-            rho BLOB,
-            orchard BOOL NOT NULL DEFAULT false,
-            spent INTEGER,
-            excluded BOOL,
-            CONSTRAINT tx_output UNIQUE (tx, orchard, output_index))",
-            [],
-        )?;
-        connection.execute(
-            "INSERT INTO new_received_notes(
-            id_note, account, position, tx, height, output_index, diversifier, value,
-            rcm, nf, spent, excluded
-        ) SELECT * FROM received_notes",
-            [],
-        )?;
-        connection.execute("DROP TABLE received_notes", [])?;
-        connection.execute(
-            "ALTER TABLE new_received_notes RENAME TO received_notes",
-            [],
-        )?;
+        if !has_column(connection, "received_notes", "orchard")? {
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS new_received_notes (
+                id_note INTEGER PRIMARY KEY,
+                account INTEGER NOT NULL,
+                position INTEGER NOT NULL,
+                tx INTEGER NOT NULL,
+                height INTEGER NOT NULL,
+                output_index INTEGER NOT NULL,
+                diversifier BLOB NOT NULL,
+                value INTEGER NOT NULL,
+                rcm BLOB NOT NULL,
+                nf BLOB NOT NULL UNIQUE,
+                rho BLOB,
+                orchard BOOL NOT NULL DEFAULT false,
+                spent INTEGER,
+                excluded BOOL,
+                CONSTRAINT tx_output UNIQUE (tx, orchard, output_index))",
+                [],
+            )?;
+            connection.execute(
+                "INSERT INTO new_received_notes(
+                id_note, account, position, tx, height, output_index, diversifier, value,
+                rcm, nf, spent, excluded
+                ) SELECT * FROM received_notes",
+                [],
+            )?;
+            connection.execute("DROP TABLE received_notes", [])?;
+            connection.execute(
+                "ALTER TABLE new_received_notes RENAME TO received_notes",
+                [],
+            )?;
+        }
         connection.execute(
             "CREATE TABLE IF NOT EXISTS orchard_witnesses (
             id_witness INTEGER PRIMARY KEY,
@@ -261,13 +281,16 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             "CREATE INDEX IF NOT EXISTS i_orchard_witness ON orchard_witnesses(height)",
             [],
         )?;
-        connection.execute(
-            "ALTER TABLE messages ADD incoming BOOL NOT NULL DEFAULT true",
-            [],
-        )?;
+        if !has_column(connection, "messages", "incoming")? {
+            connection.execute(
+                "ALTER TABLE messages ADD incoming BOOL NOT NULL DEFAULT true",
+                [],
+            )?;
+        }
+        Ok(())
     }
 
-    if version < 6 {
+    fn up6(connection: &Connection) -> rusqlite::Result<()> {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS send_templates (
                 id_send_template INTEGER PRIMARY KEY,
@@ -282,33 +305,40 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
                 body TEXT NOT NULL)",
             [],
         )?;
+        Ok(())
     }
 
-    if version < 7 {
+    fn up7(connection: &Connection) -> rusqlite::Result<()> {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS properties (
                 name TEXT PRIMARY KEY,
                 value TEXT NOT NULL)",
             [],
         )?;
+        Ok(())
     }
 
-    if version < 8 {
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS new_taddrs (
-            account INTEGER PRIMARY KEY NOT NULL,
-            sk TEXT,
-            address TEXT NOT NULL)",
-            [],
-        )?;
-        connection.execute(
-            "INSERT INTO new_taddrs(
-            account, sk, address
-        ) SELECT * FROM taddrs",
-            [],
-        )?;
-        connection.execute("DROP TABLE taddrs", [])?;
-        connection.execute("ALTER TABLE new_taddrs RENAME TO taddrs", [])?;
+    fn up8(connection: &Connection) -> rusqlite::Result<()> {
+        let r = connection.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('taddrs') 
+            WHERE name='sk' AND `notnull` = 1", [], |r| r.get::<_, u32>(0))?;
+        if r == 1 { // change sk to nullable
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS new_taddrs (
+                account INTEGER PRIMARY KEY NOT NULL,
+                sk TEXT,
+                address TEXT NOT NULL)",
+                [],
+            )?;
+            connection.execute(
+                "INSERT INTO new_taddrs(
+                account, sk, address
+            ) SELECT * FROM taddrs",
+                [],
+            )?;
+            connection.execute("DROP TABLE taddrs", [])?;
+            connection.execute("ALTER TABLE new_taddrs RENAME TO taddrs", [])?;
+        }
 
         connection.execute(
             "CREATE TABLE IF NOT EXISTS hw_wallets(
@@ -316,49 +346,57 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
             ledger BOOL NOT NULL)",
             [],
         )?;
+        Ok(())
     }
 
-    if version < 9 {
-        connection.execute(
-            "ALTER TABLE taddrs ADD balance INTEGER",
-            [],
-        )?;
+    fn up9(connection: &Connection) -> rusqlite::Result<()> {
+        if !has_column(connection, "taddrs", "balance")? {
+            connection.execute("ALTER TABLE taddrs ADD balance INTEGER", [])?;
+        }
+        Ok(())
     }
 
-    if version < 10 {
+    fn up10(connection: &Connection) -> rusqlite::Result<()> {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS accounts2 (
                 account INTEGER PRIMARY KEY NOT NULL,
                 saved BOOL NOT NULL)",
             [],
         )?;
-
-        connection.execute("DROP TABLE historical_prices", [])?;
+        connection.execute("DROP TABLE IF EXISTS historical_prices", [])?;
+        Ok(())
     }
 
-    if version != LATEST_VERSION {
-        update_schema_version(connection, LATEST_VERSION)?;
-        connection.cache_flush()?;
-        log::info!("Database migrated");
+    let upgrades = vec![up1, up2, up3, up4, up5, up6, up7, up8, up9, up10];
+    for (v, upgrade) in upgrades.iter().enumerate() {
+        let upgrade_version = (v + 1) as u32;
+        if version < upgrade_version {
+            upgrade(connection)?;
+            update_schema_version(connection, upgrade_version)?;
+        }
     }
 
-    // We may get a database that has no valid schema version from a version of single currency Z/YWallet
-    // because we kept the same app name in Google/Apple Stores. The upgraded app fails to recognize the db tables
-    // At least we monkey patch the accounts table to let the user access the backup page and recover his seed phrase
-    let c = connection.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('accounts') WHERE name = 'aindex'",
-        params![],
-        |row| {
-            let c: u32 = row.get(0)?;
-            Ok(c)
-        },
-    )?;
-    if c == 0 {
-        connection.execute(
-            "ALTER TABLE accounts ADD aindex INTEGER NOT NULL DEFAULT (0)",
-            params![],
-        )?;
-    }
+    let version = get_schema_version(connection)?;
+    assert_eq!(version as usize, upgrades.len());
+    log::info!("Database migrated");
+
+    // // We may get a database that has no valid schema version from a version of single currency Z/YWallet
+    // // because we kept the same app name in Google/Apple Stores. The upgraded app fails to recognize the db tables
+    // // At least we monkey patch the accounts table to let the user access the backup page and recover his seed phrase
+    // let c = connection.query_row(
+    //     "SELECT COUNT(*) FROM pragma_table_info('accounts') WHERE name = 'aindex'",
+    //     params![],
+    //     |row| {
+    //         let c: u32 = row.get(0)?;
+    //         Ok(c)
+    //     },
+    // )?;
+    // if c == 0 {
+    //     connection.execute(
+    //         "ALTER TABLE accounts ADD aindex INTEGER NOT NULL DEFAULT (0)",
+    //         params![],
+    //     )?;
+    // }
 
     Ok(())
 }
@@ -392,4 +430,20 @@ fn upgrade_accounts(connection: &Connection, network: &Network) -> anyhow::Resul
         )?;
     }
     Ok(())
+}
+
+fn has_column(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+) -> rusqlite::Result<bool> {
+    let r = connection.query_row(
+        &format!(
+            "SELECT COUNT(*) FROM pragma_table_info('{}') WHERE name='{}'",
+            table_name, column_name
+        ),
+        [],
+        |r| r.get::<_, u32>(0),
+    )?;
+    Ok(r != 0)
 }
