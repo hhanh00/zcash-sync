@@ -105,9 +105,7 @@ pub mod api;
 pub mod ledger;
 
 pub use crate::chain::{connect_lightwalletd, get_best_server, ChainError};
-pub use crate::coinconfig::{
-    init_coin, set_active, set_coin_lwd_url, CoinConfig, COIN_CONFIG,
-};
+pub use crate::coinconfig::{init_coin, set_active, set_coin_lwd_url, CoinConfig, COIN_CONFIG};
 pub use crate::db::{AccountData, AccountRec, DbAdapter, TxRec};
 pub use crate::fountain::{FountainCodes, RaptorQDrops};
 // pub use crate::key::KeyHelpers;
@@ -117,13 +115,13 @@ pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
 // pub use crate::wallet::{decrypt_backup, encrypt_backup, RecipientMemo, Wallet, WalletBalance};
 
 pub use crate::orchard::decode_merkle_path as decode_orchard_merkle_path;
-pub use crate::unified::{decode_unified_address, get_unified_address, get_ua_of};
+pub use crate::unified::{decode_unified_address, get_ua_of, get_unified_address};
+pub use db::backup::zip_dbs;
 pub use note_selection::{
     build_tx, build_tx_plan, fetch_utxos, get_secret_keys, Destination, Source,
     TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
     MAX_ATTEMPTS,
 };
-pub use db::backup::zip_dbs;
 
 #[cfg(feature = "nodejs")]
 pub mod nodejs;

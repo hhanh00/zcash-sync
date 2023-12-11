@@ -71,14 +71,12 @@ fn to_cresult_str(res: Result<String, anyhow::Error>) -> CResult<*mut c_char> {
 }
 
 macro_rules! fb_to_bytes {
-    ($v: ident) => {
-        {
+    ($v: ident) => {{
         let mut builder = FlatBufferBuilder::new();
         let backup_bytes = $v.pack(&mut builder);
         builder.finish(backup_bytes, None);
         Ok::<_, anyhow::Error>(builder.finished_data().to_vec())
-        }
-    };
+    }};
 }
 
 fn log_error(res: Result<(), anyhow::Error>) {
@@ -406,7 +404,12 @@ pub unsafe extern "C" fn receivers_of_address(coin: u8, address: *mut c_char) ->
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_diversified_address(coin: u8, account: u32, ua_type: u8, time: u32) -> CResult<*mut c_char> {
+pub unsafe extern "C" fn get_diversified_address(
+    coin: u8,
+    account: u32,
+    ua_type: u8,
+    time: u32,
+) -> CResult<*mut c_char> {
     let res = || crate::api::account::get_diversified_address(coin, account, ua_type, time);
     to_cresult_str(res())
 }
@@ -562,26 +565,26 @@ pub async unsafe extern "C" fn transfer_pools(
     to_cresult_str(res.await)
 }
 
-#[tokio::main]
-#[no_mangle]
-pub async unsafe extern "C" fn shield_taddr(
-    coin: u8,
-    account: u32,
-    amount: u64,
-    confirmations: u32,
-    fee_bytes: *mut u8,
-    fee_len: u64,
-) -> CResult<*mut c_char> {
-    let res = async move {
-        let fee = unpack_fee(fee_bytes, fee_len);
-        let tx_plan =
-            crate::api::payment_v2::shield_taddr(coin, account, amount, confirmations, &fee)
-                .await?;
-        let tx_plan_json = serde_json::to_string(&tx_plan)?;
-        Ok(tx_plan_json)
-    };
-    to_cresult_str(res.await)
-}
+// #[tokio::main]
+// #[no_mangle]
+// pub async unsafe extern "C" fn shield_taddr(
+//     coin: u8,
+//     account: u32,
+//     amount: u64,
+//     confirmations: u32,
+//     fee_bytes: *mut u8,
+//     fee_len: u64,
+// ) -> CResult<*mut c_char> {
+//     let res = async move {
+//         let fee = unpack_fee(fee_bytes, fee_len);
+//         let tx_plan =
+//             crate::api::payment_v2::shield_taddr(coin, account, amount, confirmations, &fee)
+//                 .await?;
+//         let tx_plan_json = serde_json::to_string(&tx_plan)?;
+//         Ok(tx_plan_json)
+//     };
+//     to_cresult_str(res.await)
+// }
 
 // #[tokio::main]
 // #[no_mangle]
@@ -614,6 +617,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
     anchor_offset: u32,
     fee_bytes: *mut u8,
     fee_len: u64,
+    z_factor: u32,
 ) -> CResult<*mut c_char> {
     let res = async {
         let last_height = crate::api::sync::get_latest_height(coin).await?;
@@ -639,6 +643,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             !pools & 0x07,
             anchor_offset,
             &unpack_fee(fee_bytes, fee_len),
+            z_factor,
         )
         .await?;
         let tx_str = serde_json::to_string(&tx)?;
@@ -648,10 +653,7 @@ pub async unsafe extern "C" fn prepare_multi_payment(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn transaction_report(
-    coin: u8,
-    plan: *mut c_char,
-) -> CResult<*const u8> {
+pub unsafe extern "C" fn transaction_report(coin: u8, plan: *mut c_char) -> CResult<*const u8> {
     from_c_str!(plan);
     let c = CoinConfig::get(coin);
     let res = || {
@@ -731,7 +733,8 @@ pub async unsafe extern "C" fn sweep_tkey(
         from_c_str!(sk);
         from_c_str!(address);
         let fee = unpack_fee(fee_bytes, fee_len);
-        let tx_plan = crate::taddr::sweep_tkey(coin, account, last_height, &sk, pool, &address, &fee).await?;
+        let tx_plan =
+            crate::taddr::sweep_tkey(coin, account, last_height, &sk, pool, &address, &fee).await?;
         let res = serde_json::to_string(&tx_plan)?;
         Ok::<_, anyhow::Error>(res)
     };
@@ -756,8 +759,18 @@ pub async unsafe extern "C" fn sweep_tseed(
         from_c_str!(seed);
         from_c_str!(address);
         let fee = unpack_fee(fee_bytes, fee_len);
-        let tx_plan = crate::taddr::sweep_tseed(coin, account, last_height, &seed, pool, 
-            &address, index, limit, &fee).await?;
+        let tx_plan = crate::taddr::sweep_tseed(
+            coin,
+            account,
+            last_height,
+            &seed,
+            pool,
+            &address,
+            index,
+            limit,
+            &fee,
+        )
+        .await?;
         let res = serde_json::to_string(&tx_plan)?;
         Ok::<_, anyhow::Error>(res)
     };
@@ -799,11 +812,18 @@ pub async unsafe extern "C" fn commit_unsaved_contacts(
     anchor_offset: u32,
     fee_bytes: *mut u8,
     fee_len: u64,
+    z_factor: u32,
 ) -> CResult<*mut c_char> {
     let res = async move {
         let fee = unpack_fee(fee_bytes, fee_len);
-        let tx_plan =
-            crate::api::contact::commit_unsaved_contacts(coin, account, anchor_offset, &fee).await?;
+        let tx_plan = crate::api::contact::commit_unsaved_contacts(
+            coin,
+            account,
+            anchor_offset,
+            &fee,
+            z_factor,
+        )
+        .await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };
@@ -862,8 +882,8 @@ pub unsafe extern "C" fn make_payment_uri(
 pub unsafe extern "C" fn decode_payment_uri(coin: u8, uri: *mut c_char) -> CResult<*const u8> {
     from_c_str!(uri);
     let payment_bytes = || {
-            let payment = crate::api::payment_uri::parse_payment_uri(coin, &uri)?;
-            let payment = PaymentURIT {
+        let payment = crate::api::payment_uri::parse_payment_uri(coin, &uri)?;
+        let payment = PaymentURIT {
             address: Some(payment.address),
             amount: payment.amount,
             memo: Some(payment.memo),
@@ -934,12 +954,13 @@ pub unsafe extern "C" fn unzip_backup(path: *mut c_char, db_dir: *mut c_char) ->
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn zip_dbs(passwd: *mut c_char, temp_dir: *mut c_char) -> CResult<*mut c_char> {
+pub unsafe extern "C" fn zip_dbs(
+    passwd: *mut c_char,
+    temp_dir: *mut c_char,
+) -> CResult<*mut c_char> {
     from_c_str!(passwd);
     from_c_str!(temp_dir);
-    let res = || {
-        crate::zip_dbs(&passwd, &temp_dir)
-    };
+    let res = || crate::zip_dbs(&passwd, &temp_dir);
     to_cresult_str(res())
 }
 
@@ -1232,9 +1253,7 @@ pub unsafe extern "C" fn get_contact(coin: u8, id: u32) -> CResult<*const u8> {
 pub unsafe extern "C" fn get_pnl_txs(coin: u8, id: u32, timestamp: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let txs = crate::db::read::get_pnl_txs(connection, id, timestamp)?;
-        let data = TxTimeValueVecT {
-            values: Some(txs),
-        };
+        let data = TxTimeValueVecT { values: Some(txs) };
         fb_to_bytes!(data)
     };
     to_cresult_bytes(with_coin(coin, res))
@@ -1244,9 +1263,7 @@ pub unsafe extern "C" fn get_pnl_txs(coin: u8, id: u32, timestamp: u32) -> CResu
 pub unsafe extern "C" fn get_spendings(coin: u8, id: u32, timestamp: u32) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let data = crate::db::read::get_spendings(connection, id, timestamp)?;
-        let data = SpendingVecT {
-            values: Some(data),
-        };
+        let data = SpendingVecT { values: Some(data) };
         fb_to_bytes!(data)
     };
     to_cresult_bytes(with_coin(coin, res))

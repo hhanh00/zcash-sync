@@ -301,13 +301,6 @@ struct CResult_____c_char transfer_pools(uint8_t coin,
                                          uint8_t *fee_bytes,
                                          uint64_t fee_len);
 
-struct CResult_____c_char shield_taddr(uint8_t coin,
-                                       uint32_t account,
-                                       uint64_t amount,
-                                       uint32_t confirmations,
-                                       uint8_t *fee_bytes,
-                                       uint64_t fee_len);
-
 struct CResult_____c_char prepare_multi_payment(uint8_t coin,
                                                 uint32_t account,
                                                 uint8_t *recipients_bytes,
@@ -316,7 +309,8 @@ struct CResult_____c_char prepare_multi_payment(uint8_t coin,
                                                 uint8_t sender_ua,
                                                 uint32_t anchor_offset,
                                                 uint8_t *fee_bytes,
-                                                uint64_t fee_len);
+                                                uint64_t fee_len,
+                                                uint32_t z_factor);
 
 struct CResult______u8 transaction_report(uint8_t coin, char *plan);
 
@@ -358,7 +352,8 @@ struct CResult_____c_char commit_unsaved_contacts(uint8_t coin,
                                                   uint32_t account,
                                                   uint32_t anchor_offset,
                                                   uint8_t *fee_bytes,
-                                                  uint64_t fee_len);
+                                                  uint64_t fee_len,
+                                                  uint32_t z_factor);
 
 void mark_message_read(uint8_t coin, uint32_t message, bool read);
 

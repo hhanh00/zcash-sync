@@ -300,9 +300,13 @@ fn get_balance(
     account: u32,
     height: u32,
     orchard: u8,
-    include_unconfirmed: bool
+    include_unconfirmed: bool,
 ) -> anyhow::Result<u64> {
-    let spend_predicate = if include_unconfirmed { "(spent IS NULL OR spent = 0)" } else { "spent IS NULL" };
+    let spend_predicate = if include_unconfirmed {
+        "(spent IS NULL OR spent = 0)"
+    } else {
+        "spent IS NULL"
+    };
     let balance = connection.query_row(
         &format!("SELECT SUM(value) FROM received_notes WHERE account = ?1 AND {spend_predicate} AND orchard = ?3 AND height <= ?2 AND (excluded IS NULL OR NOT excluded)"),
         params![account, height, orchard], |row| {

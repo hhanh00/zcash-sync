@@ -11,7 +11,7 @@ use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Connection, Hash};
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
-use rusqlite::{params, OptionalExtension, Transaction, Params, Statement, Row};
+use rusqlite::{params, OptionalExtension, Params, Row, Statement, Transaction};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -46,12 +46,12 @@ pub trait ConnectionOrTransaction {
     fn sql_execute<P: Params>(&self, sql: &str, params: P) -> rusqlite::Result<usize>;
     fn sql_prepare(&self, sql: &str) -> rusqlite::Result<Statement<'_>>;
     fn sql_query_row<T, P, F>(&self, sql: &str, params: P, f: F) -> rusqlite::Result<T>
-        where
-            P: Params,
-            F: FnOnce(&Row<'_>) -> rusqlite::Result<T>;
+    where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> rusqlite::Result<T>;
 }
 
-impl <'conn> ConnectionOrTransaction for Transaction<'conn> {
+impl<'conn> ConnectionOrTransaction for Transaction<'conn> {
     fn sql_execute<P: Params>(&self, sql: &str, params: P) -> rusqlite::Result<usize> {
         self.execute(sql, params)
     }
@@ -61,14 +61,15 @@ impl <'conn> ConnectionOrTransaction for Transaction<'conn> {
     }
 
     fn sql_query_row<T, P, F>(&self, sql: &str, params: P, f: F) -> rusqlite::Result<T>
-        where
-            P: Params,
-            F: FnOnce(&Row<'_>) -> rusqlite::Result<T> {
+    where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> rusqlite::Result<T>,
+    {
         self.query_row(sql, params, f)
     }
 }
 
-impl <'conn> ConnectionOrTransaction for Connection {
+impl<'conn> ConnectionOrTransaction for Connection {
     fn sql_execute<P: Params>(&self, sql: &str, params: P) -> rusqlite::Result<usize> {
         self.execute(sql, params)
     }
@@ -78,9 +79,10 @@ impl <'conn> ConnectionOrTransaction for Connection {
     }
 
     fn sql_query_row<T, P, F>(&self, sql: &str, params: P, f: F) -> rusqlite::Result<T>
-        where
-            P: Params,
-            F: FnOnce(&Row<'_>) -> rusqlite::Result<T> {
+    where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> rusqlite::Result<T>,
+    {
         self.query_row(sql, params, f)
     }
 }
@@ -241,8 +243,11 @@ impl DbAdapter {
                 |row| row.get(0),
             )
             .map_err(wrap_query_no_rows("store_account/id_account"))?;
-        self.connection.execute("INSERT INTO accounts2(account, saved) \
-            VALUES (?1, FALSE)", [id_account])?;
+        self.connection.execute(
+            "INSERT INTO accounts2(account, saved) \
+            VALUES (?1, FALSE)",
+            [id_account],
+        )?;
         Ok(id_account)
     }
 
@@ -1111,10 +1116,8 @@ impl DbAdapter {
             "DELETE FROM diversifiers WHERE account = ?1",
             params![account],
         )?;
-        self.connection.execute(
-            "DELETE FROM accounts2 WHERE account = ?1",
-            params![account],
-        )?;
+        self.connection
+            .execute("DELETE FROM accounts2 WHERE account = ?1", params![account])?;
         self.connection.execute(
             "DELETE FROM accounts WHERE id_account = ?1",
             params![account],

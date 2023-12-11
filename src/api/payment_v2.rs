@@ -4,11 +4,10 @@ use crate::api::sync::get_latest_height;
 pub use crate::broadcast_tx;
 use crate::chain::{get_checkpoint_height, EXPIRY_HEIGHT_OFFSET};
 use crate::db::data_generated::fb::FeeT;
-use crate::note_selection::{FeeFlat, Order, UTXO};
+use crate::note_selection::{Order, UTXO};
 use crate::{
     build_tx, fetch_utxos, get_secret_keys, note_selection, AccountData, CoinConfig,
     TransactionBuilderConfig, TransactionBuilderError, TransactionPlan, TxBuilderContext,
-    MAX_ATTEMPTS,
 };
 use rand::rngs::OsRng;
 use std::cmp::min;
@@ -30,6 +29,7 @@ pub async fn build_tx_plan_with_utxos(
     recipients: &[RecipientMemo],
     utxos: &[UTXO],
     fee: &FeeT,
+    z_factor: u32,
 ) -> note_selection::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
@@ -80,7 +80,7 @@ pub async fn build_tx_plan_with_utxos(
         orders.last_mut().unwrap().take_fee = r.fee_included;
     }
 
-    let config = TransactionBuilderConfig::new(&change_address);
+    let config = TransactionBuilderConfig::new(&change_address, z_factor);
     let fee = note_selection::FeeRule::from_rule(fee);
     let tx_plan = note_selection::build_tx_plan(
         network,
@@ -106,6 +106,7 @@ pub async fn build_tx_plan(
     excluded_flags: u8,
     confirmations: u32,
     fee_rule: &FeeT,
+    z_factor: u32,
 ) -> note_selection::Result<TransactionPlan> {
     let checkpoint_height = {
         let c = CoinConfig::get(coin);
@@ -123,6 +124,7 @@ pub async fn build_tx_plan(
         recipients,
         &utxos,
         fee_rule,
+        z_factor,
     )
     .await?;
     Ok(tx_plan)
@@ -201,34 +203,37 @@ pub async fn transfer_pools(
         !from_pool,
         confirmations,
         fee,
+        0, // single receiver
     )
     .await?;
     Ok(tx_plan)
 }
 
 /// Make a transaction that shields the transparent balance
-pub async fn shield_taddr(
-    coin: u8,
-    account: u32,
-    amount: u64,
-    confirmations: u32,
-    fee: &FeeT,
-) -> anyhow::Result<TransactionPlan> {
-    let tx_plan = transfer_pools(
-        coin,
-        account,
-        1,
-        6,
-        amount,
-        true,
-        "Shield Transparent Balance",
-        0,
-        confirmations,
-        fee,
-    )
-    .await?;
-    Ok(tx_plan)
-}
+// pub async fn shield_taddr(
+//     coin: u8,
+//     account: u32,
+//     amount: u64,
+//     confirmations: u32,
+//     fee: &FeeT,
+//     z_factor: u32,
+// ) -> anyhow::Result<TransactionPlan> {
+//     let tx_plan = transfer_pools(
+//         coin,
+//         account,
+//         1,
+//         6,
+//         amount,
+//         true,
+//         "Shield Transparent Balance",
+//         0,
+//         confirmations,
+//         fee,
+//         z_factor,
+//     )
+//     .await?;
+//     Ok(tx_plan)
+// }
 
 fn mark_spent(coin: u8, ids: &[u32]) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);

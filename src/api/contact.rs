@@ -6,9 +6,7 @@ use crate::api::sync::get_latest_height;
 use crate::coinconfig::CoinConfig;
 use crate::contact::{serialize_contacts, Contact};
 use crate::db::data_generated::fb::FeeT;
-use crate::db::AccountData;
-use crate::{TransactionPlan, get_ua_of};
-use crate::db::read::list_address_accounts;
+use crate::{get_ua_of, TransactionPlan};
 use zcash_primitives::memo::Memo;
 use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
 
@@ -37,11 +35,12 @@ pub async fn commit_unsaved_contacts(
     account: u32,
     anchor_offset: u32,
     fee: &FeeT,
+    z_factor: u32,
 ) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let contacts = c.db()?.get_unsaved_contacts()?;
     let memos = serialize_contacts(&contacts)?;
-    let tx_plan = save_contacts_tx(coin, account, &memos, anchor_offset, fee).await?;
+    let tx_plan = save_contacts_tx(coin, account, &memos, anchor_offset, fee, z_factor).await?;
     Ok(tx_plan)
 }
 
@@ -51,6 +50,7 @@ async fn save_contacts_tx(
     memos: &[Memo],
     anchor_offset: u32,
     fee: &FeeT,
+    z_factor: u32,
 ) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let last_height = get_latest_height(coin).await?;
@@ -74,6 +74,7 @@ async fn save_contacts_tx(
         1,
         anchor_offset,
         fee,
+        z_factor,
     )
     .await?;
     Ok(tx_plan)

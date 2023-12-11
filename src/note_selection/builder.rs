@@ -48,8 +48,7 @@ impl TxBuilderContext {
         let c = CoinConfig::get(coin);
         let mut connection = c.connection();
         let db_tx = connection.transaction()?;
-        let TreeCheckpoint { tree, .. } =
-            DbAdapter::get_tree_by_name(&db_tx, height, "sapling")?;
+        let TreeCheckpoint { tree, .. } = DbAdapter::get_tree_by_name(&db_tx, height, "sapling")?;
         let hasher = SaplingHasher {};
         let sapling_anchor = tree.root(32, &SAPLING_ROOTS, &hasher);
 
@@ -114,11 +113,14 @@ pub fn build_tx(
     for spend in plan.spends.iter() {
         match &spend.source {
             Source::Transparent { txid, index } => {
-                let sk = spend.key.as_ref().map(|k| {
-                    SecretKey::from_slice(k).unwrap()
-                });
+                let sk = spend
+                    .key
+                    .as_ref()
+                    .map(|k| SecretKey::from_slice(k).unwrap());
                 // Use secret key from UTXO or fail over with secret key from account
-                let tsk = sk.or(account_tsk).ok_or(anyhow!("No transparent secret key"))?;
+                let tsk = sk
+                    .or(account_tsk)
+                    .ok_or(anyhow!("No transparent secret key"))?;
                 let pub_key = PublicKey::from_secret_key(&secp, &tsk);
                 let pub_key = pub_key.serialize();
                 let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));

@@ -164,9 +164,12 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
 pub fn set_backup_reminder(coin: u8, id_account: u32, v: bool) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let connection = c.connection();
-    connection.execute("INSERT INTO accounts2(account, saved) \
+    connection.execute(
+        "INSERT INTO accounts2(account, saved) \
         VALUES (?1, ?2) ON CONFLICT DO UPDATE \
-        SET saved = excluded.saved", params![id_account, v])?;
+        SET saved = excluded.saved",
+        params![id_account, v],
+    )?;
     Ok(())
 }
 
@@ -203,7 +206,12 @@ pub fn import_transparent_secret_key(coin: u8, id_account: u32, sk: &str) -> any
 }
 
 /// Generate a new diversified address
-pub fn get_diversified_address(coin: u8, account: u32, ua_type: u8, time: u32) -> anyhow::Result<String> {
+pub fn get_diversified_address(
+    coin: u8,
+    account: u32,
+    ua_type: u8,
+    time: u32,
+) -> anyhow::Result<String> {
     let ua_type = ua_type & 6; // don't include transparent component
     if ua_type == 0 {
         anyhow::bail!("Must include a shielded receiver");
@@ -426,7 +434,8 @@ pub fn derive_keys(
 pub fn get_unified_address(coin: u8, id_account: u32, address_type: u8) -> anyhow::Result<String> {
     let c = CoinConfig::get(coin);
     let connection = c.connection();
-    let address = crate::unified::get_ua_of(c.chain.network(), &connection, id_account, address_type)?; // use ua settings
+    let address =
+        crate::unified::get_ua_of(c.chain.network(), &connection, id_account, address_type)?; // use ua settings
     Ok(address)
 }
 

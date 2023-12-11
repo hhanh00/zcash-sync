@@ -67,27 +67,53 @@ pub fn group_orders(orders: &[Order], fee: u64) -> Result<(Vec<OrderInfo>, Order
     Ok((order_info, amounts))
 }
 
-fn get_net_chg(t0: i64, s0: i64, o0: i64, x: i64, t2: i64, fee: i64) -> (i64, i64) {
-    let (d_s, d_o) = match (x, s0, o0) {
-        (0, 0, _) => (0, t0 + fee - t2), // only orchard
-        (0, _, 0) => (t0 + fee - t2, 0), // only sapling
-        _ => ((t0 - t2 + fee) / 2, t0 + fee - t2 - (t0 - t2 + fee) / 2), // do not simplify because of rounding
+// calculate the net change of each shielded pool
+fn get_net_chg(t0: i64, s0: i64, o0: i64, x: i64, t2: i64, fee: i64, z_factor: i64) -> (i64, i64) {
+    let net_chg = t0 - t2 + fee; // total net change = d_s + d_o
+    let (d_s, d_o) = match (x, s0, o0, z_factor) {
+        (_, _, _, 1) => (0, net_chg), // only orchard
+        (_, _, _, 0) => (net_chg, 0), // only sapling
+        (0, 0, _, 2) => (0, net_chg), // only orchard
+        (0, _, 0, 2) => (net_chg, 0), // only sapling
+        _ => {
+            let d_s = net_chg / 2; // distribute the net change equally
+            let d_o = net_chg - d_s; // to reduce information leakage
+            (d_s, d_o)
+        }
     };
     log::info!("{} {}", d_s, d_o);
     (d_s, d_o)
 }
 
+/*
+    initial contains the amounts of funds available in each pool
+    amounts contains the output amount
+
+    ua that have a t receiver have it removed. t+z -> z, t+z+o -> z+o
+    As a result, there are only:
+    - t0, s0, o0: output amounts in each pool associated with addresses with 1 receiver,
+    - x: output to z or o pool from addresses with 2 receivers
+
+    x = s1 + o1, the proportion of z & o is determined by this function
+
+    - t2, s2, o2: input amounts from each pool
+    - d_s, d_o: net shielded pool change
+
+    This function computes: s1, o1, t2, s2, o2
+*/
+
 pub fn allocate_funds(
     amounts: &OrderGroupAmounts,
     initial: &PoolAllocation,
+    z_factor: i64,
 ) -> Result<FundAllocation> {
     log::debug!("{:?}", initial);
 
     let OrderGroupAmounts { t0, s0, o0, x, fee } = *amounts;
     let (t0, s0, o0, x, fee) = (t0 as i64, s0 as i64, o0 as i64, x as i64, fee as i64);
 
-    let sum = t0 + s0 + o0 + x + fee;
-    let tmax = initial.0[0] as i64;
+    let sum = t0 + s0 + o0 + x + fee; // outputs + fee, must be = inputs
+    let tmax = initial.0[0] as i64; // funds available in each pool
     let smax = initial.0[1] as i64;
     let omax = initial.0[2] as i64;
 
@@ -95,27 +121,42 @@ pub fn allocate_funds(
     let mut o1;
     let mut s2;
     let mut o2;
-    let mut t2 = sum - smax - omax;
+    let mut t2 = sum - smax - omax; // take funds from shielded first
+    log::info!("t {t2} {tmax}");
     if t2 > 0 {
+        // there are not enough shielded funds to cover the outputs
         if t2 > tmax {
             return Err(TransactionBuilderError::NotEnoughFunds((t2 - tmax) as u64));
         }
         // Not enough shielded notes. Use them all before using transparent notes
         s2 = smax;
         o2 = omax;
-        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee);
+        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee, z_factor);
         s1 = s2 - d_s - s0;
         o1 = o2 - d_o - o0;
     } else {
         t2 = 0;
-        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee);
+        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee, z_factor);
 
-        // Solve relaxed problem
-        let inp = sum / 2;
-        s2 = inp;
-        o2 = sum - inp;
+        log::info!("d {d_s} {d_o}");
+        match z_factor {
+            0 => { 
+                o2 = d_o + o0; // => o1 = 0
+                s2 = sum - o2;
+            }
+            1 => {
+                s2 = d_s + s0; // => s1 = 0
+                o2 = sum - s2;
+            }
+            _ => {
+                s2 = sum / 2;
+                o2 = sum - s2;
+            }
+        }
         s1 = s2 - d_s - s0;
         o1 = o2 - d_o - o0;
+        log::info!("s {s1} {s2}");
+        log::info!("o {o1} {o2}");
 
         // Check solution validity
         if s1 < 0 {
@@ -169,8 +210,9 @@ pub fn allocate_funds(
     assert_eq!(sum, t2 + s2 + o2);
     assert_eq!(x, s1 + o1);
 
-    log::debug!("{} {}", s1, o1);
-    log::debug!("{} {} {}", t2, s2, o2);
+    log::info!("{} {} {} {}", t0, s0, o0, x);
+    log::info!("{} {}", s1, o1);
+    log::info!("{} {} {}", t2, s2, o2);
 
     let fund_allocation = FundAllocation {
         s1: s1 as u64,
@@ -306,7 +348,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
     for _ in 0..MAX_ATTEMPTS {
         let balances = sum_utxos(utxos)?;
         let (groups, amounts) = group_orders(&orders, fee)?;
-        let allocation = allocate_funds(&amounts, &balances)?;
+        let allocation = allocate_funds(&amounts, &balances, config.z_factor as i64)?;
 
         let OrderGroupAmounts { s0, o0, .. } = amounts;
         let FundAllocation { s1, o1, s2, o2, .. } = allocation;

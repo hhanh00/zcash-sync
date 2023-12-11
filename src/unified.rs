@@ -57,16 +57,15 @@ pub fn get_ua_of(
             |r| r.get::<_, String>(0),
         )
         .optional()?;
-    let (z_addr, aindex) = connection
-        .query_row(
-            "SELECT address, aindex FROM accounts WHERE id_account = ?1",
-            [account],
-            |r| {
-                let address = r.get::<_, String>(0)?;
-                let aindex = r.get::<_, u32>(1)?;
-                Ok((address, aindex))
-            },
-        )?;
+    let (z_addr, aindex) = connection.query_row(
+        "SELECT address, aindex FROM accounts WHERE id_account = ?1",
+        [account],
+        |r| {
+            let address = r.get::<_, String>(0)?;
+            let aindex = r.get::<_, u32>(1)?;
+            Ok((address, aindex))
+        },
+    )?;
     let o_fvk = connection
         .query_row(
             "SELECT fvk FROM orchard_addrs WHERE account = ?1",

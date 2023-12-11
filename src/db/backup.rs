@@ -4,7 +4,7 @@ use age::secrecy::ExposeSecret;
 use anyhow::anyhow;
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
-use std::fs::{File, DirEntry, remove_file};
+use std::fs::{remove_file, DirEntry, File};
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -139,7 +139,11 @@ pub fn zip_dbs(passwd: &str, temp_dir: &str) -> anyhow::Result<String> {
         let db_path = PathBuf::from_str(db_path)?;
         let db_name = db_path.file_name().unwrap().to_string_lossy().to_string();
         let encrypted_db_path = temp_dir.join(&db_name);
-        println!("{} -> {}", c.db_path.as_ref().unwrap(), encrypted_db_path.display());
+        println!(
+            "{} -> {}",
+            c.db_path.as_ref().unwrap(),
+            encrypted_db_path.display()
+        );
         let _ = remove_file(&encrypted_db_path);
         clone_db_with_passwd(
             &connection,

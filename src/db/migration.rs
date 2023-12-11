@@ -321,8 +321,12 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
     fn up8(connection: &Connection) -> rusqlite::Result<()> {
         let r = connection.query_row(
             "SELECT COUNT(*) FROM pragma_table_info('taddrs') 
-            WHERE name='sk' AND `notnull` = 1", [], |r| r.get::<_, u32>(0))?;
-        if r == 1 { // change sk to nullable
+            WHERE name='sk' AND `notnull` = 1",
+            [],
+            |r| r.get::<_, u32>(0),
+        )?;
+        if r == 1 {
+            // change sk to nullable
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS new_taddrs (
                 account INTEGER PRIMARY KEY NOT NULL,

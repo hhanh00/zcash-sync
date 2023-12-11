@@ -51,10 +51,12 @@ impl FeeCalculator for FeeZIP327 {
             n_out[pool] += 1;
         }
 
-        if n_out[1] != 0 { // if used, sapling has a min of 2 outputs
+        if n_out[1] != 0 {
+            // if used, sapling has a min of 2 outputs
             n_out[1] = max(2, n_out[1]);
         }
-        if n_in[2] != 0 || n_out[2] != 0 { // if used, orchard has a min of 2 actions
+        if n_in[2] != 0 || n_out[2] != 0 {
+            // if used, orchard has a min of 2 actions
             n_in[2] = max(2, n_in[2]);
         }
 

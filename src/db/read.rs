@@ -633,10 +633,7 @@ pub fn get_pnl_txs(connection: &Connection, id: u32, timestamp: u32) -> Result<V
     let rows = stmt.query_map([id, timestamp], |row| {
         let timestamp: u32 = row.get(0)?;
         let value: i64 = row.get(1)?;
-        let tx = TxTimeValueT {
-            timestamp,
-            value,
-        };
+        let tx = TxTimeValueT { timestamp, value };
         Ok(tx)
     })?;
     let txs = rows.collect::<Result<Vec<_>, _>>()?;
@@ -654,10 +651,7 @@ pub fn get_spendings(connection: &Connection, id: u32, timestamp: u32) -> Result
 
         let recipient = name.or(address);
 
-        let spending = SpendingT {
-            recipient,
-            amount,
-        };
+        let spending = SpendingT { recipient, amount };
         Ok(spending)
     })?;
     let data = rows.collect::<Result<Vec<_>, _>>()?;

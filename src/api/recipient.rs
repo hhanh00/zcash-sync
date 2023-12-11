@@ -97,7 +97,10 @@ pub fn decode_memo(
 }
 
 /// Parse a json document that contains a list of recipients
-pub fn parse_recipients(from_addr: &str, recipients: &Recipients) -> anyhow::Result<Vec<RecipientMemo>> {
+pub fn parse_recipients(
+    from_addr: &str,
+    recipients: &Recipients,
+) -> anyhow::Result<Vec<RecipientMemo>> {
     let recipients = recipients.values().unwrap();
     let recipient_memos: anyhow::Result<Vec<_>> = recipients
         .iter()

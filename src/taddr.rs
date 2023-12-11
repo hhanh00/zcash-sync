@@ -9,8 +9,8 @@ use crate::note_selection::{Source, UTXO};
 use crate::unified::orchard_as_unified;
 use crate::zip32::derive_zip32;
 use crate::{
-    AddressList, BlockId, BlockRange, CompactTxStreamerClient, Connection,
-    GetAddressUtxosArg, GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
+    AddressList, BlockId, BlockRange, CompactTxStreamerClient, Connection, GetAddressUtxosArg,
+    GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
 };
 use anyhow::anyhow;
 use base58check::{FromBase58Check, ToBase58Check};
@@ -182,8 +182,14 @@ pub async fn scan_transparent_accounts(
 ) -> anyhow::Result<Vec<TBalance>> {
     let last_height = get_latest_height(client).await?;
     let range = BlockRange {
-        start: Some(BlockId { height: 1, hash: vec![] }),
-        end: Some(BlockId { height: last_height as u64, hash: vec![] }),
+        start: Some(BlockId {
+            height: 1,
+            hash: vec![],
+        }),
+        end: Some(BlockId {
+            height: last_height as u64,
+            hash: vec![],
+        }),
         ..BlockRange::default()
     };
     let mut addresses = vec![];
@@ -301,8 +307,7 @@ pub async fn sweep_tkey(
         })
         .collect();
 
-    let tx_plan = sweep_utxos(coin, account, pool, address, last_height,
-        &utxos, fee_rule).await?;
+    let tx_plan = sweep_utxos(coin, account, pool, address, last_height, &utxos, fee_rule).await?;
     Ok(tx_plan)
 }
 
@@ -320,8 +325,14 @@ pub async fn sweep_tseed(
     let secp = Secp256k1::<All>::new();
 
     let range = BlockRange {
-        start: Some(BlockId { height: 1, hash: vec![] }),
-        end: Some(BlockId { height: last_height as u64, hash: vec![] }),
+        start: Some(BlockId {
+            height: 1,
+            hash: vec![],
+        }),
+        end: Some(BlockId {
+            height: last_height as u64,
+            hash: vec![],
+        }),
         ..BlockRange::default()
     };
 
@@ -355,12 +366,10 @@ pub async fn sweep_tseed(
             let tx_count = get_taddr_tx_count(&mut client, &taddr, &range).await?;
             if tx_count == 0 {
                 gap += 1;
-            }
-            else {
+            } else {
                 gap = 0;
             }
-        }
-        else {
+        } else {
             gap = 0;
         }
 
@@ -375,16 +384,19 @@ pub async fn sweep_tseed(
         }
     }
 
-    let tx_plan = sweep_utxos(coin, account, pool, address, last_height,
-        &inputs, fee_rule).await?;
+    let tx_plan = sweep_utxos(coin, account, pool, address, last_height, &inputs, fee_rule).await?;
     Ok(tx_plan)
 }
 
-async fn sweep_utxos(coin: u8, account: u32, pool: u8,
+async fn sweep_utxos(
+    coin: u8,
+    account: u32,
+    pool: u8,
     address: &str,
     last_height: u32,
     utxos: &[UTXO],
-    fee_rule: &FeeT) -> anyhow::Result<crate::TransactionPlan> {
+    fee_rule: &FeeT,
+) -> anyhow::Result<crate::TransactionPlan> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
     let to_address = if address.is_empty() {
@@ -407,8 +419,7 @@ async fn sweep_utxos(coin: u8, account: u32, pool: u8,
         };
         let to_address = to_address.ok_or(anyhow!("Account has no address of this type"))?;
         to_address
-    }
-    else {
+    } else {
         address.to_string()
     };
 
@@ -428,11 +439,11 @@ async fn sweep_utxos(coin: u8, account: u32, pool: u8,
         slice::from_ref(&recipient),
         &utxos,
         fee_rule,
+        0,
     )
     .await?;
     Ok(tx_plan)
 }
-
 
 pub fn get_base58_tsk(connection: &Connection, account: u32) -> anyhow::Result<Option<String>> {
     let tsk = connection

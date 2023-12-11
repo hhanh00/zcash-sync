@@ -118,7 +118,8 @@ impl<
                 for decn in dectx.notes.iter() {
                     let position = decn.position(self.note_position);
                     let rn: ReceivedNote = decn.to_received_note(position as u64);
-                    let id_note = DbAdapter::store_received_note(&rn, id_tx, position, &self.db_tx)?;
+                    let id_note =
+                        DbAdapter::store_received_note(&rn, id_tx, position, &self.db_tx)?;
                     let nf = Nf(rn.nf.try_into().unwrap());
                     self.nullifiers.insert(
                         nf,
