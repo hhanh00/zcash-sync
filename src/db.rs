@@ -1083,8 +1083,6 @@ impl DbAdapter {
         self.connection.execute("DELETE FROM orchard_tree", [])?;
         self.connection.execute("DELETE FROM contacts", [])?;
         self.connection.execute("DELETE FROM diversifiers", [])?;
-        self.connection
-            .execute("DELETE FROM historical_prices", [])?;
         self.connection.execute("DELETE FROM received_notes", [])?;
         self.connection
             .execute("DELETE FROM sapling_witnesses", [])?;

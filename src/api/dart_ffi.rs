@@ -518,9 +518,9 @@ pub async unsafe extern "C" fn rewind_to(coin: u8, height: u32) -> CResult<u32> 
 
 #[tokio::main]
 #[no_mangle]
-pub async unsafe extern "C" fn rescan_from(height: u32) {
-    let res = crate::api::sync::rescan_from(height).await;
-    log_error(res)
+pub async unsafe extern "C" fn rescan_from(coin: u8, height: u32) -> CResult<u32> {
+    let res = crate::api::sync::rescan_from(coin, height).await;
+    to_cresult(res)
 }
 
 #[tokio::main]

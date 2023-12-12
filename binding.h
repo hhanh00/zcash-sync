@@ -285,7 +285,7 @@ void skip_to_last_height(uint8_t coin);
 
 struct CResult_u32 rewind_to(uint8_t coin, uint32_t height);
 
-void rescan_from(uint32_t height);
+struct CResult_u32 rescan_from(uint8_t coin, uint32_t height);
 
 struct CResult_u64 get_taddr_balance(uint8_t coin, uint32_t id_account);
 

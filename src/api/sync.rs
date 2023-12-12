@@ -90,12 +90,12 @@ pub async fn rewind_to(coin: u8, height: u32) -> anyhow::Result<u32> {
 }
 
 /// Synchronize from a given height
-pub async fn rescan_from(height: u32) -> anyhow::Result<()> {
-    let c = CoinConfig::get_active();
+pub async fn rescan_from(coin: u8, height: u32) -> anyhow::Result<u32> {
+    let c = CoinConfig::get(coin);
     c.db()?.truncate_sync_data()?;
     let mut client = c.connect_lwd().await?;
-    fetch_and_store_tree_state(c.coin, &mut client, height).await?;
-    Ok(())
+    fetch_and_store_tree_state(c.coin, &mut client, height - 1).await?;
+    Ok(height - 1)
 }
 
 async fn fetch_and_store_tree_state(
