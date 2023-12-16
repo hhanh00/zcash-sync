@@ -403,19 +403,19 @@ async fn sweep_utxos(
         let db = c.db().unwrap();
 
         let to_address = match pool {
-            0 => db.get_taddr(account)?,
-            1 => {
+            1 => db.get_taddr(account)?,
+            2 => {
                 let AccountData { address, .. } = db.get_account_info(account)?;
                 Some(address)
             }
-            2 => {
+            4 => {
                 let okeys = db.get_orchard(account)?;
                 okeys.map(|okeys| {
                     let address = okeys.get_address(0);
                     orchard_as_unified(network, &address)
                 })
             }
-            _ => unreachable!(),
+            _ => anyhow::bail!("Unexpected pool value"),
         };
         let to_address = to_address.ok_or(anyhow!("Account has no address of this type"))?;
         to_address
