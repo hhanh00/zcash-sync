@@ -8,7 +8,8 @@ use crate::contact::{serialize_contacts, Contact};
 use crate::db::data_generated::fb::FeeT;
 use crate::{get_ua_of, TransactionPlan};
 use zcash_primitives::memo::Memo;
-use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
+
+const CONTACT_AMOUNT: u64 = 10_000;
 
 /// Store contact in the database
 /// # Arguments
@@ -59,7 +60,7 @@ async fn save_contacts_tx(
         .iter()
         .map(|m| RecipientMemo {
             address: address.clone(),
-            amount: u64::from(DEFAULT_FEE),
+            amount: CONTACT_AMOUNT,
             fee_included: false,
             memo: m.clone(),
             max_amount_per_note: 0,
