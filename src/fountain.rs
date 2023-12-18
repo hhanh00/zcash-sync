@@ -120,7 +120,7 @@ impl FountainCodes {
 
 impl RaptorQDrops {
     pub fn put_drop(drop: &str) -> anyhow::Result<RaptorQResultT> {
-        let mut fc = RAPTORQ.lock().unwrap();
+        let mut fc = RAPTORQ.lock();
         fc.put_drop(drop)
     }
 }

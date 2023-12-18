@@ -1,10 +1,9 @@
 use super::types::*;
-use crate::coinconfig::get_prover;
 use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::Witness;
-use crate::{AccountData, CoinConfig, DbAdapter};
+use crate::{AccountData, CoinConfig, DbAdapter, PROVER};
 use anyhow::anyhow;
 use jubjub::Fr;
 use orchard::builder::Builder as OrchardBuilder;
@@ -229,11 +228,13 @@ pub fn build_tx(
     }
 
     let transparent_bundle = builder.transparent_builder.build();
-    let mut ctx = get_prover().new_sapling_proving_context();
+    let prover = PROVER.lock();
+    let prover = prover.as_ref().unwrap();
+    let mut ctx = prover.new_sapling_proving_context();
     let sapling_bundle = builder
         .sapling_builder
         .build(
-            get_prover(),
+            prover,
             &mut ctx,
             &mut rng,
             BlockHeight::from_u32(plan.anchor_height),
@@ -272,7 +273,7 @@ pub fn build_tx(
 
     let sapling_bundle = unauthed_tx.sapling_bundle().map(|sb| {
         sb.clone()
-            .apply_signatures(get_prover(), &mut ctx, &mut rng, &sig_hash)
+            .apply_signatures(prover, &mut ctx, &mut rng, &sig_hash)
             .unwrap()
             .0
     });

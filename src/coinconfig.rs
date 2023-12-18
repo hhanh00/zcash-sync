@@ -5,10 +5,9 @@ use anyhow::anyhow;
 use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use parking_lot::Mutex;
 use tonic::transport::Channel;
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
-use zcash_params::{OUTPUT_PARAMS, SPEND_PARAMS};
 use zcash_proofs::prover::LocalTxProver;
 
 lazy_static! {
@@ -17,7 +16,7 @@ lazy_static! {
         Mutex::new(CoinConfig::new(1, CoinType::Ycash)),
         Mutex::new(CoinConfig::new(2, CoinType::PirateChain)),
     ];
-    pub static ref PROVER: AtomicLazyCell<LocalTxProver> = AtomicLazyCell::new();
+    pub static ref PROVER: Mutex<Option<LocalTxProver>> = Mutex::new(None);
     pub static ref RAPTORQ: Mutex<FountainCodes> = Mutex::new(FountainCodes::new());
     pub static ref MEMPOOL: AtomicLazyCell<MemPool> = AtomicLazyCell::new();
     pub static ref MEMPOOL_RUNNER: Mutex<MemPoolRunner> = Mutex::new(MemPoolRunner::new());
@@ -41,26 +40,26 @@ pub fn set_active(active: u8) {
 
 /// Set the lightwalletd url for a given coin
 pub fn set_coin_lwd_url(coin: u8, lwd_url: &str) {
-    let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
+    let mut c = COIN_CONFIG[coin as usize].lock();
     c.lwd_url = Some(lwd_url.to_string());
 }
 
 /// Get the URL of the lightwalletd server for a given coin
 #[allow(dead_code)] // Used by C FFI
 pub fn get_coin_lwd_url(coin: u8) -> String {
-    let c = COIN_CONFIG[coin as usize].lock().unwrap();
+    let c = COIN_CONFIG[coin as usize].lock();
     c.lwd_url.clone().unwrap_or_default()
 }
 
 /// Set the db passwd
 pub fn set_coin_passwd(coin: u8, passwd: &str) {
-    let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
+    let mut c = COIN_CONFIG[coin as usize].lock();
     c.passwd = passwd.to_string();
 }
 
 /// Initialize a coin with a database path
 pub fn init_coin(coin: u8, db_path: &str) -> anyhow::Result<()> {
-    let mut c = COIN_CONFIG[coin as usize].lock().unwrap();
+    let mut c = COIN_CONFIG[coin as usize].lock();
     c.set_db_path(db_path)?;
     c.migrate_db()?; // if the db was already migrated, this is a no-op
     c.open_db()?;
@@ -141,19 +140,19 @@ impl CoinConfig {
     }
 
     pub fn get(coin: u8) -> CoinConfig {
-        let c = COIN_CONFIG[coin as usize].lock().unwrap();
+        let c = COIN_CONFIG[coin as usize].lock();
         c.clone()
     }
 
     pub fn get_active() -> CoinConfig {
         let coin = ACTIVE_COIN.load(Ordering::Acquire) as usize;
-        let c = COIN_CONFIG[coin].lock().unwrap();
+        let c = COIN_CONFIG[coin].lock();
         c.clone()
     }
 
     pub fn set_height(height: u32) {
         let coin = ACTIVE_COIN.load(Ordering::Acquire) as usize;
-        let mut c = COIN_CONFIG[coin].lock().unwrap();
+        let mut c = COIN_CONFIG[coin].lock();
         c.height = height;
     }
 
@@ -179,9 +178,7 @@ impl CoinConfig {
     }
 }
 
-pub fn get_prover() -> &'static LocalTxProver {
-    if !PROVER.filled() {
-        let _ = PROVER.fill(LocalTxProver::from_bytes(SPEND_PARAMS, OUTPUT_PARAMS));
-    }
-    PROVER.borrow().unwrap()
+pub fn init_prover(spend_param_bytes: &[u8], output_param_bytes: &[u8]) {
+    let prover = LocalTxProver::from_bytes(spend_param_bytes, output_param_bytes);
+    *PROVER.lock() = Some(prover);
 }

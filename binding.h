@@ -220,6 +220,11 @@ void deallocate_str(char *s);
 
 void deallocate_bytes(uint8_t *ptr, uint32_t len);
 
+struct CResult_u8 init_prover(uint8_t *spend_bytes,
+                              uint64_t spend_len,
+                              uint8_t *output_bytes,
+                              uint64_t output_len);
+
 struct CResult_u8 init_wallet(uint8_t coin, char *db_path);
 
 struct CResult_u8 migrate_db(uint8_t coin, char *db_path);

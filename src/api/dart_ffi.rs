@@ -143,6 +143,31 @@ pub struct CResult<T> {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn init_prover(
+    spend_bytes: *mut u8,
+    spend_len: u64,
+    output_bytes: *mut u8,
+    output_len: u64,
+) -> CResult<u8> {
+    let spend_bytes: Vec<u8> = Vec::from_raw_parts(
+        spend_bytes,
+        spend_len as usize,
+        spend_len as usize,
+    );
+    let output_bytes: Vec<u8> = Vec::from_raw_parts(
+        output_bytes,
+        output_len as usize,
+        output_len as usize,
+    );
+
+    let res = || {
+        coinconfig::init_prover(&spend_bytes, &output_bytes);
+        Ok::<_, anyhow::Error>(0)
+    };
+    to_cresult(res())
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn init_wallet(coin: u8, db_path: *mut c_char) -> CResult<u8> {
     try_init_logger();
     from_c_str!(db_path);
@@ -189,7 +214,7 @@ pub unsafe extern "C" fn set_coin_passwd(coin: u8, passwd: *mut c_char) {
 #[tokio::main]
 pub async unsafe extern "C" fn mempool_run(port: i64) {
     try_init_logger();
-    let mut mempool_runner = MEMPOOL_RUNNER.lock().unwrap();
+    let mut mempool_runner = MEMPOOL_RUNNER.lock();
     let mempool = mempool_runner
         .run(move |balance: i64| {
             let mut balance = balance.into_dart();
@@ -1356,10 +1381,11 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
     let res = async {
         let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
         let c = CoinConfig::get(coin);
-        let prover = coinconfig::get_prover();
         let pk = crate::orchard::get_proving_key();
         let raw_tx = tokio::task::spawn_blocking(move || {
-            let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan, prover, &pk)?;
+            let prover = crate::PROVER.lock();
+            let prover = prover.as_ref().unwrap();
+                let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan, prover, &pk)?;
             Ok::<_, anyhow::Error>(raw_tx)
         })
         .await??;
