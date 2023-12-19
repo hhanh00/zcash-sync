@@ -3,12 +3,17 @@
 use crate::coinconfig::CoinConfig;
 use crate::scan::{AMProgressCallback, Progress};
 use crate::sync::CTree;
-use crate::{AccountData, BlockId, CompactTxStreamerClient, DbAdapter};
+use crate::{BlockId, CompactTxStreamerClient, DbAdapter};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::Request;
-use zcash_primitives::sapling::Note;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref SYNC_CANCEL: parking_lot::Mutex<Option<CancellationToken>> = parking_lot::Mutex::new(None);
+}
 
 /// Asynchronously perform warp sync
 /// # Arguments
@@ -24,11 +29,10 @@ pub async fn coin_sync(
     anchor_offset: u32,
     max_cost: u32,
     progress_callback: impl Fn(Progress) + Send + 'static,
-    cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
     let p_cb = Arc::new(Mutex::new(progress_callback));
-    coin_sync_impl(coin, get_tx, anchor_offset, max_cost, p_cb.clone(), cancel).await?;
-    coin_sync_impl(coin, get_tx, 0, u32::MAX, p_cb.clone(), cancel).await?;
+    coin_sync_impl(coin, get_tx, anchor_offset, max_cost, p_cb.clone()).await?;
+    coin_sync_impl(coin, get_tx, 0, u32::MAX, p_cb.clone()).await?;
     crate::scan::coin_trp_sync(coin).await?;
     Ok(())
 }
@@ -39,7 +43,6 @@ async fn coin_sync_impl(
     target_height_offset: u32,
     max_cost: u32,
     progress_callback: AMProgressCallback,
-    cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
     crate::scan::sync_async(
         coin,
@@ -47,7 +50,6 @@ async fn coin_sync_impl(
         target_height_offset,
         max_cost,
         progress_callback,
-        cancel,
     )
     .await
 }

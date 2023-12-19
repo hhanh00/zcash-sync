@@ -1,3 +1,4 @@
+use crate::api::sync::SYNC_CANCEL;
 use crate::db::data_generated::fb::Servers as fbServers;
 use crate::db::AccountViewKey;
 use crate::lw_rpc::compact_tx_streamer_client::CompactTxStreamerClient;
@@ -8,10 +9,10 @@ use futures::{future, FutureExt};
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
 use rayon::prelude::*;
+use tokio_util::sync::CancellationToken;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
-use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 use sysinfo::{System, SystemExt};
@@ -145,9 +146,10 @@ pub async fn download_chain(
     end_height: u32,
     mut prev_hash: Option<[u8; 32]>,
     max_cost: u32,
-    cancel: &'static Mutex<bool>,
     handler: Sender<Blocks>,
 ) -> anyhow::Result<()> {
+    let cancel_token = SYNC_CANCEL.lock().as_ref().cloned()
+        .unwrap_or(CancellationToken::new());
     let outputs_per_chunk = get_available_memory()? / get_mem_per_output();
     let outputs_per_chunk = outputs_per_chunk.min(MAX_OUTPUTS_PER_CHUNKS);
     log::info!("Outputs per chunk = {}", outputs_per_chunk);
@@ -171,64 +173,72 @@ pub async fn download_chain(
         .get_block_range(Request::new(range))
         .await?
         .into_inner();
-    while let Some(mut block) = block_stream.message().await? {
-        let block_size = get_block_size(&block);
-        total_block_size += block_size;
-        let c = *cancel.lock().unwrap();
-        if c {
-            log::info!("Canceling download");
-            break;
-        }
-        if let Some(prev_hash) = prev_hash.as_ref() {
-            if block.prev_hash.as_slice() != prev_hash {
-                log::warn!(
-                    "Reorg: {} != {}",
-                    hex::encode(block.prev_hash.as_slice()),
-                    hex::encode(prev_hash)
-                );
-                anyhow::bail!(ChainError::Reorg);
-            }
-        }
-        let mut ph = [0u8; 32];
-        ph.copy_from_slice(&block.hash);
-        prev_hash = Some(ph);
-        for tx in block.vtx.iter_mut() {
-            let mut skipped = false;
-            if tx.outputs.len() + tx.actions.len() > max_cost as usize {
-                for co in tx.outputs.iter_mut() {
-                    co.epk.clear();
-                    co.ciphertext.clear();
+    loop {
+        tokio::select! {
+            _ = cancel_token.cancelled() => {
+                log::info!("Download cancelled");
+                break;
+            },
+            message = block_stream.message() => {
+                if let Some(mut block) = message? {
+                    let block_size = get_block_size(&block);
+                    total_block_size += block_size;
+                    if let Some(prev_hash) = prev_hash.as_ref() {
+                        if block.prev_hash.as_slice() != prev_hash {
+                            log::warn!(
+                                "Reorg: {} != {}",
+                                hex::encode(block.prev_hash.as_slice()),
+                                hex::encode(prev_hash)
+                            );
+                            anyhow::bail!(ChainError::Reorg);
+                        }
+                    }
+                    let mut ph = [0u8; 32];
+                    ph.copy_from_slice(&block.hash);
+                    prev_hash = Some(ph);
+                    for tx in block.vtx.iter_mut() {
+                        let mut skipped = false;
+                        if tx.outputs.len() + tx.actions.len() > max_cost as usize {
+                            for co in tx.outputs.iter_mut() {
+                                co.epk.clear();
+                                co.ciphertext.clear();
+                            }
+                            for a in tx.actions.iter_mut() {
+                                a.ephemeral_key.clear();
+                                a.ciphertext.clear();
+                            }
+                            skipped = true;
+                        }
+                        if skipped {
+                            log::debug!("Output skipped {}", tx.outputs.len());
+                        }
+                    }
+            
+                    let block_output_count: usize = block
+                        .vtx
+                        .iter()
+                        .map(|tx| tx.outputs.len() + tx.actions.len())
+                        .sum();
+                    if output_count + block_output_count > outputs_per_chunk {
+                        // output
+                        let out = cbs;
+                        cbs = Vec::new();
+                        let blocks = Blocks(out, total_block_size);
+                        if !blocks.0.is_empty() {
+                            let _ = handler.send(blocks).await;
+                        }
+                        output_count = 0;
+                        total_block_size = 0;
+                    }
+            
+                    cbs.push(block);
+                    output_count += block_output_count;
                 }
-                for a in tx.actions.iter_mut() {
-                    a.ephemeral_key.clear();
-                    a.ciphertext.clear();
+                else {
+                    break;
                 }
-                skipped = true;
-            }
-            if skipped {
-                log::debug!("Output skipped {}", tx.outputs.len());
             }
         }
-
-        let block_output_count: usize = block
-            .vtx
-            .iter()
-            .map(|tx| tx.outputs.len() + tx.actions.len())
-            .sum();
-        if output_count + block_output_count > outputs_per_chunk {
-            // output
-            let out = cbs;
-            cbs = Vec::new();
-            let blocks = Blocks(out, total_block_size);
-            if !blocks.0.is_empty() {
-                let _ = handler.send(blocks).await;
-            }
-            output_count = 0;
-            total_block_size = 0;
-        }
-
-        cbs.push(block);
-        output_count += block_output_count;
     }
     let blocks = Blocks(cbs, total_block_size);
     if !blocks.0.is_empty() {

@@ -86,7 +86,6 @@ pub async fn sync_async<'a>(
     target_height_offset: u32,
     max_cost: u32,
     progress_callback: AMProgressCallback, // TODO
-    cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
     let result = sync_async_inner(
         coin,
@@ -94,7 +93,6 @@ pub async fn sync_async<'a>(
         target_height_offset,
         max_cost,
         progress_callback,
-        cancel,
     )
     .await;
     if let Err(ref e) = result {
@@ -114,7 +112,6 @@ async fn sync_async_inner<'a>(
     target_height_offset: u32,
     max_cost: u32,
     progress_callback: AMProgressCallback, // TODO
-    cancel: &'static std::sync::Mutex<bool>,
 ) -> anyhow::Result<()> {
     let c = CoinConfig::get(coin);
     let ld_url = c.lwd_url.as_ref().unwrap().clone();
@@ -145,7 +142,6 @@ async fn sync_async_inner<'a>(
             end_height,
             prev_hash,
             max_cost,
-            cancel,
             blocks_tx,
         )
         .await?;

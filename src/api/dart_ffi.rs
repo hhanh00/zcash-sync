@@ -14,9 +14,11 @@ use log::Level;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use tokio::sync::Semaphore;
+use tokio_util::sync::CancellationToken;
 use zcash_primitives::transaction::builder::Progress;
+use crate::api::sync::SYNC_CANCEL;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -327,14 +329,15 @@ pub unsafe extern "C" fn import_transparent_secret_key(
 }
 
 lazy_static! {
-    static ref SYNC_LOCK: Semaphore = Semaphore::new(1);
-    static ref SYNC_CANCELED: Mutex<bool> = Mutex::new(false);
+    static ref SYNC_LOCK: Mutex<()> = Mutex::new(());
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cancel_warp() {
-    log::info!("Sync canceled");
-    *SYNC_CANCELED.lock().unwrap() = true;
+    if let Some(token) = SYNC_CANCEL.lock().as_ref() {
+        log::info!("Sync cancelling");
+        token.cancel();
+    }
 }
 
 #[tokio::main]
@@ -347,7 +350,9 @@ pub async unsafe extern "C" fn warp(
     port: i64,
 ) -> CResult<u8> {
     let res = async {
-        let _permit = SYNC_LOCK.acquire().await?;
+        let permit = SYNC_LOCK.try_lock();
+        if permit.is_none() { return Ok(2); }
+        *SYNC_CANCEL.lock() = Some(CancellationToken::new());
         log::info!("Sync started");
         let result = crate::api::sync::coin_sync(
             coin,
@@ -368,7 +373,6 @@ pub async unsafe extern "C" fn warp(
                     }
                 }
             },
-            &SYNC_CANCELED,
         )
         .await;
         log::info!("Sync finished");
@@ -383,13 +387,13 @@ pub async unsafe extern "C" fn warp(
                     }
                 } else {
                     log::error!("{}", err);
-                    Ok(0xFF)
+                    Err(err)
                 }
             }
         }
     };
     let r = res.await;
-    *SYNC_CANCELED.lock().unwrap() = false;
+    *SYNC_CANCEL.lock() = None;
     to_cresult(r)
 }
 
