@@ -299,6 +299,7 @@ pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<Sh
         let id_tx: u32 = row.get("id_tx")?;
         let height: u32 = row.get("height")?;
         let mut tx_id: Vec<u8> = row.get("txid")?;
+        assert_eq!(tx_id.len(), 32);
         tx_id.reverse();
         let tx_id = hex::encode(&tx_id);
         let short_tx_id = tx_id[..8].to_string();
@@ -338,7 +339,9 @@ pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<Sh
         .collect::<HashMap<String, String>>();
 
     for tx in txs.iter_mut() {
-        tx.name = names.get(tx.address.as_ref().unwrap()).cloned();
+        if let Some(address) = tx.address.as_ref() {
+            tx.name = names.get(address).cloned();
+        }
     }
     let txs = ShieldedTxVecT { txs: Some(txs) };
     Ok(txs)
