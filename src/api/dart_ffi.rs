@@ -362,6 +362,7 @@ pub async unsafe extern "C" fn warp(
             move |progress| {
                 let progress = ProgressT {
                     height: progress.height,
+                    timestamp: progress.timestamp,
                     trial_decryptions: progress.trial_decryptions,
                     downloaded: progress.downloaded as u64,
                 };

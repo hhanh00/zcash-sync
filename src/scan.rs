@@ -46,6 +46,7 @@ impl std::fmt::Debug for Blocks {
 #[derive(Clone)]
 pub struct Progress {
     pub height: u32,
+    pub timestamp: u32,
     pub trial_decryptions: u64,
     pub downloaded: usize,
 }
@@ -150,6 +151,7 @@ async fn sync_async_inner<'a>(
 
     let mut progress = Progress {
         height: 0,
+        timestamp: 0,
         trial_decryptions: 0,
         downloaded: 0,
     };
@@ -164,6 +166,7 @@ async fn sync_async_inner<'a>(
 
         progress.downloaded += blocks.1;
         progress.height = last_height;
+        progress.timestamp = last_timestamp;
 
         let mut connection = c.connection();
         let db_tx = connection.transaction()?;

@@ -176,9 +176,9 @@ typedef struct CResult_bool {
 
 #define Servers_VT_URLS 4
 
-#define Progress_VT_TRIAL_DECRYPTIONS 6
+#define Progress_VT_TRIAL_DECRYPTIONS 8
 
-#define Progress_VT_DOWNLOADED 8
+#define Progress_VT_DOWNLOADED 10
 
 #define KeyPack_VT_T_ADDR 4
 
