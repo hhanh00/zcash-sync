@@ -1,3 +1,4 @@
+use crate::api::sync::SYNC_CANCEL;
 use crate::chain::get_latest_height;
 use crate::db::AccountViewKey;
 
@@ -14,6 +15,7 @@ use anyhow::anyhow;
 use lazy_static::lazy_static;
 use orchard::note_encryption::OrchardDomain;
 use rusqlite::{params, OptionalExtension};
+use tokio_util::sync::CancellationToken;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::{Builder, Runtime};
@@ -215,7 +217,10 @@ async fn sync_async_inner<'a>(
 
     downloader.await??;
 
-    if get_tx {
+    let cancel_token = SYNC_CANCEL.lock().as_ref().cloned();
+    let cancelled = cancel_token.map(|c| c.is_cancelled()).unwrap_or_default();
+
+    if !cancelled && get_tx {
         get_transaction_details(coin).await?;
     }
     let connection = c.connection();

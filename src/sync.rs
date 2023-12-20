@@ -1,6 +1,6 @@
 use crate::chain::Nf;
 use crate::db::{ReceivedNote, ReceivedNoteShort};
-use crate::{CompactBlock, Connection, DbAdapter};
+use crate::{CompactBlock, DbAdapter};
 use anyhow::Result;
 use rayon::prelude::*;
 use rusqlite::Transaction;

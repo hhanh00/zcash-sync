@@ -149,7 +149,7 @@ pub async fn download_chain(
     handler: Sender<Blocks>,
 ) -> anyhow::Result<()> {
     let cancel_token = SYNC_CANCEL.lock().as_ref().cloned()
-        .unwrap_or(CancellationToken::new());
+        .unwrap_or_else(CancellationToken::new);
     let outputs_per_chunk = get_available_memory()? / get_mem_per_output();
     let outputs_per_chunk = outputs_per_chunk.min(MAX_OUTPUTS_PER_CHUNKS);
     log::info!("Outputs per chunk = {}", outputs_per_chunk);
@@ -177,7 +177,7 @@ pub async fn download_chain(
         tokio::select! {
             _ = cancel_token.cancelled() => {
                 log::info!("Download cancelled");
-                break;
+                return Ok(());
             },
             message = block_stream.message() => {
                 if let Some(mut block) = message? {
