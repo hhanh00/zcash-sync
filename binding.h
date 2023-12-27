@@ -286,6 +286,8 @@ struct CResult_____c_char ledger_get_fvk(uint8_t coin);
 
 struct CResult_____c_char ledger_get_address(void);
 
+struct CResult_____c_char convert_t2_address(uint8_t coin, char *address, char *prefix, bool from);
+
 void skip_to_last_height(uint8_t coin);
 
 struct CResult_u32 rewind_to(uint8_t coin, uint32_t height);

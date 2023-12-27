@@ -487,6 +487,24 @@ pub unsafe extern "C" fn ledger_get_address() -> CResult<*mut c_char> {
     to_cresult_str(res())
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn convert_t2_address(
+    coin: u8,
+    address: *mut c_char,
+    prefix: *mut c_char,
+    from: bool,
+) -> CResult<*mut c_char> {
+    from_c_str!(address);
+    from_c_str!(prefix);
+    let res = move || {
+        let c = CoinConfig::get(coin);
+        let network = c.chain.network();
+        let result = crate::key2::convert_t2_address(&network, &address, &prefix, from)?;
+        Ok(result)
+    };
+    to_cresult_str(res())
+}
+
 #[allow(dead_code)]
 fn report_progress(progress: Progress, port: i64) {
     if port != 0 {

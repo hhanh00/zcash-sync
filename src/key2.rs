@@ -1,13 +1,16 @@
 use crate::coinconfig::CoinConfig;
 use anyhow::anyhow;
+use bech32::{FromBase32, ToBase32};
 use bip39::{Language, Mnemonic, Seed};
 use zcash_client_backend::address::RecipientAddress;
 use zcash_client_backend::encoding::{
-    decode_extended_full_viewing_key, decode_extended_spending_key,
+    decode_extended_full_viewing_key, decode_extended_spending_key, decode_transparent_address,
     encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address,
+    encode_transparent_address,
 };
 use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_primitives::consensus::{Network, Parameters};
+use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
 
 pub fn split_key(key: &str) -> (String, String) {
@@ -144,4 +147,38 @@ fn derive_address(network: &Network, fvk: &ExtendedFullViewingKey) -> anyhow::Re
     let (_, payment_address) = fvk.default_address();
     let address = encode_payment_address(network.hrp_sapling_payment_address(), &payment_address);
     Ok(address)
+}
+
+#[allow(dead_code)]
+pub fn convert_t2_address(
+    network: &Network,
+    address: &str,
+    prefix: &str,
+    from: bool,
+) -> anyhow::Result<String> {
+    let converted_address = if from {
+        let (p, b, _v) = bech32::decode(address)?;
+        if p != prefix {
+            anyhow::bail!("Invalid prefix");
+        }
+        let pkh = Vec::<u8>::from_base32(&b)?;
+        let taddr = TransparentAddress::PublicKey(pkh.try_into().unwrap());
+        encode_transparent_address(
+            &network.b58_pubkey_address_prefix(),
+            &network.b58_script_address_prefix(),
+            &taddr,
+        )
+    } else {
+        let taddr = decode_transparent_address(
+            &network.b58_pubkey_address_prefix(),
+            &network.b58_script_address_prefix(),
+            address,
+        )?
+        .ok_or(anyhow::anyhow!("Not a transparent address"))?;
+        let TransparentAddress::PublicKey(pkh) = taddr else {
+            anyhow::bail!("Not a public key hash address");
+        };
+        bech32::encode(prefix, pkh.to_base32(), bech32::Variant::Bech32m)?
+    };
+    Ok(converted_address)
 }
