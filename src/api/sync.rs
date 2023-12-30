@@ -4,16 +4,17 @@ use crate::coinconfig::CoinConfig;
 use crate::scan::{AMProgressCallback, Progress};
 use crate::sync::CTree;
 use crate::{BlockId, CompactTxStreamerClient, DbAdapter};
+use lazy_static::lazy_static;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::Request;
-use lazy_static::lazy_static;
 use zcash_primitives::consensus::Parameters;
 
 lazy_static! {
-    pub static ref SYNC_CANCEL: parking_lot::Mutex<Option<CancellationToken>> = parking_lot::Mutex::new(None);
+    pub static ref SYNC_CANCEL: parking_lot::Mutex<Option<CancellationToken>> =
+        parking_lot::Mutex::new(None);
 }
 
 /// Asynchronously perform warp sync
@@ -96,7 +97,12 @@ pub async fn rewind_to(coin: u8, height: u32) -> anyhow::Result<u32> {
 pub async fn rescan_from(coin: u8, height: u32) -> anyhow::Result<u32> {
     let c = CoinConfig::get(coin);
     c.db()?.truncate_sync_data()?;
-    let min_height = u32::from(c.chain.network().activation_height(zcash_primitives::consensus::NetworkUpgrade::Sapling).unwrap());
+    let min_height = u32::from(
+        c.chain
+            .network()
+            .activation_height(zcash_primitives::consensus::NetworkUpgrade::Sapling)
+            .unwrap(),
+    );
     let height = height.max(min_height + 2); // zcashd returns treestate at A+1
     let mut client = c.connect_lwd().await?;
     fetch_and_store_tree_state(c.coin, &mut client, height - 1).await?;

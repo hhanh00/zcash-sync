@@ -4,8 +4,8 @@ use crate::{connect_lightwalletd, CompactTxStreamerClient, Connection, DbAdapter
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;
-use std::sync::atomic::{AtomicU8, Ordering};
 use parking_lot::Mutex;
+use std::sync::atomic::{AtomicU8, Ordering};
 use tonic::transport::Channel;
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_proofs::prover::LocalTxProver;

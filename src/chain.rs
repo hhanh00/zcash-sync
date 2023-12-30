@@ -9,7 +9,6 @@ use futures::{future, FutureExt};
 use rand::prelude::SliceRandom;
 use rand::rngs::OsRng;
 use rayon::prelude::*;
-use tokio_util::sync::CancellationToken;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
@@ -19,6 +18,7 @@ use sysinfo::{System, SystemExt};
 use thiserror::Error;
 use tokio::sync::mpsc::Sender;
 use tokio::time::timeout;
+use tokio_util::sync::CancellationToken;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Request;
 use zcash_note_encryption::batch::try_compact_note_decryption;
@@ -148,7 +148,10 @@ pub async fn download_chain(
     max_cost: u32,
     handler: Sender<Blocks>,
 ) -> anyhow::Result<()> {
-    let cancel_token = SYNC_CANCEL.lock().as_ref().cloned()
+    let cancel_token = SYNC_CANCEL
+        .lock()
+        .as_ref()
+        .cloned()
         .unwrap_or_else(CancellationToken::new);
     let outputs_per_chunk = get_available_memory()? / get_mem_per_output();
     let outputs_per_chunk = outputs_per_chunk.min(MAX_OUTPUTS_PER_CHUNKS);
@@ -213,7 +216,7 @@ pub async fn download_chain(
                             log::debug!("Output skipped {}", tx.outputs.len());
                         }
                     }
-            
+
                     let block_output_count: usize = block
                         .vtx
                         .iter()
@@ -230,7 +233,7 @@ pub async fn download_chain(
                         output_count = 0;
                         total_block_size = 0;
                     }
-            
+
                     cbs.push(block);
                     output_count += block_output_count;
                 }

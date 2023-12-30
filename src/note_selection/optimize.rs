@@ -140,7 +140,7 @@ pub fn allocate_funds(
 
         log::info!("d {d_s} {d_o}");
         match z_factor {
-            0 => { 
+            0 => {
                 o2 = d_o + o0; // => o1 = 0
                 s2 = sum - o2;
             }

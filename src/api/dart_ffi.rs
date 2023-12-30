@@ -1,3 +1,4 @@
+use crate::api::sync::SYNC_CANCEL;
 use crate::coinconfig::{self, init_coin, CoinConfig, MEMPOOL, MEMPOOL_RUNNER};
 use crate::db::data_generated::fb::*;
 use crate::db::FullEncryptedBackup;
@@ -11,14 +12,13 @@ use android_logger::Config;
 use flatbuffers::FlatBufferBuilder;
 use lazy_static::lazy_static;
 use log::Level;
+use parking_lot::Mutex;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
-use parking_lot::Mutex;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use zcash_primitives::transaction::builder::Progress;
-use crate::api::sync::SYNC_CANCEL;
 
 static mut POST_COBJ: Option<ffi::DartPostCObjectFnType> = None;
 
@@ -151,16 +151,10 @@ pub unsafe extern "C" fn init_prover(
     output_bytes: *mut u8,
     output_len: u64,
 ) -> CResult<u8> {
-    let spend_bytes: Vec<u8> = Vec::from_raw_parts(
-        spend_bytes,
-        spend_len as usize,
-        spend_len as usize,
-    );
-    let output_bytes: Vec<u8> = Vec::from_raw_parts(
-        output_bytes,
-        output_len as usize,
-        output_len as usize,
-    );
+    let spend_bytes: Vec<u8> =
+        Vec::from_raw_parts(spend_bytes, spend_len as usize, spend_len as usize);
+    let output_bytes: Vec<u8> =
+        Vec::from_raw_parts(output_bytes, output_len as usize, output_len as usize);
 
     let res = || {
         coinconfig::init_prover(&spend_bytes, &output_bytes);
@@ -351,15 +345,13 @@ pub async unsafe extern "C" fn warp(
 ) -> CResult<u8> {
     let res = async {
         let permit = SYNC_LOCK.try_lock();
-        if permit.is_none() { return Ok(2); }
+        if permit.is_none() {
+            return Ok(2);
+        }
         *SYNC_CANCEL.lock() = Some(CancellationToken::new());
         log::info!("Sync started");
-        let result = crate::api::sync::coin_sync(
-            coin,
-            get_tx,
-            anchor_offset,
-            max_cost,
-            move |progress| {
+        let result =
+            crate::api::sync::coin_sync(coin, get_tx, anchor_offset, max_cost, move |progress| {
                 let progress = ProgressT {
                     height: progress.height,
                     timestamp: progress.timestamp,
@@ -373,9 +365,8 @@ pub async unsafe extern "C" fn warp(
                         p(port, &mut progress);
                     }
                 }
-            },
-        )
-        .await;
+            })
+            .await;
         log::info!("Sync finished");
 
         match result {
@@ -1408,7 +1399,7 @@ pub async unsafe extern "C" fn ledger_send(coin: u8, tx_plan: *mut c_char) -> CR
         let raw_tx = tokio::task::spawn_blocking(move || {
             let prover = crate::PROVER.lock();
             let prover = prover.as_ref().unwrap();
-                let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan, prover, &pk)?;
+            let raw_tx = crate::ledger::build_ledger_tx(c.chain.network(), &tx_plan, prover, &pk)?;
             Ok::<_, anyhow::Error>(raw_tx)
         })
         .await??;

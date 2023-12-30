@@ -15,12 +15,12 @@ use anyhow::anyhow;
 use lazy_static::lazy_static;
 use orchard::note_encryption::OrchardDomain;
 use rusqlite::{params, OptionalExtension};
-use tokio_util::sync::CancellationToken;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{Network, Parameters};
 
