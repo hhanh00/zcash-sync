@@ -6,6 +6,7 @@ use lazy_static::lazy_static;
 use lazycell::AtomicLazyCell;
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::time::Duration;
 use tonic::transport::Channel;
 use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_proofs::prover::LocalTxProver;
@@ -174,6 +175,7 @@ impl CoinConfig {
         };
         let connection = pool.get().unwrap();
         let _ = crate::db::cipher::set_db_passwd(&connection, &self.passwd);
+        let _ = connection.busy_timeout(Duration::from_secs(60));
         connection
     }
 }
