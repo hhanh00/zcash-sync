@@ -726,6 +726,30 @@ pub fn set_property(connection: &Connection, name: &str, value: &str) -> anyhow:
     Ok(())
 }
 
+pub fn get_account_property(connection: &Connection, account: u32, name: &str) -> anyhow::Result<String> {
+    let url = connection
+        .query_row(
+            "SELECT value FROM account_properties WHERE account = ?1 AND name = ?2",
+            params![account, name],
+            |row| {
+                let url: String = row.get(0)?;
+                Ok(url)
+            },
+        )
+        .optional()?;
+    Ok(url.unwrap_or(String::new()))
+}
+
+pub fn set_account_property(connection: &Connection, account: u32, name: &str, value: &str) -> anyhow::Result<()> {
+    connection.execute(
+        "INSERT INTO account_properties(account, name, value) VALUES (?1, ?2, ?3) \
+        ON CONFLICT (account, name) \
+        DO UPDATE SET value = excluded.value",
+        params![account, name, value],
+    )?;
+    Ok(())
+}
+
 pub fn get_available_addrs(connection: &Connection, account: u32) -> anyhow::Result<u8> {
     let has_transparent = connection
         .query_row(

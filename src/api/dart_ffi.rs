@@ -1387,6 +1387,36 @@ pub unsafe extern "C" fn set_property(
     to_cresult(with_coin(coin, res))
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn get_account_property(
+    coin: u8,
+    account: u32,
+    name: *mut c_char,
+) -> CResult<*mut c_char> {
+    from_c_str!(name);
+    let res = |connection: &Connection| {
+        let value = crate::db::read::get_account_property(connection, account, &name)?;
+        Ok(value)
+    };
+    to_cresult_str(with_coin(coin, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn set_account_property(
+    coin: u8,
+    account: u32,
+    name: *mut c_char,
+    value: *mut c_char,
+) -> CResult<u8> {
+    from_c_str!(name);
+    from_c_str!(value);
+    let res = |connection: &Connection| {
+        crate::db::read::set_account_property(connection, account, &name, &value)?;
+        Ok(0)
+    };
+    to_cresult(with_coin(coin, res))
+}
+
 #[cfg(feature = "ledger")]
 #[no_mangle]
 #[tokio::main]

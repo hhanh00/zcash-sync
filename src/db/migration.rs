@@ -371,7 +371,20 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
         Ok(())
     }
 
-    let upgrades = vec![up1, up2, up3, up4, up5, up6, up7, up8, up9, up10];
+    fn up11(connection: &Connection) -> rusqlite::Result<()> { 
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS account_properties (
+                account INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                value BLOB NOT NULL,
+                PRIMARY KEY (account, name))",
+            [],
+        )?;
+        Ok(())
+    }
+
+
+    let upgrades = vec![up1, up2, up3, up4, up5, up6, up7, up8, up9, up10, up11];
     for (v, upgrade) in upgrades.iter().enumerate() {
         let upgrade_version = (v + 1) as u32;
         if version < upgrade_version {
