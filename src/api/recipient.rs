@@ -22,10 +22,15 @@ pub struct RecipientMemo {
 
 impl RecipientMemo {
     pub fn from_recipient(from: &str, r: &Recipient) -> anyhow::Result<Self> {
-        let memo = if !r.reply_to() && r.subject().as_ref().unwrap().is_empty() {
-            r.memo().unwrap().to_string()
+        let memo = if !r.reply_to() && r.subject().as_ref().unwrap_or(&"").is_empty() {
+            r.memo().unwrap_or(&"").to_string()
         } else {
-            encode_memo(from, r.reply_to(), r.subject().unwrap(), r.memo().unwrap())
+            encode_memo(
+                from,
+                r.reply_to(),
+                r.subject().unwrap_or(&""),
+                r.memo().unwrap_or(&""),
+            )
         };
         Ok(RecipientMemo {
             address: r.address().unwrap().to_string(),
