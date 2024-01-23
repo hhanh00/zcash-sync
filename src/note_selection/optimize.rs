@@ -68,13 +68,11 @@ pub fn group_orders(orders: &[Order], fee: u64) -> Result<(Vec<OrderInfo>, Order
 }
 
 // calculate the net change of each shielded pool
-fn get_net_chg(t0: i64, s0: i64, o0: i64, x: i64, t2: i64, fee: i64, z_factor: i64) -> (i64, i64) {
+fn get_net_chg(t0: i64, s0: i64, o0: i64, x: i64, t2: i64, fee: i64) -> (i64, i64) {
     let net_chg = t0 - t2 + fee; // total net change = d_s + d_o
-    let (d_s, d_o) = match (x, s0, o0, z_factor) {
-        (_, _, _, 1) => (0, net_chg), // only orchard
-        (_, _, _, 0) => (net_chg, 0), // only sapling
-        (0, 0, _, 2) => (0, net_chg), // only orchard
-        (0, _, 0, 2) => (net_chg, 0), // only sapling
+    let (d_s, d_o) = match (x, s0, o0) {
+        (0, 0, _) => (0, net_chg), // only orchard
+        (0, _, 0) => (net_chg, 0), // only sapling
         _ => {
             let d_s = net_chg / 2; // distribute the net change equally
             let d_o = net_chg - d_s; // to reduce information leakage
@@ -105,7 +103,6 @@ fn get_net_chg(t0: i64, s0: i64, o0: i64, x: i64, t2: i64, fee: i64, z_factor: i
 pub fn allocate_funds(
     amounts: &OrderGroupAmounts,
     initial: &PoolAllocation,
-    z_factor: i64,
 ) -> Result<FundAllocation> {
     log::debug!("{:?}", initial);
 
@@ -131,28 +128,16 @@ pub fn allocate_funds(
         // Not enough shielded notes. Use them all before using transparent notes
         s2 = smax;
         o2 = omax;
-        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee, z_factor);
+        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee);
         s1 = s2 - d_s - s0;
         o1 = o2 - d_o - o0;
     } else {
         t2 = 0;
-        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee, z_factor);
+        let (d_s, d_o) = get_net_chg(t0, s0, o0, x, t2, fee);
 
         log::info!("d {d_s} {d_o}");
-        match z_factor {
-            0 => {
-                o2 = d_o + o0; // => o1 = 0
-                s2 = sum - o2;
-            }
-            1 => {
-                s2 = d_s + s0; // => s1 = 0
-                o2 = sum - s2;
-            }
-            _ => {
-                s2 = sum / 2;
-                o2 = sum - s2;
-            }
-        }
+        s2 = sum / 2;
+        o2 = sum - s2;
         s1 = s2 - d_s - s0;
         o1 = o2 - d_o - o0;
         log::info!("s {s1} {s2}");
@@ -348,7 +333,7 @@ pub fn build_tx_plan<F: FeeCalculator>(
     for _ in 0..MAX_ATTEMPTS {
         let balances = sum_utxos(utxos)?;
         let (groups, amounts) = group_orders(&orders, fee)?;
-        let allocation = allocate_funds(&amounts, &balances, config.z_factor as i64)?;
+        let allocation = allocate_funds(&amounts, &balances)?;
 
         let OrderGroupAmounts { s0, o0, .. } = amounts;
         let FundAllocation { s1, o1, s2, o2, .. } = allocation;

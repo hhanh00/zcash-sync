@@ -6604,12 +6604,13 @@ pub mod fb {
 
     impl<'a> Recipient<'a> {
         pub const VT_ADDRESS: flatbuffers::VOffsetT = 4;
-        pub const VT_AMOUNT: flatbuffers::VOffsetT = 6;
-        pub const VT_FEE_INCLUDED: flatbuffers::VOffsetT = 8;
-        pub const VT_REPLY_TO: flatbuffers::VOffsetT = 10;
-        pub const VT_SUBJECT: flatbuffers::VOffsetT = 12;
-        pub const VT_MEMO: flatbuffers::VOffsetT = 14;
-        pub const VT_MAX_AMOUNT_PER_NOTE: flatbuffers::VOffsetT = 16;
+        pub const VT_POOLS: flatbuffers::VOffsetT = 6;
+        pub const VT_AMOUNT: flatbuffers::VOffsetT = 8;
+        pub const VT_FEE_INCLUDED: flatbuffers::VOffsetT = 10;
+        pub const VT_REPLY_TO: flatbuffers::VOffsetT = 12;
+        pub const VT_SUBJECT: flatbuffers::VOffsetT = 14;
+        pub const VT_MEMO: flatbuffers::VOffsetT = 16;
+        pub const VT_MAX_AMOUNT_PER_NOTE: flatbuffers::VOffsetT = 18;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -6634,11 +6635,13 @@ pub mod fb {
             }
             builder.add_reply_to(args.reply_to);
             builder.add_fee_included(args.fee_included);
+            builder.add_pools(args.pools);
             builder.finish()
         }
 
         pub fn unpack(&self) -> RecipientT {
             let address = self.address().map(|x| x.to_string());
+            let pools = self.pools();
             let amount = self.amount();
             let fee_included = self.fee_included();
             let reply_to = self.reply_to();
@@ -6647,6 +6650,7 @@ pub mod fb {
             let max_amount_per_note = self.max_amount_per_note();
             RecipientT {
                 address,
+                pools,
                 amount,
                 fee_included,
                 reply_to,
@@ -6665,6 +6669,13 @@ pub mod fb {
                 self._tab
                     .get::<flatbuffers::ForwardsUOffset<&str>>(Recipient::VT_ADDRESS, None)
             }
+        }
+        #[inline]
+        pub fn pools(&self) -> u8 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u8>(Recipient::VT_POOLS, Some(0)).unwrap() }
         }
         #[inline]
         pub fn amount(&self) -> u64 {
@@ -6741,6 +6752,7 @@ pub mod fb {
                     Self::VT_ADDRESS,
                     false,
                 )?
+                .visit_field::<u8>("pools", Self::VT_POOLS, false)?
                 .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
                 .visit_field::<bool>("fee_included", Self::VT_FEE_INCLUDED, false)?
                 .visit_field::<bool>("reply_to", Self::VT_REPLY_TO, false)?
@@ -6757,6 +6769,7 @@ pub mod fb {
     }
     pub struct RecipientArgs<'a> {
         pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub pools: u8,
         pub amount: u64,
         pub fee_included: bool,
         pub reply_to: bool,
@@ -6769,6 +6782,7 @@ pub mod fb {
         fn default() -> Self {
             RecipientArgs {
                 address: None,
+                pools: 0,
                 amount: 0,
                 fee_included: false,
                 reply_to: false,
@@ -6788,6 +6802,10 @@ pub mod fb {
         pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b str>) {
             self.fbb_
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Recipient::VT_ADDRESS, address);
+        }
+        #[inline]
+        pub fn add_pools(&mut self, pools: u8) {
+            self.fbb_.push_slot::<u8>(Recipient::VT_POOLS, pools, 0);
         }
         #[inline]
         pub fn add_amount(&mut self, amount: u64) {
@@ -6837,6 +6855,7 @@ pub mod fb {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("Recipient");
             ds.field("address", &self.address());
+            ds.field("pools", &self.pools());
             ds.field("amount", &self.amount());
             ds.field("fee_included", &self.fee_included());
             ds.field("reply_to", &self.reply_to());
@@ -6850,6 +6869,7 @@ pub mod fb {
     #[derive(Debug, Clone, PartialEq)]
     pub struct RecipientT {
         pub address: Option<String>,
+        pub pools: u8,
         pub amount: u64,
         pub fee_included: bool,
         pub reply_to: bool,
@@ -6861,6 +6881,7 @@ pub mod fb {
         fn default() -> Self {
             Self {
                 address: None,
+                pools: 0,
                 amount: 0,
                 fee_included: false,
                 reply_to: false,
@@ -6876,6 +6897,7 @@ pub mod fb {
             _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
         ) -> flatbuffers::WIPOffset<Recipient<'b>> {
             let address = self.address.as_ref().map(|x| _fbb.create_string(x));
+            let pools = self.pools;
             let amount = self.amount;
             let fee_included = self.fee_included;
             let reply_to = self.reply_to;
@@ -6886,6 +6908,7 @@ pub mod fb {
                 _fbb,
                 &RecipientArgs {
                     address,
+                    pools,
                     amount,
                     fee_included,
                     reply_to,

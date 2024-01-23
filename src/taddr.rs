@@ -439,7 +439,6 @@ async fn sweep_utxos(
         slice::from_ref(&recipient),
         &utxos,
         fee_rule,
-        0,
     )
     .await?;
     Ok(tx_plan)

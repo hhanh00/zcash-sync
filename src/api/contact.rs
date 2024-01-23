@@ -36,12 +36,11 @@ pub async fn commit_unsaved_contacts(
     account: u32,
     anchor_offset: u32,
     fee: &FeeT,
-    z_factor: u32,
 ) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let contacts = c.db()?.get_unsaved_contacts()?;
     let memos = serialize_contacts(&contacts)?;
-    let tx_plan = save_contacts_tx(coin, account, &memos, anchor_offset, fee, z_factor).await?;
+    let tx_plan = save_contacts_tx(coin, account, &memos, anchor_offset, fee).await?;
     Ok(tx_plan)
 }
 
@@ -51,7 +50,6 @@ async fn save_contacts_tx(
     memos: &[Memo],
     anchor_offset: u32,
     fee: &FeeT,
-    z_factor: u32,
 ) -> anyhow::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let last_height = get_latest_height(coin).await?;
@@ -75,7 +73,6 @@ async fn save_contacts_tx(
         1,
         anchor_offset,
         fee,
-        z_factor,
     )
     .await?;
     Ok(tx_plan)

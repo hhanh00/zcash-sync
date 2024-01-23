@@ -371,7 +371,7 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
         Ok(())
     }
 
-    fn up11(connection: &Connection) -> rusqlite::Result<()> { 
+    fn up11(connection: &Connection) -> rusqlite::Result<()> {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS account_properties (
                 account INTEGER NOT NULL,
@@ -384,6 +384,19 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
     }
 
     fn up12(connection: &Connection) -> rusqlite::Result<()> {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS transparent_checkpoints (
+            height INTEGER PRIMARY KEY)",
+            [],
+        )?;
+
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS block_times (
+            height INTEGER PRIMARY KEY,
+            timestamp INTEGER NOT NULL)",
+            [],
+        )?;
+
         connection.execute(
             "CREATE TABLE IF NOT EXISTS transparent_tins (
             id_tx INTEGER NOT NULL,
@@ -416,7 +429,9 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
         Ok(())
     }
 
-    let upgrades = vec![up1, up2, up3, up4, up5, up6, up7, up8, up9, up10, up11, up12];
+    let upgrades = vec![
+        up1, up2, up3, up4, up5, up6, up7, up8, up9, up10, up11, up12,
+    ];
     for (v, upgrade) in upgrades.iter().enumerate() {
         let upgrade_version = (v + 1) as u32;
         if version < upgrade_version {

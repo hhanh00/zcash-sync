@@ -1,8 +1,11 @@
 use crate::db::data_generated::fb::{Recipient, Recipients};
 use crate::db::ZMessage;
+use crate::key2::decode_address;
 use crate::{AccountData, CoinConfig};
 use serde::Deserialize;
 use std::str::FromStr;
+use zcash_client_backend::address::{RecipientAddress, UnifiedAddress};
+use zcash_primitives::consensus::Network;
 use zcash_primitives::memo::Memo;
 
 #[derive(Clone, Deserialize)]
@@ -21,7 +24,8 @@ pub struct RecipientMemo {
 }
 
 impl RecipientMemo {
-    pub fn from_recipient(from: &str, r: &Recipient) -> anyhow::Result<Self> {
+    pub fn from_recipient(network: &Network, from: &str, r: &Recipient) -> anyhow::Result<Self> {
+        let address = r.address().unwrap();
         let memo = if !r.reply_to() && r.subject().as_ref().unwrap_or(&"").is_empty() {
             r.memo().unwrap_or(&"").to_string()
         } else {
@@ -32,8 +36,33 @@ impl RecipientMemo {
                 r.memo().unwrap_or(&""),
             )
         };
+
+        let ra =
+            RecipientAddress::decode(network, address).ok_or(anyhow::anyhow!("Invalid address"))?;
+        let pools = r.pools();
+        let address = if pools != 0 {
+            match ra {
+                RecipientAddress::Unified(ua) => {
+                    let t = ua.transparent().filter(|_| pools & 1 != 0).cloned();
+                    let s = ua.sapling().filter(|_| pools & 2 != 0).cloned();
+                    let o = ua.orchard().filter(|_| pools & 4 != 0).cloned();
+                    if s.is_some() || o.is_some() {
+                        let ua = UnifiedAddress::from_receivers(o, s, t).unwrap();
+                        ua.encode(network)
+                    } else {
+                        let ta = t.ok_or(anyhow::anyhow!("No transparent receiver"))?;
+                        let ra = RecipientAddress::Transparent(ta);
+                        ra.encode(network)
+                    }
+                }
+                _ => address.to_string(),
+            }
+        } else {
+            address.to_string()
+        };
+
         Ok(RecipientMemo {
-            address: r.address().unwrap().to_string(),
+            address: address.to_string(),
             amount: r.amount(),
             fee_included: r.fee_included(),
             memo: Memo::from_str(&memo)?,
@@ -103,13 +132,14 @@ pub fn decode_memo(
 
 /// Parse a json document that contains a list of recipients
 pub fn parse_recipients(
+    network: &Network,
     from_addr: &str,
     recipients: &Recipients,
 ) -> anyhow::Result<Vec<RecipientMemo>> {
     let recipients = recipients.values().unwrap();
     let recipient_memos: anyhow::Result<Vec<_>> = recipients
         .iter()
-        .map(|r| RecipientMemo::from_recipient(&from_addr, &r))
+        .map(|r| RecipientMemo::from_recipient(network, &from_addr, &r))
         .collect();
     recipient_memos
 }

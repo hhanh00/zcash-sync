@@ -726,7 +726,11 @@ pub fn set_property(connection: &Connection, name: &str, value: &str) -> anyhow:
     Ok(())
 }
 
-pub fn get_account_property(connection: &Connection, account: u32, name: &str) -> anyhow::Result<String> {
+pub fn get_account_property(
+    connection: &Connection,
+    account: u32,
+    name: &str,
+) -> anyhow::Result<String> {
     let url = connection
         .query_row(
             "SELECT value FROM account_properties WHERE account = ?1 AND name = ?2",
@@ -740,7 +744,12 @@ pub fn get_account_property(connection: &Connection, account: u32, name: &str) -
     Ok(url.unwrap_or(String::new()))
 }
 
-pub fn set_account_property(connection: &Connection, account: u32, name: &str, value: &str) -> anyhow::Result<()> {
+pub fn set_account_property(
+    connection: &Connection,
+    account: u32,
+    name: &str,
+    value: &str,
+) -> anyhow::Result<()> {
     connection.execute(
         "INSERT INTO account_properties(account, name, value) VALUES (?1, ?2, ?3) \
         ON CONFLICT (account, name) \

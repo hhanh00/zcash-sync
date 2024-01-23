@@ -656,9 +656,10 @@ pub async unsafe extern "C" fn prepare_multi_payment(
     anchor_offset: u32,
     fee_bytes: *mut u8,
     fee_len: u64,
-    z_factor: u32,
 ) -> CResult<*mut c_char> {
     let res = async {
+        let c = CoinConfig::get(coin);
+        let network = c.chain.network();
         let last_height = crate::api::sync::get_latest_height(coin).await?;
         let recipients_bytes: Vec<u8> = Vec::from_raw_parts(
             recipients_bytes,
@@ -672,7 +673,8 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             let connection = c.connection();
             crate::get_ua_of(&c.chain.network(), &connection, account, sender_ua)?
         };
-        let recipients = crate::api::recipient::parse_recipients(&sender_address, &recipients)?;
+        let recipients =
+            crate::api::recipient::parse_recipients(&network, &sender_address, &recipients)?;
 
         let tx = crate::api::payment_v2::build_tx_plan(
             coin,
@@ -682,7 +684,6 @@ pub async unsafe extern "C" fn prepare_multi_payment(
             !pools & 0x07,
             anchor_offset,
             &unpack_fee(fee_bytes, fee_len),
-            z_factor,
         )
         .await?;
         let tx_str = serde_json::to_string(&tx)?;
@@ -851,18 +852,12 @@ pub async unsafe extern "C" fn commit_unsaved_contacts(
     anchor_offset: u32,
     fee_bytes: *mut u8,
     fee_len: u64,
-    z_factor: u32,
 ) -> CResult<*mut c_char> {
     let res = async move {
         let fee = unpack_fee(fee_bytes, fee_len);
-        let tx_plan = crate::api::contact::commit_unsaved_contacts(
-            coin,
-            account,
-            anchor_offset,
-            &fee,
-            z_factor,
-        )
-        .await?;
+        let tx_plan =
+            crate::api::contact::commit_unsaved_contacts(coin, account, anchor_offset, &fee)
+                .await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)
     };

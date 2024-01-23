@@ -29,7 +29,6 @@ pub async fn build_tx_plan_with_utxos(
     recipients: &[RecipientMemo],
     utxos: &[UTXO],
     fee: &FeeT,
-    z_factor: u32,
 ) -> note_selection::Result<TransactionPlan> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
@@ -80,7 +79,7 @@ pub async fn build_tx_plan_with_utxos(
         orders.last_mut().unwrap().take_fee = r.fee_included;
     }
 
-    let config = TransactionBuilderConfig::new(&change_address, z_factor);
+    let config = TransactionBuilderConfig::new(&change_address);
     let fee = note_selection::FeeRule::from_rule(fee);
     let tx_plan = note_selection::build_tx_plan(
         network,
@@ -106,7 +105,6 @@ pub async fn build_tx_plan(
     excluded_flags: u8,
     confirmations: u32,
     fee_rule: &FeeT,
-    z_factor: u32,
 ) -> note_selection::Result<TransactionPlan> {
     let checkpoint_height = {
         let c = CoinConfig::get(coin);
@@ -124,7 +122,6 @@ pub async fn build_tx_plan(
         recipients,
         &utxos,
         fee_rule,
-        z_factor,
     )
     .await?;
     Ok(tx_plan)
@@ -203,7 +200,6 @@ pub async fn transfer_pools(
         !from_pool,
         confirmations,
         fee,
-        0, // single receiver
     )
     .await?;
     Ok(tx_plan)

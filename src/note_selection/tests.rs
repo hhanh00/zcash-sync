@@ -173,7 +173,6 @@ fn test_select() {
                                     let _ = allocate_funds(
                                         &amounts,
                                         &&PoolAllocation([t * 20_000, s * 20_000, o * 20_000]),
-                                        2,
                                     );
                                     c += 1;
                                 }
@@ -199,7 +198,6 @@ fn test_t2t() {
             fee: 10,
         },
         &PoolAllocation([150, 0, 0]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -225,7 +223,6 @@ fn test_t2zs() {
             fee: 10,
         },
         &PoolAllocation([150, 0, 0]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -251,7 +248,6 @@ fn test_t2zo() {
             fee: 10,
         },
         &PoolAllocation([150, 0, 0]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -277,7 +273,6 @@ fn test_t2ua() {
             fee: 10,
         },
         &PoolAllocation([150, 0, 0]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -303,7 +298,6 @@ fn test_zs2zs() {
             fee: 10,
         },
         &PoolAllocation([0, 150, 0]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -329,7 +323,6 @@ fn test_zo2zo() {
             fee: 10,
         },
         &PoolAllocation([0, 0, 150]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -355,7 +348,6 @@ fn test_ua2zs() {
             fee: 10,
         },
         &PoolAllocation([0, 150, 150]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -381,7 +373,6 @@ fn test_ua2zo() {
             fee: 10,
         },
         &PoolAllocation([0, 150, 150]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -407,7 +398,6 @@ fn test_ua2t() {
             fee: 10,
         },
         &PoolAllocation([0, 150, 150]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -433,7 +423,6 @@ fn test_zs2t() {
             fee: 10,
         },
         &PoolAllocation([0, 150, 0]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -459,7 +448,6 @@ fn test_zo2t() {
             fee: 10,
         },
         &PoolAllocation([0, 0, 150]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -485,7 +473,6 @@ fn test_zo2zs() {
             fee: 10,
         },
         &PoolAllocation([0, 0, 150]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -511,7 +498,6 @@ fn test_zs2zo() {
             fee: 10,
         },
         &PoolAllocation([0, 150, 0]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -537,7 +523,6 @@ fn test_ua2ua() {
             fee: 10,
         },
         &PoolAllocation([0, 150, 150]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -563,7 +548,6 @@ fn test_tzs2zs() {
             fee: 10,
         },
         &PoolAllocation([150, 10, 10]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -589,7 +573,6 @@ fn test_tzs2ua() {
             fee: 10,
         },
         &PoolAllocation([150, 10, 10]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -615,7 +598,6 @@ fn test_neg_ua2ua() {
             fee: 10,
         },
         &PoolAllocation([10, 10, 10]),
-        2,
     );
     assert_matches!(r, Err(NotEnoughFunds(_)))
 }
@@ -631,7 +613,6 @@ fn test_odd_ua2ua() {
             fee: 1,
         },
         &PoolAllocation([10, 10, 10]),
-        2,
     )
     .unwrap();
     assert_eq!(
@@ -670,7 +651,7 @@ fn test_fill() {
         }
     );
     let allocation =
-        allocate_funds(&amounts, &PoolAllocation([200_000, 200_000, 200_000]), 2).unwrap();
+        allocate_funds(&amounts, &PoolAllocation([200_000, 200_000, 200_000])).unwrap();
 
     let fills = fill(&orders, &groups, &amounts, &allocation, 0).unwrap();
     log::info!("{:?}", allocation);
@@ -726,7 +707,7 @@ fn test_fees() {
     ];
     let (groups, amounts) = group_orders(&orders, 0).unwrap();
     let allocation =
-        allocate_funds(&amounts, &PoolAllocation([200_000, 200_000, 200_000]), 2).unwrap();
+        allocate_funds(&amounts, &PoolAllocation([200_000, 200_000, 200_000])).unwrap();
     let fills = fill(&orders, &groups, &amounts, &allocation, 0).unwrap();
 
     let f = FeeZIP327 {};
@@ -759,7 +740,6 @@ fn test_tx_plan() {
         &orders,
         &TransactionBuilderConfig {
             change_address: CHANGE_ADDRESS.to_string(),
-            z_factor: 2,
         },
         &FeeZIP327 {},
     )

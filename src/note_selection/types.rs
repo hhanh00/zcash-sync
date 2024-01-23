@@ -14,14 +14,12 @@ use zcash_primitives::sapling::PaymentAddress;
 
 pub struct TransactionBuilderConfig {
     pub change_address: String,
-    pub z_factor: u32,
 }
 
 impl TransactionBuilderConfig {
-    pub fn new(change_address: &str, z_factor: u32) -> Self {
+    pub fn new(change_address: &str) -> Self {
         TransactionBuilderConfig {
             change_address: change_address.to_string(),
-            z_factor,
         }
     }
 }

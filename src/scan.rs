@@ -171,7 +171,8 @@ async fn sync_async_inner<'a>(
         progress.timestamp = last_timestamp;
 
         let mut connection = c.connection();
-        let db_tx = connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let db_tx =
+            connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         // Sapling
         log::info!("Sapling");
         {
