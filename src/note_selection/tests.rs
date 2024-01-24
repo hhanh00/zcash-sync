@@ -61,6 +61,7 @@ macro_rules! order {
     ($id:expr, $q:expr, $destinations:expr) => {
         Order {
             id: $id,
+            address: String::new(),
             raw_amount: $q * 1000,
             destinations: $destinations,
             memo: MemoBytes::empty(),

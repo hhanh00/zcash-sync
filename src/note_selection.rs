@@ -47,9 +47,11 @@ pub fn recipients_to_orders(network: &Network, recipients: &[Recipient]) -> Resu
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            let destinations = decode(network, r.address().unwrap())?;
+            let address = r.address().unwrap();
+            let destinations = decode(network, address)?;
             Ok::<_, TransactionBuilderError>(Order {
                 id: i as u32,
+                address: address.to_string(),
                 destinations,
                 raw_amount: r.amount(),
                 take_fee: r.fee_included(), // Caller must make sure that at most one recipient pays for the fees

@@ -227,6 +227,7 @@ pub fn fill(
             1 | 2 | 4 => {
                 let fill = Fill {
                     id_order: Some(order.id),
+                    address: order.address.clone(),
                     destination: order.destinations[ilog2(info.group_type)].unwrap(),
                     amount: order.amount(fee)?,
                     memo: order.memo.clone(),
@@ -236,12 +237,14 @@ pub fn fill(
             6 => {
                 let fill1 = Fill {
                     id_order: Some(order.id),
+                    address: order.address.clone(),
                     destination: order.destinations[1].unwrap(),
                     amount: (order.amount(fee)? as f64 * f).round() as u64,
                     memo: order.memo.clone(),
                 };
                 let fill2 = Fill {
                     id_order: Some(order.id),
+                    address: order.address.clone(),
                     destination: order.destinations[2].unwrap(),
                     amount: order.amount(fee)? - fill1.amount,
                     memo: order.memo.clone(),
@@ -298,6 +301,7 @@ pub fn outputs_for_change(
             Some(destination) => {
                 let change_fill = Fill {
                     id_order: None,
+                    address: String::new(),
                     destination,
                     amount: change.0[i],
                     memo: MemoBytes::empty(),

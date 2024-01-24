@@ -42,7 +42,7 @@ impl TransactionReport {
             .filter_map(|o| {
                 o.id_order.map(|id| TxOutputT {
                     id,
-                    address: Some(o.destination.address(network)),
+                    address: Some(o.address.clone()),
                     amount: o.amount,
                     pool: o.destination.pool() as u8,
                 })

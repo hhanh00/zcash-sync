@@ -132,6 +132,7 @@ pub struct UTXO {
 #[derive(Serialize, Debug)]
 pub struct Order {
     pub id: u32,
+    pub address: String,
     pub destinations: [Option<Destination>; 3],
     pub raw_amount: u64,
     pub take_fee: bool,
@@ -142,6 +143,7 @@ pub struct Order {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Fill {
     pub id_order: Option<u32>,
+    pub address: String,
     pub destination: Destination,
     pub amount: u64,
     #[serde(with = "MemoBytesProxy")]
@@ -245,6 +247,7 @@ impl Order {
         let destinations = decode(network, address).unwrap();
         Order {
             id,
+            address: address.to_string(),
             destinations,
             raw_amount: amount,
             take_fee,
