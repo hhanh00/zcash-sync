@@ -3,9 +3,10 @@
 use crate::coinconfig::CoinConfig;
 use crate::scan::{AMProgressCallback, Progress};
 use crate::sync::CTree;
-use crate::{BlockId, CompactTxStreamerClient, DbAdapter};
+use crate::{BlockId, CompactTxStreamerClient, DbAdapter, connect_lightwalletd, Empty};
 use lazy_static::lazy_static;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
@@ -158,6 +159,14 @@ pub async fn get_block_by_time(coin: u8, time: u32) -> anyhow::Result<u32> {
     let mut client = c.connect_lwd().await?;
     let date_time = crate::chain::get_block_by_time(c.chain.network(), &mut client, time).await?;
     Ok(date_time)
+}
+
+pub async fn ping(lwd_url: &str) -> anyhow::Result<u32> {
+    let now = Instant::now();
+    let mut client = connect_lightwalletd(lwd_url).await?;
+    let _res = client.get_lightd_info(Request::new(Empty {})).await?.into_inner();
+    let duration: u32 = now.elapsed().as_millis().try_into()?;
+    Ok(duration)
 }
 
 // #[allow(dead_code)]

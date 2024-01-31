@@ -1412,6 +1412,16 @@ pub unsafe extern "C" fn set_account_property(
     to_cresult(with_coin(coin, res))
 }
 
+#[no_mangle]
+#[tokio::main]
+pub async unsafe extern "C" fn ping(
+    lwd_url: *mut c_char,
+) -> CResult<u32> {
+    from_c_str!(lwd_url);
+    let res = crate::api::sync::ping(&lwd_url);
+    to_cresult(res.await)
+}
+
 #[cfg(feature = "ledger")]
 #[no_mangle]
 #[tokio::main]
