@@ -180,6 +180,8 @@ typedef struct CResult_bool {
 
 #define Progress_VT_DOWNLOADED 10
 
+#define Progress_VT_BALANCES 12
+
 #define KeyPack_VT_T_ADDR 4
 
 #define KeyPack_VT_T_KEY 6
@@ -262,6 +264,7 @@ void import_transparent_secret_key(uint8_t coin, uint32_t id_account, char *secr
 void cancel_warp(void);
 
 struct CResult_u8 warp(uint8_t coin,
+                       uint32_t account,
                        bool get_tx,
                        uint32_t anchor_offset,
                        uint32_t max_cost,

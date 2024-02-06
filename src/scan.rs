@@ -20,7 +20,6 @@ use std::sync::Arc;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
-use tokio_util::sync::CancellationToken;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
 use zcash_primitives::consensus::{Network, Parameters};
 
@@ -51,6 +50,7 @@ pub struct Progress {
     pub timestamp: u32,
     pub trial_decryptions: u64,
     pub downloaded: usize,
+    pub balances: PoolBalanceT,
 }
 
 pub type ProgressCallback = dyn Fn(Progress) + Send;
@@ -85,6 +85,7 @@ type OrchardSynchronizer<'a> = Synchronizer<
 
 pub async fn sync_async<'a>(
     coin: u8,
+    account: u32,
     get_tx: bool,
     target_height_offset: u32,
     max_cost: u32,
@@ -92,6 +93,7 @@ pub async fn sync_async<'a>(
 ) -> anyhow::Result<()> {
     let result = sync_async_inner(
         coin,
+        account,
         get_tx,
         target_height_offset,
         max_cost,
@@ -111,6 +113,7 @@ pub async fn sync_async<'a>(
 
 async fn sync_async_inner<'a>(
     coin: u8,
+    account: u32,
     get_tx: bool,
     target_height_offset: u32,
     max_cost: u32,
@@ -151,11 +154,18 @@ async fn sync_async_inner<'a>(
         Ok::<_, anyhow::Error>(())
     });
 
-    let mut progress = Progress {
-        height: 0,
-        timestamp: 0,
-        trial_decryptions: 0,
-        downloaded: 0,
+    let mut progress = {
+        let connection = c.connection();
+        let p = Progress {
+            height: start_height,
+            timestamp: 0,
+            trial_decryptions: 0,
+            downloaded: 0,
+            balances: get_pool_balances_inner(&connection, start_height, account, false)?,
+        };
+        let cb = progress_callback.lock().await;
+        cb(p.clone());
+        p
     };
 
     while let Some(blocks) = blocks_rx.recv().await {
@@ -171,46 +181,49 @@ async fn sync_async_inner<'a>(
         progress.timestamp = last_timestamp;
 
         let mut connection = c.connection();
-        let db_tx =
-            connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-        // Sapling
-        log::info!("Sapling");
         {
-            let decrypter = SaplingDecrypter::new(network);
-            let warper = WarpProcessor::new(SaplingHasher::default());
-            let mut synchronizer = SaplingSynchronizer::new(
-                decrypter,
-                warper,
-                sapling_vks.clone(),
-                &db_tx,
-                "sapling".to_string(),
-            );
-            synchronizer.initialize(height)?;
-            progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
-        }
-
-        if c.chain.has_unified() {
-            // Orchard
-            log::info!("Orchard");
+            let db_tx =
+                connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            // Sapling
+            log::info!("Sapling");
             {
-                let decrypter = OrchardDecrypter::new(network);
-                let warper = WarpProcessor::new(OrchardHasher::new());
-                let mut synchronizer = OrchardSynchronizer::new(
+                let decrypter = SaplingDecrypter::new(network);
+                let warper = WarpProcessor::new(SaplingHasher::default());
+                let mut synchronizer = SaplingSynchronizer::new(
                     decrypter,
                     warper,
-                    orchard_vks.clone(),
+                    sapling_vks.clone(),
                     &db_tx,
-                    "orchard".to_string(),
+                    "sapling".to_string(),
                 );
                 synchronizer.initialize(height)?;
-                log::info!("Process orchard start");
                 progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
-                log::info!("Process orchard end");
             }
-        }
 
-        DbAdapter::store_block_timestamp(&db_tx, last_height, &last_hash, last_timestamp)?;
-        db_tx.commit()?;
+            if c.chain.has_unified() {
+                // Orchard
+                log::info!("Orchard");
+                {
+                    let decrypter = OrchardDecrypter::new(network);
+                    let warper = WarpProcessor::new(OrchardHasher::new());
+                    let mut synchronizer = OrchardSynchronizer::new(
+                        decrypter,
+                        warper,
+                        orchard_vks.clone(),
+                        &db_tx,
+                        "orchard".to_string(),
+                    );
+                    synchronizer.initialize(height)?;
+                    log::info!("Process orchard start");
+                    progress.trial_decryptions += synchronizer.process(&blocks.0)? as u64;
+                    log::info!("Process orchard end");
+                }
+            }
+
+            db_tx.commit()?;
+        }
+        DbAdapter::store_block_timestamp(&connection, last_height, &last_hash, last_timestamp)?;
+        progress.balances = get_pool_balances_inner(&connection, last_height, account, false)?;
         height = last_height;
         let cb = progress_callback.lock().await;
         cb(progress.clone());
@@ -321,6 +334,7 @@ fn get_balance(
     Ok(balance)
 }
 
+#[allow(dead_code)]
 pub fn get_pool_balances(
     coin: u8,
     account: u32,
@@ -330,10 +344,19 @@ pub fn get_pool_balances(
     let c = CoinConfig::get(coin);
     let connection = c.connection();
     let db = DbAdapter::new(c.coin_type, connection)?;
-    let h = db.get_db_height()? - confirmations;
+    let height = db.get_db_height()? - confirmations;
     let connection = db.inner();
-    let sapling = get_balance(&connection, account, h, 0, include_unconfirmed)?;
-    let orchard = get_balance(&connection, account, h, 1, include_unconfirmed)?;
+    get_pool_balances_inner(&connection, height, account, include_unconfirmed)
+}
+
+pub fn get_pool_balances_inner(
+    connection: &Connection,
+    height: u32,
+    account: u32,
+    include_unconfirmed: bool,
+) -> anyhow::Result<PoolBalanceT> {
+    let sapling = get_balance(&connection, account, height, 0, include_unconfirmed)?;
+    let orchard = get_balance(&connection, account, height, 1, include_unconfirmed)?;
     let transparent = connection
         .query_row(
             "SELECT balance FROM taddrs WHERE account = ?1",

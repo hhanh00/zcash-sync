@@ -6158,6 +6158,7 @@ pub mod fb {
         pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 6;
         pub const VT_TRIAL_DECRYPTIONS: flatbuffers::VOffsetT = 8;
         pub const VT_DOWNLOADED: flatbuffers::VOffsetT = 10;
+        pub const VT_BALANCES: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -6166,11 +6167,14 @@ pub mod fb {
         #[allow(unused_mut)]
         pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
             _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
-            args: &'args ProgressArgs,
+            args: &'args ProgressArgs<'args>,
         ) -> flatbuffers::WIPOffset<Progress<'bldr>> {
             let mut builder = ProgressBuilder::new(_fbb);
             builder.add_downloaded(args.downloaded);
             builder.add_trial_decryptions(args.trial_decryptions);
+            if let Some(x) = args.balances {
+                builder.add_balances(x);
+            }
             builder.add_timestamp(args.timestamp);
             builder.add_height(args.height);
             builder.finish()
@@ -6181,11 +6185,13 @@ pub mod fb {
             let timestamp = self.timestamp();
             let trial_decryptions = self.trial_decryptions();
             let downloaded = self.downloaded();
+            let balances = self.balances().map(|x| Box::new(x.unpack()));
             ProgressT {
                 height,
                 timestamp,
                 trial_decryptions,
                 downloaded,
+                balances,
             }
         }
 
@@ -6229,6 +6235,16 @@ pub mod fb {
                     .unwrap()
             }
         }
+        #[inline]
+        pub fn balances(&self) -> Option<PoolBalance<'a>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<PoolBalance>>(Progress::VT_BALANCES, None)
+            }
+        }
     }
 
     impl flatbuffers::Verifiable for Progress<'_> {
@@ -6243,17 +6259,23 @@ pub mod fb {
                 .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
                 .visit_field::<u64>("trial_decryptions", Self::VT_TRIAL_DECRYPTIONS, false)?
                 .visit_field::<u64>("downloaded", Self::VT_DOWNLOADED, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<PoolBalance>>(
+                    "balances",
+                    Self::VT_BALANCES,
+                    false,
+                )?
                 .finish();
             Ok(())
         }
     }
-    pub struct ProgressArgs {
+    pub struct ProgressArgs<'a> {
         pub height: u32,
         pub timestamp: u32,
         pub trial_decryptions: u64,
         pub downloaded: u64,
+        pub balances: Option<flatbuffers::WIPOffset<PoolBalance<'a>>>,
     }
-    impl<'a> Default for ProgressArgs {
+    impl<'a> Default for ProgressArgs<'a> {
         #[inline]
         fn default() -> Self {
             ProgressArgs {
@@ -6261,6 +6283,7 @@ pub mod fb {
                 timestamp: 0,
                 trial_decryptions: 0,
                 downloaded: 0,
+                balances: None,
             }
         }
     }
@@ -6290,6 +6313,14 @@ pub mod fb {
                 .push_slot::<u64>(Progress::VT_DOWNLOADED, downloaded, 0);
         }
         #[inline]
+        pub fn add_balances(&mut self, balances: flatbuffers::WIPOffset<PoolBalance<'b>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<PoolBalance>>(
+                    Progress::VT_BALANCES,
+                    balances,
+                );
+        }
+        #[inline]
         pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> ProgressBuilder<'a, 'b> {
             let start = _fbb.start_table();
             ProgressBuilder {
@@ -6311,6 +6342,7 @@ pub mod fb {
             ds.field("timestamp", &self.timestamp());
             ds.field("trial_decryptions", &self.trial_decryptions());
             ds.field("downloaded", &self.downloaded());
+            ds.field("balances", &self.balances());
             ds.finish()
         }
     }
@@ -6321,6 +6353,7 @@ pub mod fb {
         pub timestamp: u32,
         pub trial_decryptions: u64,
         pub downloaded: u64,
+        pub balances: Option<Box<PoolBalanceT>>,
     }
     impl Default for ProgressT {
         fn default() -> Self {
@@ -6329,6 +6362,7 @@ pub mod fb {
                 timestamp: 0,
                 trial_decryptions: 0,
                 downloaded: 0,
+                balances: None,
             }
         }
     }
@@ -6341,6 +6375,7 @@ pub mod fb {
             let timestamp = self.timestamp;
             let trial_decryptions = self.trial_decryptions;
             let downloaded = self.downloaded;
+            let balances = self.balances.as_ref().map(|x| x.pack(_fbb));
             Progress::create(
                 _fbb,
                 &ProgressArgs {
@@ -6348,6 +6383,7 @@ pub mod fb {
                     timestamp,
                     trial_decryptions,
                     downloaded,
+                    balances,
                 },
             )
         }

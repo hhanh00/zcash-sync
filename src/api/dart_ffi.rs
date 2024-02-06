@@ -338,6 +338,7 @@ pub unsafe extern "C" fn cancel_warp() {
 #[no_mangle]
 pub async unsafe extern "C" fn warp(
     coin: u8,
+    account: u32,
     get_tx: bool,
     anchor_offset: u32,
     max_cost: u32,
@@ -350,13 +351,19 @@ pub async unsafe extern "C" fn warp(
         }
         *SYNC_CANCEL.lock() = Some(CancellationToken::new());
         log::info!("Sync started");
-        let result =
-            crate::api::sync::coin_sync(coin, get_tx, anchor_offset, max_cost, move |progress| {
+        let result = crate::api::sync::coin_sync(
+            coin,
+            account,
+            get_tx,
+            anchor_offset,
+            max_cost,
+            move |progress| {
                 let progress = ProgressT {
                     height: progress.height,
                     timestamp: progress.timestamp,
                     trial_decryptions: progress.trial_decryptions,
                     downloaded: progress.downloaded as u64,
+                    balances: Some(Box::new(progress.balances)),
                 };
                 let v = fb_to_bytes!(progress);
                 let mut progress = v.into_dart();
@@ -365,8 +372,9 @@ pub async unsafe extern "C" fn warp(
                         p(port, &mut progress);
                     }
                 }
-            })
-            .await;
+            },
+        )
+        .await;
         log::info!("Sync finished");
 
         match result {
@@ -1414,9 +1422,7 @@ pub unsafe extern "C" fn set_account_property(
 
 #[no_mangle]
 #[tokio::main]
-pub async unsafe extern "C" fn ping(
-    lwd_url: *mut c_char,
-) -> CResult<u32> {
+pub async unsafe extern "C" fn ping(lwd_url: *mut c_char) -> CResult<u32> {
     from_c_str!(lwd_url);
     let res = crate::api::sync::ping(&lwd_url);
     to_cresult(res.await)

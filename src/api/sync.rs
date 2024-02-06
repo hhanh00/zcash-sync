@@ -3,7 +3,7 @@
 use crate::coinconfig::CoinConfig;
 use crate::scan::{AMProgressCallback, Progress};
 use crate::sync::CTree;
-use crate::{BlockId, CompactTxStreamerClient, DbAdapter, connect_lightwalletd, Empty};
+use crate::{connect_lightwalletd, BlockId, CompactTxStreamerClient, DbAdapter, Empty};
 use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::time::Instant;
@@ -28,20 +28,22 @@ lazy_static! {
 /// * `cancel`: cancellation mutex, set to true to abort
 pub async fn coin_sync(
     coin: u8,
+    account: u32,
     get_tx: bool,
     anchor_offset: u32,
     max_cost: u32,
     progress_callback: impl Fn(Progress) + Send + 'static,
 ) -> anyhow::Result<()> {
     let p_cb = Arc::new(Mutex::new(progress_callback));
-    coin_sync_impl(coin, get_tx, anchor_offset, max_cost, p_cb.clone()).await?;
-    coin_sync_impl(coin, get_tx, 0, u32::MAX, p_cb.clone()).await?;
+    coin_sync_impl(coin, account, get_tx, anchor_offset, max_cost, p_cb.clone()).await?;
+    coin_sync_impl(coin, account, get_tx, 0, u32::MAX, p_cb.clone()).await?;
     crate::scan::coin_trp_sync(coin).await?;
     Ok(())
 }
 
 async fn coin_sync_impl(
     coin: u8,
+    account: u32,
     get_tx: bool,
     target_height_offset: u32,
     max_cost: u32,
@@ -49,6 +51,7 @@ async fn coin_sync_impl(
 ) -> anyhow::Result<()> {
     crate::scan::sync_async(
         coin,
+        account,
         get_tx,
         target_height_offset,
         max_cost,
@@ -164,7 +167,10 @@ pub async fn get_block_by_time(coin: u8, time: u32) -> anyhow::Result<u32> {
 pub async fn ping(lwd_url: &str) -> anyhow::Result<u32> {
     let now = Instant::now();
     let mut client = connect_lightwalletd(lwd_url).await?;
-    let _res = client.get_lightd_info(Request::new(Empty {})).await?.into_inner();
+    let _res = client
+        .get_lightd_info(Request::new(Empty {}))
+        .await?
+        .into_inner();
     let duration: u32 = now.elapsed().as_millis().try_into()?;
     Ok(duration)
 }
