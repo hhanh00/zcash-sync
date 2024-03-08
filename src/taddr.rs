@@ -14,6 +14,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use base58check::{FromBase58Check, ToBase58Check};
+use bech32::{Variant, FromBase32};
 use bip39::{Language, Mnemonic, Seed};
 use core::slice;
 use futures::StreamExt;
@@ -25,7 +26,7 @@ use std::collections::HashMap;
 use tiny_hderive::bip32::ExtendedPrivKey;
 use tonic::transport::Channel;
 use tonic::Request;
-use zcash_client_backend::encoding::encode_transparent_address;
+use zcash_client_backend::encoding::{encode_transparent_address, AddressCodec};
 use zcash_params::coin::get_branch;
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
@@ -456,6 +457,24 @@ pub fn get_base58_tsk(connection: &Connection, account: u32) -> anyhow::Result<O
         sk.to_base58check(0x80)
     });
     Ok(base58_tsk)
+}
+
+pub fn parse_tex(network: &Network, address: &str) -> anyhow::Result<String> {
+    let (hrp, data, variant) = bech32::decode(address)?;
+    if hrp != "tex" || variant != Variant::Bech32m { anyhow::bail!("Not a TEX address") }
+    let data = Vec::<u8>::from_base32(&data)?;
+    if data.len() != 20 { anyhow::bail!("Not a TEX address") }
+    let pkh: [u8; 20] = data.try_into().unwrap();
+    let taddr = TransparentAddress::PublicKey(pkh);
+    let address = taddr.encode(network);
+    Ok(address)
+}
+
+pub fn unwrap_tex(network: &Network, address: &str) -> String {
+    match parse_tex(network, address) {
+        Ok(address) => address,
+        Err(_) => address.to_string(),
+    }
 }
 
 pub struct TBalance {

@@ -1421,6 +1421,17 @@ pub unsafe extern "C" fn set_account_property(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn parse_tex(
+    coin: u8,
+    address: *mut c_char,
+) -> CResult<*mut c_char> {
+    from_c_str!(address);
+    let c = CoinConfig::get(coin);
+    let network = c.chain.network();
+    to_cresult_str(crate::taddr::parse_tex(network, &address))
+}
+
+#[no_mangle]
 #[tokio::main]
 pub async unsafe extern "C" fn ping(lwd_url: *mut c_char) -> CResult<u32> {
     from_c_str!(lwd_url);

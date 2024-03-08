@@ -473,6 +473,8 @@ struct CResult_____c_char get_account_property(uint8_t coin, uint32_t account, c
 
 struct CResult_u8 set_account_property(uint8_t coin, uint32_t account, char *name, char *value);
 
+struct CResult_____c_char parse_tex(uint8_t coin, char *address);
+
 struct CResult_u32 ping(char *lwd_url);
 
 struct CResult_____c_char ledger_send(uint8_t coin, char *tx_plan);

@@ -1,5 +1,6 @@
 use super::ser::MemoBytesProxy;
 use crate::note_selection::ua::decode;
+use crate::taddr::unwrap_tex;
 use crate::unified::orchard_as_unified;
 use crate::{Hash, TransactionBuilderError};
 use orchard::Address;
@@ -244,7 +245,8 @@ impl Order {
         take_fee: bool,
         memo: MemoBytes,
     ) -> Self {
-        let destinations = decode(network, address).unwrap();
+        let addr = unwrap_tex(network, address);
+        let destinations = decode(network, &addr).unwrap();
         Order {
             id,
             address: address.to_string(),

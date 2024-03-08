@@ -1,6 +1,7 @@
 use crate::db::data_generated::fb::{Recipient, Recipients};
 use crate::db::ZMessage;
 use crate::key2::decode_address;
+use crate::taddr::{parse_tex, unwrap_tex};
 use crate::{AccountData, CoinConfig};
 use serde::Deserialize;
 use std::str::FromStr;
@@ -37,8 +38,9 @@ impl RecipientMemo {
             )
         };
 
+        let addr = unwrap_tex(network, address);
         let ra =
-            RecipientAddress::decode(network, address).ok_or(anyhow::anyhow!("Invalid address"))?;
+            RecipientAddress::decode(network, &addr).ok_or(anyhow::anyhow!("Invalid address"))?;
         let pools = r.pools();
         let address = if pools != 0 {
             match ra {
