@@ -14,7 +14,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use base58check::{FromBase58Check, ToBase58Check};
-use bech32::{Variant, FromBase32};
+use bech32::{FromBase32, Variant};
 use bip39::{Language, Mnemonic, Seed};
 use core::slice;
 use futures::StreamExt;
@@ -461,9 +461,13 @@ pub fn get_base58_tsk(connection: &Connection, account: u32) -> anyhow::Result<O
 
 pub fn parse_tex(network: &Network, address: &str) -> anyhow::Result<String> {
     let (hrp, data, variant) = bech32::decode(address)?;
-    if hrp != "tex" || variant != Variant::Bech32m { anyhow::bail!("Not a TEX address") }
+    if hrp != "tex" || variant != Variant::Bech32m {
+        anyhow::bail!("Not a TEX address")
+    }
     let data = Vec::<u8>::from_base32(&data)?;
-    if data.len() != 20 { anyhow::bail!("Not a TEX address") }
+    if data.len() != 20 {
+        anyhow::bail!("Not a TEX address")
+    }
     let pkh: [u8; 20] = data.try_into().unwrap();
     let taddr = TransparentAddress::PublicKey(pkh);
     let address = taddr.encode(network);

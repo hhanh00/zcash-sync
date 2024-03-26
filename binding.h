@@ -104,6 +104,8 @@ typedef struct CResult_bool {
 
 #define ShieldedTx_VT_MEMO 20
 
+#define ShieldedTx_VT_MESSAGES 22
+
 #define ShieldedTxVec_VT_TXS 4
 
 #define Message_VT_ID_MSG 4
@@ -124,7 +126,7 @@ typedef struct CResult_bool {
 
 #define Message_VT_INCOMING 24
 
-#define MessageVec_VT_MESSAGES 4
+#define MemoVec_VT_MEMOS 4
 
 #define PrevNext_VT_PREV 4
 

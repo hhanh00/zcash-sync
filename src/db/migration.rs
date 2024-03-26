@@ -429,8 +429,17 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
         Ok(())
     }
 
+    fn up13(connection: &Connection) -> rusqlite::Result<()> {
+        connection.execute(
+            "ALTER TABLE messages ADD vout INTEGER NOT NULL DEFAULT(0)",
+            [],
+        )?;
+        connection.execute("ALTER TABLE transactions ADD messages BLOB NULL", [])?;
+        Ok(())
+    }
+
     let upgrades = vec![
-        up1, up2, up3, up4, up5, up6, up7, up8, up9, up10, up11, up12,
+        up1, up2, up3, up4, up5, up6, up7, up8, up9, up10, up11, up12, up13,
     ];
     for (v, upgrade) in upgrades.iter().enumerate() {
         let upgrade_version = (v + 1) as u32;

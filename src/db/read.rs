@@ -292,7 +292,7 @@ pub fn get_notes(connection: &Connection, id: u32) -> Result<Vec<u8>> {
 pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<ShieldedTxVecT> {
     let known_addresses = list_known_addresses(network, connection)?;
     let mut stmt = connection.prepare(
-        "SELECT id_tx, txid, height, timestamp, t.address, value, memo FROM transactions t \
+        "SELECT id_tx, txid, height, timestamp, t.address, value, memo, messages FROM transactions t \
         WHERE account = ?1 ORDER BY height DESC",
     )?;
     let rows = stmt.query_map(params![id], |row| {
@@ -307,6 +307,10 @@ pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<Sh
         let address: Option<String> = row.get("address")?;
         let value: i64 = row.get("value")?;
         let memo: Option<String> = row.get("memo")?;
+        let messages: Option<Vec<u8>> = row.get("messages")?;
+        let messages = messages
+            .map(|m| flatbuffers::root::<MemoVec>(&m).unwrap().unpack())
+            .unwrap_or_default();
         let tx = ShieldedTxT {
             id: id_tx,
             height,
@@ -317,6 +321,7 @@ pub fn get_txs(network: &Network, connection: &Connection, id: u32) -> Result<Sh
             value: value as u64,
             address,
             memo,
+            messages: Some(Box::new(messages)),
         };
         Ok(tx)
     })?;

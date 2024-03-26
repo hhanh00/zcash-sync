@@ -9,6 +9,7 @@ use crate::taddr::{derive_tkeys, TransparentTxInfo};
 use crate::transaction::{GetTransactionDetailRequest, TransactionDetails};
 use crate::unified::UnifiedAddressType;
 use crate::{sync, BlockId, CoinConfig, CompactTxStreamerClient, Connection, Hash};
+use flatbuffers::FlatBufferBuilder;
 use orchard::keys::FullViewingKey;
 use rusqlite::Error::QueryReturnedNoRows;
 use rusqlite::{params, OptionalExtension, Params, Row, Statement, Transaction};
@@ -33,6 +34,8 @@ pub mod read;
 use crate::db::cipher::set_db_passwd;
 use crate::db::data_generated::fb::SendTemplate;
 pub use backup::FullEncryptedBackup;
+
+use self::data_generated::fb::MemoVecT;
 
 #[allow(dead_code)]
 pub const DEFAULT_DB_PATH: &str = "zec.db";
@@ -519,9 +522,18 @@ impl DbAdapter {
     }
 
     pub fn update_transaction_with_memo(&self, details: &TransactionDetails) -> anyhow::Result<()> {
+        let messages = MemoVecT {
+            memos: Some(details.memos.clone()),
+        };
+
+        let mut builder = FlatBufferBuilder::new();
+        let root = messages.pack(&mut builder);
+        builder.finish(root, None);
+        let messages = builder.finished_data().to_vec();
+
         self.connection.execute(
-            "UPDATE transactions SET address = ?1, memo = ?2 WHERE id_tx = ?3",
-            params![details.address, details.memo, details.id_tx],
+            "UPDATE transactions SET address = ?1, memo = ?2, messages = ?3 WHERE id_tx = ?4",
+            params![details.address, details.memo, messages, details.id_tx],
         )?;
         Ok(())
     }

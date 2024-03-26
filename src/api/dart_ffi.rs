@@ -1421,10 +1421,7 @@ pub unsafe extern "C" fn set_account_property(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn parse_tex(
-    coin: u8,
-    address: *mut c_char,
-) -> CResult<*mut c_char> {
+pub unsafe extern "C" fn parse_tex(coin: u8, address: *mut c_char) -> CResult<*mut c_char> {
     from_c_str!(address);
     let c = CoinConfig::get(coin);
     let network = c.chain.network();

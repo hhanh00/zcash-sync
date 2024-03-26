@@ -1550,6 +1550,7 @@ pub mod fb {
         pub const VT_VALUE: flatbuffers::VOffsetT = 16;
         pub const VT_ADDRESS: flatbuffers::VOffsetT = 18;
         pub const VT_MEMO: flatbuffers::VOffsetT = 20;
+        pub const VT_MESSAGES: flatbuffers::VOffsetT = 22;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -1562,6 +1563,9 @@ pub mod fb {
         ) -> flatbuffers::WIPOffset<ShieldedTx<'bldr>> {
             let mut builder = ShieldedTxBuilder::new(_fbb);
             builder.add_value(args.value);
+            if let Some(x) = args.messages {
+                builder.add_messages(x);
+            }
             if let Some(x) = args.memo {
                 builder.add_memo(x);
             }
@@ -1593,6 +1597,7 @@ pub mod fb {
             let value = self.value();
             let address = self.address().map(|x| x.to_string());
             let memo = self.memo().map(|x| x.to_string());
+            let messages = self.messages().map(|x| Box::new(x.unpack()));
             ShieldedTxT {
                 id,
                 tx_id,
@@ -1603,6 +1608,7 @@ pub mod fb {
                 value,
                 address,
                 memo,
+                messages,
             }
         }
 
@@ -1692,6 +1698,16 @@ pub mod fb {
                     .get::<flatbuffers::ForwardsUOffset<&str>>(ShieldedTx::VT_MEMO, None)
             }
         }
+        #[inline]
+        pub fn messages(&self) -> Option<MemoVec<'a>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<MemoVec>>(ShieldedTx::VT_MESSAGES, None)
+            }
+        }
     }
 
     impl flatbuffers::Verifiable for ShieldedTx<'_> {
@@ -1719,6 +1735,11 @@ pub mod fb {
                     false,
                 )?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>("memo", Self::VT_MEMO, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<MemoVec>>(
+                    "messages",
+                    Self::VT_MESSAGES,
+                    false,
+                )?
                 .finish();
             Ok(())
         }
@@ -1733,6 +1754,7 @@ pub mod fb {
         pub value: u64,
         pub address: Option<flatbuffers::WIPOffset<&'a str>>,
         pub memo: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub messages: Option<flatbuffers::WIPOffset<MemoVec<'a>>>,
     }
     impl<'a> Default for ShieldedTxArgs<'a> {
         #[inline]
@@ -1747,6 +1769,7 @@ pub mod fb {
                 value: 0,
                 address: None,
                 memo: None,
+                messages: None,
             }
         }
     }
@@ -1801,6 +1824,14 @@ pub mod fb {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(ShieldedTx::VT_MEMO, memo);
         }
         #[inline]
+        pub fn add_messages(&mut self, messages: flatbuffers::WIPOffset<MemoVec<'b>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<MemoVec>>(
+                    ShieldedTx::VT_MESSAGES,
+                    messages,
+                );
+        }
+        #[inline]
         pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> ShieldedTxBuilder<'a, 'b> {
             let start = _fbb.start_table();
             ShieldedTxBuilder {
@@ -1827,6 +1858,7 @@ pub mod fb {
             ds.field("value", &self.value());
             ds.field("address", &self.address());
             ds.field("memo", &self.memo());
+            ds.field("messages", &self.messages());
             ds.finish()
         }
     }
@@ -1842,6 +1874,7 @@ pub mod fb {
         pub value: u64,
         pub address: Option<String>,
         pub memo: Option<String>,
+        pub messages: Option<Box<MemoVecT>>,
     }
     impl Default for ShieldedTxT {
         fn default() -> Self {
@@ -1855,6 +1888,7 @@ pub mod fb {
                 value: 0,
                 address: None,
                 memo: None,
+                messages: None,
             }
         }
     }
@@ -1872,6 +1906,7 @@ pub mod fb {
             let value = self.value;
             let address = self.address.as_ref().map(|x| _fbb.create_string(x));
             let memo = self.memo.as_ref().map(|x| _fbb.create_string(x));
+            let messages = self.messages.as_ref().map(|x| x.pack(_fbb));
             ShieldedTx::create(
                 _fbb,
                 &ShieldedTxArgs {
@@ -1884,6 +1919,7 @@ pub mod fb {
                     value,
                     address,
                     memo,
+                    messages,
                 },
             )
         }
@@ -2592,6 +2628,347 @@ pub mod fb {
                 _fbb.create_vector(&w)
             });
             MessageVec::create(_fbb, &MessageVecArgs { messages })
+        }
+    }
+    pub enum MemoOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct Memo<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for Memo<'a> {
+        type Inner = Memo<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> Memo<'a> {
+        pub const VT_INCOMING: flatbuffers::VOffsetT = 4;
+        pub const VT_ADDRESS: flatbuffers::VOffsetT = 6;
+        pub const VT_MEMO: flatbuffers::VOffsetT = 8;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            Memo { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args MemoArgs<'args>,
+        ) -> flatbuffers::WIPOffset<Memo<'bldr>> {
+            let mut builder = MemoBuilder::new(_fbb);
+            if let Some(x) = args.memo {
+                builder.add_memo(x);
+            }
+            if let Some(x) = args.address {
+                builder.add_address(x);
+            }
+            builder.add_incoming(args.incoming);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> MemoT {
+            let incoming = self.incoming();
+            let address = self.address().map(|x| x.to_string());
+            let memo = self.memo().map(|x| x.to_string());
+            MemoT {
+                incoming,
+                address,
+                memo,
+            }
+        }
+
+        #[inline]
+        pub fn incoming(&self) -> bool {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<bool>(Memo::VT_INCOMING, Some(false))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn address(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Memo::VT_ADDRESS, None)
+            }
+        }
+        #[inline]
+        pub fn memo(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Memo::VT_MEMO, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for Memo<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<bool>("incoming", Self::VT_INCOMING, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "address",
+                    Self::VT_ADDRESS,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("memo", Self::VT_MEMO, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct MemoArgs<'a> {
+        pub incoming: bool,
+        pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub memo: Option<flatbuffers::WIPOffset<&'a str>>,
+    }
+    impl<'a> Default for MemoArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            MemoArgs {
+                incoming: false,
+                address: None,
+                memo: None,
+            }
+        }
+    }
+
+    pub struct MemoBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> MemoBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_incoming(&mut self, incoming: bool) {
+            self.fbb_
+                .push_slot::<bool>(Memo::VT_INCOMING, incoming, false);
+        }
+        #[inline]
+        pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Memo::VT_ADDRESS, address);
+        }
+        #[inline]
+        pub fn add_memo(&mut self, memo: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Memo::VT_MEMO, memo);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> MemoBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            MemoBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<Memo<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for Memo<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("Memo");
+            ds.field("incoming", &self.incoming());
+            ds.field("address", &self.address());
+            ds.field("memo", &self.memo());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct MemoT {
+        pub incoming: bool,
+        pub address: Option<String>,
+        pub memo: Option<String>,
+    }
+    impl Default for MemoT {
+        fn default() -> Self {
+            Self {
+                incoming: false,
+                address: None,
+                memo: None,
+            }
+        }
+    }
+    impl MemoT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<Memo<'b>> {
+            let incoming = self.incoming;
+            let address = self.address.as_ref().map(|x| _fbb.create_string(x));
+            let memo = self.memo.as_ref().map(|x| _fbb.create_string(x));
+            Memo::create(
+                _fbb,
+                &MemoArgs {
+                    incoming,
+                    address,
+                    memo,
+                },
+            )
+        }
+    }
+    pub enum MemoVecOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct MemoVec<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for MemoVec<'a> {
+        type Inner = MemoVec<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> MemoVec<'a> {
+        pub const VT_MEMOS: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            MemoVec { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args MemoVecArgs<'args>,
+        ) -> flatbuffers::WIPOffset<MemoVec<'bldr>> {
+            let mut builder = MemoVecBuilder::new(_fbb);
+            if let Some(x) = args.memos {
+                builder.add_memos(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> MemoVecT {
+            let memos = self.memos().map(|x| x.iter().map(|t| t.unpack()).collect());
+            MemoVecT { memos }
+        }
+
+        #[inline]
+        pub fn memos(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Memo<'a>>>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Memo>>,
+                >>(MemoVec::VT_MEMOS, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for MemoVec<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<Memo>>,
+                >>("memos", Self::VT_MEMOS, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct MemoVecArgs<'a> {
+        pub memos: Option<
+            flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Memo<'a>>>>,
+        >,
+    }
+    impl<'a> Default for MemoVecArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            MemoVecArgs { memos: None }
+        }
+    }
+
+    pub struct MemoVecBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> MemoVecBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_memos(
+            &mut self,
+            memos: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<Memo<'b>>>,
+            >,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MemoVec::VT_MEMOS, memos);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> MemoVecBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            MemoVecBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<MemoVec<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for MemoVec<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("MemoVec");
+            ds.field("memos", &self.memos());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct MemoVecT {
+        pub memos: Option<Vec<MemoT>>,
+    }
+    impl Default for MemoVecT {
+        fn default() -> Self {
+            Self { memos: None }
+        }
+    }
+    impl MemoVecT {
+        pub fn pack<'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b>,
+        ) -> flatbuffers::WIPOffset<MemoVec<'b>> {
+            let memos = self.memos.as_ref().map(|x| {
+                let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();
+                _fbb.create_vector(&w)
+            });
+            MemoVec::create(_fbb, &MemoVecArgs { memos })
         }
     }
     pub enum PrevNextOffset {}
