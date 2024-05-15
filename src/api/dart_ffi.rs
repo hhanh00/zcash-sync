@@ -857,6 +857,7 @@ pub unsafe extern "C" fn store_contact(
 pub async unsafe extern "C" fn commit_unsaved_contacts(
     coin: u8,
     account: u32,
+    pools: u8,
     anchor_offset: u32,
     fee_bytes: *mut u8,
     fee_len: u64,
@@ -864,7 +865,7 @@ pub async unsafe extern "C" fn commit_unsaved_contacts(
     let res = async move {
         let fee = unpack_fee(fee_bytes, fee_len);
         let tx_plan =
-            crate::api::contact::commit_unsaved_contacts(coin, account, anchor_offset, &fee)
+            crate::api::contact::commit_unsaved_contacts(coin, account, pools, anchor_offset, &fee)
                 .await?;
         let tx_plan_json = serde_json::to_string(&tx_plan)?;
         Ok(tx_plan_json)

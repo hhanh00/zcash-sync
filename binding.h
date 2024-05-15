@@ -365,6 +365,7 @@ void store_contact(uint32_t id, char *name, char *address, bool dirty);
 
 struct CResult_____c_char commit_unsaved_contacts(uint8_t coin,
                                                   uint32_t account,
+                                                  uint8_t pools,
                                                   uint32_t anchor_offset,
                                                   uint8_t *fee_bytes,
                                                   uint64_t fee_len);
