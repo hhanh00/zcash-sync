@@ -864,9 +864,11 @@ pub fn store_swap(connection: &Connection, account: u32, swap: SwapT) -> anyhow:
         from_currency,
         from_amount,
         from_address,
+        from_image,
         to_currency,
         to_amount,
         to_address,
+        to_image,
         ..
     } = swap;
 
@@ -879,10 +881,12 @@ pub fn store_swap(connection: &Connection, account: u32, swap: SwapT) -> anyhow:
         from_currency,
         from_amount,
         from_address,
+        from_image,
         to_currency,
         to_amount,
-        to_address
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        to_address,
+        to_image
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             account,
             provider.unwrap(),
@@ -891,13 +895,63 @@ pub fn store_swap(connection: &Connection, account: u32, swap: SwapT) -> anyhow:
             from_currency.unwrap(),
             from_amount.unwrap(),
             from_address.unwrap(),
+            from_image.unwrap(),
             to_currency.unwrap(),
             to_amount.unwrap(),
             to_address.unwrap(),
+            to_image.unwrap(),
         ],
     )?;
     Ok(())
 }
 
-// TODO
-// list swaps
+pub fn clear_swap_history(connection: &Connection) -> anyhow::Result<()> {
+    connection.execute("DELETE FROM swaps", [])?;
+    Ok(())
+}
+
+pub fn list_swaps(connection: &Connection) -> anyhow::Result<Vec<SwapT>> {
+    let mut s = connection.prepare(
+        "SELECT 
+        provider,
+        provider_id,
+        timestamp,
+        from_currency,
+        from_amount,
+        from_address,
+        from_image,
+        to_currency,
+        to_amount,
+        to_address,
+        to_image FROM swaps",
+    )?;
+    let rows = s.query_map([], |r| {
+        let provider = r.get::<_, Option<String>>(0)?;
+        let provider_id = r.get::<_, Option<String>>(1)?;
+        let timestamp = r.get::<_, u32>(2)?;
+        let from_currency = r.get::<_, Option<String>>(3)?;
+        let from_amount = r.get::<_, Option<String>>(4)?;
+        let from_address = r.get::<_, Option<String>>(5)?;
+        let from_image = r.get::<_, Option<String>>(6)?;
+        let to_currency = r.get::<_, Option<String>>(7)?;
+        let to_amount = r.get::<_, Option<String>>(8)?;
+        let to_address = r.get::<_, Option<String>>(9)?;
+        let to_image = r.get::<_, Option<String>>(10)?;
+        let swap = SwapT {
+            provider,
+            provider_id,
+            timestamp,
+            from_currency,
+            from_amount,
+            from_address,
+            from_image,
+            to_currency,
+            to_amount,
+            to_address,
+            to_image,
+        };
+        Ok(swap)
+    })?;
+    let swaps = rows.collect::<Result<Vec<_>, _>>()?;
+    Ok(swaps)
+}

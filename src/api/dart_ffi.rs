@@ -1455,6 +1455,29 @@ pub unsafe extern "C" fn store_swap(
     to_cresult(with_coin(coin, res))
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn list_swaps(coin: u8) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let swaps = crate::db::read::list_swaps(connection)?;
+        let swaps = SwapVecT {
+            values: Some(swaps),
+        };
+        fb_to_bytes!(swaps)
+    };
+
+    to_cresult_bytes(with_coin(coin, res))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn clear_swap_history(coin: u8) -> CResult<u8> {
+    let res = |connection: &Connection| {
+        crate::db::read::clear_swap_history(connection)?;
+        Ok(0)
+    };
+
+    to_cresult(with_coin(coin, res))
+}
+
 #[cfg(feature = "ledger")]
 #[no_mangle]
 #[tokio::main]

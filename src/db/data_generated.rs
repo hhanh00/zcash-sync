@@ -9336,9 +9336,11 @@ pub mod fb {
         pub const VT_FROM_CURRENCY: flatbuffers::VOffsetT = 10;
         pub const VT_FROM_AMOUNT: flatbuffers::VOffsetT = 12;
         pub const VT_FROM_ADDRESS: flatbuffers::VOffsetT = 14;
-        pub const VT_TO_CURRENCY: flatbuffers::VOffsetT = 16;
-        pub const VT_TO_AMOUNT: flatbuffers::VOffsetT = 18;
-        pub const VT_TO_ADDRESS: flatbuffers::VOffsetT = 20;
+        pub const VT_FROM_IMAGE: flatbuffers::VOffsetT = 16;
+        pub const VT_TO_CURRENCY: flatbuffers::VOffsetT = 18;
+        pub const VT_TO_AMOUNT: flatbuffers::VOffsetT = 20;
+        pub const VT_TO_ADDRESS: flatbuffers::VOffsetT = 22;
+        pub const VT_TO_IMAGE: flatbuffers::VOffsetT = 24;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -9355,6 +9357,9 @@ pub mod fb {
             args: &'args SwapArgs<'args>,
         ) -> flatbuffers::WIPOffset<Swap<'bldr>> {
             let mut builder = SwapBuilder::new(_fbb);
+            if let Some(x) = args.to_image {
+                builder.add_to_image(x);
+            }
             if let Some(x) = args.to_address {
                 builder.add_to_address(x);
             }
@@ -9363,6 +9368,9 @@ pub mod fb {
             }
             if let Some(x) = args.to_currency {
                 builder.add_to_currency(x);
+            }
+            if let Some(x) = args.from_image {
+                builder.add_from_image(x);
             }
             if let Some(x) = args.from_address {
                 builder.add_from_address(x);
@@ -9390,9 +9398,11 @@ pub mod fb {
             let from_currency = self.from_currency().map(|x| x.to_string());
             let from_amount = self.from_amount().map(|x| x.to_string());
             let from_address = self.from_address().map(|x| x.to_string());
+            let from_image = self.from_image().map(|x| x.to_string());
             let to_currency = self.to_currency().map(|x| x.to_string());
             let to_amount = self.to_amount().map(|x| x.to_string());
             let to_address = self.to_address().map(|x| x.to_string());
+            let to_image = self.to_image().map(|x| x.to_string());
             SwapT {
                 provider,
                 provider_id,
@@ -9400,9 +9410,11 @@ pub mod fb {
                 from_currency,
                 from_amount,
                 from_address,
+                from_image,
                 to_currency,
                 to_amount,
                 to_address,
+                to_image,
             }
         }
 
@@ -9464,6 +9476,16 @@ pub mod fb {
             }
         }
         #[inline]
+        pub fn from_image(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_FROM_IMAGE, None)
+            }
+        }
+        #[inline]
         pub fn to_currency(&self) -> Option<&'a str> {
             // Safety:
             // Created from valid Table for this object
@@ -9491,6 +9513,16 @@ pub mod fb {
             unsafe {
                 self._tab
                     .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_TO_ADDRESS, None)
+            }
+        }
+        #[inline]
+        pub fn to_image(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_TO_IMAGE, None)
             }
         }
     }
@@ -9530,6 +9562,11 @@ pub mod fb {
                     false,
                 )?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "from_image",
+                    Self::VT_FROM_IMAGE,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
                     "to_currency",
                     Self::VT_TO_CURRENCY,
                     false,
@@ -9544,6 +9581,11 @@ pub mod fb {
                     Self::VT_TO_ADDRESS,
                     false,
                 )?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "to_image",
+                    Self::VT_TO_IMAGE,
+                    false,
+                )?
                 .finish();
             Ok(())
         }
@@ -9555,9 +9597,11 @@ pub mod fb {
         pub from_currency: Option<flatbuffers::WIPOffset<&'a str>>,
         pub from_amount: Option<flatbuffers::WIPOffset<&'a str>>,
         pub from_address: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub from_image: Option<flatbuffers::WIPOffset<&'a str>>,
         pub to_currency: Option<flatbuffers::WIPOffset<&'a str>>,
         pub to_amount: Option<flatbuffers::WIPOffset<&'a str>>,
         pub to_address: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub to_image: Option<flatbuffers::WIPOffset<&'a str>>,
     }
     impl<'a> Default for SwapArgs<'a> {
         #[inline]
@@ -9569,9 +9613,11 @@ pub mod fb {
                 from_currency: None,
                 from_amount: None,
                 from_address: None,
+                from_image: None,
                 to_currency: None,
                 to_amount: None,
                 to_address: None,
+                to_image: None,
             }
         }
     }
@@ -9613,6 +9659,11 @@ pub mod fb {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_FROM_ADDRESS, from_address);
         }
         #[inline]
+        pub fn add_from_image(&mut self, from_image: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_FROM_IMAGE, from_image);
+        }
+        #[inline]
         pub fn add_to_currency(&mut self, to_currency: flatbuffers::WIPOffset<&'b str>) {
             self.fbb_
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_TO_CURRENCY, to_currency);
@@ -9626,6 +9677,11 @@ pub mod fb {
         pub fn add_to_address(&mut self, to_address: flatbuffers::WIPOffset<&'b str>) {
             self.fbb_
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_TO_ADDRESS, to_address);
+        }
+        #[inline]
+        pub fn add_to_image(&mut self, to_image: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_TO_IMAGE, to_image);
         }
         #[inline]
         pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> SwapBuilder<'a, 'b, A> {
@@ -9651,9 +9707,11 @@ pub mod fb {
             ds.field("from_currency", &self.from_currency());
             ds.field("from_amount", &self.from_amount());
             ds.field("from_address", &self.from_address());
+            ds.field("from_image", &self.from_image());
             ds.field("to_currency", &self.to_currency());
             ds.field("to_amount", &self.to_amount());
             ds.field("to_address", &self.to_address());
+            ds.field("to_image", &self.to_image());
             ds.finish()
         }
     }
@@ -9666,9 +9724,11 @@ pub mod fb {
         pub from_currency: Option<String>,
         pub from_amount: Option<String>,
         pub from_address: Option<String>,
+        pub from_image: Option<String>,
         pub to_currency: Option<String>,
         pub to_amount: Option<String>,
         pub to_address: Option<String>,
+        pub to_image: Option<String>,
     }
     impl Default for SwapT {
         fn default() -> Self {
@@ -9679,9 +9739,11 @@ pub mod fb {
                 from_currency: None,
                 from_amount: None,
                 from_address: None,
+                from_image: None,
                 to_currency: None,
                 to_amount: None,
                 to_address: None,
+                to_image: None,
             }
         }
     }
@@ -9696,9 +9758,11 @@ pub mod fb {
             let from_currency = self.from_currency.as_ref().map(|x| _fbb.create_string(x));
             let from_amount = self.from_amount.as_ref().map(|x| _fbb.create_string(x));
             let from_address = self.from_address.as_ref().map(|x| _fbb.create_string(x));
+            let from_image = self.from_image.as_ref().map(|x| _fbb.create_string(x));
             let to_currency = self.to_currency.as_ref().map(|x| _fbb.create_string(x));
             let to_amount = self.to_amount.as_ref().map(|x| _fbb.create_string(x));
             let to_address = self.to_address.as_ref().map(|x| _fbb.create_string(x));
+            let to_image = self.to_image.as_ref().map(|x| _fbb.create_string(x));
             Swap::create(
                 _fbb,
                 &SwapArgs {
@@ -9708,11 +9772,164 @@ pub mod fb {
                     from_currency,
                     from_amount,
                     from_address,
+                    from_image,
                     to_currency,
                     to_amount,
                     to_address,
+                    to_image,
                 },
             )
+        }
+    }
+    pub enum SwapVecOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct SwapVec<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for SwapVec<'a> {
+        type Inner = SwapVec<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> SwapVec<'a> {
+        pub const VT_VALUES: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            SwapVec { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args SwapVecArgs<'args>,
+        ) -> flatbuffers::WIPOffset<SwapVec<'bldr>> {
+            let mut builder = SwapVecBuilder::new(_fbb);
+            if let Some(x) = args.values {
+                builder.add_values(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> SwapVecT {
+            let values = self
+                .values()
+                .map(|x| x.iter().map(|t| t.unpack()).collect());
+            SwapVecT { values }
+        }
+
+        #[inline]
+        pub fn values(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Swap<'a>>>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Swap>>,
+                >>(SwapVec::VT_VALUES, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for SwapVec<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<Swap>>,
+                >>("values", Self::VT_VALUES, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct SwapVecArgs<'a> {
+        pub values: Option<
+            flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Swap<'a>>>>,
+        >,
+    }
+    impl<'a> Default for SwapVecArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            SwapVecArgs { values: None }
+        }
+    }
+
+    pub struct SwapVecBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> SwapVecBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_values(
+            &mut self,
+            values: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<Swap<'b>>>,
+            >,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(SwapVec::VT_VALUES, values);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> SwapVecBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            SwapVecBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<SwapVec<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for SwapVec<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("SwapVec");
+            ds.field("values", &self.values());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct SwapVecT {
+        pub values: Option<Vec<SwapT>>,
+    }
+    impl Default for SwapVecT {
+        fn default() -> Self {
+            Self { values: None }
+        }
+    }
+    impl SwapVecT {
+        pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> flatbuffers::WIPOffset<SwapVec<'b>> {
+            let values = self.values.as_ref().map(|x| {
+                let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();
+                _fbb.create_vector(&w)
+            });
+            SwapVec::create(_fbb, &SwapVecArgs { values })
         }
     }
 } // pub mod fb

@@ -230,11 +230,15 @@ typedef struct CResult_bool {
 
 #define Swap_VT_FROM_ADDRESS 14
 
-#define Swap_VT_TO_CURRENCY 16
+#define Swap_VT_FROM_IMAGE 16
 
-#define Swap_VT_TO_AMOUNT 18
+#define Swap_VT_TO_CURRENCY 18
 
-#define Swap_VT_TO_ADDRESS 20
+#define Swap_VT_TO_AMOUNT 20
+
+#define Swap_VT_TO_ADDRESS 22
+
+#define Swap_VT_TO_IMAGE 24
 
 void dummy_export(void);
 
@@ -502,6 +506,10 @@ struct CResult_u8 store_swap(uint8_t coin,
                              uint32_t account,
                              uint8_t *swap_bytes,
                              uint64_t swap_len);
+
+struct CResult______u8 list_swaps(uint8_t coin);
+
+struct CResult_u8 clear_swap_history(uint8_t coin);
 
 struct CResult_____c_char ledger_send(uint8_t coin, char *tx_plan);
 

@@ -449,9 +449,11 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
                 from_currency TEXT NOT NULL,
                 from_amount TEXT NOT NULL,
                 from_address TEXT NOT NULL,
+                from_image TEXT NOT NULL,
                 to_currency TEXT NOT NULL,
                 to_amount TEXT NOT NULL,
-                to_address TEXT NOT NULL
+                to_address TEXT NOT NULL,
+                to_image TEXT NOT NULL
             )",
             [],
         )?;
