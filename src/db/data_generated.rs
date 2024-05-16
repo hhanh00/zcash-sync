@@ -9312,4 +9312,407 @@ pub mod fb {
             )
         }
     }
+    pub enum SwapOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct Swap<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for Swap<'a> {
+        type Inner = Swap<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> Swap<'a> {
+        pub const VT_PROVIDER: flatbuffers::VOffsetT = 4;
+        pub const VT_PROVIDER_ID: flatbuffers::VOffsetT = 6;
+        pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 8;
+        pub const VT_FROM_CURRENCY: flatbuffers::VOffsetT = 10;
+        pub const VT_FROM_AMOUNT: flatbuffers::VOffsetT = 12;
+        pub const VT_FROM_ADDRESS: flatbuffers::VOffsetT = 14;
+        pub const VT_TO_CURRENCY: flatbuffers::VOffsetT = 16;
+        pub const VT_TO_AMOUNT: flatbuffers::VOffsetT = 18;
+        pub const VT_TO_ADDRESS: flatbuffers::VOffsetT = 20;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            Swap { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args SwapArgs<'args>,
+        ) -> flatbuffers::WIPOffset<Swap<'bldr>> {
+            let mut builder = SwapBuilder::new(_fbb);
+            if let Some(x) = args.to_address {
+                builder.add_to_address(x);
+            }
+            if let Some(x) = args.to_amount {
+                builder.add_to_amount(x);
+            }
+            if let Some(x) = args.to_currency {
+                builder.add_to_currency(x);
+            }
+            if let Some(x) = args.from_address {
+                builder.add_from_address(x);
+            }
+            if let Some(x) = args.from_amount {
+                builder.add_from_amount(x);
+            }
+            if let Some(x) = args.from_currency {
+                builder.add_from_currency(x);
+            }
+            builder.add_timestamp(args.timestamp);
+            if let Some(x) = args.provider_id {
+                builder.add_provider_id(x);
+            }
+            if let Some(x) = args.provider {
+                builder.add_provider(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> SwapT {
+            let provider = self.provider().map(|x| x.to_string());
+            let provider_id = self.provider_id().map(|x| x.to_string());
+            let timestamp = self.timestamp();
+            let from_currency = self.from_currency().map(|x| x.to_string());
+            let from_amount = self.from_amount().map(|x| x.to_string());
+            let from_address = self.from_address().map(|x| x.to_string());
+            let to_currency = self.to_currency().map(|x| x.to_string());
+            let to_amount = self.to_amount().map(|x| x.to_string());
+            let to_address = self.to_address().map(|x| x.to_string());
+            SwapT {
+                provider,
+                provider_id,
+                timestamp,
+                from_currency,
+                from_amount,
+                from_address,
+                to_currency,
+                to_amount,
+                to_address,
+            }
+        }
+
+        #[inline]
+        pub fn provider(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_PROVIDER, None)
+            }
+        }
+        #[inline]
+        pub fn provider_id(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_PROVIDER_ID, None)
+            }
+        }
+        #[inline]
+        pub fn timestamp(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(Swap::VT_TIMESTAMP, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn from_currency(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_FROM_CURRENCY, None)
+            }
+        }
+        #[inline]
+        pub fn from_amount(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_FROM_AMOUNT, None)
+            }
+        }
+        #[inline]
+        pub fn from_address(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_FROM_ADDRESS, None)
+            }
+        }
+        #[inline]
+        pub fn to_currency(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_TO_CURRENCY, None)
+            }
+        }
+        #[inline]
+        pub fn to_amount(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_TO_AMOUNT, None)
+            }
+        }
+        #[inline]
+        pub fn to_address(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Swap::VT_TO_ADDRESS, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for Swap<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "provider",
+                    Self::VT_PROVIDER,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "provider_id",
+                    Self::VT_PROVIDER_ID,
+                    false,
+                )?
+                .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "from_currency",
+                    Self::VT_FROM_CURRENCY,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "from_amount",
+                    Self::VT_FROM_AMOUNT,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "from_address",
+                    Self::VT_FROM_ADDRESS,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "to_currency",
+                    Self::VT_TO_CURRENCY,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "to_amount",
+                    Self::VT_TO_AMOUNT,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
+                    "to_address",
+                    Self::VT_TO_ADDRESS,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct SwapArgs<'a> {
+        pub provider: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub provider_id: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub timestamp: u32,
+        pub from_currency: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub from_amount: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub from_address: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub to_currency: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub to_amount: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub to_address: Option<flatbuffers::WIPOffset<&'a str>>,
+    }
+    impl<'a> Default for SwapArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            SwapArgs {
+                provider: None,
+                provider_id: None,
+                timestamp: 0,
+                from_currency: None,
+                from_amount: None,
+                from_address: None,
+                to_currency: None,
+                to_amount: None,
+                to_address: None,
+            }
+        }
+    }
+
+    pub struct SwapBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> SwapBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_provider(&mut self, provider: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_PROVIDER, provider);
+        }
+        #[inline]
+        pub fn add_provider_id(&mut self, provider_id: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_PROVIDER_ID, provider_id);
+        }
+        #[inline]
+        pub fn add_timestamp(&mut self, timestamp: u32) {
+            self.fbb_.push_slot::<u32>(Swap::VT_TIMESTAMP, timestamp, 0);
+        }
+        #[inline]
+        pub fn add_from_currency(&mut self, from_currency: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
+                Swap::VT_FROM_CURRENCY,
+                from_currency,
+            );
+        }
+        #[inline]
+        pub fn add_from_amount(&mut self, from_amount: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_FROM_AMOUNT, from_amount);
+        }
+        #[inline]
+        pub fn add_from_address(&mut self, from_address: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_FROM_ADDRESS, from_address);
+        }
+        #[inline]
+        pub fn add_to_currency(&mut self, to_currency: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_TO_CURRENCY, to_currency);
+        }
+        #[inline]
+        pub fn add_to_amount(&mut self, to_amount: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_TO_AMOUNT, to_amount);
+        }
+        #[inline]
+        pub fn add_to_address(&mut self, to_address: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Swap::VT_TO_ADDRESS, to_address);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> SwapBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            SwapBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<Swap<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for Swap<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("Swap");
+            ds.field("provider", &self.provider());
+            ds.field("provider_id", &self.provider_id());
+            ds.field("timestamp", &self.timestamp());
+            ds.field("from_currency", &self.from_currency());
+            ds.field("from_amount", &self.from_amount());
+            ds.field("from_address", &self.from_address());
+            ds.field("to_currency", &self.to_currency());
+            ds.field("to_amount", &self.to_amount());
+            ds.field("to_address", &self.to_address());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct SwapT {
+        pub provider: Option<String>,
+        pub provider_id: Option<String>,
+        pub timestamp: u32,
+        pub from_currency: Option<String>,
+        pub from_amount: Option<String>,
+        pub from_address: Option<String>,
+        pub to_currency: Option<String>,
+        pub to_amount: Option<String>,
+        pub to_address: Option<String>,
+    }
+    impl Default for SwapT {
+        fn default() -> Self {
+            Self {
+                provider: None,
+                provider_id: None,
+                timestamp: 0,
+                from_currency: None,
+                from_amount: None,
+                from_address: None,
+                to_currency: None,
+                to_amount: None,
+                to_address: None,
+            }
+        }
+    }
+    impl SwapT {
+        pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> flatbuffers::WIPOffset<Swap<'b>> {
+            let provider = self.provider.as_ref().map(|x| _fbb.create_string(x));
+            let provider_id = self.provider_id.as_ref().map(|x| _fbb.create_string(x));
+            let timestamp = self.timestamp;
+            let from_currency = self.from_currency.as_ref().map(|x| _fbb.create_string(x));
+            let from_amount = self.from_amount.as_ref().map(|x| _fbb.create_string(x));
+            let from_address = self.from_address.as_ref().map(|x| _fbb.create_string(x));
+            let to_currency = self.to_currency.as_ref().map(|x| _fbb.create_string(x));
+            let to_amount = self.to_amount.as_ref().map(|x| _fbb.create_string(x));
+            let to_address = self.to_address.as_ref().map(|x| _fbb.create_string(x));
+            Swap::create(
+                _fbb,
+                &SwapArgs {
+                    provider,
+                    provider_id,
+                    timestamp,
+                    from_currency,
+                    from_amount,
+                    from_address,
+                    to_currency,
+                    to_amount,
+                    to_address,
+                },
+            )
+        }
+    }
 } // pub mod fb

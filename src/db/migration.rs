@@ -438,8 +438,28 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
         Ok(())
     }
 
+    fn up14(connection: &Connection) -> rusqlite::Result<()> {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS swaps(
+                id_swap INTEGER NOT NULL PRIMARY KEY,
+                account INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                provider_id TEXT NOT NULL,
+                timestamp INTEGER,
+                from_currency TEXT NOT NULL,
+                from_amount TEXT NOT NULL,
+                from_address TEXT NOT NULL,
+                to_currency TEXT NOT NULL,
+                to_amount TEXT NOT NULL,
+                to_address TEXT NOT NULL
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
     let upgrades = vec![
-        up1, up2, up3, up4, up5, up6, up7, up8, up9, up10, up11, up12, up13,
+        up1, up2, up3, up4, up5, up6, up7, up8, up9, up10, up11, up12, up13, up14,
     ];
     for (v, upgrade) in upgrades.iter().enumerate() {
         let upgrade_version = (v + 1) as u32;

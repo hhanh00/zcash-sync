@@ -220,6 +220,22 @@ typedef struct CResult_bool {
 
 #define Fee_VT_SCHEME 10
 
+#define Swap_VT_PROVIDER 4
+
+#define Swap_VT_PROVIDER_ID 6
+
+#define Swap_VT_FROM_CURRENCY 10
+
+#define Swap_VT_FROM_AMOUNT 12
+
+#define Swap_VT_FROM_ADDRESS 14
+
+#define Swap_VT_TO_CURRENCY 16
+
+#define Swap_VT_TO_AMOUNT 18
+
+#define Swap_VT_TO_ADDRESS 20
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);
@@ -481,6 +497,11 @@ struct CResult_u8 set_account_property(uint8_t coin, uint32_t account, char *nam
 struct CResult_____c_char parse_tex(uint8_t coin, char *address);
 
 struct CResult_u32 ping(char *lwd_url);
+
+struct CResult_u8 store_swap(uint8_t coin,
+                             uint32_t account,
+                             uint8_t *swap_bytes,
+                             uint64_t swap_len);
 
 struct CResult_____c_char ledger_send(uint8_t coin, char *tx_plan);
 

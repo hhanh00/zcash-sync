@@ -855,3 +855,49 @@ pub fn count_accounts(connection: &Connection) -> anyhow::Result<u32> {
     let c = connection.query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get::<_, u32>(0))?;
     Ok(c)
 }
+
+pub fn store_swap(connection: &Connection, account: u32, swap: SwapT) -> anyhow::Result<()> {
+    let SwapT {
+        provider,
+        provider_id,
+        timestamp,
+        from_currency,
+        from_amount,
+        from_address,
+        to_currency,
+        to_amount,
+        to_address,
+        ..
+    } = swap;
+
+    connection.execute(
+        "INSERT INTO swaps(
+        account,
+        provider,
+        provider_id,
+        timestamp,
+        from_currency,
+        from_amount,
+        from_address,
+        to_currency,
+        to_amount,
+        to_address
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            account,
+            provider.unwrap(),
+            provider_id.unwrap(),
+            timestamp,
+            from_currency.unwrap(),
+            from_amount.unwrap(),
+            from_address.unwrap(),
+            to_currency.unwrap(),
+            to_amount.unwrap(),
+            to_address.unwrap(),
+        ],
+    )?;
+    Ok(())
+}
+
+// TODO
+// list swaps

@@ -1437,6 +1437,24 @@ pub async unsafe extern "C" fn ping(lwd_url: *mut c_char) -> CResult<u32> {
     to_cresult(res.await)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn store_swap(
+    coin: u8,
+    account: u32,
+    swap_bytes: *mut u8,
+    swap_len: u64,
+) -> CResult<u8> {
+    let res = |connection: &Connection| {
+        let swap_bytes: Vec<u8> =
+            unsafe { Vec::from_raw_parts(swap_bytes, swap_len as usize, swap_len as usize) };
+        let swap = flatbuffers::root::<Swap>(&swap_bytes).unwrap().unpack();
+        crate::db::read::store_swap(connection, account, swap)?;
+        Ok(0)
+    };
+
+    to_cresult(with_coin(coin, res))
+}
+
 #[cfg(feature = "ledger")]
 #[no_mangle]
 #[tokio::main]

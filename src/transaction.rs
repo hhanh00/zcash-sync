@@ -292,7 +292,10 @@ pub fn decode_transaction(
         address: Some(String::new()),
         memo: Some(String::new()),
     });
-    let memos = memos.into_iter().filter(|m| !m.memo.as_ref().unwrap().is_empty()).collect();
+    let memos = memos
+        .into_iter()
+        .filter(|m| !m.memo.as_ref().unwrap().is_empty())
+        .collect();
     let tx_details = TransactionDetails {
         account,
         id_tx,

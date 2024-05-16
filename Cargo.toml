@@ -4,11 +4,6 @@ version = "1.2.15"
 authors = ["Hanh <hanh425@gmail.com>"]
 edition = "2021"
 
-[[bench]]
-name = "scan_all"
-harness = false
-required-features = ["dotenv"]
-
 [[bin]]
 name = "warp-rpc"
 path = "src/main/rpc.rs"
