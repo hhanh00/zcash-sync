@@ -12,11 +12,11 @@ use android_logger::Config;
 use flatbuffers::FlatBufferBuilder;
 use lazy_static::lazy_static;
 use log::Level;
-use parking_lot::Mutex;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
-use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use zcash_primitives::transaction::builder::Progress;
 
@@ -323,7 +323,7 @@ pub unsafe extern "C" fn import_transparent_secret_key(
 }
 
 lazy_static! {
-    static ref SYNC_LOCK: Mutex<()> = Mutex::new(());
+    static ref SYNC_LOCK: Arc<Semaphore> = Arc::new(Semaphore::new(1));
 }
 
 #[no_mangle]
@@ -345,8 +345,8 @@ pub async unsafe extern "C" fn warp(
     port: i64,
 ) -> CResult<u8> {
     let res = async {
-        let permit = SYNC_LOCK.try_lock();
-        if permit.is_none() {
+        let permit = SYNC_LOCK.acquire().await;
+        if !permit.is_ok() {
             return Ok(2);
         }
         *SYNC_CANCEL.lock() = Some(CancellationToken::new());
@@ -376,6 +376,7 @@ pub async unsafe extern "C" fn warp(
         )
         .await;
         log::info!("Sync finished");
+        drop(permit);
 
         match result {
             Ok(_) => Ok(0),
