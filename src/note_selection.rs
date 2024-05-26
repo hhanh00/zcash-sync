@@ -6,6 +6,7 @@ pub use crate::note_selection::TransactionBuilderError::TxTooComplex;
 pub use builder::{build_tx, get_secret_keys, SecretKeys, TxBuilderContext};
 pub use fee::{FeeCalculator, FeeFlat, FeeRule, FeeZIP327};
 pub use optimize::build_tx_plan;
+use rust_decimal::Decimal;
 use std::str::FromStr;
 pub use utxo::fetch_utxos;
 
@@ -17,8 +18,8 @@ use zcash_primitives::memo::Memo;
 
 #[derive(Error, Debug)]
 pub enum TransactionBuilderError {
-    #[error("Not enough funds: Missing {0} zats")]
-    NotEnoughFunds(u64),
+    #[error("Not enough funds: Missing {0}")]
+    NotEnoughFunds(String),
     #[error("Only one recipient can pay for the fees")]
     DuplicateRecipientFee,
     #[error("Not enough funds to pay for the fees")]
@@ -60,6 +61,11 @@ pub fn recipients_to_orders(network: &Network, recipients: &[Recipient]) -> Resu
         })
         .collect();
     Ok(orders?)
+}
+
+pub fn zats_to_zec(zats: u64) -> String {
+    Decimal::from_i128_with_scale(
+        zats as i128, 8).to_string()
 }
 
 #[cfg(test)]

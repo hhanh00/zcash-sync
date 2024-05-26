@@ -112,6 +112,7 @@ rustacuda_core = { version = "0.1.2", optional = true }
 metal = { version = "0.24", optional = true }
 objc = { version = "0.2", features = [ "objc_exception" ], optional = true }
 block = { version = "0.1.6", optional = true }
+rust_decimal = "1.35.0"
 
 [features]
 ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv", "ureq" ]

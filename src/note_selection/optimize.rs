@@ -2,7 +2,7 @@ use super::{types::*, Result};
 use crate::note_selection::fee::FeeCalculator;
 use crate::note_selection::ua::decode;
 use crate::note_selection::TransactionBuilderError::TxTooComplex;
-use crate::note_selection::{TransactionBuilderError, MAX_ATTEMPTS};
+use crate::note_selection::{zats_to_zec, TransactionBuilderError, MAX_ATTEMPTS};
 use crate::Hash;
 use zcash_primitives::consensus::Network;
 use zcash_primitives::memo::MemoBytes;
@@ -123,7 +123,9 @@ pub fn allocate_funds(
     if t2 > 0 {
         // there are not enough shielded funds to cover the outputs
         if t2 > tmax {
-            return Err(TransactionBuilderError::NotEnoughFunds((t2 - tmax) as u64));
+            let missing = (t2 - tmax) as u64;
+            let missing = zats_to_zec(missing);
+            return Err(TransactionBuilderError::NotEnoughFunds(missing));
         }
         // Not enough shielded notes. Use them all before using transparent notes
         s2 = smax;
