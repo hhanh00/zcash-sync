@@ -222,6 +222,7 @@ async fn sync_async_inner<'a>(
 
             db_tx.commit()?;
         }
+
         DbAdapter::store_block_timestamp(&connection, last_height, &last_hash, last_timestamp)?;
         progress.balances = get_pool_balances_inner(&connection, last_height, account, false)?;
         height = last_height;
@@ -230,6 +231,9 @@ async fn sync_async_inner<'a>(
     }
 
     downloader.await??;
+
+    let mut client = connect_lightwalletd(&ld_url).await?;
+    crate::taddr::transparent_sync(&network, c.connection(), &mut client, account, end_height).await?;
 
     let cancel_token = SYNC_CANCEL.lock().as_ref().cloned();
     let cancelled = cancel_token.map(|c| c.is_cancelled()).unwrap_or_default();

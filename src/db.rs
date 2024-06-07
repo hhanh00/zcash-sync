@@ -387,6 +387,8 @@ impl DbAdapter {
             params![height],
         )?;
         tx.execute("DELETE FROM messages WHERE height > ?1", params![height])?;
+        tx.execute("DELETE FROM tins WHERE height > ?1", params![height])?;
+        tx.execute("UPDATE tins SET spent = NULL WHERE spent > ?1", params![height])?;
         tx.commit()?;
 
         Ok(height)

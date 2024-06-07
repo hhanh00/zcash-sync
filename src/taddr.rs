@@ -12,17 +12,17 @@ use crate::{
     AddressList, BlockId, BlockRange, CompactTxStreamerClient, Connection, GetAddressUtxosArg,
     GetAddressUtxosReply, Hash, TransparentAddressBlockFilter, TxFilter,
 };
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use base58check::{FromBase58Check, ToBase58Check};
 use bech32::{FromBase32, Variant};
 use bip39::{Language, Mnemonic, Seed};
 use core::slice;
 use futures::StreamExt;
 use ripemd::{Digest, Ripemd160};
-use rusqlite::OptionalExtension;
+use rusqlite::{params, OptionalExtension};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tiny_hderive::bip32::ExtendedPrivKey;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -37,7 +37,7 @@ use zcash_primitives::transaction::Transaction;
 pub async fn get_taddr_balance(
     client: &mut CompactTxStreamerClient<Channel>,
     address: &str,
-) -> anyhow::Result<u64> {
+) -> Result<u64> {
     let req = AddressList {
         addresses: vec![address.to_string()],
     };
@@ -65,7 +65,7 @@ pub async fn get_ttx_history(
     network: &Network,
     client: &mut CompactTxStreamerClient<Channel>,
     address: &str,
-) -> anyhow::Result<Vec<TransparentTxInfo>> {
+) -> Result<Vec<TransparentTxInfo>> {
     let mut rep = client
         .get_taddress_txids(Request::new(TransparentAddressBlockFilter {
             address: address.to_string(),
@@ -145,7 +145,7 @@ pub async fn get_taddr_tx_count(
     client: &mut CompactTxStreamerClient<Channel>,
     address: &str,
     range: &BlockRange,
-) -> anyhow::Result<u32> {
+) -> Result<u32> {
     let req = TransparentAddressBlockFilter {
         address: address.to_string(),
         range: Some(range.clone()),
@@ -161,7 +161,7 @@ pub async fn get_taddr_tx_count(
 pub async fn get_utxos(
     client: &mut CompactTxStreamerClient<Channel>,
     t_address: &str,
-) -> anyhow::Result<Vec<GetAddressUtxosReply>> {
+) -> Result<Vec<GetAddressUtxosReply>> {
     let req = GetAddressUtxosArg {
         addresses: vec![t_address.to_string()],
         start_height: 0,
@@ -180,7 +180,7 @@ pub async fn scan_transparent_accounts(
     seed: &str,
     mut aindex: u32,
     gap_limit: usize,
-) -> anyhow::Result<Vec<TBalance>> {
+) -> Result<Vec<TBalance>> {
     let last_height = get_latest_height(client).await?;
     let range = BlockRange {
         start: Some(BlockId {
@@ -220,11 +220,7 @@ pub async fn scan_transparent_accounts(
     Ok(addresses)
 }
 
-pub fn derive_tkeys(
-    network: &Network,
-    phrase: &str,
-    path: &str,
-) -> anyhow::Result<(String, String)> {
+pub fn derive_tkeys(network: &Network, phrase: &str, path: &str) -> Result<(String, String)> {
     let (phrase, password) = split_key(phrase);
     let mnemonic = Mnemonic::from_phrase(&phrase, Language::English)?;
     let seed = Seed::new(&mnemonic, &password);
@@ -234,23 +230,20 @@ pub fn derive_tkeys(
     derive_from_secretkey(network, &secret_key)
 }
 
-pub fn parse_seckey(key: &str) -> anyhow::Result<SecretKey> {
+pub fn parse_seckey(key: &str) -> Result<SecretKey> {
     let (_, sk) = key.from_base58check().map_err(|_| anyhow!("Invalid key"))?;
     let sk = &sk[0..sk.len() - 1]; // remove compressed pub key marker
     let secret_key = SecretKey::from_slice(&sk)?;
     Ok(secret_key)
 }
 
-pub fn derive_taddr(network: &Network, key: &str) -> anyhow::Result<(SecretKey, String)> {
+pub fn derive_taddr(network: &Network, key: &str) -> Result<(SecretKey, String)> {
     let secret_key = parse_seckey(key)?;
     let (_, addr) = derive_from_secretkey(network, &secret_key)?;
     Ok((secret_key, addr))
 }
 
-pub fn derive_from_secretkey(
-    network: &Network,
-    sk: &SecretKey,
-) -> anyhow::Result<(String, String)> {
+pub fn derive_from_secretkey(network: &Network, sk: &SecretKey) -> Result<(String, String)> {
     let secp = Secp256k1::<All>::new();
     let pub_key = PublicKey::from_secret_key(&secp, &sk);
     let pub_key = pub_key.serialize();
@@ -265,7 +258,7 @@ pub fn derive_from_secretkey(
     Ok((sk, address))
 }
 
-pub fn derive_from_pubkey(network: &Network, pub_key: &[u8]) -> anyhow::Result<String> {
+pub fn derive_from_pubkey(network: &Network, pub_key: &[u8]) -> Result<String> {
     let pub_key = PublicKey::from_slice(pub_key)?;
     let pub_key = pub_key.serialize();
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
@@ -286,7 +279,7 @@ pub async fn sweep_tkey(
     pool: u8,
     address: &str,
     fee_rule: &FeeT,
-) -> anyhow::Result<crate::TransactionPlan> {
+) -> Result<crate::TransactionPlan> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
     let (seckey, from_address) = derive_taddr(network, sk)?;
@@ -322,7 +315,7 @@ pub async fn sweep_tseed(
     index: u32,
     limit: u32,
     fee_rule: &FeeT,
-) -> anyhow::Result<crate::TransactionPlan> {
+) -> Result<crate::TransactionPlan> {
     let secp = Secp256k1::<All>::new();
 
     let range = BlockRange {
@@ -397,7 +390,7 @@ async fn sweep_utxos(
     last_height: u32,
     utxos: &[UTXO],
     fee_rule: &FeeT,
-) -> anyhow::Result<crate::TransactionPlan> {
+) -> Result<crate::TransactionPlan> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
     let to_address = if address.is_empty() {
@@ -445,7 +438,7 @@ async fn sweep_utxos(
     Ok(tx_plan)
 }
 
-pub fn get_base58_tsk(connection: &Connection, account: u32) -> anyhow::Result<Option<String>> {
+pub fn get_base58_tsk(connection: &Connection, account: u32) -> Result<Option<String>> {
     let tsk = connection
         .query_row("SELECT sk FROM taddrs WHERE account = ?1", [account], |r| {
             r.get::<_, Option<String>>(0)
@@ -459,7 +452,7 @@ pub fn get_base58_tsk(connection: &Connection, account: u32) -> anyhow::Result<O
     Ok(base58_tsk)
 }
 
-pub fn parse_tex(network: &Network, address: &str) -> anyhow::Result<String> {
+pub fn parse_tex(network: &Network, address: &str) -> Result<String> {
     let (hrp, data, variant) = bech32::decode(address)?;
     if hrp != "tex" || variant != Variant::Bech32m {
         anyhow::bail!("Not a TEX address")
@@ -485,4 +478,171 @@ pub struct TBalance {
     pub index: u32,
     pub address: String,
     pub balance: u64,
+}
+
+pub async fn transparent_sync(
+    network: &Network,
+    mut connection: Connection,
+    client: &mut CompactTxStreamerClient<Channel>,
+    account: u32,
+    end_height: u32,
+) -> Result<()> {
+    let db_tx = connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+
+    // get taddr
+    // get last sync height start_height
+    let (account_address, start_height) = db_tx.query_row(
+        "SELECT address, height FROM taddrs WHERE account = ?1",
+        [account],
+        |r| {
+            let address = r.get::<_, String>(0)?;
+            let height = r.get::<_, u32>(1)? + 1;
+            Ok((address, height))
+        },
+    )?;
+
+    if start_height >= end_height {
+        return Ok(());
+    }
+
+    let mut txs = client
+        .get_taddress_txids(Request::new(TransparentAddressBlockFilter {
+            address: account_address.clone(),
+            range: Some(BlockRange {
+                start: Some(BlockId {
+                    height: start_height as u64,
+                    hash: vec![],
+                }),
+                end: Some(BlockId {
+                    height: end_height as u64,
+                    hash: vec![],
+                }),
+                spam_filter_threshold: 0,
+            }),
+        }))
+        .await?
+        .into_inner();
+
+    let mut tx_heights = HashSet::<u32>::new();
+    // fetch trp txs in [start_height+1, end_height]
+    while let Some(raw_tx) = txs.message().await? {
+        let tx_height = raw_tx.height as u32;
+        // - store block_height
+        tx_heights.insert(tx_height);
+        let raw_tx = raw_tx.data;
+        let branch_id = get_branch(network, tx_height);
+        let tx = Transaction::read(&*raw_tx, branch_id)?;
+
+        let mut txid = vec![];
+        tx.txid().write(&mut txid)?;
+
+        // - store blank tx with account, height, txid, memo, tx_index, messages,
+        //   value = 0 -> id_tx
+        db_tx.execute(
+            "INSERT INTO transactions(account, txid, height, timestamp, value, memo)
+            VALUES (?1, ?2, ?3, ?4, ?5, '') ON CONFLICT DO NOTHING",
+            params![account, txid, tx_height, 0, 0],
+        )?; // conflict if tx has shielded components, all good
+        let (id_tx, mut tx_value) = db_tx.query_row(
+            "SELECT id_tx, value FROM transactions WHERE txid = ?1",
+            params![txid],
+            |r| {
+                let id_tx = r.get::<_, u32>(0)?;
+                let value = r.get::<_, i64>(1)?;
+                Ok((id_tx, value))
+            },
+        )?;
+
+        if let Some(transparent) = tx.transparent_bundle() {
+            // - resolve tins, subtract value from tx
+            for tin in transparent.vin.iter() {
+                let prevout = &tin.prevout;
+                let prev_txid = prevout.hash();
+                let prev_vout = prevout.n();
+                let prev_tin = db_tx
+                    .query_row(
+                        "SELECT id_tin, tins.value FROM tins JOIN transactions
+                    ON tins.id_tx = transactions.id_tx
+                    WHERE tins.account = ?1 AND txid = ?2 AND vout = ?3",
+                        params![account, prev_txid, prev_vout],
+                        |r| {
+                            let id_tin = r.get::<_, u32>(0)?;
+                            let value = r.get::<_, u64>(1)?;
+                            Ok((id_tin, value))
+                        },
+                    )
+                    .optional()?;
+                if let Some((id_tin, value)) = prev_tin {
+                    tx_value -= value as i64;
+                    db_tx.execute(
+                        "UPDATE transactions SET value = value - ?2 WHERE id_tx = ?1",
+                        params![id_tx, value],
+                    )?;
+
+                    // - mark tin as spent
+                    db_tx.execute(
+                        "UPDATE tins SET spent = ?2 WHERE id_tin = ?1",
+                        params![id_tin, tx_height],
+                    )?;
+                }
+            }
+
+            let mut outgoing_address = account_address.clone();
+            for (vout, tout) in transparent.vout.iter().enumerate() {
+                if let Some(address) = tout.recipient_address() {
+                    let address = address.encode(network);
+                    if address == account_address {
+                        // - store touts, add value to tx
+                        let value: u64 = tout.value.into();
+                        tx_value += value as i64;
+                        db_tx.execute(
+                            "INSERT INTO tins(account, height, id_tx, vout, value) \
+                            VALUES (?1, ?2, ?3, ?4, ?5)",
+                            params![account, tx_height, id_tx, vout as u32, value],
+                        )?;
+                        db_tx.execute(
+                            "UPDATE transactions SET value = value + ?2 WHERE id_tx = ?1",
+                            params![id_tx, value],
+                        )?;
+                    } else {
+                        // - update addr
+                        outgoing_address = address;
+                    }
+                }
+            }
+
+            // Resolving all incoming tin to get the address
+            // is too resource expensive, therefore we don't
+            // know where the funds come from
+            if tx_value < 0 {
+                db_tx.execute(
+                    "UPDATE transactions SET address = ?2 WHERE id_tx = ?1",
+                    params![id_tx, outgoing_address],
+                )?;
+            }
+        }
+    }
+
+    for height in tx_heights {
+        // need to retrieve the whole block just to get the time!
+        let block = client
+            .get_block(Request::new(BlockId {
+                height: height as u64,
+                hash: vec![],
+            }))
+            .await?
+            .into_inner();
+        let timestamp = block.time;
+        db_tx.execute(
+            "UPDATE transactions SET timestamp = ?2 WHERE height = ?1 AND timestamp = 0",
+            params![height, timestamp],
+        )?;
+    }
+    db_tx.execute(
+        "UPDATE taddrs SET height = ?2 WHERE account = ?1",
+        params![account, end_height],
+    )?;
+    db_tx.commit()?;
+    log::info!("Transparent Sync complete");
+    Ok(())
 }

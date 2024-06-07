@@ -460,8 +460,28 @@ pub fn init_db(connection: &Connection, network: &Network, has_ua: bool) -> anyh
         Ok(())
     }
 
+    fn up15(connection: &Connection) -> rusqlite::Result<()> {
+        connection.execute(
+            "ALTER TABLE taddrs ADD height INTEGER NOT NULL DEFAULT 0", [])?;
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS tins(
+                id_tin INTEGER NOT NULL PRIMARY KEY,
+                account INTEGER NOT NULL,
+                height INTEGER NOT NULL,
+                id_tx INTEGER NOT NULL,
+                vout INTEGER NOT NULL,
+                value INTEGER NOT NULL,
+                spent INTEGER
+            )", [])?;
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS transactions_txid
+            ON transactions (account, txid)", [])?;
+        Ok(())
+    }
+
     let upgrades = vec![
         up1, up2, up3, up4, up5, up6, up7, up8, up9, up10, up11, up12, up13, up14,
+        up15,
     ];
     for (v, upgrade) in upgrades.iter().enumerate() {
         let upgrade_version = (v + 1) as u32;
