@@ -398,6 +398,24 @@ pub async unsafe extern "C" fn warp(
     to_cresult(r)
 }
 
+#[tokio::main]
+#[no_mangle]
+pub async unsafe extern "C" fn transparent_sync(
+    coin: u8,
+    account: u32,
+    height: u32,
+) -> CResult<bool> {
+    let res = async {
+        let c = CoinConfig::get(coin);
+        let connection = c.connection();
+        let mut client = c.connect_lwd().await?;
+        let is_updated = crate::taddr::transparent_sync(c.chain.network(), 
+            connection, &mut client, account, height).await?;
+        Ok::<_, anyhow::Error>(is_updated)
+    };
+    to_cresult(res.await)
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn is_valid_seed(coin: u8, seed: *mut c_char) -> bool {
     from_c_str!(seed);

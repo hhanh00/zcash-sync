@@ -486,7 +486,7 @@ pub async fn transparent_sync(
     client: &mut CompactTxStreamerClient<Channel>,
     account: u32,
     end_height: u32,
-) -> Result<()> {
+) -> Result<bool> {
     let db_tx = connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
     // get taddr
@@ -502,7 +502,7 @@ pub async fn transparent_sync(
     )?;
 
     if start_height >= end_height {
-        return Ok(());
+        return Ok(false); // nothing changed
     }
 
     let mut txs = client
@@ -644,5 +644,5 @@ pub async fn transparent_sync(
     )?;
     db_tx.commit()?;
     log::info!("Transparent Sync complete");
-    Ok(())
+    Ok(true)
 }

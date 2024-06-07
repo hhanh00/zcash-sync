@@ -46,17 +46,17 @@ typedef struct CResult_____c_char {
   uint32_t len;
 } CResult_____c_char;
 
-typedef struct CResult_u64 {
-  uint64_t value;
-  char *error;
-  uint32_t len;
-} CResult_u64;
-
 typedef struct CResult_bool {
   bool value;
   char *error;
   uint32_t len;
 } CResult_bool;
+
+typedef struct CResult_u64 {
+  uint64_t value;
+  char *error;
+  uint32_t len;
+} CResult_u64;
 
 #define Account_VT_COIN 4
 
@@ -293,6 +293,8 @@ struct CResult_u8 warp(uint8_t coin,
                        uint32_t anchor_offset,
                        uint32_t max_cost,
                        int64_t port);
+
+struct CResult_bool transparent_sync(uint8_t coin, uint32_t account, uint32_t height);
 
 bool is_valid_seed(uint8_t coin, char *seed);
 
