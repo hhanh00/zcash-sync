@@ -544,8 +544,8 @@ pub async fn transparent_sync(
             params![account, txid, tx_height, 0, 0],
         )?; // conflict if tx has shielded components, all good
         let (id_tx, mut tx_value) = db_tx.query_row(
-            "SELECT id_tx, value FROM transactions WHERE txid = ?1",
-            params![txid],
+            "SELECT id_tx, value FROM transactions WHERE txid = ?1 AND account = ?2",
+            params![txid, account],
             |r| {
                 let id_tx = r.get::<_, u32>(0)?;
                 let value = r.get::<_, i64>(1)?;
