@@ -20,6 +20,8 @@ typedef void *DartPostCObjectFnType;
 
 #define MAX_ATTEMPTS 10
 
+#define DEPTH 32
+
 #define N 200000
 
 typedef struct CResult_u8 {

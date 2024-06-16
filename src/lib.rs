@@ -99,6 +99,7 @@ mod unified;
 mod zip32;
 // mod wallet;
 /// accounts, sync, payments, etc.
+pub mod vote;
 pub mod api;
 
 #[cfg(feature = "ledger")]

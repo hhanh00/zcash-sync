@@ -616,7 +616,7 @@ pub async fn transparent_sync(
             // know where the funds come from
             if tx_value < 0 {
                 db_tx.execute(
-                    "UPDATE transactions SET address = ?2 WHERE id_tx = ?1",
+                    "UPDATE transactions SET address = ?2 WHERE id_tx = ?1 AND address IS NULL",
                     params![id_tx, outgoing_address],
                 )?;
             }
