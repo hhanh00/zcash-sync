@@ -66,11 +66,17 @@ pub async fn fetch_tree_state(
     Ok(ph)
 }
 
-pub async fn get_tree_root(client: &mut CompactTxStreamerClient<Channel>, height: u32) -> Result<Hash> {
-    let tree_state = client.get_tree_state(Request::new(BlockId {
-        height: height as u64,
-        hash: vec![],
-    })).await?.into_inner();
+pub async fn get_tree_root(
+    client: &mut CompactTxStreamerClient<Channel>,
+    height: u32,
+) -> Result<Hash> {
+    let tree_state = client
+        .get_tree_state(Request::new(BlockId {
+            height: height as u64,
+            hash: vec![],
+        }))
+        .await?
+        .into_inner();
     let orchard_tree = hex::decode(&tree_state.orchard_tree).unwrap();
     let tree_state = CommitmentTree::<MerkleHashOrchard>::read(&*orchard_tree).unwrap();
     let root = tree_state.root().to_bytes();

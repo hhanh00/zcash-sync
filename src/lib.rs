@@ -98,9 +98,9 @@ mod unified;
 // mod ua;
 mod zip32;
 // mod wallet;
+pub mod api;
 /// accounts, sync, payments, etc.
 pub mod vote;
-pub mod api;
 
 #[cfg(feature = "ledger")]
 pub mod ledger;

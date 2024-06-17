@@ -64,8 +64,7 @@ pub fn recipients_to_orders(network: &Network, recipients: &[Recipient]) -> Resu
 }
 
 pub fn zats_to_zec(zats: u64) -> String {
-    Decimal::from_i128_with_scale(
-        zats as i128, 8).to_string()
+    Decimal::from_i128_with_scale(zats as i128, 8).to_string()
 }
 
 #[cfg(test)]

@@ -242,6 +242,20 @@ typedef struct CResult_u64 {
 
 #define Swap_VT_TO_IMAGE 24
 
+#define Ballot_VT_HEADER 4
+
+#define Ballot_VT_INPUTS 6
+
+#define Ballot_VT_PAYLOAD 10
+
+#define BallotWitness_VT_PROOFS 4
+
+#define BallotWitness_VT_BINDING_SIGNATURE 6
+
+#define BallotEnvelope_VT_BALLOT 4
+
+#define BallotEnvelope_VT_WITNESS 6
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);

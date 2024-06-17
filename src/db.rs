@@ -388,7 +388,10 @@ impl DbAdapter {
         )?;
         tx.execute("DELETE FROM messages WHERE height > ?1", params![height])?;
         tx.execute("DELETE FROM tins WHERE height > ?1", params![height])?;
-        tx.execute("UPDATE tins SET spent = NULL WHERE spent > ?1", params![height])?;
+        tx.execute(
+            "UPDATE tins SET spent = NULL WHERE spent > ?1",
+            params![height],
+        )?;
         tx.execute("UPDATE taddrs SET height = ?1", params![height])?;
         tx.commit()?;
 
@@ -1105,7 +1108,8 @@ impl DbAdapter {
             .execute("DELETE FROM orchard_witnesses", [])?;
         self.connection.execute("DELETE FROM transactions", [])?;
         self.connection.execute("DELETE FROM messages", [])?;
-        self.connection.execute("UPDATE taddrs SET height = 0", [])?;
+        self.connection
+            .execute("UPDATE taddrs SET height = 0", [])?;
         Ok(())
     }
 

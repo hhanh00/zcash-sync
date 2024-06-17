@@ -4,12 +4,7 @@ use tonic::{transport::Channel, Request};
 
 use crate::{BlockId, BlockRange, CompactTxStreamerClient};
 
-use super::prevhash::PreviousHashes;
-
-pub struct Election {
-    pub start_height: u32,
-    pub end_height: u32,
-}
+use super::{prevhash::PreviousHashes, Election, Hash, DEPTH};
 
 pub async fn download_reference_data(
     connection: &Connection,
@@ -135,6 +130,31 @@ where
     Ok(())
 }
 
+pub fn get_merkle_path(
+    connection: &Connection,
+    table_name: &str,
+    prev: &PreviousHashes,
+    mut position: u32,
+) -> Result<()> {
+    let mut start = prev.position() as u32;
+    for i in 0..32 {
+        if start & 1 == 1 {
+            start -= 1;
+        }
+        let depth_start = connection.query_row(
+            &format!("SELECT MIN(id) FROM {table_name} WHERE depth = ?1"),
+            [i],
+            |r| r.get::<_, u32>(0),
+        )?;
+        let id = position - start + depth_start;
+        println!("{id}");
+
+        position /= 2;
+        start /= 2;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::vote::prevhash::{fetch_tree_state, get_tree_root};
@@ -144,6 +164,7 @@ mod tests {
     #[tokio::test]
     async fn test() -> anyhow::Result<()> {
         let e = Election {
+            name: "Devfund Poll".to_string(),
             start_height: 2541400,
             end_height: 2541500,
         };
@@ -173,23 +194,27 @@ mod tests {
             "nullifier_tree",
             &super::PreviousHashes::default(),
             |connection| {
-                connection.execute("INSERT INTO nullifier_tree(depth, hash)
-                SELECT 0, hash FROM nullifiers ORDER BY revhash", [])?;
+                connection.execute(
+                    "INSERT INTO nullifier_tree(depth, hash)
+                SELECT 0, hash FROM nullifiers ORDER BY revhash",
+                    [],
+                )?;
                 Ok(())
             },
         )?;
 
         let ph = fetch_tree_state(&mut client, e.start_height - 1).await?;
-        super::build_merkle_tree(
-            &connection,
-            "cmx_tree",
-            &ph,
-            |connection| {
-                connection.execute("INSERT INTO cmx_tree(depth, hash)
-                SELECT 0, hash FROM cmxs ORDER BY id_cmx", [])?;
-                Ok(())
-            },
-        )?;
+        super::build_merkle_tree(&connection, "cmx_tree", &ph, |connection| {
+            connection.execute(
+                "INSERT INTO cmx_tree(depth, hash)
+                SELECT 0, hash FROM cmxs ORDER BY id_cmx",
+                [],
+            )?;
+            Ok(())
+        })?;
+
+        super::get_merkle_path(&connection, "cmx_tree", &ph, ph.position() as u32)?;
+
         Ok(())
     }
 }

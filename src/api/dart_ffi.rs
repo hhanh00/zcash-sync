@@ -12,11 +12,11 @@ use android_logger::Config;
 use flatbuffers::FlatBufferBuilder;
 use lazy_static::lazy_static;
 use log::Level;
-use std::sync::Arc;
-use tokio::sync::Semaphore;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use zcash_primitives::transaction::builder::Progress;
 
@@ -409,8 +409,14 @@ pub async unsafe extern "C" fn transparent_sync(
         let c = CoinConfig::get(coin);
         let connection = c.connection();
         let mut client = c.connect_lwd().await?;
-        let is_updated = crate::taddr::transparent_sync(c.chain.network(), 
-            connection, &mut client, account, height).await?;
+        let is_updated = crate::taddr::transparent_sync(
+            c.chain.network(),
+            connection,
+            &mut client,
+            account,
+            height,
+        )
+        .await?;
         Ok::<_, anyhow::Error>(is_updated)
     };
     to_cresult(res.await)
