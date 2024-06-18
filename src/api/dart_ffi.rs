@@ -1503,6 +1503,64 @@ pub unsafe extern "C" fn clear_swap_history(coin: u8) -> CResult<u8> {
     to_cresult(with_coin(coin, res))
 }
 
+#[no_mangle]
+#[tokio::main]
+pub async unsafe extern "C" fn download_vote_data(coin: u8, election: *mut c_char) -> CResult<u8> {
+    let res = async {
+        from_c_str!(election);
+        crate::vote::download_data(coin, &election).await?;
+        Ok(0)
+    };
+    to_cresult(res.await)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn populate_vote_notes(
+    coin: u8,
+    account: u32,
+    start_height: u32,
+    end_height: u32,
+) -> CResult<u8> {
+    let res = || {
+        crate::populate_vote_notes(coin, account, start_height, end_height)?;
+        Ok(0)
+    };
+    to_cresult(res())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn list_vote_notes(coin: u8, account: u32) -> CResult<*const u8> {
+    let res = |connection: &Connection| {
+        let ids = crate::vote::list_notes(connection, account)?;
+        fb_to_bytes!(ids)
+    };
+    let r = with_coin(coin, res);
+    to_cresult_bytes(r)
+}
+
+#[no_mangle]
+#[tokio::main]
+pub async unsafe extern "C" fn vote(
+    coin: u8,
+    account: u32,
+    id_notes: *mut u8,
+    id_notes_len: usize,
+    candidate: u32,
+    election: *mut c_char,
+) -> CResult<*const u8> {
+    let res = async {
+        let id_notes = unsafe { Vec::from_raw_parts(id_notes, id_notes_len, id_notes_len) };
+        from_c_str!(election);
+        crate::vote::download_data(coin, &election).await?;
+        let id_notes = flatbuffers::root::<IdList>(&id_notes).unwrap();
+        let id_notes = id_notes.ids().unwrap().iter().collect::<Vec<_>>();
+        let ballot = crate::vote::vote(coin, account, &id_notes, candidate, &election).await?;
+        let ballot_bytes = fb_to_bytes!(ballot);
+        ballot_bytes
+    };
+    to_cresult_bytes(res.await)
+}
+
 #[cfg(feature = "ledger")]
 #[no_mangle]
 #[tokio::main]

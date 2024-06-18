@@ -17,6 +17,147 @@ pub mod fb {
     extern crate flatbuffers;
     use self::flatbuffers::{EndianScalar, Follow};
 
+    pub enum IdListOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct IdList<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for IdList<'a> {
+        type Inner = IdList<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> IdList<'a> {
+        pub const VT_IDS: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            IdList { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args IdListArgs<'args>,
+        ) -> flatbuffers::WIPOffset<IdList<'bldr>> {
+            let mut builder = IdListBuilder::new(_fbb);
+            if let Some(x) = args.ids {
+                builder.add_ids(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> IdListT {
+            let ids = self.ids().map(|x| x.into_iter().collect());
+            IdListT { ids }
+        }
+
+        #[inline]
+        pub fn ids(&self) -> Option<flatbuffers::Vector<'a, u32>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u32>>>(
+                        IdList::VT_IDS,
+                        None,
+                    )
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for IdList<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u32>>>(
+                    "ids",
+                    Self::VT_IDS,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct IdListArgs<'a> {
+        pub ids: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u32>>>,
+    }
+    impl<'a> Default for IdListArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            IdListArgs { ids: None }
+        }
+    }
+
+    pub struct IdListBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> IdListBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_ids(&mut self, ids: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u32>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(IdList::VT_IDS, ids);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> IdListBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            IdListBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<IdList<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for IdList<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("IdList");
+            ds.field("ids", &self.ids());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct IdListT {
+        pub ids: Option<Vec<u32>>,
+    }
+    impl Default for IdListT {
+        fn default() -> Self {
+            Self { ids: None }
+        }
+    }
+    impl IdListT {
+        pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> flatbuffers::WIPOffset<IdList<'b>> {
+            let ids = self.ids.as_ref().map(|x| _fbb.create_vector(x));
+            IdList::create(_fbb, &IdListArgs { ids })
+        }
+    }
     pub enum AccountOffset {}
     #[derive(Copy, Clone, PartialEq)]
 

@@ -115,6 +115,8 @@ objc = { version = "0.2", features = [ "objc_exception" ], optional = true }
 block = { version = "0.1.6", optional = true }
 rust_decimal = "1.35.0"
 
+zcash-vote = { path = "../zcash-vote" }
+
 [features]
 ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv", "ureq" ]
 dart_ffi = ["allo-isolate", "once_cell", "android_logger"]

@@ -20,8 +20,6 @@ typedef void *DartPostCObjectFnType;
 
 #define MAX_ATTEMPTS 10
 
-#define DEPTH 32
-
 #define N 200000
 
 typedef struct CResult_u8 {
@@ -59,6 +57,8 @@ typedef struct CResult_u64 {
   char *error;
   uint32_t len;
 } CResult_u64;
+
+#define IdList_VT_IDS 4
 
 #define Account_VT_COIN 4
 
@@ -241,20 +241,6 @@ typedef struct CResult_u64 {
 #define Swap_VT_TO_ADDRESS 22
 
 #define Swap_VT_TO_IMAGE 24
-
-#define Ballot_VT_HEADER 4
-
-#define Ballot_VT_INPUTS 6
-
-#define Ballot_VT_PAYLOAD 10
-
-#define BallotWitness_VT_PROOFS 4
-
-#define BallotWitness_VT_BINDING_SIGNATURE 6
-
-#define BallotEnvelope_VT_BALLOT 4
-
-#define BallotEnvelope_VT_WITNESS 6
 
 void dummy_export(void);
 
@@ -528,6 +514,22 @@ struct CResult_u8 store_swap(uint8_t coin,
 struct CResult______u8 list_swaps(uint8_t coin);
 
 struct CResult_u8 clear_swap_history(uint8_t coin);
+
+struct CResult_u8 download_vote_data(uint8_t coin, char *election);
+
+struct CResult_u8 populate_vote_notes(uint8_t coin,
+                                      uint32_t account,
+                                      uint32_t start_height,
+                                      uint32_t end_height);
+
+struct CResult______u8 list_vote_notes(uint8_t coin, uint32_t account);
+
+struct CResult______u8 vote(uint8_t coin,
+                            uint32_t account,
+                            uint8_t *id_notes,
+                            uintptr_t id_notes_len,
+                            uint32_t candidate,
+                            char *election);
 
 struct CResult_____c_char ledger_send(uint8_t coin, char *tx_plan);
 
