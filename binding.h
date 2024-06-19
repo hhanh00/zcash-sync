@@ -522,7 +522,7 @@ struct CResult_u8 populate_vote_notes(uint8_t coin,
                                       uint32_t start_height,
                                       uint32_t end_height);
 
-struct CResult______u8 list_vote_notes(uint8_t coin, uint32_t account);
+struct CResult______u8 list_vote_notes(uint8_t coin, uint32_t account, uint32_t end_height);
 
 struct CResult______u8 vote(uint8_t coin,
                             uint32_t account,

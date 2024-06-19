@@ -25,7 +25,8 @@ pub fn populate_vote_notes(
     connection.execute(
         "INSERT INTO vote_notes(id_note, account, value, spent)
         SELECT id_note, account, value, spent FROM received_notes
-        WHERE account = ?1 AND height >= ?2 AND height <= ?3 AND orchard = 1
+        WHERE account = ?1 AND height >= ?2 AND height <= ?3
+        AND orchard = 1
         ON CONFLICT(id_note) DO UPDATE SET
         spent = EXCLUDED.spent",
         params![account, start_height, end_height],
@@ -33,10 +34,11 @@ pub fn populate_vote_notes(
     Ok(())
 }
 
-pub fn list_notes(connection: &Connection, account: u32) -> Result<IdListT> {
+pub fn list_notes(connection: &Connection, account: u32, end_height: u32) -> Result<IdListT> {
     let mut s = connection
-        .prepare("SELECT id_note FROM vote_notes WHERE account = ?1 AND spent IS NULL")?;
-    let rows = s.query_map(params![account], |r| r.get::<_, u32>(0))?;
+        .prepare("SELECT id_note FROM vote_notes WHERE account = ?1 AND
+        (spent IS NULL OR spent > ?2)")?;
+    let rows = s.query_map(params![account, end_height], |r| r.get::<_, u32>(0))?;
     let ids = rows.collect::<Result<Vec<_>, _>>()?;
     let ids = IdListT { ids: Some(ids) };
     Ok(ids)
