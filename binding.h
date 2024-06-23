@@ -531,6 +531,8 @@ struct CResult______u8 vote(uint8_t coin,
                             uint32_t candidate,
                             char *election);
 
+struct CResult_u8 reset_vote(uint8_t coin);
+
 struct CResult_____c_char ledger_send(uint8_t coin, char *tx_plan);
 
 struct CResult_u32 ledger_import_account(uint8_t coin, char *name);

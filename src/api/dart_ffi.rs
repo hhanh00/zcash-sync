@@ -1561,6 +1561,15 @@ pub async unsafe extern "C" fn vote(
     to_cresult_bytes(res.await)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn reset_vote(coin: u8) -> CResult<u8> {
+    let res = || {
+        crate::vote::reset_data(coin)?;
+        Ok(0)
+    };
+    to_cresult(res())
+}
+
 #[cfg(feature = "ledger")]
 #[no_mangle]
 #[tokio::main]

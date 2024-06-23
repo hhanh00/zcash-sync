@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rand::rngs::OsRng;
 use rusqlite::params;
-use zcash_vote::{create_ballot, download_reference_data, vote_data::BallotEnvelopeT, Election};
+use zcash_vote::{create_ballot, download_reference_data, drop_tables, vote_data::BallotEnvelopeT, Election};
 
 use crate::{db::data_generated::fb::IdListT, CoinConfig, Connection};
 
@@ -42,6 +42,15 @@ pub fn list_notes(connection: &Connection, account: u32, end_height: u32) -> Res
     let ids = rows.collect::<Result<Vec<_>, _>>()?;
     let ids = IdListT { ids: Some(ids) };
     Ok(ids)
+}
+
+pub fn reset_data(coin: u8) -> Result<()> {
+    let c = CoinConfig::get(coin);
+
+    let connection = c.connection();
+    drop_tables(&connection)?;
+    connection.execute("DROP TABLE IF EXISTS vote_notes", [])?;
+    Ok(())
 }
 
 pub async fn download_data(coin: u8, election: &str) -> Result<()> {
