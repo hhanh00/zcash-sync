@@ -1529,7 +1529,11 @@ pub unsafe extern "C" fn populate_vote_notes(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn list_vote_notes(coin: u8, account: u32, end_height: u32) -> CResult<*const u8> {
+pub unsafe extern "C" fn list_vote_notes(
+    coin: u8,
+    account: u32,
+    end_height: u32,
+) -> CResult<*const u8> {
     let res = |connection: &Connection| {
         let ids = crate::vote::list_notes(connection, account, end_height)?;
         fb_to_bytes!(ids)

@@ -491,15 +491,18 @@ pub async fn transparent_sync(
 
     // get taddr
     // get last sync height start_height
-    let (account_address, start_height) = match db_tx.query_row(
-        "SELECT address, height FROM taddrs WHERE account = ?1",
-        [account],
-        |r| {
-            let address = r.get::<_, String>(0)?;
-            let height = r.get::<_, u32>(1)? + 1;
-            Ok((address, height))
-        },
-    ).optional()? {
+    let (account_address, start_height) = match db_tx
+        .query_row(
+            "SELECT address, height FROM taddrs WHERE account = ?1",
+            [account],
+            |r| {
+                let address = r.get::<_, String>(0)?;
+                let height = r.get::<_, u32>(1)? + 1;
+                Ok((address, height))
+            },
+        )
+        .optional()?
+    {
         Some(r) => r,
         None => return Ok(false), // no t-addr
     };

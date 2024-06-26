@@ -1,7 +1,9 @@
 use anyhow::Result;
 use rand::rngs::OsRng;
 use rusqlite::params;
-use zcash_vote::{create_ballot, download_reference_data, drop_tables, vote_data::BallotEnvelopeT, Election};
+use zcash_vote::{
+    create_ballot, download_reference_data, drop_tables, vote_data::BallotEnvelopeT, Election,
+};
 
 use crate::{db::data_generated::fb::IdListT, CoinConfig, Connection};
 
@@ -35,9 +37,10 @@ pub fn populate_vote_notes(
 }
 
 pub fn list_notes(connection: &Connection, account: u32, end_height: u32) -> Result<IdListT> {
-    let mut s = connection
-        .prepare("SELECT id_note FROM vote_notes WHERE account = ?1 AND
-        (spent IS NULL OR spent > ?2)")?;
+    let mut s = connection.prepare(
+        "SELECT id_note FROM vote_notes WHERE account = ?1 AND
+        (spent IS NULL OR spent > ?2)",
+    )?;
     let rows = s.query_map(params![account, end_height], |r| r.get::<_, u32>(0))?;
     let ids = rows.collect::<Result<Vec<_>, _>>()?;
     let ids = IdListT { ids: Some(ids) };
