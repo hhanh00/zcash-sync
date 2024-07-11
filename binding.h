@@ -242,6 +242,8 @@ typedef struct CResult_u64 {
 
 #define Swap_VT_TO_IMAGE 24
 
+#define VoteNote_VT_SELECTED 10
+
 void dummy_export(void);
 
 void dart_post_cobject(DartPostCObjectFnType ptr);

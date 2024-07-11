@@ -10073,4 +10073,368 @@ pub mod fb {
             SwapVec::create(_fbb, &SwapVecArgs { values })
         }
     }
+    pub enum VoteNoteOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct VoteNote<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for VoteNote<'a> {
+        type Inner = VoteNote<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> VoteNote<'a> {
+        pub const VT_ID: flatbuffers::VOffsetT = 4;
+        pub const VT_HEIGHT: flatbuffers::VOffsetT = 6;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 8;
+        pub const VT_SELECTED: flatbuffers::VOffsetT = 10;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            VoteNote { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args VoteNoteArgs,
+        ) -> flatbuffers::WIPOffset<VoteNote<'bldr>> {
+            let mut builder = VoteNoteBuilder::new(_fbb);
+            builder.add_value(args.value);
+            builder.add_height(args.height);
+            builder.add_id(args.id);
+            builder.add_selected(args.selected);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> VoteNoteT {
+            let id = self.id();
+            let height = self.height();
+            let value = self.value();
+            let selected = self.selected();
+            VoteNoteT {
+                id,
+                height,
+                value,
+                selected,
+            }
+        }
+
+        #[inline]
+        pub fn id(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(VoteNote::VT_ID, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn height(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(VoteNote::VT_HEIGHT, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn value(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u64>(VoteNote::VT_VALUE, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn selected(&self) -> bool {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<bool>(VoteNote::VT_SELECTED, Some(false))
+                    .unwrap()
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for VoteNote<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<u32>("id", Self::VT_ID, false)?
+                .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
+                .visit_field::<u64>("value", Self::VT_VALUE, false)?
+                .visit_field::<bool>("selected", Self::VT_SELECTED, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct VoteNoteArgs {
+        pub id: u32,
+        pub height: u32,
+        pub value: u64,
+        pub selected: bool,
+    }
+    impl<'a> Default for VoteNoteArgs {
+        #[inline]
+        fn default() -> Self {
+            VoteNoteArgs {
+                id: 0,
+                height: 0,
+                value: 0,
+                selected: false,
+            }
+        }
+    }
+
+    pub struct VoteNoteBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> VoteNoteBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_id(&mut self, id: u32) {
+            self.fbb_.push_slot::<u32>(VoteNote::VT_ID, id, 0);
+        }
+        #[inline]
+        pub fn add_height(&mut self, height: u32) {
+            self.fbb_.push_slot::<u32>(VoteNote::VT_HEIGHT, height, 0);
+        }
+        #[inline]
+        pub fn add_value(&mut self, value: u64) {
+            self.fbb_.push_slot::<u64>(VoteNote::VT_VALUE, value, 0);
+        }
+        #[inline]
+        pub fn add_selected(&mut self, selected: bool) {
+            self.fbb_
+                .push_slot::<bool>(VoteNote::VT_SELECTED, selected, false);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> VoteNoteBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            VoteNoteBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<VoteNote<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for VoteNote<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("VoteNote");
+            ds.field("id", &self.id());
+            ds.field("height", &self.height());
+            ds.field("value", &self.value());
+            ds.field("selected", &self.selected());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct VoteNoteT {
+        pub id: u32,
+        pub height: u32,
+        pub value: u64,
+        pub selected: bool,
+    }
+    impl Default for VoteNoteT {
+        fn default() -> Self {
+            Self {
+                id: 0,
+                height: 0,
+                value: 0,
+                selected: false,
+            }
+        }
+    }
+    impl VoteNoteT {
+        pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> flatbuffers::WIPOffset<VoteNote<'b>> {
+            let id = self.id;
+            let height = self.height;
+            let value = self.value;
+            let selected = self.selected;
+            VoteNote::create(
+                _fbb,
+                &VoteNoteArgs {
+                    id,
+                    height,
+                    value,
+                    selected,
+                },
+            )
+        }
+    }
+    pub enum VoteNoteVecOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct VoteNoteVec<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for VoteNoteVec<'a> {
+        type Inner = VoteNoteVec<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> VoteNoteVec<'a> {
+        pub const VT_NOTES: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            VoteNoteVec { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args VoteNoteVecArgs<'args>,
+        ) -> flatbuffers::WIPOffset<VoteNoteVec<'bldr>> {
+            let mut builder = VoteNoteVecBuilder::new(_fbb);
+            if let Some(x) = args.notes {
+                builder.add_notes(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> VoteNoteVecT {
+            let notes = self.notes().map(|x| x.iter().map(|t| t.unpack()).collect());
+            VoteNoteVecT { notes }
+        }
+
+        #[inline]
+        pub fn notes(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<VoteNote<'a>>>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<VoteNote>>,
+                >>(VoteNoteVec::VT_NOTES, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for VoteNoteVec<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<VoteNote>>,
+                >>("notes", Self::VT_NOTES, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct VoteNoteVecArgs<'a> {
+        pub notes: Option<
+            flatbuffers::WIPOffset<
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<VoteNote<'a>>>,
+            >,
+        >,
+    }
+    impl<'a> Default for VoteNoteVecArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            VoteNoteVecArgs { notes: None }
+        }
+    }
+
+    pub struct VoteNoteVecBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> VoteNoteVecBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_notes(
+            &mut self,
+            notes: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<VoteNote<'b>>>,
+            >,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(VoteNoteVec::VT_NOTES, notes);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> VoteNoteVecBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            VoteNoteVecBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<VoteNoteVec<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for VoteNoteVec<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("VoteNoteVec");
+            ds.field("notes", &self.notes());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct VoteNoteVecT {
+        pub notes: Option<Vec<VoteNoteT>>,
+    }
+    impl Default for VoteNoteVecT {
+        fn default() -> Self {
+            Self { notes: None }
+        }
+    }
+    impl VoteNoteVecT {
+        pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> flatbuffers::WIPOffset<VoteNoteVec<'b>> {
+            let notes = self.notes.as_ref().map(|x| {
+                let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();
+                _fbb.create_vector(&w)
+            });
+            VoteNoteVec::create(_fbb, &VoteNoteVecArgs { notes })
+        }
+    }
 } // pub mod fb

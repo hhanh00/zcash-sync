@@ -1535,8 +1535,8 @@ pub unsafe extern "C" fn list_vote_notes(
     end_height: u32,
 ) -> CResult<*const u8> {
     let res = |connection: &Connection| {
-        let ids = crate::vote::list_notes(connection, account, end_height)?;
-        fb_to_bytes!(ids)
+        let notes = crate::vote::list_notes(connection, account, end_height)?;
+        fb_to_bytes!(notes)
     };
     let r = with_coin(coin, res);
     to_cresult_bytes(r)

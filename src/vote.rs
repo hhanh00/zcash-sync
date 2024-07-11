@@ -5,7 +5,13 @@ use zcash_vote::{
     create_ballot, download_reference_data, drop_tables, vote_data::BallotEnvelopeT, Election,
 };
 
-use crate::{db::data_generated::fb::IdListT, CoinConfig, Connection};
+use crate::{
+    db::data_generated::fb::{
+        IdListT, ShieldedNoteT, ShieldedNoteVec, ShieldedNoteVecT, VoteNote, VoteNoteT,
+        VoteNoteVecT,
+    },
+    CoinConfig, Connection,
+};
 
 pub fn populate_vote_notes(
     coin: u8,
@@ -36,15 +42,30 @@ pub fn populate_vote_notes(
     Ok(())
 }
 
-pub fn list_notes(connection: &Connection, account: u32, end_height: u32) -> Result<IdListT> {
+pub fn list_notes(connection: &Connection, account: u32, end_height: u32) -> Result<VoteNoteVecT> {
     let mut s = connection.prepare(
-        "SELECT id_note FROM vote_notes WHERE account = ?1 AND
-        (spent IS NULL OR spent > ?2)",
+        "SELECT v.id_note, r.height, r.value
+        FROM vote_notes v JOIN received_notes r
+        ON r.id_note = v.id_note WHERE r.account = ?1 AND
+        (v.spent IS NULL OR v.spent > ?2)",
     )?;
-    let rows = s.query_map(params![account, end_height], |r| r.get::<_, u32>(0))?;
-    let ids = rows.collect::<Result<Vec<_>, _>>()?;
-    let ids = IdListT { ids: Some(ids) };
-    Ok(ids)
+    let rows = s.query_map(params![account, end_height], |r| {
+        let id = r.get::<_, u32>(0)?;
+        let height = r.get::<_, u32>(1)?;
+        let value = r.get::<_, u64>(2)?;
+        Ok((id, height, value))
+    })?;
+    let mut notes = vec![];
+    for r in rows {
+        let (id, height, value) = r?;
+        notes.push(VoteNoteT {
+            id,
+            height,
+            value,
+            selected: false,
+        });
+    }
+    Ok(VoteNoteVecT { notes: Some(notes) })
 }
 
 pub fn reset_data(coin: u8) -> Result<()> {
