@@ -517,24 +517,6 @@ struct CResult______u8 list_swaps(uint8_t coin);
 
 struct CResult_u8 clear_swap_history(uint8_t coin);
 
-struct CResult_u8 download_vote_data(uint8_t coin, char *election);
-
-struct CResult_u8 populate_vote_notes(uint8_t coin,
-                                      uint32_t account,
-                                      uint32_t start_height,
-                                      uint32_t end_height);
-
-struct CResult______u8 list_vote_notes(uint8_t coin, uint32_t account, uint32_t end_height);
-
-struct CResult______u8 vote(uint8_t coin,
-                            uint32_t account,
-                            uint8_t *id_notes,
-                            uintptr_t id_notes_len,
-                            uint32_t candidate,
-                            char *election);
-
-struct CResult_u8 reset_vote(uint8_t coin);
-
 struct CResult_____c_char ledger_send(uint8_t coin, char *tx_plan);
 
 struct CResult_u32 ledger_import_account(uint8_t coin, char *name);

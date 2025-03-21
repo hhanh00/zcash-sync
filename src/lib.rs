@@ -103,7 +103,6 @@ pub mod api;
 
 #[cfg(feature = "ledger")]
 pub mod ledger;
-pub mod vote;
 
 pub use crate::chain::{connect_lightwalletd, get_best_server, ChainError};
 pub use crate::coinconfig::{
@@ -119,7 +118,6 @@ pub use crate::pay::{broadcast_tx, Tx, TxIn, TxOut};
 
 pub use crate::orchard::decode_merkle_path as decode_orchard_merkle_path;
 pub use crate::unified::{decode_unified_address, get_ua_of, get_unified_address};
-pub use crate::vote::populate_vote_notes;
 pub use db::backup::zip_dbs;
 pub use note_selection::{
     build_tx, build_tx_plan, fetch_utxos, get_secret_keys, Destination, Source,
