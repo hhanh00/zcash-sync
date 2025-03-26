@@ -14,7 +14,7 @@ use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, encode_payment_address, encode_transparent_address,
 };
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
-use zcash_params::coin::get_branch;
+use crate::coin::get_branch;
 use zcash_primitives::consensus::{BlockHeight, Network, Parameters};
 use zcash_primitives::memo::{Memo, MemoBytes};
 use zcash_primitives::sapling::note_encryption::{

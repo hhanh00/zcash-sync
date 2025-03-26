@@ -24,7 +24,7 @@ required-features = ["dotenv"]
 
 [lib]
 name = "warp_api_ffi"
-crate-type = ["cdylib"]
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 nonempty = "0.7"
@@ -114,8 +114,7 @@ metal = { version = "0.24", optional = true }
 objc = { version = "0.2", features = [ "objc_exception" ], optional = true }
 block = { version = "0.1.6", optional = true }
 rust_decimal = "1.35.0"
-
-zcash-vote = { path = "../zcash-vote" }
+zcash_note_encryption = "0.2.0"
 
 [features]
 ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv", "ureq" ]
@@ -128,8 +127,7 @@ sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
-rev = "47133e10ac7fa6093f0fc408761f17301f54c9e4"
-#path = "../zcash-params"
+rev = "e122ef6"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
@@ -156,11 +154,6 @@ rev = "d5c3fbcc"
 git = "https://github.com/hhanh00/librustzcash.git"
 rev = "d5c3fbcc"
 #path = "../../librustzcash/components/zcash_encoding"
-
-[dependencies.zcash_note_encryption]
-git = "https://github.com/hhanh00/librustzcash.git"
-rev = "d5c3fbcc"
-#path = "../../librustzcash/components/zcash_note_encryption"
 
 [build-dependencies]
 tonic-build = "0.7.2"

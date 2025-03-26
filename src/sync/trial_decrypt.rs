@@ -32,7 +32,7 @@ pub struct DecryptedTx<D: BatchDomain, VK, DN: DecryptedNote<D, VK>> {
 
 pub trait ViewKey<D: BatchDomain>: Clone {
     fn account(&self) -> u32;
-    fn ivk(&self) -> D::IncomingViewingKey;
+    fn ivk(&self) -> D::IncomingViewingKey where D::IncomingViewingKey: Clone;
 }
 
 #[derive(Clone)]
@@ -152,7 +152,11 @@ pub trait TrialDecrypter<
     DN: DecryptedNote<D, VK>,
 >: Clone
 {
-    fn decrypt_notes(&self, block: &CompactBlock, vks: &[VK]) -> DecryptedBlock<D, VK, DN> {
+    fn decrypt_notes(&self, block: &CompactBlock, vks: &[VK]) -> DecryptedBlock<D, VK, DN>
+    where <D as zcash_note_encryption::Domain>::IncomingViewingKey: Clone,
+    <D as zcash_note_encryption::Domain>::Note: Clone,
+    <D as zcash_note_encryption::Domain>::Recipient: Clone,
+    {
         let height = BlockHeight::from_u32(block.height as u32);
         let mut count_outputs = 0u32;
         let mut spends: Vec<Nf> = vec![];

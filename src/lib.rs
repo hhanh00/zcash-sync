@@ -74,6 +74,7 @@ pub type Hash = [u8; 32];
 
 // mod builder;
 mod chain;
+pub mod coin;
 mod coinconfig;
 // mod commitment;
 mod contact;

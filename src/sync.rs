@@ -86,7 +86,10 @@ impl<
         Ok(())
     }
 
-    pub fn process(&mut self, blocks: &[CompactBlock]) -> Result<usize> {
+    pub fn process(&mut self, blocks: &[CompactBlock]) -> Result<usize>
+    where <D as zcash_note_encryption::Domain>::IncomingViewingKey: Clone,
+    <D as zcash_note_encryption::Domain>::Recipient: Clone,
+    <D as zcash_note_encryption::Domain>::Note: Clone {
         if blocks.is_empty() {
             return Ok(0);
         }

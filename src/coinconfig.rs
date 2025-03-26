@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 use tonic::transport::Channel;
-use zcash_params::coin::{get_coin_chain, CoinChain, CoinType};
+use crate::coin::{get_coin_chain, CoinChain, CoinType};
 use zcash_proofs::prover::LocalTxProver;
 
 lazy_static! {

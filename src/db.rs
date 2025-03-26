@@ -19,7 +19,7 @@ use std::convert::TryInto;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_params::coin::{get_coin_chain, CoinType};
+use crate::coin::{get_coin_chain, CoinType};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};

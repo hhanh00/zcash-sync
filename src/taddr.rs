@@ -27,7 +27,7 @@ use tiny_hderive::bip32::ExtendedPrivKey;
 use tonic::transport::Channel;
 use tonic::Request;
 use zcash_client_backend::encoding::{encode_transparent_address, AddressCodec};
-use zcash_params::coin::get_branch;
+use crate::coin::get_branch;
 use zcash_primitives::consensus::{Network, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::memo::Memo;
