@@ -1,4 +1,10 @@
 fn main() {
+    // create_protobuf();
+    // create_c_bindings();
+}
+
+#[allow(dead_code)]
+fn create_protobuf() {
     tonic_build::configure()
         .out_dir("src/generated")
         .compile(
@@ -6,8 +12,6 @@ fn main() {
             &["proto"],
         )
         .unwrap();
-
-    create_c_bindings();
 }
 
 #[allow(dead_code)]
