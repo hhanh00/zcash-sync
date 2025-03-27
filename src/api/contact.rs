@@ -17,8 +17,8 @@ const CONTACT_AMOUNT: u64 = 10_000;
 /// * `name`: contact name
 /// * `address`: contact address
 /// * `dirty`: true if the database hasn't been saved to the blockchain yet
-pub fn store_contact(id: u32, name: &str, address: &str, dirty: bool) -> anyhow::Result<()> {
-    let c = CoinConfig::get_active();
+pub fn store_contact(coin: u8, id: u32, name: &str, address: &str, dirty: bool) -> anyhow::Result<()> {
+    let c = CoinConfig::get(coin);
     let contact = Contact {
         id,
         name: name.to_string(),

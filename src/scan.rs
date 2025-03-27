@@ -351,13 +351,13 @@ pub fn get_pool_balances(
     let db = DbAdapter::new(c.coin_type, connection)?;
     let height = db.get_db_height()? - confirmations;
     let connection = db.inner();
-    get_pool_balances_inner(&connection, height, account, include_unconfirmed)
+    get_pool_balances_inner(&connection, account, height, include_unconfirmed)
 }
 
 pub fn get_pool_balances_inner(
     connection: &Connection,
-    height: u32,
     account: u32,
+    height: u32,
     include_unconfirmed: bool,
 ) -> anyhow::Result<PoolBalanceT> {
     let sapling = get_balance(&connection, account, height, 0, include_unconfirmed)?;
