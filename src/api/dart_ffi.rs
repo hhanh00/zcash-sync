@@ -866,6 +866,7 @@ pub async unsafe extern "C" fn get_block_by_time(coin: u8, time: u32) -> CResult
 
 #[no_mangle]
 pub unsafe extern "C" fn store_contact(
+    coin: u8,
     id: u32,
     name: *mut c_char,
     address: *mut c_char,
@@ -873,7 +874,7 @@ pub unsafe extern "C" fn store_contact(
 ) {
     from_c_str!(name);
     from_c_str!(address);
-    let res = crate::api::contact::store_contact(id, &name, &address, dirty);
+    let res = crate::api::contact::store_contact(coin, id, &name, &address, dirty);
     log_error(res)
 }
 

@@ -387,7 +387,7 @@ struct CResult_u32 get_activation_date(void);
 
 struct CResult_u32 get_block_by_time(uint8_t coin, uint32_t time);
 
-void store_contact(uint32_t id, char *name, char *address, bool dirty);
+void store_contact(uint8_t coin, uint32_t id, char *name, char *address, bool dirty);
 
 struct CResult_____c_char commit_unsaved_contacts(uint8_t coin,
                                                   uint32_t account,
