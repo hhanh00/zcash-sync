@@ -3,6 +3,7 @@ fn main() {
     // create_c_bindings();
 }
 
+/*
 #[allow(dead_code)]
 fn create_protobuf() {
     tonic_build::configure()
@@ -26,3 +27,4 @@ fn create_c_bindings() {
         .expect("Unable to generate bindings")
         .write_to_file("binding.h");
 }
+*/
