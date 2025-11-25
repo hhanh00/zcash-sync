@@ -131,28 +131,28 @@ rev = "e122ef6"
 
 [dependencies.zcash_client_backend]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "d5c3fbcc"
+rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
 #path = "../../librustzcash/zcash_client_backend"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "d5c3fbcc"
+rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
 #path = "../../librustzcash/zcash_primitives"
 features = [ "transparent-inputs" ]
 
 [dependencies.zcash_proofs]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "d5c3fbcc"
+rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
 #path = "../../librustzcash/zcash_proofs"
 
 [dependencies.zcash_address]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "d5c3fbcc"
+rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
 #path = "../../librustzcash/components/zcash_address"
 
 [dependencies.zcash_encoding]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "d5c3fbcc"
+rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
 #path = "../../librustzcash/components/zcash_encoding"
 
 #[build-dependencies]
@@ -164,4 +164,4 @@ criterion = "0.3.4"
 
 #These patch overrides must be included in your workspace root Cargo.toml
 #[patch.crates-io]
-#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "d5c3fbcc" }
+#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599" }
