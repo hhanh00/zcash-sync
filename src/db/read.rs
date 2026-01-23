@@ -1,6 +1,7 @@
 use crate::unified::orchard_as_unified;
 use crate::CoinConfig;
 use crate::{db::data_generated::fb::*, orchard::OrchardKeyBytes};
+use crate::taddr::parse_tex;
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
@@ -360,7 +361,11 @@ fn extract_receivers<T: Clone>(
     value: T,
     receiver_map: &mut HashMap<String, Vec<T>>,
 ) -> anyhow::Result<()> {
-    let a = RecipientAddress::decode(network, address).unwrap();
+    let address = match parse_tex(network, address) {
+        Ok(address) => address,
+        Err(_) => address.to_string(),
+    };
+    let a = RecipientAddress::decode(network, &address).ok_or(anyhow::anyhow!("Invalid Address"))?;
     match a {
         RecipientAddress::Transparent(_) | RecipientAddress::Shielded(_) => {
             receiver_map
@@ -912,7 +917,7 @@ pub fn clear_swap_history(connection: &Connection) -> anyhow::Result<()> {
 
 pub fn list_swaps(connection: &Connection) -> anyhow::Result<Vec<SwapT>> {
     let mut s = connection.prepare(
-        "SELECT 
+        "SELECT
         provider,
         provider_id,
         timestamp,
