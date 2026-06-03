@@ -84,8 +84,8 @@ f4jumble = "0.1.0"
 
 # Halo
 orchard = "0.3.0"
-halo2_proofs = "0.2"
-halo2_gadgets = "0.2"
+halo2_proofs = "0.3"
+halo2_gadgets = "0.5"
 
 bech32 = "0.8.1"
 rand_chacha = "0.3.1"
