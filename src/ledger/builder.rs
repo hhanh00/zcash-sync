@@ -226,9 +226,12 @@ pub fn build_ledger_tx(
     let sapling_bundle = sapling_builder.build()?;
     let orchard_bundle = orchard_builder.build()?;
 
+    let consensus_branch_id =
+        BranchId::for_height(network, BlockHeight::from_u32(tx_plan.anchor_height));
+    let version = TxVersion::suggested_for_branch(consensus_branch_id);
     let authed_tx: TransactionData<Authorized> = TransactionData {
-        version: TxVersion::Zip225,
-        consensus_branch_id: BranchId::Nu5,
+        version,
+        consensus_branch_id,
         lock_time: 0,
         expiry_height: BlockHeight::from_u32(tx_plan.expiry_height),
         transparent_bundle,

@@ -1,5 +1,6 @@
 use super::types::*;
-use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
+use crate::orchard::{get_proving_key_for_height, OrchardHasher, ORCHARD_ROOTS};
+use halo2_gadgets::ecc::chip::CircuitVersion;
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::Witness;
@@ -108,7 +109,12 @@ pub fn build_tx(
     let anchor: Anchor = orchard::tree::MerkleHashOrchard::from_bytes(&plan.orchard_anchor)
         .unwrap()
         .into();
-    let mut orchard_builder = OrchardBuilder::new(Flags::from_parts(true, true), anchor);
+    let circuit_version = if BranchId::for_height(network, BlockHeight::from_u32(plan.anchor_height)) as u32 >= 0x5437_f330 {
+        CircuitVersion::AnchoredBase
+    } else {
+        CircuitVersion::InsecureUnanchoredBase
+    };
+    let mut orchard_builder = OrchardBuilder::new_for_version(Flags::from_parts(true, true), anchor, circuit_version);
     for spend in plan.spends.iter() {
         match &spend.source {
             Source::Transparent { txid, index } => {
@@ -286,7 +292,7 @@ pub fn build_tx(
     let orchard_bundle = unauthed_tx.orchard_bundle().map(|ob| {
         let proven = ob
             .clone()
-            .create_proof(get_proving_key(), &mut rng)
+            .create_proof(get_proving_key_for_height(network, plan.anchor_height), &mut rng)
             .unwrap();
         proven
             .apply_signatures(&mut rng, sig_hash, &orchard_signing_keys)
