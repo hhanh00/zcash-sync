@@ -19,7 +19,7 @@ use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use std::str::FromStr;
 use zcash_client_backend::encoding::decode_extended_spending_key;
-use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
+use zcash_primitives::consensus::{BlockHeight, BranchId, Network, NetworkUpgrade, Parameters};
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::merkle_tree::IncrementalWitness;
 use zcash_primitives::sapling::prover::TxProver;
@@ -109,7 +109,7 @@ pub fn build_tx(
     let anchor: Anchor = orchard::tree::MerkleHashOrchard::from_bytes(&plan.orchard_anchor)
         .unwrap()
         .into();
-    let circuit_version = if BranchId::for_height(network, BlockHeight::from_u32(plan.anchor_height)) as u32 >= 0x5437_f330 {
+    let circuit_version = if network.is_nu_active(NetworkUpgrade::Nu6_2, BlockHeight::from_u32(plan.anchor_height)) {
         CircuitVersion::AnchoredBase
     } else {
         CircuitVersion::InsecureUnanchoredBase
@@ -290,9 +290,10 @@ pub fn build_tx(
     }
 
     let orchard_bundle = unauthed_tx.orchard_bundle().map(|ob| {
+        let pk = get_proving_key_for_height(network, plan.anchor_height);
         let proven = ob
             .clone()
-            .create_proof(get_proving_key_for_height(network, plan.anchor_height), &mut rng)
+            .create_proof(pk, &mut rng)
             .unwrap();
         proven
             .apply_signatures(&mut rng, sig_hash, &orchard_signing_keys)

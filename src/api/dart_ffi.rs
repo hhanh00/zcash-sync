@@ -123,15 +123,6 @@ pub unsafe extern "C" fn deallocate_bytes(ptr: *mut u8, len: u32) {
 fn try_init_logger() {
     android_logger::init_once(
         Config::default()
-            // .format(|buf, record| {
-            //     writeln!(
-            //         buf,
-            //         "{:?}-{:?}: {}",
-            //         record.file(),
-            //         record.line(),
-            //         record.args()
-            //     )
-            // })
             .with_min_level(Level::Info),
     );
     let _ = env_logger::try_init();

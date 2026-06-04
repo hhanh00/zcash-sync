@@ -39,13 +39,14 @@ pub fn get_proving_key_insecure() -> &'static ProvingKey {
 
 /// Returns the correct proving key based on whether NU6.2 is active at the given height.
 pub fn get_proving_key_for_height(network: &zcash_primitives::consensus::Network, height: u32) -> &'static ProvingKey {
-    use zcash_primitives::consensus::{BlockHeight, BranchId};
-    let branch = BranchId::for_height(network, BlockHeight::from_u32(height));
-    if branch as u32 >= 0x5437_f330 {
+    use zcash_primitives::consensus::{BlockHeight, NetworkUpgrade, Parameters};
+    let is_nu6_2 = network.is_nu_active(NetworkUpgrade::Nu6_2, BlockHeight::from_u32(height));
+    let pk = if is_nu6_2 {
         // NU6.2 or later — use the fixed circuit
         get_proving_key()
     } else {
         // Pre-NU6.2 — use the insecure circuit
         get_proving_key_insecure()
-    }
+    };
+    pk
 }
