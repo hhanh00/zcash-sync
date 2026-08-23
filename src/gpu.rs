@@ -6,10 +6,10 @@ use lazy_static::lazy_static;
 use std::convert::TryInto;
 use std::sync::Mutex;
 use zcash_note_encryption::Domain;
-use zcash_primitives::consensus::{BlockHeight, Network};
-use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
-use zcash_primitives::sapling::SaplingIvk;
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_protocol::consensus::{BlockHeight, Network};
+use sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
+use sapling::SaplingIvk;
+use sapling::zip32::ExtendedFullViewingKey;
 
 lazy_static! {
     pub static ref USE_GPU: Mutex<bool> = Mutex::new(true);
@@ -124,7 +124,10 @@ fn collect_decrypted_notes(
     for db in decrypted_blocks {
         let b = &db.compact_block;
         let mut decrypted_notes = vec![];
-        let domain = SaplingDomain::for_height(*network, BlockHeight::from_u32(b.height as u32));
+        let domain = SaplingDomain::new(crate::sapling::zip212_enforcement(
+            network,
+            BlockHeight::from_u32(b.height as u32),
+        ));
         for (tx_index, tx) in b.vtx.iter().enumerate() {
             for (output_index, co) in tx.outputs.iter().enumerate() {
                 if !co.epk.is_empty() {

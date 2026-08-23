@@ -1,7 +1,7 @@
 use crate::{db::read::get_account_by_address, taddr::derive_from_pubkey, CoinConfig};
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
-use zcash_client_backend::encoding::{encode_extended_full_viewing_key, encode_payment_address};
+use zcash_keys::encoding::{encode_extended_full_viewing_key, encode_payment_address};
 use zcash_primitives::{consensus::Parameters, zip32::ExtendedFullViewingKey};
 
 use super::transport::*;

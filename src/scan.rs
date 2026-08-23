@@ -20,14 +20,14 @@ use std::sync::Arc;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_primitives::consensus::{Network, Parameters};
+use zcash_keys::encoding::decode_extended_full_viewing_key;
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 
 use crate::orchard::{DecryptedOrchardNote, OrchardDecrypter, OrchardHasher, OrchardViewKey};
 use crate::sapling::{DecryptedSaplingNote, SaplingDecrypter, SaplingHasher, SaplingViewKey};
 use crate::sync::{Synchronizer, WarpProcessor};
-use zcash_primitives::sapling::note_encryption::SaplingDomain;
-use zcash_primitives::sapling::Note;
+use sapling::note_encryption::SaplingDomain;
+use sapling::Note;
 
 pub struct Blocks(pub Vec<CompactBlock>, pub usize);
 
@@ -66,7 +66,7 @@ pub struct TxIdHeight {
 type SaplingSynchronizer<'a> = Synchronizer<
     'a,
     Network,
-    SaplingDomain<Network>,
+    SaplingDomain,
     SaplingViewKey,
     DecryptedSaplingNote,
     SaplingDecrypter<Network>,

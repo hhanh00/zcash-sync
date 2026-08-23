@@ -1,4 +1,4 @@
-use zcash_primitives::consensus::{BlockHeight, BranchId, Network};
+use zcash_protocol::consensus::{BlockHeight, BranchId, Network};
 use serde::{Serialize, Deserialize};
 
 #[derive(Copy, Clone, Serialize, Deserialize, Debug)]

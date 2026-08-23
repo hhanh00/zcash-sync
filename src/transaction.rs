@@ -10,17 +10,17 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use tonic::transport::Channel;
 use tonic::Request;
-use zcash_client_backend::encoding::{
+use zcash_keys::encoding::{
     decode_extended_full_viewing_key, encode_payment_address, encode_transparent_address,
 };
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 use crate::coin::get_branch;
-use zcash_primitives::consensus::{BlockHeight, Network, Parameters};
-use zcash_primitives::memo::{Memo, MemoBytes};
-use zcash_primitives::sapling::note_encryption::{
+use zcash_protocol::consensus::{BlockHeight, Network, NetworkConstants, Parameters};
+use zcash_protocol::memo::{Memo, MemoBytes};
+use sapling::note_encryption::{
     try_sapling_note_decryption, try_sapling_output_recovery, PreparedIncomingViewingKey,
 };
-use zcash_primitives::sapling::SaplingIvk;
+use sapling::SaplingIvk;
 use zcash_primitives::transaction::Transaction;
 
 #[derive(Debug)]
@@ -100,7 +100,7 @@ async fn fetch_raw_transaction(
 
 #[derive(Clone)]
 pub struct DecryptionKeys {
-    sapling_keys: (SaplingIvk, zcash_primitives::keys::OutgoingViewingKey),
+    sapling_keys: (SaplingIvk, sapling::keys::OutgoingViewingKey),
     orchard_keys: Option<(IncomingViewingKey, OutgoingViewingKey)>,
 }
 
@@ -140,53 +140,63 @@ pub fn decode_transaction(
     // or a self-transfer
 
     if let Some(sapling_bundle) = tx.sapling_bundle() {
-        let mut contact_decoder = ContactDecoder::new(sapling_bundle.shielded_outputs.len());
-        for output in sapling_bundle.shielded_outputs.iter() {
+        let mut contact_decoder = ContactDecoder::new(sapling_bundle.shielded_outputs().len());
+        for output in sapling_bundle.shielded_outputs().iter() {
             let pivk = PreparedIncomingViewingKey::new(&sapling_ivk);
             let mut opt_memo = None;
 
             // Try decoding with the ivk
-            if let Some((_note, pa, memo)) =
-                try_sapling_note_decryption(network, block_height, &pivk, output)
-            {
+            if let Some((_note, pa, memo)) = try_sapling_note_decryption(
+                &pivk,
+                output,
+                crate::sapling::zip212_enforcement(network, block_height),
+            ) {
                 let address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
-                if let Ok(memo) = Memo::try_from(memo) {
-                    if let Some(txt) = get_memo_text(&memo) {
-                        opt_memo
-                            .get_or_insert(MemoT {
-                                direction: 0,
-                                address: Some(address),
-                                memo: Some(txt),
-                            })
-                            .direction |= 1;
+                if let Ok(memo_bytes) = MemoBytes::from_bytes(&memo) {
+                    if let Ok(memo) = Memo::try_from(memo_bytes) {
+                        if let Some(txt) = get_memo_text(&memo) {
+                            opt_memo
+                                .get_or_insert(MemoT {
+                                    direction: 0,
+                                    address: Some(address),
+                                    memo: Some(txt),
+                                })
+                                .direction |= 1;
+                        }
                     }
                 }
             }
 
             // Try decoding with the ovk
-            if let Some((_note, pa, memo, ..)) =
-                try_sapling_output_recovery(network, block_height, &sapling_ovk, output)
-            {
+            if let Some((_note, pa, memo)) = try_sapling_output_recovery(
+                &sapling_ovk,
+                output,
+                crate::sapling::zip212_enforcement(network, block_height),
+            ) {
                 let address = encode_payment_address(network.hrp_sapling_payment_address(), &pa);
                 // contacts are decoded with our OVK, this makes sure that we
                 // created it
-                let _ = contact_decoder.add_memo(&memo); // ignore memo that is not for contacts, if we cannot decode it with ovk, we didn't create this memo
-                if let Ok(memo) = Memo::try_from(memo) {
-                    if let Some(txt) = get_memo_text(&memo) {
-                        opt_memo
-                            .get_or_insert(MemoT {
-                                direction: 0,
-                                address: Some(address),
-                                memo: Some(txt),
-                            })
-                            .direction |= 2;
-                        // the previous line stores the memo or
-                        // updates its direction
-                        // whether the memo is decoded via ivk or ovk
-                        // does not matter. The value is the same in
-                        // both cases
+                if let Ok(memo_bytes) = MemoBytes::from_bytes(&memo) {
+                    // ignore memo that is not for contacts; if we cannot decode it
+                    // with ovk, we didn't create this memo
+                    let _ = contact_decoder.add_memo(&memo_bytes);
+                }
+                if let Ok(memo_bytes) = MemoBytes::from_bytes(&memo) {
+                    if let Ok(memo) = Memo::try_from(memo_bytes) {
+                        if let Some(txt) = get_memo_text(&memo) {
+                            opt_memo
+                                .get_or_insert(MemoT {
+                                    direction: 0,
+                                    address: Some(address),
+                                    memo: Some(txt),
+                                })
+                                .direction |= 2;
+                        }
                     }
                 }
+                // the previous line stores the memo or updates its direction.
+                // Whether the memo is decoded via ivk or ovk does not matter;
+                // the value is the same in both cases.
             }
 
             if let Some(memo) = opt_memo {

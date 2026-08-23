@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use zcash_note_encryption::BatchDomain;
-use zcash_primitives::consensus::Parameters;
+use zcash_protocol::consensus::{NetworkConstants, Parameters};
 
 pub mod tree;
 pub mod trial_decrypt;

@@ -13,8 +13,8 @@ pub use utxo::fetch_utxos;
 use crate::db::data_generated::fb::Recipient;
 use thiserror::Error;
 use ua::decode;
-use zcash_primitives::consensus::Network;
-use zcash_primitives::memo::Memo;
+use zcash_protocol::consensus::Network;
+use zcash_protocol::memo::Memo;
 
 #[derive(Error, Debug)]
 pub enum TransactionBuilderError {

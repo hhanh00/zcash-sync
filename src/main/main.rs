@@ -1,9 +1,9 @@
 use std::time::Instant;
 use sync::{advance_tree, scan_all, CTree, Witness};
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_primitives::consensus::{Network, Parameters};
+use zcash_keys::encoding::decode_extended_full_viewing_key;
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
-use zcash_primitives::sapling::Node;
+use sapling::Node;
 
 const NETWORK: Network = Network::MainNetwork;
 

@@ -4,8 +4,8 @@ use crate::note_selection::ua::decode;
 use crate::note_selection::TransactionBuilderError::TxTooComplex;
 use crate::note_selection::{zats_to_zec, TransactionBuilderError, MAX_ATTEMPTS};
 use crate::Hash;
-use zcash_primitives::consensus::Network;
-use zcash_primitives::memo::MemoBytes;
+use zcash_protocol::consensus::Network;
+use zcash_protocol::memo::MemoBytes;
 
 pub fn sum_utxos(utxos: &[UTXO]) -> Result<PoolAllocation> {
     let mut pool = PoolAllocation::default();

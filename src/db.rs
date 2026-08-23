@@ -18,12 +18,12 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use tonic::transport::Channel;
 use tonic::Request;
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
+use zcash_keys::encoding::decode_extended_full_viewing_key;
 use crate::coin::{get_coin_chain, CoinType};
-use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
-use zcash_primitives::merkle_tree::IncrementalWitness;
-use zcash_primitives::sapling::{Diversifier, Node, Note, SaplingIvk};
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_protocol::consensus::{Network, NetworkConstants, NetworkUpgrade, Parameters};
+use incrementalmerkletree::witness::IncrementalWitness;
+use sapling::{Diversifier, Node, Note, SaplingIvk};
+use sapling::zip32::ExtendedFullViewingKey;
 
 pub mod backup;
 pub mod cipher;
@@ -116,7 +116,7 @@ pub struct SpendableNote {
     pub id: u32,
     pub note: Note,
     pub diversifier: Diversifier,
-    pub witness: IncrementalWitness<Node>,
+    pub witness: IncrementalWitness<Node, 32>,
 }
 
 pub struct AccountViewKey {

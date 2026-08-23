@@ -1,10 +1,10 @@
 use anyhow::Result;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use zcash_client_backend::encoding::encode_extended_spending_key;
-use zcash_primitives::consensus::Network::MainNetwork;
-use zcash_primitives::consensus::Parameters;
-use zcash_primitives::zip32::ExtendedSpendingKey;
+use zcash_keys::encoding::encode_extended_spending_key;
+use zcash_protocol::consensus::Network::MainNetwork;
+use zcash_protocol::consensus::{NetworkConstants, Parameters};
+use sapling::zip32::ExtendedSpendingKey;
 
 fn main() -> Result<()> {
     env_logger::init();

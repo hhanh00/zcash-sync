@@ -5,15 +5,15 @@ use std::collections::HashMap;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tonic::Request;
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
+use zcash_keys::encoding::decode_extended_full_viewing_key;
 use zcash_note_encryption::try_note_decryption;
 
 use crate::coinconfig::CoinConfig;
-use zcash_primitives::consensus::{BlockHeight, Network, NetworkUpgrade, Parameters};
-use zcash_primitives::sapling::note_encryption::{
+use zcash_protocol::consensus::{BlockHeight, Network, NetworkConstants, NetworkUpgrade, Parameters};
+use sapling::note_encryption::{
     try_sapling_note_decryption, PreparedIncomingViewingKey,
 };
-use zcash_primitives::sapling::SaplingIvk;
+use sapling::SaplingIvk;
 use zcash_primitives::transaction::Transaction;
 
 struct MemPoolImpl {
@@ -256,20 +256,19 @@ impl MemPoolImpl {
         let tx = Transaction::read(&tx.data[..], consensus_branch_id)?;
         log::info!("Mempool TXID {}", tx.txid());
         if let Some(sapling_bundle) = tx.sapling_bundle() {
-            for cs in sapling_bundle.shielded_spends.iter() {
-                let nf = cs.nullifier.0;
+            for cs in sapling_bundle.shielded_spends().iter() {
+                let nf = cs.nullifier().0;
                 if let Some(&value) = self.nfs.get(&nf) {
                     // nf recognized -> value is spent
                     balance -= value as i64;
                 }
             }
-            for co in sapling_bundle.shielded_outputs.iter() {
+            for co in sapling_bundle.shielded_outputs().iter() {
                 // let od = to_output_description(co);
                 if let Some((note, _, _)) = try_sapling_note_decryption(
-                    &self.network,
-                    BlockHeight::from_u32(height),
                     &self.pivk,
                     co,
+                    crate::sapling::zip212_enforcement(&self.network, BlockHeight::from_u32(height)),
                 ) {
                     balance += note.value().inner() as i64; // value is incoming
                 }

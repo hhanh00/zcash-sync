@@ -3,10 +3,10 @@ use byteorder::WriteBytesExt;
 use std::io::{Read, Write};
 use zcash_encoding::{Optional, Vector};
 use zcash_primitives::merkle_tree::{CommitmentTree, Hashable};
-use zcash_primitives::sapling::Node;
+use sapling::Node;
 
 /*
-Same behavior and structure as CommitmentTree<Node> from librustzcash
+Same behavior and structure as CommitmentTree<Node, 32> from librustzcash
 It represents the data required to build a merkle path from a note commitment (leaf)
 to the root.
 The Merkle Path is the minimal set of nodes needed to recalculate the Merkle root
@@ -185,9 +185,9 @@ impl CTree {
         tree
     }
 
-    pub fn to_commitment_tree(&self) -> CommitmentTree<Node> {
+    pub fn to_commitment_tree(&self) -> CommitmentTree<Node, 32> {
         let mut bb: Vec<u8> = vec![];
         self.write(&mut bb).unwrap();
-        CommitmentTree::<Node>::read(&*bb).unwrap()
+        CommitmentTree::<Node, 32>::read(&*bb).unwrap()
     }
 }

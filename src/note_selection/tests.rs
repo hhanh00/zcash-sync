@@ -7,8 +7,8 @@ use crate::note_selection::optimize::select_inputs;
 use assert_matches::assert_matches;
 use serde::Serialize;
 use serde_json::Value;
-use zcash_primitives::consensus::Network;
-use zcash_primitives::memo::MemoBytes;
+use zcash_protocol::consensus::Network;
+use zcash_protocol::memo::MemoBytes;
 
 macro_rules! utxo {
     ($id:expr, $q:expr) => {

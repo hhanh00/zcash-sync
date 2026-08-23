@@ -5,9 +5,9 @@ use crate::taddr::{parse_tex, unwrap_tex};
 use crate::{AccountData, CoinConfig};
 use serde::Deserialize;
 use std::str::FromStr;
-use zcash_client_backend::address::{RecipientAddress, UnifiedAddress};
-use zcash_primitives::consensus::Network;
-use zcash_primitives::memo::Memo;
+use zcash_keys::address::{Address, UnifiedAddress};
+use zcash_protocol::consensus::Network;
+use zcash_protocol::memo::Memo;
 
 #[derive(Clone, Deserialize)]
 pub struct RecipientShort {
@@ -40,11 +40,11 @@ impl RecipientMemo {
 
         let addr = unwrap_tex(network, address);
         let ra =
-            RecipientAddress::decode(network, &addr).ok_or(anyhow::anyhow!("Invalid address"))?;
+            Address::decode(network, &addr).ok_or(anyhow::anyhow!("Invalid address"))?;
         let pools = r.pools();
         let address = if pools != 0 {
             match ra {
-                RecipientAddress::Unified(ua) => {
+                Address::Unified(ua) => {
                     let t = ua.transparent().filter(|_| pools & 1 != 0).cloned();
                     let s = ua.sapling().filter(|_| pools & 2 != 0).cloned();
                     let o = ua.orchard().filter(|_| pools & 4 != 0).cloned();
@@ -53,7 +53,7 @@ impl RecipientMemo {
                         ua.encode(network)
                     } else {
                         let ta = t.ok_or(anyhow::anyhow!("No transparent receiver"))?;
-                        let ra = RecipientAddress::Transparent(ta);
+                        let ra = Address::Transparent(ta);
                         ra.encode(network)
                     }
                 }

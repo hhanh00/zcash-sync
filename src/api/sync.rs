@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::Request;
-use zcash_primitives::consensus::Parameters;
+use zcash_protocol::consensus::{NetworkConstants, Parameters};
 
 lazy_static! {
     pub static ref SYNC_CANCEL: parking_lot::Mutex<Option<CancellationToken>> =
@@ -104,7 +104,7 @@ pub async fn rescan_from(coin: u8, height: u32) -> anyhow::Result<u32> {
     let min_height = u32::from(
         c.chain
             .network()
-            .activation_height(zcash_primitives::consensus::NetworkUpgrade::Sapling)
+            .activation_height(zcash_protocol::consensus::NetworkUpgrade::Sapling)
             .unwrap(),
     );
     let height = height.max(min_height + 2); // zcashd returns treestate at A+1

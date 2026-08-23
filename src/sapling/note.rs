@@ -6,10 +6,12 @@ use crate::CompactTx;
 use ff::PrimeField;
 use std::convert::TryInto;
 use zcash_note_encryption::Domain;
-use zcash_primitives::consensus::{BlockHeight, Parameters};
-use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
-use zcash_primitives::sapling::{PaymentAddress, SaplingIvk};
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_protocol::consensus::{BlockHeight, NetworkConstants, Parameters};
+use sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
+use sapling::zip32::ExtendedFullViewingKey;
+use sapling::{PaymentAddress, SaplingIvk};
+
+use crate::sapling::zip212_enforcement;
 
 #[derive(Clone)]
 pub struct SaplingViewKey {
@@ -18,27 +20,27 @@ pub struct SaplingViewKey {
     pub ivk: SaplingIvk,
 }
 
-impl<P: Parameters> ViewKey<SaplingDomain<P>> for SaplingViewKey {
+impl ViewKey<SaplingDomain> for SaplingViewKey {
     fn account(&self) -> u32 {
         self.account
     }
-    fn ivk(&self) -> <SaplingDomain<P> as Domain>::IncomingViewingKey {
+    fn ivk(&self) -> <SaplingDomain as Domain>::IncomingViewingKey {
         PreparedIncomingViewingKey::new(&self.ivk)
     }
 }
 
 pub struct DecryptedSaplingNote {
     pub vk: SaplingViewKey,
-    pub note: zcash_primitives::sapling::Note,
+    pub note: sapling::Note,
     pub pa: PaymentAddress,
     pub output_position: OutputPosition,
     pub cmx: Node,
 }
 
-impl<P: Parameters> DecryptedNote<SaplingDomain<P>, SaplingViewKey> for DecryptedSaplingNote {
+impl DecryptedNote<SaplingDomain, SaplingViewKey> for DecryptedSaplingNote {
     fn from_parts(
         vk: SaplingViewKey,
-        note: zcash_primitives::sapling::Note,
+        note: sapling::Note,
         pa: PaymentAddress,
         output_position: OutputPosition,
         cmx: Node,
@@ -87,11 +89,11 @@ impl<N> SaplingDecrypter<N> {
     }
 }
 
-impl<N: Parameters> TrialDecrypter<N, SaplingDomain<N>, SaplingViewKey, DecryptedSaplingNote>
+impl<N: Parameters> TrialDecrypter<N, SaplingDomain, SaplingViewKey, DecryptedSaplingNote>
     for SaplingDecrypter<N>
 {
-    fn domain(&self, height: BlockHeight, _cob: &CompactOutputBytes) -> SaplingDomain<N> {
-        SaplingDomain::<N>::for_height(self.network.clone(), height)
+    fn domain(&self, height: BlockHeight, _cob: &CompactOutputBytes) -> SaplingDomain {
+        SaplingDomain::new(zip212_enforcement(&self.network, height))
     }
 
     fn spends(&self, vtx: &CompactTx) -> Vec<Nf> {

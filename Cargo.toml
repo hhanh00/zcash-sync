@@ -67,7 +67,8 @@ bls12_381 = "0.7"
 ff = "0.13"
 group = "0.13.0"
 byteorder = "^1.4"
-secp256k1 = "0.21.3"
+secp256k1 = "0.29"
+zcash_script = "0.4"
 tiny-hderive = "0.3.0"
 ripemd = "0.1.1"
 sha2 = "0.10.2"
@@ -79,13 +80,15 @@ lazycell = "1.3.0"
 reqwest = { version = "0.11.4", features = ["json", "rustls-tls"], default-features = false }
 ureq = { version = "2.6", optional = true }
 hex-literal = "0.4"
-pasta_curves = "0.5"
-f4jumble = "0.1.0"
+pasta_curves = "0.5.1"
+f4jumble = "0.1.1"
+incrementalmerkletree = { version = "0.8.2", default-features = false, features = ["legacy-api"] }
+zip32 = "0.2"
 
 # Halo
-orchard = "0.3.0"
-halo2_proofs = "0.2"
-halo2_gadgets = "0.2"
+orchard = "0.15"
+halo2_proofs = "0.3"
+halo2_gadgets = "0.5"
 
 bech32 = "0.8.1"
 rand_chacha = "0.3.1"
@@ -95,7 +98,7 @@ base64 = "^0.13"
 base58check = "0.1.0"
 raptorq = "1.7.0"
 sysinfo = "0.28"
-incrementalmerkletree = "0.5.1"
+
 
 ledger-transport-hid = { version = "0.10", optional = true }
 ledger-apdu = { version = "0.10", optional = true }
@@ -114,7 +117,7 @@ metal = { version = "0.24", optional = true }
 objc = { version = "0.2", features = [ "objc_exception" ], optional = true }
 block = { version = "0.1.6", optional = true }
 rust_decimal = "1.35.0"
-zcash_note_encryption = "0.2.0"
+zcash_note_encryption = "0.4"
 
 [features]
 ledger = ["ledger-apdu", "ledger-transport-hid", "dotenv", "ureq" ]
@@ -127,32 +130,53 @@ sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies.zcash_params]
 git = "https://github.com/hhanh00/zcash-params.git"
-rev = "e122ef6"
+rev = "31889e3"
+#path = "../zcash-params"
 
-[dependencies.zcash_client_backend]
+[dependencies.zcash_protocol]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
-#path = "../../librustzcash/zcash_client_backend"
+rev = "9ec4bd271"
+#path = "../../librustzcash/components/zcash_protocol"
+
+[dependencies.zcash_keys]
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "9ec4bd271"
+#path = "../../librustzcash/zcash_keys"
+
+[dependencies.zcash_transparent]
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "9ec4bd271"
+#path = "../../librustzcash/zcash_transparent"
+
+[dependencies.zip321]
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "9ec4bd271"
+#path = "../../librustzcash/components/zip321"
+
+[dependencies.sapling]
+package = "sapling-crypto"
+git = "https://github.com/hhanh00/sapling-crypto.git"
+rev = "70b8cf8"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
+rev = "9ec4bd271"
 #path = "../../librustzcash/zcash_primitives"
-features = [ "transparent-inputs" ]
+features = [ "transparent-inputs", "non-standard-fees" ]
 
 [dependencies.zcash_proofs]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
+rev = "9ec4bd271"
 #path = "../../librustzcash/zcash_proofs"
 
 [dependencies.zcash_address]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
+rev = "9ec4bd271"
 #path = "../../librustzcash/components/zcash_address"
 
 [dependencies.zcash_encoding]
 git = "https://github.com/hhanh00/librustzcash.git"
-rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
+rev = "9ec4bd271"
 #path = "../../librustzcash/components/zcash_encoding"
 
 #[build-dependencies]
@@ -163,5 +187,15 @@ rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599"
 criterion = "0.3.4"
 
 #These patch overrides must be included in your workspace root Cargo.toml
-#[patch.crates-io]
-#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "03bd6b436b95ffa6f41c76475a5ccc7250a77599" }
+[patch.crates-io]
+sapling-crypto = { git = "https://github.com/hhanh00/sapling-crypto.git", rev = "70b8cf8" }
+zcash_protocol = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }
+zcash_primitives = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }
+zcash_keys = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }
+zcash_transparent = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }
+zcash_address = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }
+zcash_encoding = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }
+zcash_proofs = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }
+zip321 = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }
+f4jumble = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }
+equihash = { git = "https://github.com/hhanh00/librustzcash.git", rev = "9ec4bd271" }

@@ -7,11 +7,11 @@ use orchard::Address;
 use serde::{Deserialize, Serialize};
 use serde_hex::{SerHex, Strict};
 use serde_with::serde_as;
-use zcash_client_backend::encoding::{encode_payment_address, AddressCodec};
-use zcash_primitives::consensus::{Network, Parameters};
-use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::memo::MemoBytes;
-use zcash_primitives::sapling::PaymentAddress;
+use zcash_keys::encoding::{encode_payment_address, AddressCodec};
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
+use zcash_transparent::address::TransparentAddress;
+use zcash_protocol::memo::MemoBytes;
+use sapling::PaymentAddress;
 
 pub struct TransactionBuilderConfig {
     pub change_address: String,
@@ -67,11 +67,11 @@ impl Destination {
     pub fn from_transparent(ta: &TransparentAddress) -> Self {
         let mut d = [0u8; 21];
         match ta {
-            TransparentAddress::PublicKey(data) => {
+            TransparentAddress::PublicKeyHash(data) => {
                 d[0] = 0;
                 d[1..21].copy_from_slice(&*data);
             }
-            TransparentAddress::Script(data) => {
+            TransparentAddress::ScriptHash(data) => {
                 d[0] = 1;
                 d[1..21].copy_from_slice(&*data);
             }
@@ -84,9 +84,9 @@ impl Destination {
             Destination::Transparent(data) => {
                 let hash: [u8; 20] = data[1..21].try_into().unwrap();
                 let ta = if data[0] == 0 {
-                    TransparentAddress::PublicKey(hash)
+                    TransparentAddress::PublicKeyHash(hash)
                 } else {
-                    TransparentAddress::Script(hash)
+                    TransparentAddress::ScriptHash(hash)
                 };
                 ta
             }

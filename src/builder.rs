@@ -7,7 +7,7 @@ use group::Curve;
 use jubjub::{AffinePoint, ExtendedPoint};
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::*;
-use zcash_primitives::sapling::Node;
+use sapling::Node;
 
 pub enum ProvingSystem {
     Sapling,
@@ -461,7 +461,7 @@ mod tests {
     use crate::commitment::{CTree, Witness};
     use crate::print::{print_ctree, print_tree, print_witness, print_witness2};
     use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
-    use zcash_primitives::sapling::Node;
+    use sapling::Node;
 
     fn make_nodes(p: usize, len: usize) -> Vec<Node> {
         let nodes: Vec<_> = (p..p + len)
@@ -480,8 +480,8 @@ mod tests {
     }
 
     fn update_witnesses1(
-        tree: &mut CommitmentTree<Node>,
-        ws: &mut Vec<IncrementalWitness<Node>>,
+        tree: &mut CommitmentTree<Node, 32>,
+        ws: &mut Vec<IncrementalWitness<Node, 32>>,
         nodes: &[Node],
     ) {
         for n in nodes.iter() {
@@ -489,12 +489,12 @@ mod tests {
             for w in ws.iter_mut() {
                 w.append(*n).unwrap();
             }
-            let w = IncrementalWitness::<Node>::from_tree(tree);
+            let w = IncrementalWitness::<Node, 32>::from_tree(tree);
             ws.push(w);
         }
     }
 
-    fn compare_witness(w1: &IncrementalWitness<Node>, w2: &Witness) {
+    fn compare_witness(w1: &IncrementalWitness<Node, 32>, w2: &Witness) {
         let mut bb1: Vec<u8> = vec![];
         w1.write(&mut bb1).unwrap();
         let mut bb2: Vec<u8> = vec![];
@@ -524,8 +524,8 @@ mod tests {
             for n2 in 0..=40 {
                 println!("{} {}", n1, n2);
                 let mut bp = BlockProcessor::new(&CTree::new(), &[]);
-                let mut tree1: CommitmentTree<Node> = CommitmentTree::empty();
-                let mut ws1: Vec<IncrementalWitness<Node>> = vec![];
+                let mut tree1: CommitmentTree<Node, 32> = CommitmentTree::empty();
+                let mut ws1: Vec<IncrementalWitness<Node, 32>> = vec![];
 
                 let mut nodes = make_nodes(0, n1);
                 update_witnesses1(&mut tree1, &mut ws1, &nodes);
@@ -550,8 +550,8 @@ mod tests {
         for n1 in 0..=40 {
             for n2 in 0..=40 {
                 println!("{} {}", n1, n2);
-                let mut tree1: CommitmentTree<Node> = CommitmentTree::empty();
-                let mut ws1: Vec<IncrementalWitness<Node>> = vec![];
+                let mut tree1: CommitmentTree<Node, 32> = CommitmentTree::empty();
+                let mut ws1: Vec<IncrementalWitness<Node, 32>> = vec![];
                 let mut tree2 = CTree::new();
                 let mut ws2: Vec<Witness> = vec![];
 
@@ -627,9 +627,9 @@ mod tests {
     ) -> (CTree, Vec<Witness>) {
         let witness_freq = (100.0 / witness_percent) as usize;
 
-        let mut tree1: CommitmentTree<Node> = CommitmentTree::empty();
+        let mut tree1: CommitmentTree<Node, 32> = CommitmentTree::empty();
         let mut tree2 = CTree::new();
-        let mut ws: Vec<IncrementalWitness<Node>> = vec![];
+        let mut ws: Vec<IncrementalWitness<Node, 32>> = vec![];
         let mut ws2: Vec<Witness> = vec![];
         if let Some((t0, ws0)) = initial {
             tree2 = t0;
@@ -637,12 +637,12 @@ mod tests {
 
             let mut bb: Vec<u8> = vec![];
             tree2.write(&mut bb).unwrap();
-            tree1 = CommitmentTree::<Node>::read(&*bb).unwrap();
+            tree1 = CommitmentTree::<Node, 32>::read(&*bb).unwrap();
 
             for w in ws2.iter() {
                 bb = vec![];
                 w.write(&mut bb).unwrap();
-                let w1 = IncrementalWitness::<Node>::read(&*bb).unwrap();
+                let w1 = IncrementalWitness::<Node, 32>::read(&*bb).unwrap();
                 ws.push(w1);
             }
         }

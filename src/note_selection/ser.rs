@@ -2,8 +2,8 @@ use crate::db::data_generated::fb::{TxOutputT, TxReportT};
 use crate::note_selection::types::TransactionReport;
 use crate::TransactionPlan;
 use serde::{Deserialize, Serialize};
-use zcash_primitives::consensus::Network;
-use zcash_primitives::memo::MemoBytes;
+use zcash_protocol::consensus::Network;
+use zcash_protocol::memo::MemoBytes;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "MemoBytes")]

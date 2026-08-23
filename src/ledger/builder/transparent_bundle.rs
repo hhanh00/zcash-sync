@@ -9,10 +9,10 @@ use crate::taddr::derive_from_pubkey;
 
 use anyhow::Result;
 
-use zcash_client_backend::encoding::decode_transparent_address;
-use zcash_primitives::consensus::Network;
-use zcash_primitives::consensus::Parameters;
-use zcash_primitives::legacy::{Script, TransparentAddress};
+use zcash_keys::encoding::decode_transparent_address;
+use zcash_protocol::consensus::Network;
+use zcash_protocol::consensus::{NetworkConstants, Parameters};
+use zcash_transparent::address::{Script, TransparentAddress};
 use zcash_primitives::transaction::components::{transparent, Amount, OutPoint, TxIn, TxOut};
 
 use super::create_hasher;
@@ -46,7 +46,7 @@ impl TransparentBuilder {
         .unwrap()
         .unwrap();
         let pkh = match taddr {
-            TransparentAddress::PublicKey(pkh) => pkh,
+            TransparentAddress::PublicKeyHash(pkh) => pkh,
             _ => unreachable!(),
         };
         let tin_pubscript = taddr.script();
@@ -89,7 +89,7 @@ impl TransparentBuilder {
             anyhow::bail!("Only t1 addresses are supported");
         }
         ledger_add_t_output(amount, &raw_address)?;
-        let ta = TransparentAddress::PublicKey(raw_address[1..21].try_into().unwrap());
+        let ta = TransparentAddress::PublicKeyHash(raw_address[1..21].try_into().unwrap());
         self.vout.push(TxOut {
             value: Amount::from_u64(amount).unwrap(),
             script_pubkey: ta.script(),

@@ -14,11 +14,11 @@ use std::mem;
 use std::ptr::slice_from_raw_parts;
 use std::sync::Mutex;
 use std::time::SystemTime;
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
+use zcash_keys::encoding::decode_extended_full_viewing_key;
 use zcash_note_encryption::Domain;
-use zcash_primitives::consensus::{BlockHeight, MainNetwork, Network, Parameters};
-use zcash_primitives::sapling::note_encryption::SaplingDomain;
-use zcash_primitives::sapling::SaplingIvk;
+use zcash_protocol::consensus::{BlockHeight, MainNetwork, Network, Parameters};
+use sapling::note_encryption::SaplingDomain;
+use sapling::SaplingIvk;
 
 lazy_static! {
     pub static ref METAL_CONTEXT: Mutex<MetalContext> = Mutex::new(MetalContext::new());

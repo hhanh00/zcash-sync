@@ -5,12 +5,12 @@ use crate::taddr::parse_tex;
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
-use zcash_client_backend::address::{RecipientAddress, UnifiedAddress};
-use zcash_client_backend::encoding::{
+use zcash_keys::address::{Address, UnifiedAddress};
+use zcash_keys::encoding::{
     decode_payment_address, encode_payment_address, AddressCodec,
 };
-use zcash_primitives::consensus::{Network, Parameters};
-use zcash_primitives::legacy::TransparentAddress;
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
+use zcash_transparent::address::TransparentAddress;
 
 pub fn get_account_list(coin: u8, connection: &Connection) -> Result<AccountVecT> {
     let c = CoinConfig::get(coin);
@@ -240,7 +240,7 @@ pub fn get_db_height(network: &Network, connection: &Connection) -> Result<Heigh
         .optional()?
         .unwrap_or_else(|| {
             let h: u32 = network
-                .activation_height(zcash_primitives::consensus::NetworkUpgrade::Sapling)
+                .activation_height(zcash_protocol::consensus::NetworkUpgrade::Sapling)
                 .unwrap()
                 .into();
             HeightT {
@@ -365,15 +365,16 @@ fn extract_receivers<T: Clone>(
         Ok(address) => address,
         Err(_) => address.to_string(),
     };
-    let a = RecipientAddress::decode(network, &address).ok_or(anyhow::anyhow!("Invalid Address"))?;
+    let a = Address::decode(network, &address).ok_or(anyhow::anyhow!("Invalid Address"))?;
     match a {
-        RecipientAddress::Transparent(_) | RecipientAddress::Shielded(_) => {
+        Address::Transparent(_) | Address::Sapling(_) => {
             receiver_map
                 .entry(address.to_string())
                 .or_insert_with(Vec::new)
                 .push(value.clone());
         }
-        RecipientAddress::Unified(ua) => {
+        Address::Tex(_) => {}
+        Address::Unified(ua) => {
             if let Some(pa) = ua.transparent() {
                 let a = pa.encode(network);
                 receiver_map

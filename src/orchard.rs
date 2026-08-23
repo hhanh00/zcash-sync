@@ -17,7 +17,9 @@ pub use note::{decode_merkle_path, DecryptedOrchardNote, OrchardDecrypter, Orcha
 pub fn get_proving_key() -> &'static ProvingKey {
     if !PROVING_KEY.filled() {
         log::info!("Building Orchard proving key");
-        let _ = PROVING_KEY.fill(ProvingKey::build());
+        let _ = PROVING_KEY.fill(ProvingKey::build(
+            orchard::circuit::OrchardCircuitVersion::FixedPostNu6_2,
+        ));
     }
     PROVING_KEY.borrow().unwrap()
 }

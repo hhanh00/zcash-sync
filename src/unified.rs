@@ -5,13 +5,14 @@ use orchard::Address;
 use rusqlite::OptionalExtension;
 use zcash_address::unified::{Container, Encoding, Receiver};
 use zcash_address::{unified, ToAddress, ZcashAddress};
-use zcash_client_backend::address::UnifiedAddress;
-use zcash_client_backend::encoding::{
-    decode_payment_address, encode_payment_address, AddressCodec,
+use zcash_keys::address::UnifiedAddress;
+use zcash_keys::encoding::{
+    decode_payment_address, decode_transparent_address, encode_payment_address,
+    encode_transparent_address, AddressCodec,
 };
-use zcash_primitives::consensus::{Network, Parameters};
-use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::sapling::PaymentAddress;
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
+use zcash_transparent::address::TransparentAddress;
+use sapling::PaymentAddress;
 
 #[derive(Debug)]
 pub struct UnifiedAddressType {
@@ -32,13 +33,23 @@ impl std::fmt::Display for DecodedUA {
         write!(
             f,
             "DecodedUA: {:?} {:?} {:?}",
-            self.transparent.as_ref().map(|a| a.encode(&self.network)),
+            self.transparent.as_ref().map(|a| {
+                encode_transparent_address(
+                    &self.network.b58_pubkey_address_prefix(),
+                    &self.network.b58_script_address_prefix(),
+                    a,
+                )
+            }),
             self.sapling
                 .as_ref()
                 .map(|a| encode_payment_address(self.network.hrp_sapling_payment_address(), a)),
             self.orchard.as_ref().map(|a| {
-                let ua = unified::Address(vec![Receiver::Orchard(a.to_raw_address_bytes())]);
-                ua.encode(&self.network.address_network().unwrap())
+                let ua =
+                    unified::Address::try_from_items(vec![Receiver::Orchard(
+                        a.to_raw_address_bytes(),
+                    )])
+                    .unwrap();
+                ua.encode(&self.network.network_type())
             })
         )
     }
@@ -80,7 +91,15 @@ pub fn get_ua_of(
         return Ok(z_addr);
     }
 
-    let t_addr = t_addr.map(|a| TransparentAddress::decode(network, &a).unwrap());
+    let t_addr = t_addr.map(|a| {
+        decode_transparent_address(
+            &network.b58_pubkey_address_prefix(),
+            &network.b58_script_address_prefix(),
+            &a,
+        )
+        .unwrap()
+        .unwrap()
+    });
     let z_addr = decode_payment_address(network.hrp_sapling_payment_address(), &z_addr).unwrap();
     let o_addr = o_fvk.map(|fvk| {
         let fvk = FullViewingKey::from_bytes(&fvk.try_into().unwrap()).unwrap();
@@ -91,7 +110,7 @@ pub fn get_ua_of(
     let o_recv = if ua & 4 != 0 { o_addr } else { None };
 
     let address =
-        zcash_client_backend::address::UnifiedAddress::from_receivers(o_recv, z_recv, t_recv)
+        zcash_keys::address::UnifiedAddress::from_receivers(o_recv, z_recv, t_recv)
             .ok_or(anyhow!("Invalid UA"))?;
     Ok(address.encode(network))
 }
@@ -130,8 +149,14 @@ pub fn get_unified_address(
             if tpe.transparent {
                 let address = db.get_taddr(account)?;
                 if let Some(address) = address {
-                    let address = TransparentAddress::decode(network, &address)?;
-                    if let TransparentAddress::PublicKey(pkh) = address {
+                    let address = decode_transparent_address(
+                        &network.b58_pubkey_address_prefix(),
+                        &network.b58_script_address_prefix(),
+                        &address,
+                    )
+                    .map_err(|e| anyhow!("{}", e))?
+                    .ok_or(anyhow!("Not a transparent address"))?;
+                    if let TransparentAddress::PublicKeyHash(pkh) = address {
                         let rcv = Receiver::P2pkh(pkh);
                         rcvs.push(rcv);
                     }
@@ -148,18 +173,18 @@ pub fn get_unified_address(
                 let okey = db.get_orchard(account)?;
                 if let Some(okey) = okey {
                     let fvk = FullViewingKey::from_bytes(&okey.fvk).unwrap();
-                    let address = fvk.address_at(0usize, Scope::External);
+                    let address = fvk.address_at(0u32, Scope::External);
                     let rcv = Receiver::Orchard(address.to_raw_address_bytes());
                     rcvs.push(rcv);
                 }
             }
 
             assert!(!rcvs.is_empty());
-            let addresses = unified::Address(rcvs);
-            ZcashAddress::from_unified(network.address_network().unwrap(), addresses)
+            let addresses = unified::Address::try_from_items(rcvs)?;
+            ZcashAddress::from_unified(network.network_type(), addresses)
         }
     };
-    Ok(address.encode())
+    Ok(address.to_string())
 }
 
 pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<DecodedUA> {
@@ -169,7 +194,7 @@ pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<Dec
         sapling: None,
         orchard: None,
     };
-    let network = network.address_network().unwrap();
+    let network = network.network_type();
     let (a_network, ua) = unified::Address::decode(ua)?;
     if network != a_network {
         anyhow::bail!("Invalid network")
@@ -178,13 +203,13 @@ pub fn decode_unified_address(network: &Network, ua: &str) -> anyhow::Result<Dec
     for recv in ua.items_as_parsed() {
         match recv {
             Receiver::Orchard(addr) => {
-                decoded_ua.orchard = Address::from_raw_address_bytes(addr).into();
+                decoded_ua.orchard = Address::from_raw_address_bytes(&addr).into();
             }
             Receiver::Sapling(addr) => {
-                decoded_ua.sapling = PaymentAddress::from_bytes(addr);
+                decoded_ua.sapling = PaymentAddress::from_bytes(&addr);
             }
             Receiver::P2pkh(addr) => {
-                decoded_ua.transparent = Some(TransparentAddress::PublicKey(*addr));
+                decoded_ua.transparent = Some(TransparentAddress::PublicKeyHash(*addr));
             }
             Receiver::P2sh(_) => {}
             Receiver::Unknown { .. } => {}

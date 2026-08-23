@@ -12,23 +12,29 @@ use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use tonic::Request;
-use zcash_client_backend::address::RecipientAddress;
-use zcash_client_backend::encoding::{
+use zcash_keys::address::Address;
+use zcash_keys::encoding::{
     decode_extended_full_viewing_key, encode_extended_full_viewing_key, encode_payment_address,
 };
 use crate::coin::{get_coin_chain, CoinChain, CoinType};
-use zcash_primitives::consensus::{BlockHeight, Parameters};
-use zcash_primitives::keys::OutgoingViewingKey;
-use zcash_primitives::legacy::Script;
-use zcash_primitives::memo::{Memo, MemoBytes};
-use zcash_primitives::merkle_tree::IncrementalWitness;
-use zcash_primitives::sapling::prover::TxProver;
-use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
-use zcash_primitives::transaction::builder::{Builder, Progress};
-use zcash_primitives::transaction::components::amount::{DEFAULT_FEE, MAX_MONEY};
-use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut as ZTxOut};
+use zcash_protocol::consensus::{BlockHeight, NetworkConstants, Parameters};
+use sapling::keys::OutgoingViewingKey;
+use sapling::prover::{OutputProver, SpendProver};
+use zcash_transparent::address::Script;
+use zcash_protocol::memo::{Memo, MemoBytes};
+use incrementalmerkletree::{witness::IncrementalWitness, Hashable};
+
+use sapling::{Diversifier, Node, PaymentAddress, Rseed};
+use zcash_primitives::transaction::builder::{BuildConfig, Builder, Progress};
+use zcash_protocol::value::MAX_MONEY;
+use zcash_protocol::value::Zatoshis;
+use zcash_transparent::builder::TransparentSigningSet;
+use zcash_transparent::bundle::{OutPoint, TxOut as ZTxOut};
 use zcash_primitives::transaction::fees::fixed::FeeRule;
-use zcash_primitives::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+use sapling::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+
+/// The fixed transaction fee, in zatoshis, charged by this wallet.
+const DEFAULT_FEE: u64 = 1000;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tx {
@@ -119,7 +125,7 @@ impl TxBuilder {
         &mut self,
         diversifier: &Diversifier,
         fvk: &ExtendedFullViewingKey,
-        amount: Amount,
+        amount: Zatoshis,
         rseed: &[u8],
         witness: &[u8],
     ) -> anyhow::Result<()> {
@@ -139,7 +145,7 @@ impl TxBuilder {
         Ok(())
     }
 
-    fn add_t_output(&mut self, address: &str, amount: Amount) -> anyhow::Result<()> {
+    fn add_t_output(&mut self, address: &str, amount: Zatoshis) -> anyhow::Result<()> {
         let tx_out = TxOut {
             addr: address.to_string(),
             amount: u64::from(amount),
@@ -154,7 +160,7 @@ impl TxBuilder {
         &mut self,
         address: &str,
         ovk: &OutgoingViewingKey,
-        amount: Amount,
+        amount: Zatoshis,
         memo: &Memo,
     ) -> anyhow::Result<()> {
         let tx_out = TxOut {
@@ -194,8 +200,8 @@ impl TxBuilder {
         target_amount: u64,
     ) -> anyhow::Result<Vec<u32>> {
         let mut selected_notes: Vec<u32> = vec![];
-        let target_amount = Amount::from_u64(target_amount).unwrap();
-        let mut t_amount = Amount::zero();
+        let target_amount = Zatoshis::from_u64(target_amount).unwrap();
+        let mut t_amount = Zatoshis::ZERO;
         // If we use the transparent address, we use all the utxos
         if !utxos.is_empty() {
             for utxo in utxos.iter() {
@@ -203,11 +209,12 @@ impl TxBuilder {
                 tx_hash.copy_from_slice(&utxo.txid);
                 let op = OutPoint::new(tx_hash, utxo.index as u32);
                 self.add_t_input(op, utxo.value_zat as u64, &utxo.script);
-                t_amount += Amount::from_i64(utxo.value_zat).unwrap();
+                t_amount = (t_amount + Zatoshis::from_nonnegative_i64(utxo.value_zat).unwrap()).unwrap();
             }
         }
-        let target_amount_with_fee =
-            (target_amount + DEFAULT_FEE).ok_or(anyhow!("Invalid amount"))?;
+        let target_amount_with_fee = (target_amount
+            + Zatoshis::from_u64(DEFAULT_FEE).map_err(|_| anyhow!("Invalid amount"))?)
+        .ok_or(anyhow!("Invalid amount"))?;
         if target_amount_with_fee > t_amount {
             // We need to use some shielded notes because the transparent balance is not enough
             let mut amount = (target_amount_with_fee - t_amount).unwrap();
@@ -219,18 +226,21 @@ impl TxBuilder {
             for n in notes.iter() {
                 if amount.is_positive() {
                     let a = amount.min(
-                        Amount::from_u64(n.note.value().inner())
+                        Zatoshis::from_u64(n.note.value().inner())
                             .map_err(|_| anyhow::anyhow!("Invalid amount"))?,
                     );
-                    amount -= a;
+                    amount = (amount - a).unwrap();
                     let mut witness_bytes: Vec<u8> = vec![];
-                    n.witness.write(&mut witness_bytes)?;
-                    if let Rseed::BeforeZip212(rseed) = n.note.rseed {
+                    zcash_primitives::merkle_tree::write_incremental_witness(
+                        &n.witness,
+                        &mut witness_bytes,
+                    )?;
+                    if let Rseed::BeforeZip212(rseed) = n.note.rseed() {
                         // rseed are stored as pre-zip212
                         self.add_z_input(
                             &n.diversifier,
                             fvk,
-                            Amount::from_u64(n.note.value().inner()).unwrap(),
+                            Zatoshis::from_u64(n.note.value().inner()).unwrap(),
                             &rseed.to_bytes(),
                             &witness_bytes,
                         )?;
@@ -266,16 +276,16 @@ impl TxBuilder {
         self.set_change(ovk, &change)?;
 
         for r in recipients.iter() {
-            let to_addr = RecipientAddress::decode(self.chain().network(), &r.address)
+            let to_addr = Address::decode(self.chain().network(), &r.address)
                 .ok_or(anyhow::anyhow!("Invalid address"))?;
             let memo = &r.memo;
 
-            let amount = Amount::from_u64(r.amount).unwrap();
+            let amount = Zatoshis::from_u64(r.amount).unwrap();
             let max_amount_per_note = r.max_amount_per_note;
             let max_amount_per_note = if max_amount_per_note != 0 {
-                Amount::from_u64(max_amount_per_note).unwrap()
+                Zatoshis::from_u64(max_amount_per_note).unwrap()
             } else {
-                Amount::from_i64(MAX_MONEY).unwrap()
+                Zatoshis::from_u64(MAX_MONEY).unwrap()
             };
 
             let mut is_first = true; // make at least an output note
@@ -283,19 +293,20 @@ impl TxBuilder {
             while remaining_amount.is_positive() || is_first {
                 is_first = false;
                 let note_amount = remaining_amount.min(max_amount_per_note);
-                remaining_amount -= note_amount;
+                remaining_amount = (remaining_amount - note_amount).unwrap();
 
                 match &to_addr {
-                    RecipientAddress::Shielded(_pa) => {
+                    Address::Sapling(_pa) => {
                         log::info!("Sapling output: {}", r.amount);
                         self.add_z_output(&r.address, ovk, note_amount, memo)
                     }
-                    RecipientAddress::Transparent(_address) => {
+                    Address::Transparent(_address) => {
                         self.add_t_output(&r.address, note_amount)
                     }
-                    RecipientAddress::Unified(_ua) => {
+                    Address::Unified(_ua) => {
                         todo!() // TODO
                     }
+                    Address::Tex(_) => Err(anyhow!("TEX addresses are not supported")),
                 }?;
             }
         }
@@ -316,33 +327,27 @@ impl Tx {
         &self,
         tsk: Option<SecretKey>,
         zsk: &ExtendedSpendingKey,
-        prover: &impl TxProver,
+        prover: &(impl SpendProver + OutputProver),
         progress_callback: impl Fn(Progress) + Send + 'static,
     ) -> anyhow::Result<Vec<u8>> {
         let chain = get_coin_chain(self.coin_type);
         let last_height = BlockHeight::from_u32(self.height as u32);
-        let mut builder = Builder::new(*chain.network(), last_height);
         let efvk = zsk.to_extended_full_viewing_key();
+        let mut signing_set = TransparentSigningSet::new();
 
-        if let Some(tsk) = tsk {
-            for txin in self.t_inputs.iter() {
-                let mut txid = [0u8; 32];
-                hex::decode_to_slice(&txin.op, &mut txid)?;
-                builder
-                    .add_transparent_input(
-                        tsk,
-                        OutPoint::new(txid, txin.n),
-                        ZTxOut {
-                            value: Amount::from_u64(txin.amount).unwrap(),
-                            script_pubkey: Script(hex::decode(&txin.script).unwrap()),
-                        },
-                    )
-                    .map_err(|e| anyhow!(e.to_string()))?;
-            }
+        let transparent_pubkey = if let Some(tsk) = tsk {
+            Some(signing_set.add_key(tsk))
         } else if !self.t_inputs.is_empty() {
             anyhow::bail!("Missing secret key of transparent account");
-        }
+        } else {
+            None
+        };
 
+        // Collect the Sapling spends and compute the anchor from the first
+        // spend's merkle path.
+        let mut sapling_anchor = None;
+        let mut spends: Vec<(sapling::keys::FullViewingKey, sapling::Note, sapling::MerklePath)> =
+            vec![];
         for txin in self.inputs.iter() {
             let mut diversifier = [0u8; 11];
             hex::decode_to_slice(&txin.diversifier, &mut diversifier)?;
@@ -359,26 +364,64 @@ impl Tx {
             let mut rseed_bytes = [0u8; 32];
             hex::decode_to_slice(&txin.rseed, &mut rseed_bytes)?;
             let rseed = Fr::from_bytes(&rseed_bytes).unwrap();
-            let note = pa.create_note(txin.amount, Rseed::BeforeZip212(rseed));
+            let note = pa.create_note(
+                sapling::value::NoteValue::from_raw(txin.amount),
+                Rseed::BeforeZip212(rseed),
+            );
             let w = hex::decode(&txin.witness)?;
-            let witness = IncrementalWitness::<Node>::read(&*w)?;
+            let witness =
+                zcash_primitives::merkle_tree::read_incremental_witness::<Node, _, 32>(
+                    &*w,
+                )?;
             let merkle_path = witness.path().unwrap();
+            if sapling_anchor.is_none() {
+                sapling_anchor = Some(sapling::Anchor::from(merkle_path.root(Node::empty_leaf())));
+            }
+            spends.push((fvk.fvk, note, merkle_path));
+        }
 
+        let build_config = BuildConfig::Standard {
+            sapling_anchor,
+            orchard_anchor: None,
+            ironwood_anchor: None,
+            orchard_padding: zcash_primitives::transaction::builder::BundlePadding::DEFAULT,
+            ironwood_padding: zcash_primitives::transaction::builder::BundlePadding::DEFAULT,
+        };
+        let mut builder = Builder::new(*chain.network(), last_height, build_config);
+
+        if let Some(pubkey) = transparent_pubkey {
+            for txin in self.t_inputs.iter() {
+                let mut txid = [0u8; 32];
+                hex::decode_to_slice(&txin.op, &mut txid)?;
+                builder
+                    .add_transparent_p2pkh_input(
+                        pubkey,
+                        OutPoint::new(txid, txin.n),
+                        ZTxOut::new(
+                            Zatoshis::from_u64(txin.amount).unwrap(),
+                            Script(zcash_script::script::Code(hex::decode(&txin.script).unwrap())),
+                        ),
+                    )
+                    .map_err(|e| anyhow!(e.to_string()))?;
+            }
+        }
+
+        for (fvk, note, merkle_path) in spends {
             builder
-                .add_sapling_spend(zsk.clone(), diversifier, note, merkle_path)
+                .add_sapling_spend::<anyhow::Error>(fvk, note, merkle_path)
                 .map_err(|e| anyhow!(e.to_string()))?;
         }
 
         for txout in self.outputs.iter() {
-            let recipient = RecipientAddress::decode(chain.network(), &txout.addr).unwrap();
-            let amount = Amount::from_u64(txout.amount).unwrap();
+            let recipient = Address::decode(chain.network(), &txout.addr).unwrap();
+            let amount = Zatoshis::from_u64(txout.amount).unwrap();
             match recipient {
-                RecipientAddress::Transparent(ta) => {
+                Address::Transparent(ta) => {
                     builder
                         .add_transparent_output(&ta, amount)
                         .map_err(|e| anyhow!(e.to_string()))?;
                 }
-                RecipientAddress::Shielded(pa) => {
+                Address::Sapling(pa) => {
                     let mut ovk = [0u8; 32];
                     hex::decode_to_slice(&txout.ovk, &mut ovk)?;
                     let ovk = OutgoingViewingKey(ovk);
@@ -387,27 +430,38 @@ impl Tx {
                     memo[..m.len()].copy_from_slice(&m);
                     let memo = MemoBytes::from_bytes(&memo)?;
                     builder
-                        .add_sapling_output(Some(ovk), pa, amount, memo)
+                        .add_sapling_output::<anyhow::Error>(Some(ovk), pa, amount, memo)
                         .map_err(|e| anyhow!(e.to_string()))?;
                 }
-                RecipientAddress::Unified(_ua) => {
+                Address::Unified(_ua) => {
                     todo!() // TODO
                 }
+                Address::Tex(_) => {}
             }
         }
 
         let (progress_tx, progress_rx) = mpsc::channel::<Progress>();
 
-        builder.with_progress_notifier(progress_tx);
+        let builder = builder.with_progress_notifier(progress_tx);
         tokio::spawn(async move {
             while let Ok(progress) = progress_rx.recv() {
                 log::info!("Progress: {}", progress.cur());
                 progress_callback(progress);
             }
         });
-        let (tx, _) = builder.build(prover, &FeeRule::standard())?;
+        let sapling_extsks = vec![zsk.clone(); self.inputs.len()];
+        let fee_rule = FeeRule::non_standard(Zatoshis::from_u64(DEFAULT_FEE).unwrap());
+        let build_result = builder.build(
+            &signing_set,
+            &sapling_extsks,
+            &[],
+            OsRng,
+            prover,
+            prover,
+            &fee_rule,
+        )?;
         let mut raw_tx = vec![];
-        tx.write(&mut raw_tx)?;
+        build_result.transaction().write(&mut raw_tx)?;
 
         Ok(raw_tx)
     }

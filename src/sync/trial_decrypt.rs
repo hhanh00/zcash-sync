@@ -9,7 +9,7 @@ use std::marker::PhantomData;
 use std::time::Instant;
 use zcash_note_encryption::batch::try_compact_note_decryption;
 use zcash_note_encryption::{BatchDomain, EphemeralKeyBytes, ShieldedOutput, COMPACT_NOTE_SIZE};
-use zcash_primitives::consensus::{BlockHeight, Parameters};
+use zcash_protocol::consensus::{BlockHeight, NetworkConstants, Parameters};
 
 pub struct DecryptedBlock<D: BatchDomain, VK, DN: DecryptedNote<D, VK>> {
     pub height: u32,

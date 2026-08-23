@@ -1,34 +1,35 @@
 use super::types::*;
-use crate::orchard::{get_proving_key, OrchardHasher, ORCHARD_ROOTS};
+use crate::orchard::{OrchardHasher, ORCHARD_ROOTS};
 use crate::sapling::{SaplingHasher, SAPLING_ROOTS};
 use crate::sync::tree::TreeCheckpoint;
 use crate::sync::Witness;
 use crate::{AccountData, CoinConfig, DbAdapter, PROVER};
 use anyhow::anyhow;
 use jubjub::Fr;
-use orchard::builder::Builder as OrchardBuilder;
-use orchard::bundle::Flags;
 use orchard::keys::{FullViewingKey, Scope, SpendAuthorizingKey, SpendingKey};
 use orchard::note::Nullifier;
 use orchard::value::NoteValue;
-use orchard::{Address, Anchor, Bundle};
+use orchard::Address;
 use rand::{CryptoRng, RngCore};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use std::str::FromStr;
-use zcash_client_backend::encoding::decode_extended_spending_key;
-use zcash_primitives::consensus::{BlockHeight, BranchId, Network, Parameters};
-use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::merkle_tree::IncrementalWitness;
-use zcash_primitives::sapling::prover::TxProver;
-use zcash_primitives::sapling::{Diversifier, Node, PaymentAddress, Rseed};
-use zcash_primitives::transaction::builder::Builder;
-use zcash_primitives::transaction::components::{Amount, OutPoint, TxOut};
-use zcash_primitives::transaction::sighash::{signature_hash, SignableInput};
-use zcash_primitives::transaction::txid::TxIdDigester;
-use zcash_primitives::transaction::{Transaction, TransactionData, TxVersion};
-use zcash_primitives::zip32::ExtendedSpendingKey;
+use zcash_keys::encoding::decode_extended_spending_key;
+use zcash_protocol::consensus::{BlockHeight, Network, NetworkConstants, Parameters};
+use zcash_transparent::address::{Script, TransparentAddress};
+use zcash_transparent::builder::TransparentSigningSet;
+use zcash_transparent::bundle::{OutPoint, TxOut};
+use incrementalmerkletree::{witness::IncrementalWitness, Hashable};
+
+use sapling::zip32::ExtendedSpendingKey;
+use sapling::{Diversifier, Node, PaymentAddress, Rseed};
+use zcash_primitives::transaction::builder::{BuildConfig, BundlePadding, Builder};
+use zcash_primitives::transaction::fees::fixed::FeeRule;
+use zcash_protocol::value::Zatoshis;
+
+/// The fixed transaction fee, in zatoshis, charged by this wallet.
+const DEFAULT_FEE: u64 = 1000;
 
 pub struct SecretKeys {
     pub transparent: Option<SecretKey>,
@@ -72,15 +73,9 @@ pub fn build_tx(
     network: &Network,
     skeys: &SecretKeys,
     plan: &TransactionPlan,
-    mut rng: impl RngCore + CryptoRng + Clone,
+    mut rng: impl RngCore + CryptoRng,
 ) -> anyhow::Result<Vec<u8>> {
     let secp = Secp256k1::<All>::new();
-    let transparent_address = skeys.transparent.map(|tkey| {
-        let pub_key = PublicKey::from_secret_key(&secp, &tkey);
-        let pub_key = pub_key.serialize();
-        let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
-        TransparentAddress::PublicKey(pub_key.into())
-    });
 
     let sapling_fvk = skeys
         .sapling
@@ -99,16 +94,20 @@ pub fn build_tx(
     };
 
     let account_tsk = skeys.transparent;
-    let mut has_orchard = false;
-    let mut builder = Builder::new_with_rng(
-        *network,
-        BlockHeight::from_u32(plan.anchor_height),
-        &mut rng,
-    );
-    let anchor: Anchor = orchard::tree::MerkleHashOrchard::from_bytes(&plan.orchard_anchor)
-        .unwrap()
-        .into();
-    let mut orchard_builder = OrchardBuilder::new(Flags::from_parts(true, true), anchor);
+    let mut signing_set = TransparentSigningSet::new();
+
+    // Collect the inputs; the Sapling anchor is computed from the first
+    // spend's merkle path.
+    let mut sapling_anchor = None;
+    let mut sapling_spends: Vec<(sapling::keys::FullViewingKey, sapling::Note, sapling::MerklePath)> =
+        vec![];
+    let mut orchard_spends: Vec<(
+        orchard::keys::FullViewingKey,
+        orchard::Note,
+        orchard::tree::MerklePath,
+    )> = vec![];
+    let mut transparent_inputs: Vec<(secp256k1::PublicKey, OutPoint, TxOut)> = vec![];
+
     for spend in plan.spends.iter() {
         match &spend.source {
             Source::Transparent { txid, index } => {
@@ -120,21 +119,16 @@ pub fn build_tx(
                 let tsk = sk
                     .or(account_tsk)
                     .ok_or(anyhow!("No transparent secret key"))?;
-                let pub_key = PublicKey::from_secret_key(&secp, &tsk);
-                let pub_key = pub_key.serialize();
-                let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
-                let address = TransparentAddress::PublicKey(pub_key.into());
-                let script_pubkey = address.script();
-
+                let pub_key = signing_set.add_key(tsk);
+                let address = TransparentAddress::PublicKeyHash(
+                    Ripemd160::digest(&Sha256::digest(&pub_key.serialize())).into(),
+                );
                 let utxo = OutPoint::new(*txid, *index);
-                let coin = TxOut {
-                    value: Amount::from_u64(spend.amount).unwrap(),
-                    script_pubkey: script_pubkey,
-                };
-                builder
-                    .add_transparent_input(tsk, utxo, coin)
-                    .map_err(|e| anyhow!(e.to_string()))?;
-                println!("2");
+                let coin = TxOut::new(
+                    Zatoshis::from_u64(spend.amount).unwrap(),
+                    Script::from(address.script()),
+                );
+                transparent_inputs.push((pub_key, utxo, coin));
             }
             Source::Sapling {
                 diversifier,
@@ -151,17 +145,19 @@ pub fn build_tx(
                     .to_payment_address(diversifier)
                     .unwrap();
                 let rseed = Rseed::BeforeZip212(Fr::from_bytes(rseed).unwrap());
-                let note = sapling_address.create_note(spend.amount, rseed);
-                let witness = IncrementalWitness::<Node>::read(witness.as_slice())?;
+                let note =
+                    sapling_address.create_note(sapling::value::NoteValue::from_raw(spend.amount), rseed);
+                let witness = zcash_primitives::merkle_tree::read_incremental_witness::<
+                    Node,
+                    _,
+                    32,
+                >(witness.as_slice())?;
                 let merkle_path = witness.path().unwrap();
-                builder
-                    .add_sapling_spend(
-                        skeys.sapling.clone().ok_or(anyhow!("No Sapling Key"))?,
-                        diversifier,
-                        note,
-                        merkle_path,
-                    )
-                    .map_err(|e| anyhow!(e.to_string()))?;
+                if sapling_anchor.is_none() {
+                    sapling_anchor =
+                        Some(sapling::Anchor::from(merkle_path.root(Node::empty_leaf())));
+                }
+                sapling_spends.push((sapling_fvk.as_ref().unwrap().fvk.clone(), note, merkle_path));
             }
             Source::Orchard {
                 id_note,
@@ -170,16 +166,22 @@ pub fn build_tx(
                 rseed,
                 witness,
             } => {
-                has_orchard = true;
                 let diversifier = orchard::keys::Diversifier::from_bytes(*diversifier);
                 let sender_address = orchard_fvk
                     .as_ref()
                     .ok_or(anyhow!("No Orchard key"))
                     .map(|fvk| fvk.address(diversifier, Scope::External))?;
                 let value = NoteValue::from_raw(spend.amount);
-                let rho = Nullifier::from_bytes(&rho).unwrap();
+                let rho = orchard::note::Rho::from_bytes(&rho).unwrap();
                 let rseed = orchard::note::RandomSeed::from_bytes(*rseed, &rho).unwrap();
-                let note = orchard::Note::from_parts(sender_address, value, rho, rseed).unwrap();
+                let note = orchard::Note::from_parts(
+                    sender_address,
+                    value,
+                    rho,
+                    rseed,
+                    orchard::note::NoteVersion::V2,
+                )
+                .unwrap();
                 let witness = Witness::from_bytes(*id_note, &witness)?;
                 let auth_path: Vec<_> = witness
                     .auth_path(32, &ORCHARD_ROOTS, &OrchardHasher::new())
@@ -190,15 +192,41 @@ pub fn build_tx(
                     witness.position as u32,
                     auth_path.try_into().unwrap(),
                 );
-                orchard_builder
-                    .add_spend(orchard_fvk.clone().unwrap(), note, merkle_path)
-                    .map_err(|e| anyhow!(e.to_string()))?;
+                orchard_spends.push((orchard_fvk.as_ref().unwrap().clone(), note, merkle_path));
             }
         }
     }
 
+    let orchard_anchor = orchard::Anchor::from_bytes(plan.orchard_anchor).unwrap();
+    let build_config = BuildConfig::Standard {
+        sapling_anchor,
+        orchard_anchor: Some(orchard_anchor),
+        ironwood_anchor: None,
+        orchard_padding: BundlePadding::DEFAULT,
+        ironwood_padding: BundlePadding::DEFAULT,
+    };
+    let mut builder = Builder::new(*network, BlockHeight::from_u32(plan.anchor_height), build_config);
+
+    for (pub_key, utxo, coin) in transparent_inputs {
+        builder
+            .add_transparent_p2pkh_input(pub_key, utxo, coin)
+            .map_err(|e| anyhow!(e.to_string()))?;
+    }
+
+    for (fvk, note, merkle_path) in sapling_spends {
+        builder
+            .add_sapling_spend::<anyhow::Error>(fvk, note, merkle_path)
+            .map_err(|e| anyhow!(e.to_string()))?;
+    }
+
+    for (fvk, note, merkle_path) in orchard_spends {
+        builder
+            .add_orchard_spend::<anyhow::Error>(fvk, note, merkle_path)
+            .map_err(|e| anyhow!(e.to_string()))?;
+    }
+
     for output in plan.outputs.iter() {
-        let value = Amount::from_u64(output.amount).unwrap();
+        let value = Zatoshis::from_u64(output.amount).unwrap();
         match &output.destination {
             Destination::Transparent(_addr) => {
                 let transparent_address = output.destination.transparent();
@@ -209,105 +237,61 @@ pub fn build_tx(
             Destination::Sapling(addr) => {
                 let sapling_address = PaymentAddress::from_bytes(addr).unwrap();
                 builder
-                    .add_sapling_output(sapling_ovk, sapling_address, value, output.memo.clone())
+                    .add_sapling_output::<anyhow::Error>(
+                        sapling_ovk,
+                        sapling_address,
+                        value,
+                        output.memo.clone(),
+                    )
                     .map_err(|e| anyhow!(e.to_string()))?;
             }
             Destination::Orchard(addr) => {
-                has_orchard = true;
                 let orchard_address = Address::from_raw_address_bytes(addr).unwrap();
-                orchard_builder
-                    .add_recipient(
+                builder
+                    .add_orchard_output::<anyhow::Error>(
                         orchard_ovk.clone(),
                         orchard_address,
-                        NoteValue::from_raw(output.amount),
-                        Some(*output.memo.as_array()),
+                        value,
+                        output.memo.clone(),
                     )
-                    .map_err(|_| anyhow!("Orchard::add_recipient"))?;
+                    .map_err(|e| anyhow!(e.to_string()))?;
             }
         }
     }
 
-    let transparent_bundle = builder.transparent_builder.build();
     let prover = PROVER.lock();
     let prover = prover.as_ref().unwrap();
-    let mut ctx = prover.new_sapling_proving_context();
-    let sapling_bundle = builder
-        .sapling_builder
-        .build(
-            prover,
-            &mut ctx,
-            &mut rng,
-            BlockHeight::from_u32(plan.anchor_height),
-            None,
-        )
-        .unwrap();
-
-    let mut orchard_bundle: Option<Bundle<_, Amount>> = None;
-    if has_orchard {
-        orchard_bundle = Some(orchard_builder.build(&mut rng).unwrap());
-    }
-
-    let consensus_branch_id =
-        BranchId::for_height(network, BlockHeight::from_u32(plan.anchor_height));
-    let version = TxVersion::suggested_for_branch(consensus_branch_id);
-
-    let unauthed_tx: TransactionData<zcash_primitives::transaction::Unauthorized> =
-        TransactionData::from_parts(
-            version,
-            consensus_branch_id,
-            0,
-            BlockHeight::from_u32(plan.expiry_height),
-            transparent_bundle,
-            None,
-            sapling_bundle,
-            orchard_bundle,
-        );
-
-    let txid_parts = unauthed_tx.digest(TxIdDigester);
-    let sig_hash = signature_hash(&unauthed_tx, &SignableInput::Shielded, &txid_parts);
-    let sig_hash: [u8; 32] = sig_hash.as_ref().clone();
-
-    let transparent_bundle = unauthed_tx
-        .transparent_bundle()
-        .map(|tb| tb.clone().apply_signatures(&unauthed_tx, &txid_parts));
-
-    let sapling_bundle = unauthed_tx.sapling_bundle().map(|sb| {
-        sb.clone()
-            .apply_signatures(prover, &mut ctx, &mut rng, &sig_hash)
-            .unwrap()
-            .0
-    });
-
-    let mut orchard_signing_keys = vec![];
-    if let Some(sk) = skeys.orchard {
-        orchard_signing_keys.push(SpendAuthorizingKey::from(&sk));
-    }
-
-    let orchard_bundle = unauthed_tx.orchard_bundle().map(|ob| {
-        let proven = ob
-            .clone()
-            .create_proof(get_proving_key(), &mut rng)
-            .unwrap();
-        proven
-            .apply_signatures(&mut rng, sig_hash, &orchard_signing_keys)
-            .unwrap()
-    });
-
-    let tx_data: TransactionData<zcash_primitives::transaction::Authorized> =
-        TransactionData::from_parts(
-            version,
-            consensus_branch_id,
-            0,
-            BlockHeight::from_u32(plan.expiry_height),
-            transparent_bundle,
-            None,
-            sapling_bundle,
-            orchard_bundle,
-        );
-    let tx = Transaction::from_data(tx_data).unwrap();
+    let sapling_extsks = vec![
+        skeys.sapling.clone().ok_or(anyhow!("No Sapling Key"))?;
+        plan.spends
+            .iter()
+            .filter(|s| matches!(s.source, Source::Sapling { .. }))
+            .count()
+    ];
+    let orchard_saks = if let Some(sk) = skeys.orchard {
+        vec![
+            SpendAuthorizingKey::from(&sk);
+            plan.spends
+                .iter()
+                .filter(|s| matches!(s.source, Source::Orchard { .. }))
+                .count()
+        ]
+    } else {
+        vec![]
+    };
+    let fee_rule = FeeRule::non_standard(Zatoshis::from_u64(DEFAULT_FEE).unwrap());
+    let build_result = builder.build(
+        &signing_set,
+        &sapling_extsks,
+        &orchard_saks,
+        &mut rng,
+        prover,
+        prover,
+        &fee_rule,
+    )?;
 
     let mut tx_bytes = vec![];
-    tx.write(&mut tx_bytes).unwrap();
+    build_result.transaction().write(&mut tx_bytes).unwrap();
 
     Ok(tx_bytes)
 }

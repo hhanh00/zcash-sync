@@ -12,8 +12,8 @@ use rustacuda::prelude::*;
 use std::convert::TryInto;
 use std::ffi::CString;
 use std::sync::Mutex;
-use zcash_primitives::consensus::Network;
-use zcash_primitives::sapling::SaplingIvk;
+use zcash_protocol::consensus::Network;
+use sapling::SaplingIvk;
 
 const THREADS_PER_BLOCK: usize = 256usize;
 const BUFFER_SIZE: usize = 96usize;

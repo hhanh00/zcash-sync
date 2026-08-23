@@ -2,16 +2,17 @@ use crate::coinconfig::CoinConfig;
 use anyhow::anyhow;
 use bech32::{FromBase32, ToBase32};
 use bip39::{Language, Mnemonic, Seed};
-use zcash_client_backend::address::RecipientAddress;
-use zcash_client_backend::encoding::{
+use zcash_keys::address::Address;
+use zcash_keys::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key, decode_transparent_address,
     encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address,
     encode_transparent_address,
 };
-use zcash_client_backend::keys::UnifiedFullViewingKey;
-use zcash_primitives::consensus::{Network, Parameters};
-use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey};
+use zcash_keys::keys::UnifiedFullViewingKey;
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
+use zcash_transparent::address::TransparentAddress;
+use sapling::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
+use zip32::ChildIndex;
 
 pub fn split_key(key: &str) -> (String, String) {
     let words: Vec<_> = key.split_whitespace().collect();
@@ -106,10 +107,10 @@ pub fn is_valid_key(coin: u8, key: &str) -> i8 {
     -1
 }
 
-pub fn decode_address(coin: u8, address: &str) -> Option<RecipientAddress> {
+pub fn decode_address(coin: u8, address: &str) -> Option<Address> {
     let c = CoinConfig::get(coin);
     let network = c.chain.network();
-    RecipientAddress::decode(network, address)
+    Address::decode(network, address)
 }
 
 fn derive_secret_key(
@@ -121,9 +122,9 @@ fn derive_secret_key(
     let seed = Seed::new(mnemonic, password);
     let master = ExtendedSpendingKey::master(seed.as_bytes());
     let path = [
-        ChildIndex::Hardened(32),
-        ChildIndex::Hardened(network.coin_type()),
-        ChildIndex::Hardened(index),
+        ChildIndex::hardened(32),
+        ChildIndex::hardened(network.coin_type()),
+        ChildIndex::hardened(index),
     ];
     let extsk = ExtendedSpendingKey::from_path(&master, &path);
     let sk = encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &extsk);
@@ -162,7 +163,7 @@ pub fn convert_t2_address(
             anyhow::bail!("Invalid prefix");
         }
         let pkh = Vec::<u8>::from_base32(&b)?;
-        let taddr = TransparentAddress::PublicKey(pkh.try_into().unwrap());
+        let taddr = TransparentAddress::PublicKeyHash(pkh.try_into().unwrap());
         encode_transparent_address(
             &network.b58_pubkey_address_prefix(),
             &network.b58_script_address_prefix(),
@@ -173,9 +174,10 @@ pub fn convert_t2_address(
             &network.b58_pubkey_address_prefix(),
             &network.b58_script_address_prefix(),
             address,
-        )?
+        )
+        .map_err(|e| anyhow!("{}", e))?
         .ok_or(anyhow::anyhow!("Not a transparent address"))?;
-        let TransparentAddress::PublicKey(pkh) = taddr else {
+        let TransparentAddress::PublicKeyHash(pkh) = taddr else {
             anyhow::bail!("Not a public key hash address");
         };
         bech32::encode(prefix, pkh.to_base32(), bech32::Variant::Bech32m)?

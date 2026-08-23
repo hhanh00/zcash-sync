@@ -5,7 +5,7 @@ use ff::PrimeField;
 use group::Curve;
 use jubjub::{AffinePoint, ExtendedPoint, Fr};
 use lazy_static::lazy_static;
-use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
+use sapling::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 
 lazy_static! {
     pub static ref SAPLING_ROOTS: Vec<Hash> = {

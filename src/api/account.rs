@@ -15,12 +15,12 @@ use orchard::keys::{FullViewingKey, Scope};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use rusqlite::params;
-use zcash_address::unified::{Address as UA, Receiver};
+use zcash_address::unified::{self, Encoding, Fvk, Receiver};
 use zcash_address::{ToAddress, ZcashAddress};
-use zcash_client_backend::encoding::{decode_extended_full_viewing_key, encode_payment_address};
-use zcash_client_backend::keys::UnifiedFullViewingKey;
-use zcash_primitives::consensus::{Network, Parameters};
-use zcash_primitives::zip32::DiversifierIndex;
+use zcash_keys::encoding::{decode_extended_full_viewing_key, encode_payment_address};
+use zcash_keys::keys::UnifiedFullViewingKey;
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
+use zip32::DiversifierIndex;
 
 pub fn check_account(coin: u8, account: u32) -> bool {
     let c = CoinConfig::get(coin);
@@ -141,9 +141,13 @@ pub fn get_backup_package(coin: u8, id_account: u32) -> anyhow::Result<BackupT> 
             decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &fvk)
                 .unwrap();
         let sapling_dfvk = sapling_efvk.to_diversifiable_full_viewing_key();
-        let orchard_fvk = FullViewingKey::from_bytes(&ofvk);
-        let ufvk = UnifiedFullViewingKey::new(Some(sapling_dfvk), orchard_fvk).unwrap();
-        ufvk.encode(network)
+        let orchard_fvk = FullViewingKey::from_bytes(&ofvk).unwrap();
+        let ufvk = unified::Ufvk::try_from_items(vec![
+            Fvk::Sapling(sapling_dfvk.to_bytes()),
+            Fvk::Orchard(orchard_fvk.to_bytes()),
+        ])
+        .unwrap();
+        UnifiedFullViewingKey::parse(&ufvk).unwrap().encode(network)
     });
     let connection = db.inner();
     let tsk = get_base58_tsk(&connection, id_account)?;
@@ -226,7 +230,7 @@ pub fn get_diversified_address(
     .map_err(|_| anyhow!("Bech32 Decode Error"))?;
     let mut di = [0u8; 11];
     di[4..8].copy_from_slice(&time.to_le_bytes());
-    let diversifier_index = DiversifierIndex(di);
+    let diversifier_index = DiversifierIndex::from(di);
     let (_, pa) = fvk
         .find_address(diversifier_index)
         .ok_or_else(|| anyhow::anyhow!("Cannot generate new address"))?;
@@ -247,17 +251,16 @@ pub fn get_diversified_address(
     }
     if ua_type & 4 != 0 {
         let orchard_fvk = FullViewingKey::from_bytes(&orchard_keys.fvk).unwrap();
-        let index = diversifier_index.0; // any sapling index is fine for orchard
+        let index = *diversifier_index.as_bytes(); // any sapling index is fine for orchard
         let orchard_address = orchard_fvk.address_at(index, Scope::External);
         receivers.push(Receiver::Orchard(orchard_address.to_raw_address_bytes()));
     }
 
-    let unified_address = UA(receivers);
-    let address = ZcashAddress::from_unified(
-        c.chain.network().address_network().unwrap(),
-        unified_address,
-    );
-    let address = address.encode();
+    let unified_address = unified::Address::try_from_items(receivers)
+        .map_err(|e| anyhow!("Invalid unified address: {}", e))?;
+    let address =
+        ZcashAddress::from_unified(c.chain.network().network_type(), unified_address);
+    let address = address.to_string();
     Ok(address)
 }
 

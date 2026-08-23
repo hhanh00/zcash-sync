@@ -442,18 +442,19 @@ pub unsafe extern "C" fn valid_address(coin: u8, address: *mut c_char) -> bool {
 
 #[no_mangle]
 pub unsafe extern "C" fn receivers_of_address(coin: u8, address: *mut c_char) -> u8 {
-    use zcash_client_backend::address::RecipientAddress;
+    use zcash_keys::address::Address;
     from_c_str!(address);
     match crate::key2::decode_address(coin, &address) {
         None => 0,
-        Some(RecipientAddress::Transparent(_)) => 1,
-        Some(RecipientAddress::Shielded(_)) => 2,
-        Some(RecipientAddress::Unified(ua)) => {
+        Some(Address::Transparent(_)) => 1,
+        Some(Address::Sapling(_)) => 2,
+        Some(Address::Unified(ua)) => {
             let t = if ua.transparent().is_some() { 1 } else { 0 };
             let s = if ua.sapling().is_some() { 2 } else { 0 };
             let o = if ua.orchard().is_some() { 4 } else { 0 };
             t + s + o
         }
+        Some(Address::Tex(_)) => 0,
     }
 }
 

@@ -13,9 +13,9 @@ use rand::rngs::OsRng;
 use std::cmp::min;
 use std::slice;
 use std::str::FromStr;
-use zcash_client_backend::encoding::decode_extended_full_viewing_key;
-use zcash_primitives::consensus::Parameters;
-use zcash_primitives::memo::{Memo, MemoBytes};
+use zcash_keys::encoding::decode_extended_full_viewing_key;
+use zcash_protocol::consensus::{NetworkConstants, Parameters};
+use zcash_protocol::memo::{Memo, MemoBytes};
 use zcash_primitives::transaction::builder::Progress;
 
 #[allow(dead_code)]

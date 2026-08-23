@@ -1,7 +1,7 @@
 use prost::bytes::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
-use zcash_primitives::memo::{Memo, MemoBytes};
+use zcash_protocol::memo::{Memo, MemoBytes};
 
 const CONTACT_COOKIE: u32 = 0x434E5440;
 

@@ -23,19 +23,18 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Request;
 use zcash_note_encryption::batch::try_compact_note_decryption;
 use zcash_note_encryption::{Domain, EphemeralKeyBytes, ShieldedOutput, COMPACT_NOTE_SIZE};
-use zcash_primitives::consensus::{BlockHeight, Network, NetworkUpgrade, Parameters};
-use zcash_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
-use zcash_primitives::sapling::note::ExtractedNoteCommitment;
-use zcash_primitives::sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
-use zcash_primitives::sapling::{Node, Note, PaymentAddress};
-use zcash_primitives::transaction::components::sapling::CompactOutputDescription;
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use zcash_protocol::consensus::{BlockHeight, Network, NetworkConstants, NetworkUpgrade, Parameters};
+use incrementalmerkletree::{frontier::CommitmentTree, witness::IncrementalWitness};
+use sapling::note_encryption::{PreparedIncomingViewingKey, SaplingDomain};
+use sapling::zip32::ExtendedFullViewingKey;
+use sapling::{Node, Note, PaymentAddress};
 
 #[cfg(feature = "cuda")]
 use crate::gpu::cuda::{CudaProcessor, CUDA_CONTEXT};
 #[cfg(feature = "apple_metal")]
 use crate::gpu::metal::MetalProcessor;
 use crate::gpu::USE_GPU;
+use crate::sapling::zip212_enforcement;
 
 pub async fn get_latest_height(
     client: &mut CompactTxStreamerClient<Channel>,
@@ -305,30 +304,17 @@ pub struct DecryptedNote {
 }
 
 #[allow(dead_code)]
-pub fn to_output_description(co: &CompactSaplingOutput) -> CompactOutputDescription {
-    let cmu: [u8; 32] = co.cmu.clone().try_into().unwrap();
-    let epk: [u8; 32] = co.epk.clone().try_into().unwrap();
-    let enc_ciphertext: [u8; 52] = co.ciphertext.clone().try_into().unwrap();
-
-    CompactOutputDescription {
-        ephemeral_key: EphemeralKeyBytes::from(epk),
-        cmu: ExtractedNoteCommitment::from_bytes(&cmu).unwrap(),
-        enc_ciphertext,
-    }
-}
-
-struct AccountOutput<'a, N: Parameters> {
+struct AccountOutput<'a> {
     epk: EphemeralKeyBytes,
-    cmu: <SaplingDomain<N> as Domain>::ExtractedCommitmentBytes,
+    cmu: <SaplingDomain as Domain>::ExtractedCommitmentBytes,
     ciphertext: [u8; COMPACT_NOTE_SIZE],
     tx_index: usize,
     output_index: usize,
     block_output_index: usize,
     vtx: &'a CompactTx,
-    _phantom: PhantomData<N>,
 }
 
-impl<'a, N: Parameters> AccountOutput<'a, N> {
+impl<'a> AccountOutput<'a> {
     fn new(
         tx_index: usize,
         output_index: usize,
@@ -353,18 +339,15 @@ impl<'a, N: Parameters> AccountOutput<'a, N> {
             epk,
             cmu,
             ciphertext: ciphertext_bytes,
-            _phantom: PhantomData::default(),
         }
     }
 }
 
-impl<'a, N: Parameters> ShieldedOutput<SaplingDomain<N>, COMPACT_NOTE_SIZE>
-    for AccountOutput<'a, N>
-{
+impl<'a> ShieldedOutput<SaplingDomain, COMPACT_NOTE_SIZE> for AccountOutput<'a> {
     fn ephemeral_key(&self) -> EphemeralKeyBytes {
         self.epk.clone()
     }
-    fn cmstar_bytes(&self) -> <SaplingDomain<N> as Domain>::ExtractedCommitmentBytes {
+    fn cmstar_bytes(&self) -> <SaplingDomain as Domain>::ExtractedCommitmentBytes {
         self.cmu
     }
     fn enc_ciphertext(&self) -> &[u8; COMPACT_NOTE_SIZE] {
@@ -385,7 +368,7 @@ fn decrypt_notes<'a, N: Parameters>(
         .iter()
         .map(|vk| PreparedIncomingViewingKey::new(&vk.1.ivk))
         .collect();
-    let mut outputs: Vec<(SaplingDomain<N>, AccountOutput<N>)> = vec![];
+    let mut outputs: Vec<(SaplingDomain, AccountOutput)> = vec![];
     for (tx_index, vtx) in block.vtx.iter().enumerate() {
         for cs in vtx.spends.iter() {
             let mut nf = [0u8; 32];
@@ -396,8 +379,8 @@ fn decrypt_notes<'a, N: Parameters>(
         if let Some(fco) = vtx.outputs.first() {
             if !fco.epk.is_empty() {
                 for (output_index, co) in vtx.outputs.iter().enumerate() {
-                    let domain = SaplingDomain::<N>::for_height(network.clone(), height);
-                    let output = AccountOutput::<N>::new(
+                    let domain = SaplingDomain::new(zip212_enforcement(network, height));
+                    let output = AccountOutput::new(
                         tx_index,
                         output_index,
                         count_outputs as usize,
@@ -418,7 +401,7 @@ fn decrypt_notes<'a, N: Parameters>(
 
     let start = Instant::now();
     let notes_decrypted =
-        try_compact_note_decryption::<SaplingDomain<N>, AccountOutput<N>>(&vvks, &outputs);
+        try_compact_note_decryption::<SaplingDomain, AccountOutput>(&vvks, &outputs);
     let elapsed = start.elapsed().as_millis() as usize;
 
     for (pos, opt_note) in notes_decrypted.iter().enumerate() {
@@ -539,9 +522,9 @@ fn calculate_tree_state_v1(
     cbs: &[CompactBlock],
     blocks: &[DecryptedBlock],
     height: u32,
-    mut tree_state: CommitmentTree<Node>,
-) -> Vec<IncrementalWitness<Node>> {
-    let mut witnesses: Vec<IncrementalWitness<Node>> = vec![];
+    mut tree_state: CommitmentTree<Node, 32>,
+) -> Vec<IncrementalWitness<Node, 32>> {
+    let mut witnesses: Vec<IncrementalWitness<Node, 32>> = vec![];
     for (cb, block) in cbs.iter().zip(blocks) {
         assert_eq!(cb.height as u32, block.height);
         if block.height < height {
@@ -554,14 +537,14 @@ fn calculate_tree_state_v1(
             for co in tx.outputs.iter() {
                 let mut cmu = [0u8; 32];
                 cmu.copy_from_slice(&co.cmu);
-                let node = Node::new(cmu);
+                let node = Node::from_bytes(cmu).unwrap();
                 tree_state.append(node).unwrap();
                 for w in witnesses.iter_mut() {
                     w.append(node).unwrap();
                 }
                 if let Some(nn) = n {
                     if i == nn.position_in_block {
-                        let w = IncrementalWitness::from_tree(&tree_state);
+                        let w = IncrementalWitness::from_tree(tree_state.clone()).unwrap();
                         witnesses.push(w);
                         n = notes.next();
                     }

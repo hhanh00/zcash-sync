@@ -21,14 +21,14 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::PublicKey;
 use sha2::Sha256;
 
-use zcash_client_backend::encoding::{
+use zcash_keys::encoding::{
     encode_extended_full_viewing_key, encode_transparent_address,
 };
-use zcash_primitives::consensus::Network;
-use zcash_primitives::consensus::Parameters;
-use zcash_primitives::legacy::TransparentAddress;
+use zcash_protocol::consensus::Network;
+use zcash_protocol::consensus::{NetworkConstants, Parameters};
+use zcash_transparent::address::TransparentAddress;
 
-use zcash_primitives::zip32::ExtendedFullViewingKey;
+use sapling::zip32::ExtendedFullViewingKey;
 
 use zcash_primitives::transaction::txid::TxIdDigester;
 use zcash_primitives::{
@@ -50,7 +50,7 @@ pub fn show_public_keys() -> Result<()> {
     let pub_key = PublicKey::from_slice(&pub_key)?;
     let pub_key = pub_key.serialize();
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
-    let address = TransparentAddress::PublicKey(pub_key.into());
+    let address = TransparentAddress::PublicKeyHash(pub_key.into());
     let address = encode_transparent_address(
         &network.b58_pubkey_address_prefix(),
         &network.b58_script_address_prefix(),
@@ -95,8 +95,8 @@ pub fn build_ledger_tx(
 
     let master_seed = ledger_init_tx()?;
 
-    let dfvk: zcash_primitives::zip32::DiversifiableFullViewingKey = ledger_get_dfvk()?;
-    let proofgen_key: zcash_primitives::sapling::ProofGenerationKey = ledger_get_proofgen_key()?;
+    let dfvk: sapling::zip32::DiversifiableFullViewingKey = ledger_get_dfvk()?;
+    let proofgen_key: sapling::ProofGenerationKey = ledger_get_proofgen_key()?;
 
     let mut sapling_builder = SaplingBuilder::new(prover, dfvk, proofgen_key);
 

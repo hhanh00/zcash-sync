@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use ledger_apdu::{APDUCommand, APDUErrorCode};
 use ledger_transport_hid::{TransportNativeHID, hidapi::HidApi};
-use zcash_client_backend::encoding::encode_extended_full_viewing_key;
+use zcash_keys::encoding::encode_extended_full_viewing_key;
 use zcash_primitives::{zip32::{DiversifiableFullViewingKey, ExtendedFullViewingKey}, consensus::{Parameters, Network}};
 use std::ops::Deref;
 

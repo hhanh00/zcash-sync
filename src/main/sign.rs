@@ -3,9 +3,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
 use sync::{KeyHelpers, Tx};
-use zcash_client_backend::encoding::decode_extended_spending_key;
+use zcash_keys::encoding::decode_extended_spending_key;
 use zcash_params::coin::CoinType;
-use zcash_primitives::consensus::{Network, Parameters};
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 use zcash_proofs::prover::LocalTxProver;
 
 #[tokio::main]

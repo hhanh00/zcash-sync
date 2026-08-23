@@ -9,8 +9,8 @@ use ledger_apdu::APDUCommand;
 use ledger_transport_hid::{hidapi::HidApi, TransportNativeHID};
 use serde_json::Value;
 use std::io::Write;
-use zcash_primitives::sapling::ProofGenerationKey;
-use zcash_primitives::zip32::DiversifiableFullViewingKey;
+use sapling::ProofGenerationKey;
+use sapling::zip32::DiversifiableFullViewingKey;
 
 fn handle_error_code(code: u16) -> Result<()> {
     match code {

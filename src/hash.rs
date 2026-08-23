@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use std::io::Read;
 use std::ops::AddAssign;
 use zcash_params::GENERATORS;
-use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
+use sapling::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 
 lazy_static! {
     pub static ref GENERATORS_EXP: Vec<ExtendedNielsPoint> = read_generators_bin();
@@ -138,19 +138,20 @@ fn generator_multiplication(
 #[cfg(test)]
 mod tests {
     use crate::hash::pedersen_hash;
+    use ff::{Field, PrimeField};
+    use incrementalmerkletree::{Hashable, Level};
     use rand::{thread_rng, RngCore};
-    use zcash_primitives::merkle_tree::Hashable;
-    use zcash_primitives::sapling::Node;
+    use sapling::Node;
 
     #[test]
     fn test_hash() {
         let mut r = thread_rng();
 
         for _ in 0..1 {
-            let mut a = [0u8; 32];
-            r.fill_bytes(&mut a);
-            let mut b = [0u8; 32];
-            r.fill_bytes(&mut b);
+            // Use valid field element representations; Node::from_bytes
+            // rejects arbitrary byte strings.
+            let a = jubjub::Fr::random(&mut r).to_repr();
+            let b = jubjub::Fr::random(&mut r).to_repr();
             let depth = (r.next_u32() % 64) as u8;
             let depth = depth.min(62);
 
@@ -161,14 +162,11 @@ mod tests {
             // println!("A: {}", hex::encode(a));
             // println!("B: {}", hex::encode(b));
 
-            let node1 = Node::new(a);
-            let node2 = Node::new(b);
-            let hash = Node::combine(depth as usize, &node1, &node2);
+            let node1 = Node::from_bytes(a).unwrap();
+            let node2 = Node::from_bytes(b).unwrap();
+            let hash = Node::combine(Level::from(depth), &node1, &node2);
             let hash2 = pedersen_hash(depth, &a, &b);
-            // println!("Reference Hash: {}", hex::encode(hash.repr));
-            // println!("This Hash:      {}", hex::encode(hash2));
-            // need to expose repr for this check
-            assert_eq!(hash.repr, hash2);
+            assert_eq!(hash.to_bytes(), hash2);
         }
     }
 }

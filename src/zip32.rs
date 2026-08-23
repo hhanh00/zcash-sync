@@ -7,12 +7,13 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use tiny_hderive::bip32::ExtendedPrivKey;
-use zcash_client_backend::encoding::{
+use zcash_keys::encoding::{
     encode_extended_spending_key, encode_payment_address, encode_transparent_address,
 };
-use zcash_primitives::consensus::{Network, Parameters};
-use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::zip32::{ChildIndex, ExtendedSpendingKey};
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
+use zcash_transparent::address::TransparentAddress;
+use sapling::zip32::ExtendedSpendingKey;
+use zip32::ChildIndex;
 
 pub fn derive_zip32(
     network: &Network,
@@ -26,12 +27,12 @@ pub fn derive_zip32(
     let seed = Seed::new(&mnemonic, &password);
     let master = ExtendedSpendingKey::master(seed.as_bytes());
     let mut z_path = vec![
-        ChildIndex::Hardened(32),
-        ChildIndex::Hardened(network.coin_type()),
-        ChildIndex::Hardened(account_index),
+        ChildIndex::hardened(32),
+        ChildIndex::hardened(network.coin_type()),
+        ChildIndex::hardened(account_index),
     ];
     if let Some(address_index) = address_index {
-        z_path.push(ChildIndex::Hardened(address_index));
+        z_path.push(ChildIndex::hardened(address_index));
     }
     let extsk = ExtendedSpendingKey::from_path(&master, &z_path);
     let z_key = encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &extsk);
@@ -53,13 +54,13 @@ pub fn derive_zip32(
     let pub_key = PublicKey::from_secret_key(&secp, &secret_key);
     let pub_key = pub_key.serialize();
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
-    let t_addr = TransparentAddress::PublicKey(pub_key.into());
+    let t_addr = TransparentAddress::PublicKeyHash(pub_key.into());
     let t_addr = encode_transparent_address(
         &network.b58_pubkey_address_prefix(),
         &network.b58_script_address_prefix(),
         &t_addr,
     );
-    let mut sk = secret_key.serialize_secret().to_vec();
+    let mut sk = secret_key.secret_bytes().to_vec();
     sk.push(0x01);
     let t_key = sk.to_base58check(0x80);
 

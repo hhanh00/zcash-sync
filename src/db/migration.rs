@@ -1,6 +1,6 @@
 use crate::orchard::derive_orchard_keys;
 use rusqlite::{params, Connection, OptionalExtension};
-use zcash_primitives::consensus::{Network, Parameters};
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 
 pub fn get_schema_version(connection: &Connection) -> anyhow::Result<u32> {
     let version: Option<u32> = connection

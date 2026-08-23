@@ -5,16 +5,16 @@ use ff::PrimeField;
 use group::GroupEncoding;
 
 use jubjub::{Fq, Fr};
-use zcash_primitives::memo::MemoBytes;
-use zcash_primitives::sapling::ProofGenerationKey;
-use zcash_primitives::zip32::DiversifiableFullViewingKey;
+use zcash_protocol::memo::MemoBytes;
+use sapling::ProofGenerationKey;
+use sapling::zip32::DiversifiableFullViewingKey;
 
 use crate::ledger::transport::*;
 
 use anyhow::{anyhow, Result};
 use rand::RngCore;
 
-use zcash_primitives::constants::SPENDING_KEY_GENERATOR;
+use sapling::constants::SPENDING_KEY_GENERATOR;
 use zcash_primitives::{
     consensus::MainNetwork,
     merkle_tree::IncrementalWitness,
@@ -38,7 +38,7 @@ struct SpendDescriptionUnAuthorized {
     cv: ValueCommitment,
     anchor: Fq,
     pub nullifier: Nullifier,
-    rk: zcash_primitives::sapling::redjubjub::PublicKey,
+    rk: sapling::redjubjub::PublicKey,
     zkproof: [u8; GROTH_PROOF_SIZE],
 }
 

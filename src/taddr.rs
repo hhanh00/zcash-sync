@@ -26,12 +26,12 @@ use std::collections::{HashMap, HashSet};
 use tiny_hderive::bip32::ExtendedPrivKey;
 use tonic::transport::Channel;
 use tonic::Request;
-use zcash_client_backend::encoding::{encode_transparent_address, AddressCodec};
+use zcash_keys::encoding::{encode_transparent_address, AddressCodec};
 use crate::coin::get_branch;
-use zcash_primitives::consensus::{Network, Parameters};
-use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::memo::Memo;
-use zcash_primitives::transaction::components::OutPoint;
+use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
+use zcash_transparent::address::TransparentAddress;
+use zcash_protocol::memo::Memo;
+use zcash_transparent::bundle::OutPoint;
 use zcash_primitives::transaction::Transaction;
 
 pub async fn get_taddr_balance(
@@ -90,7 +90,7 @@ pub async fn get_ttx_history(
             let out_value = transparent_bundle
                 .vout
                 .iter()
-                .map(|vout| i64::from(vout.value))
+                .map(|vout| u64::from(vout.value) as i64)
                 .sum::<i64>() as u64;
             txs.push(TransparentTxInfo {
                 txid: txid.as_ref().clone(),
@@ -131,7 +131,7 @@ pub async fn get_ttx_history(
             let transparent_bundle = tx_data
                 .transparent_bundle()
                 .ok_or(anyhow!("No transparent bundle"))?;
-            let value = i64::from(transparent_bundle.vout[input.n() as usize].value);
+            let value = u64::from(transparent_bundle.vout[input.n() as usize].value) as i64;
             in_value += value;
         }
         tx.timestamp = heights[&tx.height];
@@ -248,7 +248,7 @@ pub fn derive_from_secretkey(network: &Network, sk: &SecretKey) -> Result<(Strin
     let pub_key = PublicKey::from_secret_key(&secp, &sk);
     let pub_key = pub_key.serialize();
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
-    let address = TransparentAddress::PublicKey(pub_key.into());
+    let address = TransparentAddress::PublicKeyHash(pub_key.into());
     let address = encode_transparent_address(
         &network.b58_pubkey_address_prefix(),
         &network.b58_script_address_prefix(),
@@ -262,7 +262,7 @@ pub fn derive_from_pubkey(network: &Network, pub_key: &[u8]) -> Result<String> {
     let pub_key = PublicKey::from_slice(pub_key)?;
     let pub_key = pub_key.serialize();
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
-    let address = TransparentAddress::PublicKey(pub_key.into());
+    let address = TransparentAddress::PublicKeyHash(pub_key.into());
     let address = encode_transparent_address(
         &network.b58_pubkey_address_prefix(),
         &network.b58_script_address_prefix(),
@@ -297,7 +297,7 @@ pub async fn sweep_tkey(
                 index: utxo.index as u32,
             },
             amount: utxo.value_zat as u64,
-            key: Some(seckey.serialize_secret()),
+            key: Some(seckey.secret_bytes()),
         })
         .collect();
 
@@ -352,7 +352,7 @@ pub async fn sweep_tseed(
                     index: utxo.index as u32,
                 },
                 amount: utxo.value_zat as u64,
-                key: Some(sk.serialize_secret()),
+                key: Some(sk.secret_bytes()),
                 id: 0,
             });
         }
@@ -462,7 +462,7 @@ pub fn parse_tex(network: &Network, address: &str) -> Result<String> {
         anyhow::bail!("Not a TEX address")
     }
     let pkh: [u8; 20] = data.try_into().unwrap();
-    let taddr = TransparentAddress::PublicKey(pkh);
+    let taddr = TransparentAddress::PublicKeyHash(pkh);
     let address = taddr.encode(network);
     Ok(address)
 }

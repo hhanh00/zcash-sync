@@ -6,7 +6,7 @@ use crate::sync::{
 use crate::CompactTx;
 use orchard::keys::PreparedIncomingViewingKey;
 use orchard::note_encryption::OrchardDomain;
-use zcash_primitives::consensus::{BlockHeight, Parameters};
+use zcash_protocol::consensus::{BlockHeight, NetworkConstants, Parameters};
 
 #[derive(Clone, Debug)]
 pub struct OrchardViewKey {
@@ -89,7 +89,13 @@ impl<N: Parameters> TrialDecrypter<N, OrchardDomain, OrchardViewKey, DecryptedOr
     for OrchardDecrypter<N>
 {
     fn domain(&self, _height: BlockHeight, cob: &CompactOutputBytes) -> OrchardDomain {
-        OrchardDomain::for_nullifier(orchard::note::Nullifier::from_bytes(&cob.nullifier).unwrap())
+        let action = orchard::note_encryption::CompactAction::from_parts(
+            orchard::note::Nullifier::from_bytes(&cob.nullifier).unwrap(),
+            orchard::note::ExtractedNoteCommitment::from_bytes(&cob.cmx).unwrap(),
+            zcash_note_encryption::EphemeralKeyBytes::from(cob.epk),
+            cob.ciphertext.try_into().unwrap(),
+        );
+        OrchardDomain::for_compact_action(&action)
     }
 
     fn spends(&self, vtx: &CompactTx) -> Vec<Nf> {

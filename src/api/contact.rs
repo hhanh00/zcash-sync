@@ -7,7 +7,7 @@ use crate::coinconfig::CoinConfig;
 use crate::contact::{serialize_contacts, Contact};
 use crate::db::data_generated::fb::FeeT;
 use crate::{get_ua_of, TransactionPlan};
-use zcash_primitives::memo::Memo;
+use zcash_protocol::memo::Memo;
 
 const CONTACT_AMOUNT: u64 = 10_000;
 
